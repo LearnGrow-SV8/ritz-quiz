@@ -8994,22 +8994,33 @@ function renderAdminReports() {
   html += '<div class="subtitle">' + (en ? 'Scores, replays & export' : '成绩总表 · 答题回放 · 导出') + '</div>';
   html += '</div><div class="page">';
 
-  if (adminState.cloudStatus !== 'ok' && !adminCloudFetching) adminFetchCloudStudents();
+  if (adminState.cloudStatus !== 'ok' && adminState.cloudStatus !== 'partial' && !adminCloudFetching) adminFetchCloudStudents();
+  adminScheduleFullSync();
   var statusLine = '';
+  var fullSyncBtn = '<button class="admin-mini-btn" onclick="adminForceFullSync()">'
+    + (en ? '↻ Full re-sync' : '↻ 立即全量重拉')
+    + '</button>';
   if (adminState.cloudStatus === 'loading') {
-    statusLine = '⏳ ' + (en ? 'Fetching cloud data…' : '正在拉取云端数据…');
+    statusLine = '⏳ ' + (en ? 'Fetching cloud data…' : '正在拉取云端数据…') + ' ' + fullSyncBtn;
   } else if (adminState.cloudStatus === 'retrying') {
     statusLine = '🔁 ' + (en ? 'Cloud fetch failed, auto-retrying (' + (adminState.cloudRetry || 0) + '/' + ADMIN_CLOUD_RETRY_MAX + ')… ' : '云端拉取失败，正在自动重试（' + (adminState.cloudRetry || 0) + '/' + ADMIN_CLOUD_RETRY_MAX + '）… ') +
-      '<button class="admin-mini-btn" onclick="adminFetchCloudStudents()">' + (en ? 'Retry now' : '立即重试') + '</button>';
+      '<button class="admin-mini-btn" onclick="adminFetchCloudStudents()">' + (en ? 'Retry now' : '立即重试') + '</button> ' + fullSyncBtn;
   } else if (adminState.cloudStatus === 'error') {
     statusLine = '⚠️ ' + (en ? 'Cloud fetch failed. ' : '云端数据拉取失败。') +
-      '<button class="admin-mini-btn" onclick="adminFetchCloudStudents()">' + (en ? 'Retry' : '重试') + '</button>' +
+      '<button class="admin-mini-btn" onclick="adminFetchCloudStudents()">' + (en ? 'Retry' : '重试') + '</button> ' + fullSyncBtn +
       '<div style="font-size:11px;color:var(--text-light);margin-top:4px;">' + (en
         ? 'Your line may be blocking ntfy.sh. The edge relay is tried automatically — if it still fails, open this admin panel from the EdgeOne link so the relay can fetch on your behalf.'
         : '你的网络线路可能屏蔽了 ntfy.sh。系统已自动尝试边缘中继；若仍失败，请改用 EdgeOne 链接打开管理端，由边缘节点代为拉取。') + '</div>';
+  } else if (adminState.cloudStatus === 'partial') {
+    var verN = adminState.cloudVerifiedCount;
+    var verText = (typeof verN === 'number') ? verN : '?';
+    statusLine = '⚠️ ' + (en
+      ? 'Local list is INCOMPLETE — cloud has ' + verText + ' records. '
+      : '本地列表不完整，云端共有 ' + verText + ' 条记录。')
+      + '<button class="admin-mini-btn" onclick="adminForceFullSync()">' + (en ? '↻ Full re-sync now' : '↻ 立即全量重拉') + '</button>';
   } else if (adminState.cloudStatus === 'ok') {
     statusLine = '☁️ ' + (en ? 'Synced. ' : '已同步。') +
-      '<button class="admin-mini-btn" onclick="adminFetchCloudStudents()">' + (en ? 'Refresh' : '刷新') + '</button>';
+      '<button class="admin-mini-btn" onclick="adminFetchCloudStudents()">' + (en ? 'Refresh' : '刷新') + '</button> ' + fullSyncBtn;
   }
   html += '<div class="sync-note">' + statusLine + '</div>';
 
@@ -9301,7 +9312,14 @@ var adminCloudFetching = false;
 // attempt, fall back to the EdgeOne edge relay (reachable from any line).
 var ADMIN_CLOUD_RETRY_MAX = 5;
 var ADMIN_CLOUD_RETRY_MS = 15000;
+var ADMIN_FULLSYNC_BOOT_MS = 30000;   // boot 后多久首次全量对账
+var ADMIN_FULLSYNC_PERIOD_MS = 6 * 60 * 60 * 1000; // 6 小时再对一次
 var adminCloudRetryTimer = null;
+var adminFullSyncTimer = null;     // 启动后定时全量
+var adminFullSyncInFlight = false; // 防止对账被并发触发
+// 标记：在 adminState 里手动加 `cloudVerifiedCount`，保存最近一次"云端真实人数"
+// （取自 student_snapshots count），用于跟本地比较、判断 partial
+// `adminState.cloudVerifiedAt` 保存对账时间
 // Stage 8.1: the admin's student view reads BOTH Supabase stores and merges
 // them, because reading only one silently LOSES data:
 //   student_snapshots     — durable, phone-keyed record. Only students who
@@ -9317,11 +9335,20 @@ function cloudStudentsFetch(since) {
   if (!SB_ON) return Promise.resolve(null);
   function snapStore() { return sbListSnapshots(since, true); }
   function logStore() { return sbPollSyncLines(since, true); }
+  // When the caller asked for a FULL pull (`since === 'all'`), also fetch a
+  // separate `count-only` query. That count is what tells the UI "your local
+  // list is complete" vs "the cloud has 58 students and you only have 2".
+  var wantCount = (since === 'all');
+  function countStore() {
+    if (!wantCount) return Promise.resolve(null);
+    return sbCountSnapshots().catch(function() { return null; });
+  }
   return Promise.all([
     snapStore().catch(function() { return null; }),
-    logStore().catch(function() { return null; })
+    logStore().catch(function() { return null; }),
+    countStore()
   ]).then(function(res) {
-    var snap = res[0], log = res[1];
+    var snap = res[0], log = res[1], cnt = res[2];
     // One logical attempt = ONE strike, no matter how many Supabase hops it
     // took (the silent flag above stops each hop from counting separately).
     if (!snap && !log) { sbMarkFail('students'); return null; }
@@ -9329,9 +9356,26 @@ function cloudStudentsFetch(since) {
     return {
       snapshots: (snap && Array.isArray(snap.records)) ? snap.records : [],
       lines: (log && Array.isArray(log.lines)) ? log.lines : [],
-      maxMs: (log && log.maxMs) || 0
+      maxMs: (log && log.maxMs) || 0,
+      cloudCount: (typeof cnt === 'number' && cnt >= 0) ? cnt : undefined
     };
   });
+}
+// Supabase: total row count of `student_snapshots`. Used by full-sync to know
+// the ground truth against which the local cache is reconciled.
+function sbCountSnapshots() {
+  if (!SB_ON) return Promise.resolve(0);
+  var path = '/rest/v1/student_snapshots?select=phone&limit=1';
+  // Use sbFetch directly so we can read the response headers (sbJson only
+  // exposes the parsed body). content-range has the total we need.
+  return sbFetch(path, { headers: { 'Prefer': 'count=exact' } }, SB_SNAPSHOT_TIMEOUT_MS, 'sb-count-snap')
+    .then(function(r) {
+      if (!r.ok) return 0;
+      var cr = r.headers.get('content-range') || '';
+      // content-range looks like "0-0/57" → the 57 is the total
+      var m = /\/(\d+)/.exec(cr);
+      return m ? parseInt(m[1], 10) : 0;
+    }, function() { return 0; });
 }
 // Pre-Stage-8 channel: EdgeOne /api/student-snapshots (phone-keyed KV). Kept as
 // the last resort so a dead Supabase degrades to exactly the old behaviour.
@@ -9376,7 +9420,8 @@ function snapshotToLines(rec) {
   return out;
 }
 // Merge one answered payload into the admin cache and settle the UI state.
-function applyAdminStudents(j, cache, since) {
+function applyAdminStudents(j, cache, since, opts) {
+  opts = opts || {};
   var lines = [];
   for (var i = 0; i < j.snapshots.length; i++) lines = lines.concat(snapshotToLines(j.snapshots[i]));
   for (var li = 0; li < j.lines.length; li++) lines.push(j.lines[li]);
@@ -9390,18 +9435,37 @@ function applyAdminStudents(j, cache, since) {
     if (typeof ts === 'number' && ts > newest) newest = ts;
   }
   if (newest > 0) cache.fetchedTs = newest;
+  // Store the verified cloud count when the caller tells us one (force / full
+  // sync path). This is the only way the "已同步" badge can know whether the
+  // local list is complete or just a subset.
+  if (typeof j.cloudCount === 'number') {
+    adminState.cloudVerifiedCount = j.cloudCount;
+    adminState.cloudVerifiedAt = Date.now();
+  }
   adminSaveStudentCache(cache);
-  adminState.cloudStatus = 'ok';
+  // Decide the status honestly:
+  //   - 'partial'   : verified count says there's more than we know about
+  //   - 'ok'        : verified count says we're complete, or no count available
+  var localCount = Object.keys(cache.students).length;
+  if (typeof adminState.cloudVerifiedCount === 'number' && adminState.cloudVerifiedCount > localCount) {
+    adminState.cloudStatus = 'partial';
+  } else {
+    adminState.cloudStatus = 'ok';
+  }
   adminState.cloudRetry = 0;
   adminCloudFetching = false;
+  adminFullSyncInFlight = false;
   if (state.currentPage === 'adminStudents' || state.currentPage === 'adminReports') render();
   // A successful read means the cloud is alive — replay queued offline writes.
   flushPendingOps().catch(function() {});
   // ...and top the panel up with anything ntfy still holds (background).
   adminBackfillStudentsFromNtfy(since);
 }
-function adminFetchCloudStudents(isRetry) {
+function adminFetchCloudStudents(isRetry, opts) {
+  opts = opts || {};
+  var force = !!opts.force;
   if (adminCloudFetching) return;
+  if (adminFullSyncInFlight && !force) return; // 全量对账在跑，常规拉让位
   if (adminCloudRetryTimer) { clearTimeout(adminCloudRetryTimer); adminCloudRetryTimer = null; }
   if (!isRetry) adminState.cloudRetry = 0;
   adminCloudFetching = true;
@@ -9410,12 +9474,19 @@ function adminFetchCloudStudents(isRetry) {
   // fetchedTs is a MILLISECOND epoch (snapshot ts and the sync log's created_at
   // are both normalised to ms before being stored). Look back 60 s so a record
   // that lands between two polls can never fall into the gap.
-  var since = cache.fetchedTs > 0 ? String(Math.max(0, cache.fetchedTs - 60000)) : 'all';
+  // `force` ignores the cursor and asks for the WHOLE table — the safety net
+  // against the per-device delta cursor locking a device into a stale subset.
+  var since = force ? 'all'
+    : (cache.fetchedTs > 0 ? String(Math.max(0, cache.fetchedTs - 60000)) : 'all');
   // Walk the rest of the chain: EdgeOne KV, then ntfy (direct → edge relay).
+  // ntfy expects since in SECONDS but we store ms in fetchedTs — convert at the
+  // boundary so the legacy channel can actually see history (the old code passed
+  // 13-digit ms straight in and ntfy silently returned an empty stream).
+  var sinceSec = since === 'all' ? 'all' : String(Math.floor(Number(since) / 1000));
   function notAnswered() {
     return legacyCloudStudentsFetch(since).then(function(lj) {
-      if (!lj) return adminFetchCloudStudentsViaNtfy(since);
-      return applyAdminStudents(lj, cache, since);
+      if (!lj) return adminFetchCloudStudentsViaNtfy(sinceSec);
+      return applyAdminStudents(lj, cache, since, { force: force });
     });
   }
   cloudStudentsFetch(since)
@@ -9426,9 +9497,49 @@ function adminFetchCloudStudents(isRetry) {
       // that exact mistake is what hid a whole afternoon of exam sessions.
       if (!j) return notAnswered();
       if (!j.snapshots.length && !j.lines.length) return notAnswered();
-      return applyAdminStudents(j, cache, since);
+      return applyAdminStudents(j, cache, since, { force: force });
     })
-    .catch(function() { return adminFetchCloudStudentsViaNtfy(since); });
+    .catch(function() { return adminFetchCloudStudentsViaNtfy(sinceSec); });
+}
+// User-initiated full reconciliation. Ignores fetchedTs, fetches everything,
+// and sets the verified count so the UI can stop lying.
+function adminForceFullSync() {
+  if (adminCloudFetching || adminFullSyncInFlight) return;
+  adminFullSyncInFlight = true;
+  adminState.cloudStatus = 'loading';
+  if (state.currentPage === 'adminStudents' || state.currentPage === 'adminReports') render();
+  // Reset the cursor so a partially-set fetchedTs from the previous loop can't
+  // contaminate this pull — adminForceFullSync must produce a fresh baseline.
+  try {
+    var c0 = adminStudentCache();
+    c0.fetchedTs = 0;
+    adminSaveStudentCache(c0);
+  } catch (e0) {}
+  adminFetchCloudStudents(false, { force: true });
+}
+// Schedule the periodic full sync. Idempotent — safe to call multiple times.
+function adminScheduleFullSync() {
+  if (adminFullSyncTimer) clearTimeout(adminFullSyncTimer);
+  function next() {
+    adminFullSyncTimer = setTimeout(function() {
+      adminFullSyncTimer = null;
+      if (state.currentPage !== 'adminStudents' && state.currentPage !== 'adminReports') {
+        // Only force when the panel is open. Saves bandwidth on pages that don't
+        // care (admin never enters the student page → no point hammering).
+        next(); return;
+      }
+      adminForceFullSync();
+      next();
+    }, ADMIN_FULLSYNC_PERIOD_MS);
+  }
+  // First full sync: 30 s after the panel first opens. The "device was booted
+  // yesterday with cachedTs stuck" failure mode only matters once someone looks
+  // at the list, so this only fires from inside the page lifecycle.
+  adminFullSyncTimer = setTimeout(function() {
+    adminFullSyncTimer = null;
+    adminForceFullSync();
+    next();
+  }, ADMIN_FULLSYNC_BOOT_MS);
 }
 
 // Parse one ntfy JSON-lines stream into the admin cache and return the newest
@@ -9474,6 +9585,9 @@ function adminBackfillStudentsFromNtfy(since) {
 }
 function adminFetchCloudStudentsViaNtfy(since) {
   if (adminCloudFetching) adminCloudFetching = false;
+  // since arriving here is ALREADY in seconds (adminFetchCloudStudents converted
+  // it from the ms stored in fetchedTs). ntfy uses seconds since epoch — never
+  // pass the raw ms cursor or it parses it as year 51389 and returns nothing.
   // NOT pollTopicText() here. That helper deliberately keeps a single-hop fast
   // path for the sync channel, so a reachable-but-EMPTY Supabase stream would
   // short-circuit it — precisely the failure that hides every student from this
@@ -9481,8 +9595,21 @@ function adminFetchCloudStudentsViaNtfy(since) {
   legacyPollText('sync', SYNC_URL, since)
     .then(function(txt) {
       adminMergeNtfyStream(txt);
-      adminState.cloudStatus = 'ok';
+      // After ntfy, re-mark partial/error based on whether the stream actually
+      // contained anything. The ntfy 12-hour retention is a ceiling; if a device
+      // has a stale fetchedTs that excludes everything, this returns empty.
+      var localCount = Object.keys(adminStudentCache().students || {}).length;
+      if (localCount === 0) {
+        // ntfy ALSO empty means we still have no idea what's on the server —
+        // keep "loading" and let the next periodic full sync try Supabase.
+        adminState.cloudStatus = 'loading';
+      } else {
+        // We have SOME data; whether it's complete is for the verified-count
+        // check to decide (see adminUpdateCloudStatusAfterFetch below).
+        adminState.cloudStatus = 'ok';
+      }
       adminState.cloudRetry = 0;
+      adminFullSyncInFlight = false;
       if (state.currentPage === 'adminStudents' || state.currentPage === 'adminReports') render();
     })
     .catch(function() {
@@ -9496,6 +9623,7 @@ function adminFetchCloudStudentsViaNtfy(since) {
         }, ADMIN_CLOUD_RETRY_MS);
       } else {
         adminState.cloudStatus = 'error';
+        adminFullSyncInFlight = false;
         if (state.currentPage === 'adminStudents' || state.currentPage === 'adminReports') render();
       }
     });
@@ -9716,22 +9844,43 @@ function renderAdminStudents() {
   html += '</div><div class="page">';
 
   // Kick off (or re-kick) the cloud fetch; the placeholder below shows status.
-  if (adminState.cloudStatus !== 'ok' && !adminCloudFetching) adminFetchCloudStudents();
+  // 'partial' is informational (verified count > local). Don't re-trigger the
+  // same fetch that put us in partial — wait for the periodic full sync or the
+  // user's manual "Full re-sync" click.
+  if (adminState.cloudStatus !== 'ok' && adminState.cloudStatus !== 'partial' && !adminCloudFetching) adminFetchCloudStudents();
+  // Schedule the periodic full reconciliation on first render. Subsequent
+  // renders hit the idempotent guard at the top of adminScheduleFullSync().
+  adminScheduleFullSync();
   var statusLine = '';
+  // Always-available manual escape hatch — the failure mode (a device locked to
+  // 2 students) can only be reliably cleared by a manual full re-pull.
+  var fullSyncBtn = '<button class="admin-mini-btn" onclick="adminForceFullSync()">'
+    + (en ? '↻ Full re-sync' : '↻ 立即全量重拉')
+    + '</button>';
   if (adminState.cloudStatus === 'loading') {
-    statusLine = '⏳ ' + (en ? 'Fetching cloud data…' : '正在拉取云端数据…');
+    statusLine = '⏳ ' + (en ? 'Fetching cloud data…' : '正在拉取云端数据…')
+      + ' ' + fullSyncBtn;
   } else if (adminState.cloudStatus === 'retrying') {
     statusLine = '🔁 ' + (en ? 'Cloud fetch failed, auto-retrying (' + (adminState.cloudRetry || 0) + '/' + ADMIN_CLOUD_RETRY_MAX + ')… ' : '云端拉取失败，正在自动重试（' + (adminState.cloudRetry || 0) + '/' + ADMIN_CLOUD_RETRY_MAX + '）… ') +
-      '<button class="admin-mini-btn" onclick="adminFetchCloudStudents()">' + (en ? 'Retry now' : '立即重试') + '</button>';
+      '<button class="admin-mini-btn" onclick="adminFetchCloudStudents()">' + (en ? 'Retry now' : '立即重试') + '</button> ' + fullSyncBtn;
   } else if (adminState.cloudStatus === 'error') {
     statusLine = '⚠️ ' + (en ? 'Cloud fetch failed (check network). ' : '云端数据拉取失败（请检查网络）。') +
-      '<button class="admin-mini-btn" onclick="adminFetchCloudStudents()">' + (en ? 'Retry' : '重试') + '</button>' +
+      '<button class="admin-mini-btn" onclick="adminFetchCloudStudents()">' + (en ? 'Retry' : '重试') + '</button> ' + fullSyncBtn +
       '<div style="font-size:11px;color:var(--text-light);margin-top:4px;">' + (en
         ? 'Your line may be blocking ntfy.sh. The edge relay is tried automatically — if it still fails, open this admin panel from the EdgeOne link so the relay can fetch on your behalf.'
         : '你的网络线路可能屏蔽了 ntfy.sh。系统已自动尝试边缘中继；若仍失败，请改用 EdgeOne 链接打开管理端，由边缘节点代为拉取。') + '</div>';
+  } else if (adminState.cloudStatus === 'partial') {
+    // The truth-telling badge: verified count > local count ⇒ we know we're
+    // missing records. Don't lie with a green tick.
+    var verN = adminState.cloudVerifiedCount;
+    var verText = (typeof verN === 'number') ? verN : '?';
+    statusLine = '⚠️ ' + (en
+      ? 'Local list is INCOMPLETE — cloud has ' + verText + ' students. '
+      : '本地列表不完整，云端共有 ' + verText + ' 人。')
+      + '<button class="admin-mini-btn" onclick="adminForceFullSync()">' + (en ? '↻ Full re-sync now' : '↻ 立即全量重拉') + '</button>';
   } else if (adminState.cloudStatus === 'ok') {
     statusLine = '☁️ ' + (en ? 'Synced. ' : '已同步。') +
-      '<button class="admin-mini-btn" onclick="adminFetchCloudStudents()">' + (en ? 'Refresh' : '刷新') + '</button>';
+      '<button class="admin-mini-btn" onclick="adminFetchCloudStudents()">' + (en ? 'Refresh' : '刷新') + '</button> ' + fullSyncBtn;
   }
 
   // ===== Student detail view =====
