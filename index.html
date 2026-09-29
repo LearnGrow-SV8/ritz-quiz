@@ -8828,7 +8828,7 @@ function renderAdminExamHub() {
   html += '<div class="admin-hub-desc">' + (en ? 'Publish / edit / close timed exams — syncs to every device' : '发布、修改、关闭限时考试，即时同步学员端') + '</div></div>';
   html += '<div class="admin-hub-arrow">›</div></div>';
 
-  html += '<div class="admin-hub-card" onclick="adminState.reportDetail=null;adminState.reportTab=\'formal\';adminState.reportPaper=\'all\';navigate(\'adminReports\')">';
+  html += '<div class="admin-hub-card" onclick="adminState.reportDetail=null;adminState.reportFrom=\'\';adminState.reportTab=\'formal\';adminState.reportPaper=\'all\';navigate(\'adminReports\')">';
   html += '<div class="admin-hub-icon">📊</div>';
   html += '<div class="admin-hub-body"><div class="admin-hub-title">' + (en ? 'Report Center' : '考试报告中心') + '</div>';
   html += '<div class="admin-hub-desc">' + (en ? 'Scores by paper, answer replay, CSV export' : '成绩总表、逐题答题回放、CSV 导出') + '</div></div>';
@@ -8950,6 +8950,33 @@ function adminExportReportCSV() {
 }
 function reportOpenReplay(key, eid) {
   adminState.reportDetail = { key: key, eid: eid };
+  adminState.reportFrom = '';
+  render();
+  window.scrollTo(0, 0);
+}
+// Batch 6: ← back from an answer replay. Most replays open from the report
+// center (currentPage stays 'adminReports'), but a replay can now also be
+// opened straight from a student's exam history — in that case the back
+// button must land on that student's detail card, not the report list.
+function adminReportBack() {
+  adminState.reportDetail = null;
+  var from = adminState.reportFrom || '';
+  adminState.reportFrom = '';
+  if (from === 'student') {
+    state.currentPage = 'adminStudents';
+    render();
+    window.scrollTo(0, 0);
+  } else {
+    render();
+  }
+}
+// Batch 6: student-detail exam-history row → that attempt's answer replay.
+// adminState.studentDetail is left untouched so the back button restores the
+// exact same detail card.
+function adminOpenExamFromStudent(key, eid) {
+  adminState.reportDetail = { key: key, eid: eid };
+  adminState.reportFrom = 'student';
+  state.currentPage = 'adminReports';
   render();
   window.scrollTo(0, 0);
 }
@@ -9068,10 +9095,12 @@ function renderAdminReportReplay() {
   var en = state.lang === 'en';
   var det = adminState.reportDetail;
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminState.reportDetail=null;render()">←</button>';
+  html += '<button class="back-btn" onclick="adminReportBack()">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>🎬 ' + (en ? 'Answer Replay' : '答题回放') + '</h1>';
-  html += '<div class="subtitle">' + (en ? 'Per-question review' : '逐题查看作答') + '</div>';
+  html += '<div class="subtitle">' + (adminState.reportFrom === 'student'
+    ? (en ? 'Per-question review · from student detail' : '逐题查看作答 · 来自学员详情')
+    : (en ? 'Per-question review' : '逐题查看作答')) + '</div>';
   html += '</div><div class="page">';
 
   // locate the exam event + student record
@@ -9096,7 +9125,7 @@ function renderAdminReportReplay() {
 
   // summary card
   html += '<div class="q-card" style="margin-bottom:12px;">';
-  html += '<div style="font-size:15px;font-weight:600;">👤 ' + escapeHtml(name) + ' <span style="font-weight:400;font-size:12px;color:#8a8f96;">' + escapeHtml(snap.emp || '') + '</span></div>';
+  html += '<div style="font-size:15px;font-weight:600;">👤 ' + escapeHtml(name) + (snap.cn && snap.cn !== name ? ' <span style="font-weight:400;font-size:13px;color:#8a8f96;">· ' + escapeHtml(snap.cn) + '</span>' : '') + ' <span style="font-weight:400;font-size:12px;color:#8a8f96;">' + escapeHtml(snap.emp || '') + '</span></div>';
   html += '<div class="stu-meta" style="margin:6px 0;">' + fmtSyncTime(ev.ts) + ' · ' + (ev.mode === 'formal' ? '📌 ' + (en ? 'Formal' : '正式考') : '📝 ' + (en ? 'Practice' : '模拟考')) + ' · ' + escapeHtml(syncPaperLabel(ev.paper)) + (ev.title ? ' · ' + escapeHtml(ev.title) : '') + '</div>';
   var grEv = gradeExam(ev, null);
   var ppqNow = gradingFor(ev.paper).ppq;
@@ -9211,7 +9240,7 @@ function renderAdminReportReplay() {
     html += '</div>';
   }
 
-  html += '<button class="nav-btn secondary" style="width:100%;" onclick="adminState.reportDetail=null;render()">← ' + (en ? 'Back to report' : '返回报告列表') + '</button>';
+  html += '<button class="nav-btn secondary" style="width:100%;" onclick="adminReportBack()">← ' + (adminState.reportFrom === 'student' ? (en ? 'Back to student detail' : '返回学员详情') : (en ? 'Back to report' : '返回报告列表')) + '</button>';
   html += '</div>';
   return html;
 }
@@ -9661,6 +9690,21 @@ function adminStudentRecords() {
   arr.sort(function(a, b) { return (b.snap.ts || 0) - (a.snap.ts || 0); });
   return arr;
 }
+// Batch 6: division-first department label — "人力资源部 · 培训部".
+// Older builds rendered dept first; the hotel's convention is Division first,
+// Department second. Single helper so list card, detail card and future views
+// all agree on the order.
+function adminDeptDivLabel(snap, en) {
+  snap = snap || {};
+  var div = snap.div ? (en ? (snap.divEn || snap.div) : snap.div) : '';
+  var dept = snap.dept ? (en ? (snap.deptEn || snap.dept) : snap.dept) : '';
+  var out = '';
+  if (div) out += escapeHtml(div);
+  if (div && dept) out += ' · ';
+  if (dept) out += escapeHtml(dept);
+  if (!out) out = en ? 'No department' : '未填部门';
+  return out;
+}
 function renderAdminStudents() {
   if (!adminState.authenticated) return renderAdminLogin();
   var en = state.lang === 'en';
@@ -9702,9 +9746,16 @@ function renderAdminStudents() {
     }
     var snap = rec.snap;
     var stuEmp = adminStudentEmp(rec);
+    var stuName = snap.name || rec.key;
+    // Batch 6: show the Chinese name alongside the (usually English) display
+    // name so two students sharing an English name stay distinguishable in
+    // the list without opening each detail card.
+    var stuCnTag = (snap.cn && snap.cn !== stuName)
+      ? ' <span style="font-weight:400;font-size:13px;color:#8a8f96;">· ' + escapeHtml(snap.cn) + '</span>'
+      : '';
     html += '<div class="sync-note">' + statusLine + '</div>';
     html += '<div class="stu-row" style="cursor:default;">';
-    html += '<div class="stu-name">' + escapeHtml(snap.name || rec.key) + '</div>';
+    html += '<div class="stu-name">' + escapeHtml(stuName) + stuCnTag + '</div>';
     // Stage 9: the account identity is the EMPLOYEE ID, so that is what the
     // detail card leads with. The storage key is shown underneath in small
     // type — it is what a ban / a manual SQL fix has to target, and for
@@ -9712,7 +9763,7 @@ function renderAdminStudents() {
     html += '<div class="stu-meta">🔑 ' + (en ? 'Employee ID: ' : '工号：') + (stuEmp
       ? '<b>' + escapeHtml(stuEmp) + '</b>'
       : '<span style="color:#c0392b;">' + (en ? 'not on record (legacy account)' : '无工号记录（旧账号）') + '</span>') + '</div>';
-    html += '<div class="stu-meta">' + (snap.dept ? escapeHtml(en ? (snap.deptEn || snap.dept) : snap.dept) : (en ? 'No department' : '未填部门')) + (snap.div ? ' · ' + escapeHtml(en ? (snap.divEn || snap.div) : snap.div) : '') + '</div>';
+    html += '<div class="stu-meta">' + adminDeptDivLabel(snap, en) + '</div>';
     html += '<div class="stu-meta">' + (en ? 'PIN: ' : 'PIN：') + (snap.pinSetAt
       ? '<b style="color:#2e7d32;">' + (en ? 'set' : '已设置') + '</b>'
       : '<span style="color:#c0392b;">' + (en ? 'not set yet — asked on next sign-in' : '尚未设置（下次登录会要求设置）') + '</span>') + '</div>';
@@ -9806,13 +9857,17 @@ function renderAdminStudents() {
     if (!rec.exams.length) {
       html += '<div class="sync-note">' + (en ? 'No exams yet.' : '暂无考试记录。') + '</div>';
     }
+    // Batch 6: every exam-history row jumps straight to that attempt's answer
+    // replay (previously admins had to leave the detail card, open the report
+    // center and search). Back button on the replay returns here.
     for (var e2 = 0; e2 < rec.exams.length; e2++) {
       var ev2 = rec.exams[e2];
       var rs = ev2.reason === 'timeout' ? ' ⏱' : (ev2.reason === 'switch' ? ' ↩️' : '');
       var modeTag = ev2.mode === 'formal' ? ' <b style="color:#2c4a8a;background:#e8f0fe;border-radius:4px;padding:0 4px;font-size:11px;">📌 ' + (en ? 'Formal' : '正式') + '</b>' : '';
       var durTag = ev2.dur ? ' · ⏱ ' + Math.floor(ev2.dur / 60) + ':' + (ev2.dur % 60 < 10 ? '0' : '') + (ev2.dur % 60) : '';
       var titleTag = (ev2.mode === 'formal' && ev2.title) ? '<br><span style="font-size:11px;color:#2c4a8a;">' + escapeHtml(ev2.title) + '</span>' : '';
-      html += '<div class="exam-row"><span>' + fmtSyncTime(ev2.ts) + ' · ' + escapeHtml(syncPaperLabel(ev2.paper)) + modeTag + rs + durTag + titleTag + '<br><span class="report-label">' + (ev2.correct || 0) + '/' + (ev2.total || 0) + '</span></span><b style="font-size:16px;color:' + ((ev2.score || 0) >= 60 ? '#2e7d32' : '#c0392b') + ';">' + ev2.score + '</b></div>';
+      var replayHint = ' <span style="font-size:11px;color:#8a8f96;">' + (en ? 'replay' : '回放') + ' ›</span>';
+      html += '<div class="exam-row" style="cursor:pointer;' + (ev2.id ? '' : 'opacity:.6;') + '" title="' + (ev2.id ? (en ? 'View answer replay' : '查看答题回放') : (en ? 'Replay unavailable for this record' : '该记录无回放')) + '"' + (ev2.id ? ' onclick="adminOpenExamFromStudent(\'' + jsKey(rec.key) + '\',\'' + jsKey(ev2.id) + '\')"' : '') + '><span>' + fmtSyncTime(ev2.ts) + ' · ' + escapeHtml(syncPaperLabel(ev2.paper)) + modeTag + rs + durTag + titleTag + '<br><span class="report-label">' + (ev2.correct || 0) + '/' + (ev2.total || 0) + '</span></span><b style="font-size:16px;color:' + ((ev2.score || 0) >= 60 ? '#2e7d32' : '#c0392b') + ';">' + ev2.score + '</b>' + replayHint + '</div>';
     }
 
     html += '<h4 style="margin:16px 0 8px;">🚩 ' + (en ? 'Error reports' : '报错记录') + '</h4>';
@@ -9923,12 +9978,18 @@ function renderAdminStudents() {
       // flagged inline so the list doubles as a status board.
       var emp2 = adminStudentEmp(rec2);
       var isBanned = !!adminBanStateOf(rec2);
+      // Batch 6: Chinese name inline in the list — disambiguates same-English-
+      // -name students at a glance. Hidden when empty (foreign staff) or when
+      // the display name already IS the Chinese name.
+      var cnTag2 = (snap2.cn && snap2.cn !== name)
+        ? ' <span style="font-weight:400;font-size:12px;color:#8a8f96;">· ' + escapeHtml(snap2.cn) + '</span>'
+        : '';
       var empTag = ' <span style="font-weight:400;font-size:12px;color:#8a8f96;">' + (emp2 ? escapeHtml(t('admin_emp_no')) + ' ' + escapeHtml(emp2) : escapeHtml(rec2.key)) + '</span>';
       var banTag = isBanned ? ' <span style="font-weight:400;font-size:11px;color:#c0392b;">🚫 ' + (en ? 'banned' : '已禁用') + '</span>' : '';
       var noPinTag = (!snap2.pinSetAt && !isBanned) ? ' <span style="font-weight:400;font-size:11px;color:#b8860b;">🔑 ' + (en ? 'no PIN' : '未设 PIN') + '</span>' : '';
       html += '<div class="stu-row" onclick="adminState.studentDetail=\'' + jsKey(rec2.key) + '\';render()">';
-      html += '<div class="stu-name">' + escapeHtml(name) + empTag + banTag + noPinTag + '</div>';
-      html += '<div class="stu-meta">' + (snap2.dept ? escapeHtml(en ? (snap2.deptEn || snap2.dept) : snap2.dept) + (snap2.div ? ' · ' + escapeHtml(en ? (snap2.divEn || snap2.div) : snap2.div) : '') : (en ? 'No department' : '未填部门')) + ' · ' + (en ? 'active ' : '活跃 ') + fmtSyncTime(snap2.ts) + '</div>';
+      html += '<div class="stu-name">' + escapeHtml(name) + cnTag2 + empTag + banTag + noPinTag + '</div>';
+      html += '<div class="stu-meta">' + adminDeptDivLabel(snap2, en) + ' · ' + (en ? 'active ' : '活跃 ') + fmtSyncTime(snap2.ts) + '</div>';
       html += '<div class="stu-stats">';
       var prog = snap2.prog || {};
       var progKeys = ['day21', 'day21_kitchen', 'tsos', 'tsos_kitchen', 'manual'];
