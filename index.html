@@ -8406,43 +8406,24 @@ function renderAdminDashboard() {
   }
   html += '</div>';
 
-  // ===== Cloud base URL configuration (Stage 6.6) =====
-  // The EdgeOne Pages URL is the durable home of KV-backed sync. Each
-  // redeploy gives it a 3 h token — when the token expires the admin pastes
-  // the new URL here and clicks Save, every device picks it up on refresh.
-  html += '<div class="admin-card" style="margin-top:12px;">';
-  html += '<div class="admin-card-header">' + (state.lang === 'en' ? '☁️ Cloud base URL (EdgeOne)' : '☁️ 云端地址（EdgeOne）') + '</div>';
-  html += '<div style="font-size:13px;color:var(--text-light);margin-bottom:8px;">';
-  html += (state.lang === 'en'
-    ? 'The EdgeOne Pages URL is the durable home of the cloud bank + student records. When a redeploy issues a new 3 h token, paste the new URL here and click Save. Empty = use the embedded default.'
-    : 'EdgeOne Pages 地址是云端题库和学员记录的归宿。每次重新部署会签发新的 3 小时 token，把新地址粘贴进来点保存即可。留空 = 使用内嵌默认地址。');
-  html += '</div>';
-  html += '<div style="display:flex;gap:8px;align-items:center;">';
-  html += '<input type="text" id="cloudBaseInput" placeholder="https://ritz-quiz-platform-xxxx.edgeone.cool?eo_token=..." style="flex:1;font-family:monospace;font-size:12px;" value="' + escapeHtml(getCloudBase()) + '" />';
-  html += '<button class="admin-mini-btn" onclick="adminSaveCloudBase()">' + (state.lang === 'en' ? 'Save' : '保存') + '</button>';
-  html += '<button class="admin-mini-btn" onclick="adminTestCloudBase()">' + (state.lang === 'en' ? 'Test' : '测试') + '</button>';
-  html += '</div>';
-  html += '<div id="cloudBaseStatus" style="margin-top:6px;font-size:13px;"></div>';
-  html += '</div>';
-
   // ===== Three workspace entries (question / student / exam management) =====
   html += '<div class="admin-hub">';
   html += '<div class="admin-hub-card" onclick="navigate(\'adminBankHub\')">';
   html += '<div class="admin-hub-icon">\ud83d\udcda</div>';
   html += '<div class="admin-hub-body"><div class="admin-hub-title">' + (state.lang === 'en' ? 'Question Management' : '\u9898\u76ee\u7ba1\u7406') + '</div>';
-  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Edit / add / delete questions, compose papers' : '\u9898\u5e93\u7f16\u8f91\u30fb\u65b0\u589e\u30fb\u5220\u9664\u30fb\u8bd5\u5377\u7f16\u6392') + '</div></div>';
+  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Edit / add / delete questions, compose papers' : '\u9898\u5e93\u7f16\u8f91\u00b7\u65b0\u589e\u00b7\u5220\u9664\u00b7\u8bd5\u5377\u7f16\u6392') + '</div></div>';
   html += '<div class="admin-hub-arrow">\u203a</div></div>';
 
   html += '<div class="admin-hub-card" onclick="adminState.studentsTab=\'list\';adminState.studentDetail=\'\';adminState.editStudent=\'\';navigate(\'adminStudents\')">';
   html += '<div class="admin-hub-icon">\ud83d\udc65</div>';
   html += '<div class="admin-hub-body"><div class="admin-hub-title">' + (state.lang === 'en' ? 'Student Management' : '\u5b66\u5458\u7ba1\u7406') + '</div>';
-  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Learning data, error reports, info corrections' : '\u5b66\u4e60\u60c5\u51b5\u30fb\u62a5\u9519\u5904\u7406\u30bf\u4fe1\u606f\u66f4\u6b63') + '</div></div>';
+  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Learning data, error reports, info corrections' : '\u5b66\u4e60\u60c5\u51b5\u00b7\u62a5\u9519\u5904\u7406\u00b7\u4fe1\u606f\u66f4\u6b63') + '</div></div>';
   html += '<div class="admin-hub-arrow">\u203a</div></div>';
 
   html += '<div class="admin-hub-card" onclick="navigate(\'adminExamHub\')">';
   html += '<div class="admin-hub-icon">\ud83d\udccc</div>';
   html += '<div class="admin-hub-body"><div class="admin-hub-title">' + (state.lang === 'en' ? 'Exam Management' : '\u8003\u8bd5\u7ba1\u7406') + '</div>';
-  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Publish formal exams, scores & replays, CSV export' : '\u6b63\u5f0f\u8003\u8bd5\u53d1\u5e03\u30fb\u62a5\u544a\u4e2d\u5fc3\u30ef\u6210\u7ee9\u5bfc\u51fa') + '</div></div>';
+  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Publish formal exams, scores & replays, CSV export' : '\u6b63\u5f0f\u8003\u8bd5\u53d1\u5e03\u00b7\u62a5\u544a\u4e2d\u5fc3\u00b7\u6210\u7ee9\u5bfc\u51fa') + '</div></div>';
   html += '<div class="admin-hub-arrow">\u203a</div></div>';
 
   // Stage 4: blacklist hub card. Admins ban a phone and stop that account
