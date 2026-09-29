@@ -10642,6 +10642,88 @@ function renderAdminPaper() {
   html += '</div>';
   html += '</div>';
 
+
+  // ===== Stage 14 / Batch 5 — paper statistics + continuity card ===========
+  // Sits next to paperGradingCard so the admin sees question mix + dept mix
+  // before scrolling the long list. Cheap to recompute (refs < 100).
+  var stats = adminPaperStats(paperKey);
+  var continuity = adminCheckPaperContinuity(paperKey);
+  html += '<div class="admin-bank-card" id="paperStatsCard" data-paper-key="' + escapeHtml(paperKey) + '">';
+  html += '<h3 style="display:flex;align-items:center;justify-content:space-between;">';
+  html += '<span>\ud83d\udcca ' + (state.lang === 'en' ? 'Paper statistics' : '\u8bd5\u5377\u7edf\u8ba1') + '</span>';
+  if (!continuity.ok) {
+    html += '<span style="font-size:11px;font-weight:500;color:var(--danger-deep, #b3261e);background:var(--danger-soft, #fdecea);padding:2px 10px;border-radius:10px;">\u26a0\ufe0f ' +
+      (state.lang === 'en'
+        ? ('Numbering: ' + continuity.gaps.length + ' gap' + (continuity.gaps.length === 1 ? '' : 's') + (continuity.duplicates.length ? ', ' + continuity.duplicates.length + ' dup' : ''))
+        : ('\u9898\u53f7\uff1a' + continuity.gaps.length + ' \u5904\u7f3a\u53e3' + (continuity.duplicates.length ? '\uff0c' + continuity.duplicates.length + ' \u5904\u91cd\u590d' : ''))) +
+      '</span>';
+  } else if (continuity.missingNumber > 0) {
+    html += '<span style="font-size:11px;font-weight:500;color:#92400e;background:#fef3c7;padding:2px 10px;border-radius:10px;">' +
+      (state.lang === 'en'
+        ? ('Numbering uses index fallback for ' + continuity.missingNumber + ' legacy question' + (continuity.missingNumber === 1 ? '' : 's'))
+        : ('\u9898\u53f7\u7f3a\u5931 ' + continuity.missingNumber + ' \u9053\uff0c\u5df2\u6309\u4f4d\u7f6e\u514c\u5e95\u663e\u793a')) + '</span>';
+  }
+  html += '</h3>';
+  var typeOrder = ['single', 'multiple', 'judge', 'fill', 'essay'];
+  var typeLabels = state.lang === 'en'
+    ? { single: 'Single', multiple: 'Multiple', judge: 'True/False', fill: 'Fill', essay: 'Essay', unknown: 'Other' }
+    : { single: '\u5355\u9009', multiple: '\u591a\u9009', judge: '\u5224\u65ad', fill: '\u586b\u7a7a', essay: '\u7b80\u7b54', unknown: '\u5176\u4ed6' };
+  var typePills = [];
+  for (var ti = 0; ti < typeOrder.length; ti++) {
+    var tk = typeOrder[ti];
+    var tv = stats.byType[tk];
+    if (tv) {
+      var pts = stats.pointsByType[tk] || 0;
+      typePills.push('<span style="font-size:12px;color:var(--text);background:#f1f5f9;padding:3px 10px;border-radius:10px;">' +
+        escapeHtml(typeLabels[tk] || tk) + ' \u00b7 ' + tv + ' (' + Math.round(pts * 10) / 10 + (state.lang === 'en' ? ' pts' : ' \u5206') + ')</span>');
+    }
+  }
+  if (stats.byType.unknown) {
+    typePills.push('<span style="font-size:12px;color:var(--text);background:#f1f5f9;padding:3px 10px;border-radius:10px;">' +
+      escapeHtml(typeLabels.unknown) + ' \u00b7 ' + stats.byType.unknown + '</span>');
+  }
+  if (typePills.length) {
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">' + typePills.join('') + '</div>';
+  }
+  var deptKeys = Object.keys(stats.byDept).sort(function (a, b) { return stats.byDept[b] - stats.byDept[a]; });
+  if (deptKeys.length) {
+    html += '<div style="margin-top:10px;font-size:12px;color:var(--text-light);">' +
+      (state.lang === 'en' ? 'By department:' : '\u6309\u90e8\u95e8\uff1a') + '</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">';
+    var shownDepts = deptKeys.slice(0, 6);
+    for (var di = 0; di < shownDepts.length; di++) {
+      var dk = shownDepts[di];
+      var dv = stats.byDept[dk];
+      var label = dk === '_uncategorized'
+        ? (state.lang === 'en' ? 'Uncategorised' : '\u672a\u5206\u7c7b')
+        : escapeHtml(dk);
+      html += '<span style="font-size:12px;color:var(--text);background:#ecfdf5;padding:3px 10px;border-radius:10px;">' +
+        label + ' \u00b7 ' + dv + '</span>';
+    }
+    if (deptKeys.length > 6) {
+      html += '<span style="font-size:12px;color:var(--text-light);">' +
+        (state.lang === 'en' ? '+' + (deptKeys.length - 6) + ' more' : '\u5176\u4f59 ' + (deptKeys.length - 6) + ' \u4e2a') + '</span>';
+    }
+    html += '</div>';
+  }
+  if (!continuity.ok) {
+    var bits = [];
+    if (continuity.gaps.length) {
+      bits.push((state.lang === 'en' ? 'Issue: ' : '\u7f3a\u5931 ') + continuity.gaps.slice(0, 6).join(', ') + (continuity.gaps.length > 6 ? (state.lang === 'en' ? ' \u2026' : ' \u2026') : ''));
+    }
+    if (continuity.duplicates.length) {
+      bits.push((state.lang === 'en' ? 'Duplicates: ' : '\u91cd\u590d ') + continuity.duplicates.slice(0, 6).join(', ') + (continuity.duplicates.length > 6 ? (state.lang === 'en' ? ' \u2026' : ' \u2026') : ''));
+    }
+    if (bits.length) {
+      html += '<div style="margin-top:10px;font-size:11px;color:var(--danger-deep, #b3261e);line-height:1.5;">' + escapeHtml(bits.join(' \u00b7 ')) + '</div>';
+    }
+  }
+  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">';
+  html += '<button type="button" class="admin-cloud-btn" style="background:var(--bg-secondary);color:var(--text);" onclick="adminExportPaperJSON(\'' + escapeHtml(paperKey) + '\')">\ud83d\udce5 ' +
+    (state.lang === 'en' ? 'Export this paper as JSON' : '\u5bfc\u51fa\u6b64\u8bd5\u5377\u4e3a JSON') + '</button>';
+  html += '</div>';
+  html += '</div>';
+
   // Friendly hint when the kitchen paper is the auto-seeded default (16 Gold
   // Standards + 8 FSQM food-safety / service-knowledge questions). Lets admin
   // know they don't have to start from scratch — and makes the "still under
@@ -10704,32 +10786,249 @@ function adminPaperGradePublishClick() {
     var _tq = adminPaperRefQuestion(refs[_ti]);
     if (_tq) totalScore += gradePointsForQ(_tq, g);
   }
-  if (g.pass > totalScore && totalScore > 0) {
-    var ok = confirm(en
-      ? 'Passing score (' + g.pass + ') is higher than the full score (' + totalScore + '). Publish anyway?'
-      : '及格分（' + g.pass + '）高于满分（' + totalScore + '），仍要发布吗？');
-    if (!ok) return;
+  function actuallyPublish() {
+    adminPaperGradePublish().then(function (res) {
+      if (res && res.ok) {
+        adminAlert(
+          en ? 'Published' : '已发布',
+          en ? 'Saved and published to all student devices.' : '已保存并发布到所有学员端。'
+        );
+      } else if (res && res.reason === 'too_large') {
+        adminAlert(
+          en ? 'Grading config too large' : '评分配置过大',
+          en ? 'Grading config is too large (' + res.size + ' bytes). Reduce overrides and retry.' : '评分配置过大（' + res.size + ' 字节），请减少单题覆盖后再试。'
+        );
+      } else {
+        adminAlert(
+          en ? 'Publish failed' : '发布失败',
+          en ? 'Saved locally, but publishing to students failed (will retry next time).' : '已保存到本设备，但发布到学员端失败（下次打开本页会重试）。'
+        );
+      }
+      render();
+    });
   }
-  // Switch the global save-state banner so the existing "发布状态" toast covers
-  // grading publish too — no need to invent a parallel UX.
-  adminPaperGradePublish().then(function (res) {
-    if (res && res.ok) {
-      alert(en ? 'Saved and published to all student devices.' : '已保存并发布到所有学员端。');
-    } else if (res && res.reason === 'too_large') {
-      alert(en ? 'Grading config is too large (' + res.size + ' bytes). Reduce overrides and retry.' : '评分配置过大（' + res.size + ' 字节），请减少单题覆盖后再试。');
-    } else {
-      alert(en ? 'Saved locally, but publishing to students failed (will retry next time).' : '已保存到本设备，但发布到学员端失败（下次打开本页会重试）。');
-    }
-    render();
-  });
+  if (g.pass > totalScore && totalScore > 0) {
+    adminConfirm(
+      en ? 'Passing score above full score' : '及格分高于满分',
+      en
+        ? 'Passing score (' + g.pass + ') is higher than the full score (' + totalScore + '). Publish anyway?'
+        : '及格分（' + g.pass + '）高于满分（' + totalScore + '），仍要发布吗？',
+      { primaryText: en ? 'Publish anyway' : '仍然发布', danger: true }
+    ).then(function (ok) { if (ok) actuallyPublish(); });
+    return;
+  }
+  actuallyPublish();
 }
 function adminPaperGradeDiscard() {
+  // Discard stays on native confirm() on purpose — it's a one-line "are you
+  // sure?" with no follow-up UX, so the async modal adds ceremony without
+  // payoff. adminPaperGradePublishClick (which shows a result alert) is the
+  // path that graduated to adminConfirm.
   if (!confirm(state.lang === 'en'
     ? 'Discard in-progress grading edits on this paper? Published numbers stay as they are.'
     : '放弃当前对此试卷的评分修改？已发布的数值不会被改动。')) return;
   var gk = gradingKeyOf(adminState.paper);
   if (adminPaperGradingDraft && gk) delete adminPaperGradingDraft.byPaper[gk];
   render();
+}
+
+// ===== Stage 14 / Batch 5 — generic admin modal helpers ====================
+// Promise-based confirm() + alert() that use the existing .confirm-overlay /
+// .confirm-box CSS (same look as the employee-conflict modal). We use these
+// instead of native window.confirm/alert for the admin paths because:
+//   • iOS Safari blocks input on native confirm() (a known paper-cut that
+//     already motivated an existing employee-conflict modal earlier);
+//   • native alert/confirm cannot render the danger button styling we want;
+//   • Promise-based means the existing synchronous render() call sites
+//     need only a tiny async wrapper.
+// Both close on: OK button, Cancel button (confirm), Esc key, backdrop click.
+function adminConfirm(title, body, opts) {
+  opts = opts || {};
+  return new Promise(function (resolve) {
+    var en = state.lang === 'en';
+    var primaryText = opts.primaryText || (en ? 'OK' : '确定');
+    var secondaryText = opts.secondaryText || (en ? 'Cancel' : '取消');
+    var danger = !!opts.danger;
+    var overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay admin-confirm-overlay';
+    overlay.innerHTML =
+      '<div class="confirm-box">' +
+        '<div class="confirm-title">' + escapeHtml(title) + '</div>' +
+        (body ? '<div class="confirm-body">' + escapeHtml(body) + '</div>' : '') +
+        '<div class="confirm-actions">' +
+          '<button class="confirm-btn secondary" data-act="cancel">' + escapeHtml(secondaryText) + '</button>' +
+          '<button class="confirm-btn ' + (danger ? 'danger' : 'primary') + '" data-act="ok">' + escapeHtml(primaryText) + '</button>' +
+        '</div>' +
+      '</div>';
+    function close(result) {
+      document.removeEventListener('keydown', onEsc);
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      resolve(result);
+    }
+    function onEsc(e) { if (e && e.key === 'Escape') close(false); }
+    overlay.querySelector('[data-act="cancel"]').onclick = function () { close(false); };
+    overlay.querySelector('[data-act="ok"]').onclick = function () { close(true); };
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(false); });
+    document.addEventListener('keydown', onEsc);
+    document.body.appendChild(overlay);
+  });
+}
+
+function adminAlert(title, body, opts) {
+  opts = opts || {};
+  return new Promise(function (resolve) {
+    var en = state.lang === 'en';
+    var okText = opts.okText || (en ? 'OK' : '我知道了');
+    var overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay admin-alert-overlay';
+    overlay.innerHTML =
+      '<div class="confirm-box">' +
+        '<div class="confirm-title">' + escapeHtml(title) + '</div>' +
+        (body ? '<div class="confirm-body">' + escapeHtml(body) + '</div>' : '') +
+        '<div class="confirm-actions">' +
+          '<button class="confirm-btn primary" data-act="ok">' + escapeHtml(okText) + '</button>' +
+        '</div>' +
+      '</div>';
+    function close() {
+      document.removeEventListener('keydown', onEsc);
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      resolve();
+    }
+    function onEsc(e) { if (e && e.key === 'Escape') close(); }
+    overlay.querySelector('[data-act="ok"]').onclick = close;
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', onEsc);
+    document.body.appendChild(overlay);
+  });
+}
+
+// ===== Stage 14 / Batch 5 — paper continuity check =========================
+// Stage 14: validate that the current paper's question numbers form a clean
+// 1..N sequence with no gaps and no duplicates. Old questions (added before
+// the number field existed) fall back to their list index so we don't false-
+// positive every legacy paper. Result shape:
+//   { ok: boolean, total: number, expected: number, gaps: number[],
+//     duplicates: number[], missingNumber: number[] }
+function adminCheckPaperContinuity(paperKey) {
+  var refs = ((QUESTION_DATA.papers || {})[paperKey]) || [];
+  var nums = [];
+  var missingNumber = 0;
+  for (var i = 0; i < refs.length; i++) {
+    var q = adminPaperRefQuestion(refs[i]);
+    var n = (q && typeof q.number === 'number' && q.number > 0) ? q.number : (i + 1);
+    nums.push(n);
+    if (!(q && typeof q.number === 'number' && q.number > 0)) missingNumber++;
+  }
+  // Sort copy so we can detect duplicates + gap ranges regardless of order.
+  var sorted = nums.slice().sort(function (a, b) { return a - b; });
+  var seen = {};
+  var duplicates = [];
+  for (var k = 0; k < sorted.length; k++) {
+    if (seen[sorted[k]]) duplicates.push(sorted[k]);
+    else seen[sorted[k]] = true;
+  }
+  var gaps = [];
+  for (var g = 1; g < sorted.length; g++) {
+    if (sorted[g] - sorted[g - 1] > 1) {
+      for (var m = sorted[g - 1] + 1; m < sorted[g]; m++) gaps.push(m);
+    }
+  }
+  return {
+    ok: gaps.length === 0 && duplicates.length === 0,
+    total: nums.length,
+    expected: nums.length,
+    nums: nums,
+    gaps: gaps,
+    duplicates: duplicates,
+    missingNumber: missingNumber
+  };
+}
+
+// ===== Stage 14 / Batch 5 — paper statistics ===============================
+// Aggregates the current paper by:
+//   • question type (single / multiple / fill / judge / essay …)
+//   • department (top-level q.department_big; "未分类" fallback)
+//   • score by type (using the same gradePointsForQ shared with student-side)
+// Returns { total, byType: {type:count}, byDept: {dept:count}, pointsByType }.
+function adminPaperStats(paperKey) {
+  var refs = ((QUESTION_DATA.papers || {})[paperKey]) || [];
+  var gradingKey = gradingKeyOf(paperKey);
+  var g = paperGradingSnapshot(gradingKey);
+  var byType = {}, byDept = {}, pointsByType = {}, totalPts = 0;
+  for (var i = 0; i < refs.length; i++) {
+    var q = adminPaperRefQuestion(refs[i]);
+    if (!q) continue;
+    var type = (q.type || 'unknown').toLowerCase();
+    byType[type] = (byType[type] || 0) + 1;
+    var dept = (q.department_big || '').trim() || '_uncategorized';
+    byDept[dept] = (byDept[dept] || 0) + 1;
+    var pts = gradePointsForQ(q, g);
+    totalPts += pts;
+    pointsByType[type] = (pointsByType[type] || 0) + pts;
+  }
+  return { total: refs.length, byType: byType, byDept: byDept, pointsByType: pointsByType, totalPts: totalPts };
+}
+
+// ===== Stage 14 / Batch 5 — per-paper JSON export ==========================
+// Downloads just this paper's full question set + the rest of the bank so
+// another trainer can re-import the same paper on their own device without
+// needing to clone the whole question bank. Format mirrors adminGetData() so
+// adminImportPaperJSON() (future) can ingest it directly.
+function adminExportPaperJSON(paperKey) {
+  paperKey = paperKey || adminState.paper;
+  if (!paperKey) return adminAlert(
+    state.lang === 'en' ? 'No paper selected' : '未选择试卷',
+    state.lang === 'en' ? 'Open a paper first, then export.' : '请先打开一个试卷，再导出。'
+  );
+  var refs = ((QUESTION_DATA.papers || {})[paperKey]) || [];
+  if (!refs.length) return adminAlert(
+    state.lang === 'en' ? 'Paper is empty' : '试卷为空',
+    state.lang === 'en' ? 'There are no questions to export.' : '此试卷没有题目可导出。'
+  );
+  var gradingKey = gradingKeyOf(paperKey);
+  var g = paperGradingSnapshot(gradingKey);
+  // Walk the refs and emit full question objects, falling back to a deleted-
+  // marker for missing ones so the export is self-describing.
+  var outQs = [];
+  var seenIds = {};
+  for (var i = 0; i < refs.length; i++) {
+    var q = adminPaperRefQuestion(refs[i]);
+    var qid = refs[i].ref || refs[i].id || '';
+    if (q) {
+      // Clone + strip any non-serialisable fields (defensive — none today,
+      // but if Vue-style reactivity proxies slip in we want a clean JSON).
+      var clone = JSON.parse(JSON.stringify(q));
+      clone._paperPoints = gradePointsForQ(q, g);
+      outQs.push(clone);
+    } else {
+      outQs.push({ id: qid, _deleted: true, _paperPoints: (g.qov && g.qov[qid]) || 0 });
+    }
+    seenIds[qid] = true;
+  }
+  var payload = {
+    t: 'paper-export',
+    paperKey: paperKey,
+    gradingKey: gradingKey,
+    exportedAt: new Date().toISOString(),
+    exportedBy: 'admin',
+    grading: { ppq: g.ppq, ppBlank: g.ppBlank, pass: g.pass },
+    questions: outQs
+  };
+  var json = JSON.stringify(payload, null, 2);
+  var blob = new Blob([json], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  var stamp = new Date().toISOString().slice(0, 10);
+  a.download = 'paper_' + paperKey + '_' + stamp + '.json';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () {
+    if (a.parentNode) a.parentNode.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+  return Promise.resolve();  // kept async to match adminAlert signature for call-site symmetry
 }
 
 function adminRenderPaperList() {
@@ -10823,11 +11122,19 @@ function adminPaperMove(index, dir) {
 }
 
 function adminPaperRemove(index) {
-  if (!confirm(state.lang === 'en' ? 'Remove this question from the paper?' : '\u786e\u5b9a\u4ece\u8bd5\u5377\u4e2d\u79fb\u9664\u8be5\u9898\uff1f')) return;
-  var refs = ((QUESTION_DATA.papers || {})[adminState.paper]) || [];
-  refs.splice(index, 1);
-  adminPaperSaveData();
-  render();
+  adminConfirm(
+    state.lang === 'en' ? 'Remove this question?' : '\u4ece\u8bd5\u5377\u79fb\u9664\u8be5\u9898\uff1f',
+    state.lang === 'en'
+      ? 'This question will be removed from the current paper. You can add it back any time from the question bank.'
+      : '\u5c06\u4ece\u5f53\u524d\u8bd5\u5377\u79fb\u9664\u8be5\u9898\u3002\u53ef\u4ee5\u968f\u65f6\u4ece\u9898\u5e93\u91cd\u65b0\u6dfb\u52a0\u3002',
+    { primaryText: state.lang === 'en' ? 'Remove' : '\u79fb\u9664', danger: true }
+  ).then(function (ok) {
+    if (!ok) return;
+    var refs = ((QUESTION_DATA.papers || {})[adminState.paper]) || [];
+    refs.splice(index, 1);
+    adminPaperSaveData();
+    render();
+  });
 }
 
 function adminPaperPickCount() {
@@ -12097,6 +12404,17 @@ function adminExportJSON() {
 }
 
 function adminResetData() {
+  adminConfirm(
+    state.lang === 'en' ? 'Reset all changes?' : '\u6062\u590d\u539f\u59cb\u6570\u636e\uff1f',
+    state.lang === 'en'
+      ? 'This restores the original question bank for EVERYONE — all student devices will also revert to the original questions.'
+      : '\u6240\u6709\u4fee\u6539\u5c06\u88ab\u6e05\u9664\uff0c\u4e14\u6240\u6709\u5b66\u5458\u7aef\u4e5f\u4f1a\u4e00\u5e76\u6062\u590d\u4e3a\u539f\u59cb\u9898\u5e93\u3002',
+    { primaryText: state.lang === 'en' ? 'Reset everything' : '\u6062\u590d\u4e3a\u539f\u59cb', danger: true }
+  ).then(function (ok) { if (ok) adminResetDataContinue(); });
+}
+
+function adminResetDataContinue() {
+
   if (!confirm(state.lang === 'en'
     ? 'Reset all changes? This restores the original question bank for EVERYONE — all student devices will also revert to the original questions.'
     : '确定恢复原始数据？所有修改将被清除，且所有学员端也会一并恢复为原始题库。')) return;
@@ -12114,9 +12432,14 @@ function adminResetData() {
   var notified = false;
   function done(ok) {
     if (notified) return; notified = true;
-    alert(ok
-      ? (state.lang === 'en' ? '\u2705 Reset to original data! Students will see the original bank within ~90 seconds.' : '\u2705 \u5df2\u6062\u590d\u4e3a\u539f\u59cb\u6570\u636e\uff01\u5b66\u5458\u7aef\u5c06\u5728\u7ea6 90 \u79d2\u5185\uff08\u6216\u4e0b\u6b21\u6253\u5f00\u65f6\uff09\u81ea\u52a8\u6062\u590d\u3002')
-      : (state.lang === 'en' ? '\u26a0\ufe0f Reset locally, but notifying student devices failed — please try again.' : '\u26a0\ufe0f \u672c\u5730\u5df2\u6062\u590d\uff0c\u4f46\u901a\u77e5\u5b66\u5458\u7aef\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u4e00\u6b21\u3002'));
+    adminAlert(
+      ok
+        ? (state.lang === 'en' ? 'Done' : '\u6062\u590d\u6210\u529f')
+        : (state.lang === 'en' ? 'Reset failed' : '\u6062\u590d\u5931\u8d25'),
+      ok
+        ? (state.lang === 'en' ? 'Reset to original data! Students will see the original bank within ~90 seconds.' : '\u5df2\u6062\u590d\u4e3a\u539f\u59cb\u6570\u636e\uff01\u5b66\u5458\u7aef\u5c06\u5728\u7ea6 90 \u79d2\u5185\uff08\u6216\u4e0b\u6b21\u6253\u5f00\u65f6\uff09\u81ea\u52a8\u6062\u590d\u3002')
+        : (state.lang === 'en' ? 'Reset locally, but notifying student devices failed — please try again.' : '\u672c\u5730\u5df2\u6062\u590d\uff0c\u4f46\u901a\u77e5\u5b66\u5458\u7aef\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u4e00\u6b21\u3002')
+    );
     location.reload();
   }
   try {
@@ -12125,6 +12448,7 @@ function adminResetData() {
       .then(function(r) { done(!!(r && r.ok)); }, function() { done(false); });
   } catch (e) { done(false); }
   setTimeout(function() { done(false); }, 8000);
+
 }
 
 function render() {
