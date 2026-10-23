@@ -41,6 +41,13 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .app-header .header-logo { height:22px; width:auto; display:block; margin:0 auto 6px; opacity:0.9; }
 .back-btn { position:absolute; left:12px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.5); border:1px solid rgba(0,0,0,0.08); color:var(--primary); width:36px; height:36px; border-radius:50%; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 
+/* 统一学员端顶栏：左侧「← 返回上一层」，右侧 语言切换 + 🏠 一键回首页 */
+.app-header .header-right { position:absolute; right:12px; top:50%; transform:translateY(-50%); display:flex; align-items:center; gap:8px; }
+.back-btn.wide { width:auto; height:34px; padding:0 12px 0 8px; border-radius:17px; gap:3px; font-size:16px; }
+.back-btn.wide .back-label, .home-btn .back-label { font-size:13px; font-weight:600; letter-spacing:0; margin-left:3px; }
+.home-btn { background:rgba(255,255,255,0.5); border:1px solid rgba(0,0,0,0.08); color:var(--primary); height:34px; min-width:34px; padding:0 10px; border-radius:17px; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.app-header.has-back .header-logo, .app-header.has-back h1 { padding-left:4px; }
+@media (max-width:360px) { .back-btn.wide .back-label, .home-btn .back-label { display:none; } .back-btn.wide { padding:0 10px; } .home-btn { padding:0 8px; } }
 .page { padding:16px; padding-bottom:80px; }
 
 .home-hero { background:linear-gradient(160deg,var(--primary-soft) 0%,var(--primary-light) 100%); color:var(--primary); padding:36px 20px 32px; border-radius:0 0 28px 28px; text-align:center; margin:-16px -16px 20px; position:relative; }
@@ -3741,6 +3748,7 @@ const state = {
   loginHasPin: false,    // whether the resolved account already has a PIN
   searchKeyword: '',
   lang: localStorage.getItem('appLang') || 'cn',
+  navStack: [],        // 学员端页面栈（仅内存，刷新即清空）：goBack() 据此逐级回上一层，而不是一律回首页
 };
 
 // ===== Admin Panel State =====
@@ -4002,6 +4010,12 @@ var I18N = {
   result_unanswered: {cn:'未答', en:'Unanswered'},
   result_review: {cn:'查看解析', en:'Review Answers'},
   result_back: {cn:'返回', en:'Back'},
+  nav_back: {cn:'返回', en:'Back'},
+  nav_home: {cn:'首页', en:'Home'},
+  nav_home_hint: {cn:'回到首页', en:'Go to home'},
+  nav_back_hint: {cn:'返回上一层', en:'Go back'},
+  exit_exam_confirm: {cn:'考试还没交卷，现在离开本次成绩将不计入。确定要离开吗？', en:'This exam is not submitted yet — leaving now will not record a score. Leave anyway?'},
+  exit_practice_confirm: {cn:'确定要结束本次练习吗？', en:'End this practice session?'},
   result_replay: {cn:'答题回放', en:'Answer Replay'},
   result_replay_title: {cn:'答题回放', en:'Answer Replay'},
   result_replay_explain: {cn:'查看解析', en:'Explain'},
@@ -5525,6 +5539,7 @@ function doLogout() {
   state.wrongAnswers = {};
   state.collectedQuestions = [];
   state.practiceProgress = {};
+  state.navStack = [];    // the old page history belongs to the account we just left
   // Show the account switcher page so the user can pick any past account
   // (enter / delete / add new) without retyping credentials.
   state.currentPage = 'accountSwitcher';
@@ -6138,15 +6153,8 @@ function renderProfile() {
     html += t('profile_required_banner');
     html += '</div>';
   } else {
-    html += '<div class="app-header">';
-    html += '<button class="back-btn" onclick="navigate(\'home\')">←</button>';
-    html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-    html += '<h1>👤 ' + t('profile_title') + '</h1>';
-    html += '<div class="lang-toggle" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);">';
-    html += '<button class="' + (state.lang==='cn'?'active':'') + '" onclick="setLang(\'cn\')">中</button>';
-    html += '<button class="' + (state.lang==='en'?'active':'') + '" onclick="setLang(\'en\')">EN</button>';
-    html += '</div>';
-    html += '</div><div class="page"><div class="q-card"><div class="profile-form">';
+    html += renderAppHeader({ title: '👤 ' + t('profile_title') });
+    html += '<div class="page"><div class="q-card"><div class="profile-form">';
   }
 
   html += '<label>' + t('profile_division') + ' <span style="color:var(--danger);">*</span></label>';
@@ -6400,6 +6408,7 @@ function pfSave() {
   // Profile was just created/updated — push a fresh snapshot to the cloud.
   syncNow(true);
   alert(forced ? t('profile_required_saved') : (newPin ? t('profile_pin_updated') : t('profile_saved')));
+  state.navStack = [];   // saving the profile is the end of the login flow — start a clean history
   navigate('home');
 }
 
@@ -6415,17 +6424,9 @@ function renderBank(bank) {
   if (state.wrongAnswers[skey]) wrongCount = Object.keys(state.wrongAnswers[skey]).length;
   var progress = state.practiceProgress[skey] || 0;
 
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'home\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>'+bankIcon+' '+bankName+'</h1>';
   var paperTag = isPaperBank(bank) ? '<span class="paper-tag '+(isKitchen?'kitchen':'all')+'">'+(isKitchen?t('paper_kitchen_tag'):t('paper_all_tag'))+'</span>' : '';
-  html += '<div class="subtitle">'+paperTag+bankDesc+' · '+questions.length+t('questions_unit')+'</div>';
-  html += '<div class="lang-toggle" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);">';
-  html += '<button class="' + (state.lang==='cn'?'active':'') + '" onclick="setLang(\'cn\')">中</button>';
-  html += '<button class="' + (state.lang==='en'?'active':'') + '" onclick="setLang(\'en\')">EN</button>';
-  html += '</div>';
-  html += '</div><div class="page">';
+  var html = renderAppHeader({ title: bankIcon+' '+bankName, subtitle: paperTag+bankDesc+' · '+questions.length+t('questions_unit') });
+  html += '<div class="page">';
   
   html += '<div class="stats-summary">';
   html += '<div class="stat-card"><div class="num">'+questions.length+'</div><div class="label">'+t('stat_total')+'</div></div>';
@@ -6514,12 +6515,8 @@ function renderPaperSelect(bank) {
   var allCount = resolvePaperQuestions(bank + '_all').length;
   var kitchenCount = resolvePaperQuestions(bank + '_kitchen').length;
 
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'home\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>'+bankIcon+' '+bankName+'</h1>';
-  html += '<div class="subtitle">'+t('paper_select_title')+'</div>';
-  html += '</div><div class="page">';
+  var html = renderAppHeader({ title: bankIcon+' '+bankName, subtitle: t('paper_select_title') });
+  html += '<div class="page">';
 
   html += '<div class="paper-card" onclick="selectPaper(\'all\')">';
   html += '<div class="p-icon">👥</div>';
@@ -6552,16 +6549,8 @@ function renderQuestion() {
   var progressPct = Math.round((idx + 1) / total * 100);
   var modeText = isExamMode() ? (state.currentMode === 'formal' ? t('mode_formal') : t('mode_exam')) : (state.currentMode === 'wrong' ? t('mode_wrong') : (state.currentMode === 'review' ? t('mode_review') : t('mode_practice')));
   
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="exitPractice()">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>'+escapeHtml(currentSectionTitle())+'</h1>';
-  html += '<div class="subtitle">'+modeText+' · '+(idx+1)+'/'+total+'</div>';
-  html += '<div class="lang-toggle" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);">';
-  html += '<button class="' + (state.lang==='cn'?'active':'') + '" onclick="setLang(\'cn\')">中</button>';
-  html += '<button class="' + (state.lang==='en'?'active':'') + '" onclick="setLang(\'en\')">EN</button>';
-  html += '</div>';
-  html += '</div><div class="page">';
+  var html = renderAppHeader({ title: escapeHtml(currentSectionTitle()), subtitle: modeText+' · '+(idx+1)+'/'+total });
+  html += '<div class="page">';
   
   html += '<div class="progress-bar"><div class="progress-fill" style="width:'+progressPct+'%"></div></div>';
   
@@ -6757,16 +6746,8 @@ function renderSearch() {
   var bank = state.currentBank;
   var bankName = getBankName(bank);
   
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="goToBankDirect(\''+bank+'\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>🔍 '+t('search_title')+'</h1>';
-  html += '<div class="subtitle">'+bankName+'</div>';
-  html += '<div class="lang-toggle" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);">';
-  html += '<button class="' + (state.lang==='cn'?'active':'') + '" onclick="setLang(\'cn\')">中</button>';
-  html += '<button class="' + (state.lang==='en'?'active':'') + '" onclick="setLang(\'en\')">EN</button>';
-  html += '</div>';
-  html += '</div><div class="page">';
+  var html = renderAppHeader({ title: '🔍 '+t('search_title'), subtitle: bankName });
+  html += '<div class="page">';
   
   html += '<div class="search-box">';
   html += '<span class="search-icon">🔍</span>';
@@ -6804,16 +6785,8 @@ function renderWrongList() {
   var wrongData = state.wrongAnswers[bankStateKey(bank)] || {};
   var wrongIds = Object.keys(wrongData);
 
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="goToBankDirect(\''+bank+'\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>❌ '+t('wrong_title')+'</h1>';
-  html += '<div class="subtitle">'+bankName+' · '+wrongIds.length+t('questions_unit')+'</div>';
-  html += '<div class="lang-toggle" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);">';
-  html += '<button class="' + (state.lang==='cn'?'active':'') + '" onclick="setLang(\'cn\')">中</button>';
-  html += '<button class="' + (state.lang==='en'?'active':'') + '" onclick="setLang(\'en\')">EN</button>';
-  html += '</div>';
-  html += '</div><div class="page">';
+  var html = renderAppHeader({ title: '❌ '+t('wrong_title'), subtitle: bankName+' · '+wrongIds.length+t('questions_unit') });
+  html += '<div class="page">';
   
   if (wrongIds.length === 0) {
     html += '<div class="empty-state"><div class="icon">🎉</div><p>'+t('wrong_empty')+'</p></div>';
@@ -6977,12 +6950,7 @@ function renderExamResult() {
   var divLabel = en ? (divObj.en || '') : (divObj.cn || '');
   var deptLabel = en ? (deptObj.en || '') : (deptObj.cn || '');
 
-  var html = '<div class="app-header"><img class="header-logo" src="assets/logo.webp" alt="logo"><h1>'+t('result_title')+'</h1><div class="subtitle">'+getBankName(state.currentBank)+'</div>';
-  html += '<div class="lang-toggle" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);">';
-  html += '<button class="' + (state.lang==='cn'?'active':'') + '" onclick="setLang(\'cn\')">中</button>';
-  html += '<button class="' + (state.lang==='en'?'active':'') + '" onclick="setLang(\'en\')">EN</button>';
-  html += '</div>';
-  html += '</div>';
+  var html = renderAppHeader({ title: t('result_title'), subtitle: getBankName(state.currentBank) });
   html += '<div class="page"><div class="q-card result-card">';
   if (state.examEndReason) {
     var note = state.examEndReason === 'switch' ? t('exam_switch_note') : t('exam_timeout_note');
@@ -7023,12 +6991,27 @@ function renderExamResult() {
 }
 
 // ============ Navigation ============
-function navigate(page) {
+// Student-side navigation keeps a page stack so that the single "←" button in
+// the top-left corner of every page returns to the page the student actually
+// came from (home → bank → question → back → bank), instead of dumping everyone
+// on the home page. The stack is in-memory only: after a refresh it is empty and
+// "back" then falls back to home.
+// Pass {replace:true} when the current page must NOT stay in the history (e.g.
+// the question page after an exam has been submitted — going "back" from the
+// report should land on the bank, not on a dead exam screen).
+var NAV_STACK_LIMIT = 20;
+function navigate(page, opts) {
+  var o = opts || {};
   var prev = state.currentPage;
   // Remember the question-list scroll position so that returning from the
   // editor lands back where the admin left off (not at the top).
   if (prev === 'adminBank' && page !== 'adminBank') {
     try { adminState.bankScrollY = window.scrollY || window.pageYOffset || 0; } catch (e) {}
+  }
+  if (!o.replace && prev && prev !== page) {
+    if (!state.navStack) state.navStack = [];
+    state.navStack.push(prev);
+    while (state.navStack.length > NAV_STACK_LIMIT) state.navStack.shift();
   }
   state.currentPage = page;
   render();
@@ -7038,6 +7021,68 @@ function navigate(page) {
   } else {
     window.scrollTo(0, 0);
   }
+}
+
+// ---- unified back / home navigation (student side) ----
+// Leaving the question page mid-exam would silently drop the attempt, so ask
+// first. Practice / review / wrong-answer review leave without a prompt.
+function confirmLeaveQuestion() {
+  if (typeof isExamMode !== 'function' || !isExamMode()) return true;
+  try { return !!confirm(t('exit_exam_confirm')); } catch (e) { return true; }
+}
+// "←" in the top-left corner of every page: one level up the page stack.
+function goBack() {
+  var from = state.currentPage;
+  if (from === 'question') {
+    if (!confirmLeaveQuestion()) return;
+    clearExamTimer();
+    detachExamGuards();
+  }
+  if (!state.navStack) state.navStack = [];
+  var target = state.navStack.length ? state.navStack.pop() : 'home';
+  if (!target || target === from) target = 'home';
+  navigate(target, { replace: true });
+}
+// 🏠 One-tap "back to home", shown next to the language toggle on every inner
+// page so nobody has to press "back" five times after a deep dive.
+function navHome() {
+  var from = state.currentPage;
+  if (from === 'home') return;
+  if (from === 'question') {
+    if (!confirmLeaveQuestion()) return;
+    clearExamTimer();
+    detachExamGuards();
+  }
+  state.navStack = [];
+  navigate('home', { replace: true });
+}
+// Shared header for every student page: "← 返回" on the left, the title in the
+// middle and 语言切换 + 🏠首页 on the right. Pages pass only their own bits.
+function renderAppHeader(opt) {
+  var o = opt || {};
+  var showBack = o.showBack !== false;
+  var showHome = o.showHome !== false;
+  var showLang = o.showLang !== false;
+  var langShort = o.langShort !== false;
+  var html = '<div class="app-header' + (showBack ? ' has-back' : '') + '">';
+  if (showBack) {
+    html += '<button class="back-btn wide" onclick="goBack()" title="' + t('nav_back_hint') + '" aria-label="' + t('nav_back') + '">←<span class="back-label">' + t('nav_back') + '</span></button>';
+  }
+  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
+  html += '<h1>' + (o.title || '') + '</h1>';
+  if (o.subtitle) html += '<div class="subtitle">' + o.subtitle + '</div>';
+  html += '<div class="header-right">';
+  if (showLang) {
+    html += '<div class="lang-toggle">';
+    html += '<button class="' + (state.lang === 'cn' ? 'active' : '') + '" onclick="setLang(\'cn\')">' + (langShort ? '中' : '中文') + '</button>';
+    html += '<button class="' + (state.lang === 'en' ? 'active' : '') + '" onclick="setLang(\'en\')">EN</button>';
+    html += '</div>';
+  }
+  if (showHome) {
+    html += '<button class="home-btn" onclick="navHome()" title="' + t('nav_home_hint') + '" aria-label="' + t('nav_home') + '">🏠<span class="back-label">' + t('nav_home') + '</span></button>';
+  }
+  html += '</div></div>';
+  return html;
 }
 
 function goToBank(bank) {
@@ -7069,10 +7114,13 @@ function selectSection(section) {
   render();
 }
 
+// Leaving the question page from anywhere (header "←", the in-page exit
+// button): stop the exam clock, drop the visibility guards, then go back one
+// level — which is the page the practice/exam was started from, not always home.
 function exitPractice() {
   clearExamTimer();
   detachExamGuards();
-  goToBankDirect(state.currentBank);
+  goBack();
 }
 
 // ============ Actions ============
@@ -7159,7 +7207,9 @@ function endExamAutomatically(reason) {
   detachExamGuards();
   state.examEndReason = reason;
   recordExamEvent(); // persist this attempt to the cloud sync log
-  navigate('examResult');
+  // The finished question page must not stay in the back stack: "返回" on the
+  // report should land on the bank the exam was started from.
+  navigate('examResult', { replace: true });
 }
 
 function isExamMode() {
@@ -7367,7 +7417,9 @@ function submitExam() {
   detachExamGuards();
   state.examEndReason = null;
   recordExamEvent(); // persist this attempt to the cloud sync log
-  navigate('examResult');
+  // The finished question page must not stay in the back stack: "返回" on the
+  // report should land on the bank the exam was started from.
+  navigate('examResult', { replace: true });
 }
 
 function reviewExam() {
@@ -7410,12 +7462,7 @@ function renderExamReplay() {
   var empNo = (prof.empNo || getProfileEmpNo() || '').trim();
   var dispName = profileDisplayName();
 
-  var html = '<div class="app-header"><img class="header-logo" src="assets/logo.webp" alt="logo"><h1>🎬 ' + (en ? 'Answer Replay' : '答题回放') + '</h1>';
-  html += '<div class="subtitle">' + getBankName(state.currentBank) + (snap.title ? ' · ' + escapeHtml(snap.title) : '') + '</div>';
-  html += '<div class="lang-toggle" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);">';
-  html += '<button class="' + (state.lang==='cn'?'active':'') + '" onclick="setLang(\'cn\')">中</button>';
-  html += '<button class="' + (state.lang==='en'?'active':'') + '" onclick="setLang(\'en\')">EN</button>';
-  html += '</div></div>';
+  var html = renderAppHeader({ title: '🎬 ' + (en ? 'Answer Replay' : '答题回放'), subtitle: getBankName(state.currentBank) + (snap.title ? ' · ' + escapeHtml(snap.title) : '') });
   html += '<div class="page">';
 
   html += '<div class="q-card result-card">';
@@ -7486,7 +7533,7 @@ function renderExamReplay() {
     html += '</div>';
   }
   html += '<div class="action-row" style="margin-top:14px;">';
-  html += '<button class="action-btn nav-btn secondary" onclick="navigate(\'result\')">' + t('result_back') + '</button>';
+  html += '<button class="action-btn nav-btn secondary" onclick="goBack()">' + t('result_back') + '</button>';
   html += '</div></div>';
   return html;
 }
@@ -7590,15 +7637,7 @@ function openExamHistoryEntry(idx) {
 function renderExamHistory() {
   var en = state.lang === 'en';
   var hist = loadExamHistory();
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'bank\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>📊 ' + t('result_history') + '</h1>';
-  html += '<div class="subtitle">' + (en ? 'Tap a row to view the answer replay' : '点击行查看答题回放') + '</div>';
-  html += '<div class="lang-toggle" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);">';
-  html += '<button class="' + (state.lang==='cn'?'active':'') + '" onclick="setLang(\'cn\')">中</button>';
-  html += '<button class="' + (state.lang==='en'?'active':'') + '" onclick="setLang(\'en\')">EN</button>';
-  html += '</div></div>';
+  var html = renderAppHeader({ title: '📊 ' + t('result_history'), subtitle: (en ? 'Tap a row to view the answer replay' : '点击行查看答题回放') });
   html += '<div class="page">';
   if (!hist.length) {
     html += '<div class="empty-state"><div class="icon">📊</div><p>' + t('result_history_empty') + '</p></div>';
@@ -8161,6 +8200,7 @@ function adminLoginAttempt() {
 function adminLogout() {
   adminState.authenticated = false;
   adminAuthClear();
+  state.navStack = [];
   navigate('home');
 }
 
