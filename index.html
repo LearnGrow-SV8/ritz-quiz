@@ -424,6 +424,18 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .replay-ans.ok { background:#e8f5e9; color:#1b5e20; }
 .replay-ans.bad { background:#ffebee; color:#b71c1c; }
 .replay-explain { margin-top:10px; padding:6px 12px; font-size:13px; }
+/* Inline "查看解析" body — expands inside the replay card so the student never
+   leaves the answer list. Same visual language as the post-answer feedback on
+   the question page: green = correct option, red = the one they picked. */
+.replay-explain-body { margin-top:10px; border-top:1px dashed var(--border); padding-top:10px; }
+.replay-ex-opt { display:flex; gap:8px; align-items:flex-start; padding:7px 10px; border-radius:6px; margin-bottom:6px; font-size:13px; line-height:1.45; background:#fff; border:1px solid var(--border); }
+.replay-ex-opt.ok { background:#e8f5e9; border-color:#a5d6a7; color:#1b5e20; }
+.replay-ex-opt.bad { background:#ffebee; border-color:#ef9a9a; color:#b71c1c; }
+.replay-ex-letter { font-weight:700; min-width:14px; }
+.replay-ex-text { flex:1; }
+.replay-ex-blank { font-size:13px; line-height:1.5; padding:6px 10px; border-radius:6px; margin-bottom:6px; }
+.replay-ex-blank.ok { background:#e8f5e9; color:#1b5e20; }
+.replay-ex-blank.bad { background:#ffebee; color:#b71c1c; }
 .history-row { display:flex; justify-content:space-between; align-items:center; padding:12px; background:#fff; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; cursor:pointer; }
 .history-row .hr-score { font-weight:700; font-size:18px; }
 .history-row .hr-score.pass { color:var(--success); }
@@ -2042,7 +2054,7 @@ function legacyKeysForEmp(emp) {
   return out;
 }
 // Move every legacy key of `emp` onto the canonical "e<empNo>" key. Runs on
-// login / profile save, so switching to the new model is invisible to staff:
+// login / profile save, so switching to the new model is invisible to employees:
 // they log in once and their old records are already there.
 function migrateLegacyToEmpKey(emp) {
   var akey = empKeyFor(emp);
@@ -3706,6 +3718,7 @@ const state = {
   questionTimes: {},    // seconds spent per question index (accumulated on leave)
   questionShownAt: null,// timestamp when the current question was first displayed
   lastExamReplay: null, // most recent finished exam snapshot for the in-page replay UI
+  replayExpanded: {},   // { <sheet index>: true } — inline "查看解析" state of the replay list (in-memory only)
   currentUser: getCurrentUser(),
   profile: null,        // {empNo, cnName, enName, division:{en,cn}, dept:{en,cn}} per employee
   wrongAnswers: {},
@@ -3866,7 +3879,8 @@ var I18N = {
   login_claim_confirm_label: {cn:'✓ 是我本人的账号，继续设置密码', en:'✓ That\'s me — let me set a password'},
   login_claim_btn: {cn:'核对并进入', en:'Verify & enter'},
   login_claim_name_mismatch: {cn:'姓名与该工号的历史记录不一致，请联系培训负责人', en:'That name does not match this employee ID\'s records — please contact your training lead'},
-  login_foreign_opt: {cn:'我没有中文名（外籍员工）', en:'I have no Chinese name (non-Chinese staff)'},
+  login_foreign_opt: {cn:'我没有中文名（外籍员工请勾选）', en:'I have no Chinese name (non-Chinese employee)'},
+  login_cn_na_ph: {cn:'已勾选「我没有中文名」，无需填写', en:'"No Chinese name" is checked — nothing to fill in'},
   login_recent_pin_note: {cn:'点击后需输入该账号的密码', en:'You will be asked for that account\'s password'},
   login_recent_title: {cn:'快速登录 · 点击直接进入', en:'Quick login · tap to enter'},
   login_recent_sub: {cn:'最多保留最近 5 个账号', en:'Up to 5 most recent accounts'},
@@ -4022,7 +4036,7 @@ var I18N = {
   profile_req_name: {cn:'请至少填写中文名或英文名（外籍员工可只填英文名）', en:'Please enter a Chinese or English name (foreign employees may enter English only)'},
   profile_need_small: {cn:'请选择对应的小部门', en:'Please select the matching Department'},
   profile_need_division: {cn:'请先选择大部门', en:'Please select a Division first'},
-  profile_foreign_opt: {cn:'我是外籍员工，无中文名', en:'I am a foreign employee and have no Chinese name'},
+  profile_foreign_opt: {cn:'我没有中文名（外籍员工请勾选）', en:'I have no Chinese name (non-Chinese employee)'},
   profile_required_title: {cn:'完善个人信息', en:'Complete Your Profile'},
   profile_required_sub: {cn:'新账号首登，请先完善资料再进入答题主页', en:'First-time login: please complete your profile before entering the quiz'},
   profile_required_banner: {cn:'📌 请务必按照您的真实信息准确填写', en:'📌 Please fill in your real information accurately'},
@@ -5350,7 +5364,8 @@ function loginRegisterSubmit() {
   d.cn = fieldVal('loginCn').trim();
   d.en = fieldVal('loginEn').trim();
   var fk = document.getElementById('loginForeign');
-  if (fk && fk.checked != null) d.foreign = !!fk.checked;
+  // No checkbox in the Chinese UI => always required (never silently exempt).
+  d.foreign = fk ? !!fk.checked : false;
   d.div = fieldVal('loginDiv');
   d.dept = fieldVal('loginDept');
   d.pin = fieldVal('loginPin').trim();
@@ -5647,9 +5662,18 @@ function renderLoginStep2() {
     html += '<div class="profile-form">';
     html += '<div style="font-size:13px;color:var(--text);font-weight:600;margin:2px 0 8px;">' + t('login_register_title') + '</div>';
     html += '<div style="font-size:12px;color:var(--text-light);line-height:1.5;margin-bottom:6px;">' + t('login_register_sub') + '</div>';
-    html += '<label>' + t('profile_cn_name') + '</label>';
-    html += '<input type="text" id="loginCn" value="' + escapeHtml(d.cn) + '" placeholder="' + t('profile_cn_ph') + '" maxlength="20" oninput="filterNameField(this,\'cn\')" autocomplete="off">';
-    html += '<label class="pf-check"><input type="checkbox" id="loginForeign"' + (d.foreign ? ' checked' : '') + '><span>' + t('login_foreign_opt') + '</span></label>';
+    // Chinese-name field. In the Chinese UI there is NO "I have no Chinese name"
+    // escape hatch at all — the field is unconditionally mandatory. The opt-out
+    // checkbox is an English-UI-only affordance; when it is rendered, the red *
+    // and the input's disabled state both follow it so "not required" is visible
+    // rather than implied.
+    var showForeign = (state.lang === 'en');
+    var foreign = showForeign ? !!d.foreign : false;
+    html += '<label>' + t('profile_cn_name') + ' <span id="loginCnReq" style="color:var(--danger);"' + (foreign ? ' hidden' : '') + '>*</span></label>';
+    html += '<input type="text" id="loginCn" value="' + escapeHtml(foreign ? '' : d.cn) + '" placeholder="' + (foreign ? t('login_cn_na_ph') : t('profile_cn_ph')) + '" maxlength="20" oninput="filterNameField(this,\'cn\')" autocomplete="off"' + (foreign ? ' disabled style="background:#f3f4f6;color:#6a7079;cursor:not-allowed;"' : '') + '>';
+    if (showForeign) {
+      html += '<label class="pf-check"><input type="checkbox" id="loginForeign"' + (foreign ? ' checked' : '') + ' onchange="onForeignToggle(\'login\')"><span>' + t('login_foreign_opt') + '</span></label>';
+    }
     html += '<label>' + t('profile_en_name') + ' <span style="color:var(--danger);">*</span></label>';
     html += '<input type="text" id="loginEn" value="' + escapeHtml(d.en) + '" placeholder="' + t('profile_en_ph') + '" maxlength="50" oninput="filterNameField(this,\'en\')" autocomplete="off">';
     html += '<label>' + t('profile_division') + ' <span style="color:var(--danger);">*</span></label>';
@@ -5674,6 +5698,40 @@ function renderLoginStep2() {
   }
   html += '<div class="login-recent-manage" style="margin-top:10px;"><a href="javascript:void(0)" onclick="loginBackToEmp()">' + t('login_step_back') + '</a></div>';
   return html;
+}
+// "I have no Chinese name" toggle — shared by the registration form (prefix
+// 'login') and the profile editor (prefix 'pf'). The checkbox used to be inert:
+// it only ever mattered at submit time, so the Chinese-name field kept its red
+// * and looked mandatory no matter what. Now ticking the box greys the field
+// out, empties it and drops the *, so "not required" is visible, not implied.
+function onForeignToggle(prefix) {
+  var login = (prefix === 'login');
+  var box = document.getElementById(login ? 'loginForeign' : 'pfForeign');
+  var input = document.getElementById(login ? 'loginCn' : 'pfCn');
+  var req = document.getElementById(login ? 'loginCnReq' : 'pfCnReq');
+  if (!box) return;
+  var on = !!box.checked;
+  if (input) {
+    input.disabled = on;
+    if (on) {
+      input.value = '';
+      input.placeholder = t('login_cn_na_ph');
+      input.style.background = '#f3f4f6';
+      input.style.color = '#6a7079';
+      input.style.cursor = 'not-allowed';
+    } else {
+      input.placeholder = t('profile_cn_ph');
+      input.style.background = '';
+      input.style.color = '';
+      input.style.cursor = '';
+    }
+  }
+  if (req) req.hidden = on;
+  // Keep the draft in sync so a re-render (e.g. switching Division) does not
+  // resurrect a stale Chinese name the employee just cleared.
+  try {
+    if (login) { var d = loginDraft(); d.foreign = on; if (on) d.cn = ''; }
+  } catch (e) {}
 }
 // Department <option> list for the registration form (mirrors pfSelDivision).
 function loginDeptOptions(divV, deptV, en) {
@@ -6128,9 +6186,18 @@ function renderProfile() {
   html += '<input type="text" id="pfEmp" value="' + escapeHtml(empNo) + '" readonly style="background:#f3f4f6;color:#6a7079;cursor:not-allowed;" autocomplete="off">';
   html += '<div style="font-size:11px;color:var(--text-light);margin:-4px 0 10px;line-height:1.4;">' + t('profile_emp_locked_hint') + '</div>';
 
-  html += '<label>' + t('profile_cn_name') + ' <span style="color:var(--danger);">*</span></label>';
-  html += '<input type="text" id="pfCn" value="' + escapeHtml(cnName) + '" placeholder="' + t('profile_cn_ph') + '" maxlength="20" oninput="filterNameField(this,\'cn\')" autocomplete="off">';
-  html += '<label class="pf-check"><input type="checkbox" id="pfForeign"' + (p.foreignNoCn ? ' checked' : '') + '><span>' + t('profile_foreign_opt') + '</span></label>';
+  // Same rule as the registration form: the red * and the disabled state follow
+  // the "no Chinese name" checkbox, so ticking it visibly releases the field.
+  // The checkbox itself is English-UI-only — in the Chinese UI the Chinese name
+  // is mandatory, so no opt-out is offered (an existing foreign flag is still
+  // honoured silently so those employees are not trapped on this screen).
+  var foreignFlagged = !!p.foreignNoCn;
+  var showForeign = (state.lang === 'en');
+  html += '<label>' + t('profile_cn_name') + ' <span id="pfCnReq" style="color:var(--danger);"' + (foreignFlagged ? ' hidden' : '') + '>*</span></label>';
+  html += '<input type="text" id="pfCn" value="' + escapeHtml(foreignFlagged ? '' : cnName) + '" placeholder="' + (foreignFlagged ? t('login_cn_na_ph') : t('profile_cn_ph')) + '" maxlength="20" oninput="filterNameField(this,\'cn\')" autocomplete="off"' + (foreignFlagged ? ' disabled style="background:#f3f4f6;color:#6a7079;cursor:not-allowed;"' : '') + '>';
+  if (showForeign) {
+    html += '<label class="pf-check"><input type="checkbox" id="pfForeign"' + (foreignFlagged ? ' checked' : '') + ' onchange="onForeignToggle(\'pf\')"><span>' + t('profile_foreign_opt') + '</span></label>';
+  }
 
   // ===== Stage 9: login PIN (replaces the retired phone field) =====
   // This is the credential that lets an employee come back on another device,
@@ -6261,7 +6328,11 @@ function pfSave() {
   var errEl = document.getElementById('pfError');
   var foreign = false;
   var fk = document.getElementById('pfForeign');
+  // The checkbox is not rendered in the Chinese UI; falling back to the stored
+  // flag keeps an already-exempt employee from being trapped (they can undo it
+  // by switching to English, where the checkbox is available).
   if (fk) foreign = !!fk.checked;
+  else foreign = !!(state.profile && state.profile.foreignNoCn);
   if (!en) { errEl.textContent = t('profile_req_en'); return; }
   if (!cn && !foreign) { errEl.textContent = t('profile_req_cn'); return; }
   if (cn && !isCnNameValid(cn)) { errEl.textContent = t('profile_lang_cn'); return; }
@@ -7317,6 +7388,7 @@ function openExamReplay() {
     alert(state.lang === 'en' ? 'Replay not available for this attempt.' : '本次考试暂无回放数据。');
     return;
   }
+  state.replayExpanded = {};
   navigate('examReplay');
 }
 function renderExamReplay() {
@@ -7403,12 +7475,75 @@ function renderExamReplay() {
     html += '<div class="replay-q-text">' + escapeHtml(qtext) + '</div>';
     html += '<div class="replay-ans ' + (ok ? 'ok' : 'bad') + '">' + (en ? 'Your answer' : '你的作答') + '：' + escapeHtml(ansText) + '</div>';
     if (!ok) html += '<div class="replay-ans ok">' + t('correct_answer') + escapeHtml(caText) + '</div>';
-    if (q) html += '<button class="action-btn nav-btn secondary replay-explain" onclick="state.currentIndex=' + i + ';state.selectedAnswers=replaySheetToAnswers(sheet,' + i + ');state.currentMode=\'review\';state.showAnswer=true;navigate(\'question\')">🔍 ' + (en ? 'Explain' : '查看解析') + '</button>';
+    if (q) {
+      // Inline toggle: the explanation expands right here in the card. It used
+      // to jump to the question page, which dropped the replay list (the back
+      // button there is exitPractice) and showed the full practice chrome.
+      var exOpen = !!(state.replayExpanded && state.replayExpanded[i]);
+      html += '<button class="action-btn nav-btn secondary replay-explain" onclick="toggleReplayExplain(' + i + ')">' + (exOpen ? '🔼 ' + (en ? 'Hide' : '收起解析') : '🔍 ' + (en ? 'Explain' : '查看解析')) + '</button>';
+      if (exOpen) html += replayExplainBlock(q, row, en);
+    }
     html += '</div>';
   }
   html += '<div class="action-row" style="margin-top:14px;">';
   html += '<button class="action-btn nav-btn secondary" onclick="navigate(\'result\')">' + t('result_back') + '</button>';
   html += '</div></div>';
+  return html;
+}
+// Expand / collapse the inline explanation of one replay card. Held on state
+// (never persisted) so switching language mid-replay keeps the card open.
+function toggleReplayExplain(idx) {
+  if (!state.replayExpanded) state.replayExpanded = {};
+  state.replayExpanded[idx] = !state.replayExpanded[idx];
+  render();
+}
+// Inline body of the "查看解析" toggle — the same feedback the student saw right
+// after answering that question (full option list with the correct answer in
+// green and their wrong pick in red, the fill blanks, and the written
+// explanation), rendered inside the replay card.
+// row.ua / row.ca are stored in BANK option order and q here comes from
+// findByIdAllBanks (also bank order), so they index q.options directly — the
+// same assumption answerDisplayText() already makes for this card.
+function replayExplainBlock(q, row, en) {
+  var html = '<div class="replay-explain-body">';
+  var ua = Array.isArray(row.ua) ? row.ua : [];
+  var ca = Array.isArray(row.ca) ? row.ca : [];
+  if (q.type === 'fill') {
+    var fa = q.fill_answers || [];
+    var blankCnt = fa.length > 2 ? Math.ceil(fa.length / 2) : 1;
+    var pb = (Array.isArray(row.pb) && row.pb.length) ? row.pb : fillBlankResults(ua, q);
+    for (var b = 0; b < blankCnt; b++) {
+      var uv = (ua[b] == null || ua[b] === '') ? '' : String(ua[b]);
+      var cCn = fa[b * 2] || '', cEn = fa[b * 2 + 1] || '';
+      var cAns = (cCn && cEn) ? (cCn + '  /  ' + cEn) : (cCn || cEn);
+      var okB = !!pb[b];
+      html += '<div class="replay-ex-blank ' + (okB ? 'ok' : 'bad') + '">';
+      html += '<div>' + (b + 1) + '. ' + (en ? 'Your answer: ' : '你的作答：') + escapeHtml(uv || '—') + (okB ? ' ✓' : ' ✗') + '</div>';
+      if (!okB) html += '<div>' + t('correct_answer') + escapeHtml(cAns) + '</div>';
+      html += '</div>';
+    }
+    if (fa.length) {
+      html += '<div class="explanation">💡 ' + t('fill_acceptable') + '<br>';
+      for (var fi = 0; fi < fa.length; fi++) html += '· ' + escapeHtml(fa[fi]) + '<br>';
+      html += '</div>';
+    }
+  } else {
+    var opts = q.options || [];
+    for (var oi = 0; oi < opts.length; oi++) {
+      var isCa = ca.indexOf(oi) >= 0;
+      var isUa = ua.indexOf(oi) >= 0;
+      var cls = isCa ? 'ok' : (isUa ? 'bad' : '');
+      var mark = isCa ? ' ✓' : (isUa ? ' ✗' : '');
+      html += '<div class="replay-ex-opt ' + cls + '">';
+      html += '<div class="replay-ex-letter">' + String.fromCharCode(65 + oi) + '</div>';
+      html += '<div class="replay-ex-text">' + escapeHtml(qOptText(q, oi)) + mark + '</div>';
+      html += '</div>';
+    }
+  }
+  // Gold Standards deliberately carry no written explanation.
+  var exp = (q.section_en === 'Gold Standards') ? '' : qExplanationOf(q);
+  if (exp) html += '<div class="explanation">📖 ' + t('explanation') + escapeHtml(exp) + '</div>';
+  html += '</div>';
   return html;
 }
 // Render-friendly answer text for a student's (ua) or correct (ca) array.
@@ -7428,25 +7563,6 @@ function answerDisplayText(ans, q) {
     parts.push(String.fromCharCode(65 + ans[i]) + '. ' + label);
   }
   return parts.join(' / ');
-}
-// Helper for "view explanation" inside the replay list — pushes the chosen
-// question's saved answer into state so renderQuestion() shows the same
-// feedback the student saw during the exam.
-function replaySheetToAnswers(sheet, idx) {
-  var out = {};
-  if (!sheet) return out;
-  var row = sheet[idx];
-  if (!row) return out;
-  // ua is in BANK option order; map back to display order via _optOrder if needed.
-  var q = findByIdAllBanks(row.qid);
-  var ua = row.ua;
-  if (ua && q && q._optOrder && Array.isArray(ua)) {
-    var inv = [];
-    for (var k = 0; k < q._optOrder.length; k++) if (q._optOrder[k] >= 0) inv[q._optOrder[k]] = k;
-    ua = ua.map(function (x) { return inv[x] != null ? inv[x] : x; });
-  }
-  out[idx] = ua;
-  return out;
 }
 
 // ===== Past exam history (per-user, local) =====
@@ -7468,6 +7584,7 @@ function openExamHistoryEntry(idx) {
   // Make sure questions still match the bank version we recorded against —
   // if not, renderExamReplay falls back gracefully via findByIdAllBanks().
   state.lastExamReplay = e;
+  state.replayExpanded = {};
   navigate('examReplay');
 }
 function renderExamHistory() {
@@ -10128,7 +10245,7 @@ function renderAdminStudents() {
       var emp2 = adminStudentEmp(rec2);
       var isBanned = !!adminBanStateOf(rec2);
       // Batch 6: Chinese name inline in the list — disambiguates same-English-
-      // -name students at a glance. Hidden when empty (foreign staff) or when
+      // -name students at a glance. Hidden when empty (no Chinese name) or when
       // the display name already IS the Chinese name.
       var cnTag2 = (snap2.cn && snap2.cn !== name)
         ? ' <span style="font-weight:400;font-size:12px;color:#8a8f96;">· ' + escapeHtml(snap2.cn) + '</span>'
