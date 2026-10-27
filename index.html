@@ -4093,7 +4093,9 @@ var I18N = {
   race_confirm_start: {cn:'点开始后立刻计时', en:'The timer starts as soon as you begin'},
   race_confirm_ask: {cn:'确定开始吗？', en:'Ready to start?'},
   race_filter_label: {cn:'只看', en:'Filter'},
-  race_filter_all: {cn:'全部板块', en:'All sections'},
+  race_filter_all: {cn:'全部板块总榜', en:'Overall — all sections'},
+  race_board_mix_hint: {cn:'各板块成绩混合排名，仅供整体参考', en:'All sections mixed — for overall reference only'},
+  race_board_sec_hint: {cn:'本榜只统计选择该板块的成绩，同板块内部相比', en:'Only scores from this section — compared within the same section'},
   race_my_section: {cn:'你本期所选', en:'Your section'},
   race_go_pick: {cn:'去选板块', en:'Pick a section'},
   nav_back: {cn:'返回', en:'Back'},
@@ -6743,6 +6745,16 @@ function renderRaceResult() {
   html += '</div>';
   return html;
 }
+// 排行榜顶部切换条：第一个是「全部板块总榜」，其后每个板块一张独立榜
+function raceBoardChip(key, label, active) {
+  var bg = active ? '#1a3a5c' : '#fff';
+  var fg = active ? '#fff' : '#44546b';
+  var bd = active ? '#1a3a5c' : '#d8dee4';
+  return '<button onclick="state.raceBoardSec=\'' + key + '\';render()"'
+    + ' style="flex:0 0 auto;padding:7px 13px;border-radius:999px;font-size:12px;font-weight:600;'
+    + 'white-space:nowrap;cursor:pointer;background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';">'
+    + label + '</button>';
+}
 function renderRaceBoard() {
   var tab = state.raceBoardTab || 'period';
   var html = renderAppHeader({ title: '🏆 ' + t('race_board'), subtitle: raceConfOf() ? (raceConfOf().title || '') : '' });
@@ -6752,15 +6764,18 @@ function renderRaceBoard() {
   html += '<button class="action-btn ' + (tab === 'dept' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'dept\';render()">' + t('race_board_dept') + '</button>';
   html += '<button class="action-btn ' + (tab === 'best' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'best\';render()">' + t('race_board_best') + '</button>';
   html += '</div>';
-  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:#666;">';
-  html += '<span>' + t('race_filter_label') + '</span>';
-  html += '<select onchange="state.raceBoardSec=this.value;render()" style="flex:1;padding:6px 8px;border:1px solid #d8dee4;border-radius:6px;font-size:12px;">';
-  html += '<option value=""' + (state.raceBoardSec ? '' : ' selected') + '>' + t('race_filter_all') + '</option>';
+  var sec = state.raceBoardSec || '';
+  html += '<div style="display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch;">';
+  html += raceBoardChip('', '\ud83d\udcca ' + t('race_filter_all'), !sec);
   for (var s = 0; s < RACE_SECTIONS.length; s++) {
     var sk = RACE_SECTIONS[s].key;
-    html += '<option value="' + sk + '"' + (state.raceBoardSec === sk ? ' selected' : '') + '>' + RACE_SECTIONS[s].icon + ' ' + raceSecName(sk) + '</option>';
+    html += raceBoardChip(sk, RACE_SECTIONS[s].icon + ' ' + raceSecName(sk), sec === sk);
   }
-  html += '</select></div>';
+  html += '</div>';
+  html += '<div style="font-size:12px;color:#888;margin:2px 0 10px;">'
+    + (sec ? (raceSecIcon(sec) + ' ' + escapeHtml(raceSecName(sec)) + ' \u00b7 ' + t('race_board_sec_hint'))
+           : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 ' + t('race_board_mix_hint')))
+    + '</div>';
   var rows = raceBoardRows(tab);
   if (!state.raceBoard) {
     html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_loading') + '</div>';
@@ -6778,7 +6793,7 @@ function renderRaceBoard() {
       html += '<div style="width:32px;text-align:center;font-weight:700;color:#1a3a5c;">' + medal + '</div>';
       html += '<div style="flex:1;min-width:0;">';
       html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#1a3a5c;font-size:12px;">' + t('race_you') + '</span>' : '') + '</div>';
-      html += '<div style="font-size:12px;color:#888;">' + escapeHtml(rw.dept) + (rw.section ? ' · ' + raceSecIcon(rw.section) + ' ' + raceSecName(rw.section) : '') + '</div>';
+      html += '<div style="font-size:12px;color:#888;">' + escapeHtml(rw.dept) + (rw.section && !sec ? ' \u00b7 ' + raceSecIcon(rw.section) + ' ' + raceSecName(rw.section) : '') + '</div>';
       html += '</div>';
       html += '<div style="text-align:right;">';
       html += '<div style="font-size:16px;font-weight:700;color:#1a3a5c;">' + rw.correct + '</div>';
