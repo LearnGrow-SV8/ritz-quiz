@@ -3013,6 +3013,11 @@ var CLOUD_SYNC_READY = false; // true after the first relay round-trip settles
     // ago (ntfy only retains 12 h).
     try { keepAliveStudentEvents(); } catch (e2) {}
     try { refreshBlacklist(); } catch (e2) {}
+    // 有效工号名单：拉到最新名单后，若本机已登录账号的工号已不在名单内（离职），
+    // 立即退出登录。名单为空 / 拉不到时不动作（fail-open）。
+    try {
+      refreshRoster().then(function () { try { enforceRosterSession(); } catch (e4) {} });
+    } catch (e5) {}
     // Stage 8: trim the transport log once a day (ntfy used to prune itself
     // after 12 h; Postgres has to be told). Durable records live in
     // student_snapshots / accounts, so this is pure housekeeping.
@@ -3240,7 +3245,7 @@ function loginAsRecentUser(userKeyVal) {
   var emp = normEmpNo(empOfKey(userKeyVal) || empFromLegacyKey(userKeyVal) || rec.empId || '');
   // Stage 9: a saved-account card skips step 1, so the ban must be re-checked
   // here — otherwise a banned employee just taps their old card and walks in.
-  if (emp && isEmpBlacklisted(emp)) {
+  if (emp && isEmpBlocked(emp)) {
     state.pendingQuickKey = '';
     state.loginEmp = emp;
     state.loginStep = 1;
@@ -3248,7 +3253,7 @@ function loginAsRecentUser(userKeyVal) {
     state.loginMsg = '';
     state.currentPage = 'home';
     render();
-    loginErr(t('profile_phone_blacklisted'));
+    loginErr(empBlockMsg(emp));
     return;
   }
   // An incomplete-profile account may NOT skip the access-code gate (it
@@ -3946,6 +3951,8 @@ var adminState = {
   studentDetail: '',   // userKey of the student whose detail view is open
   editStudent: '',     // userKey being edited in the admin student-info form
   adminEmpQuery: '',   // Stage 9: name → employee-ID lookup / list filter box
+  rosterQuery: '',     // 有效工号名单里的搜索词
+  rosterFetched: false,// 有效工号名单是否已从云端拉过一次
   reportFilter: 'open', // 'open' | 'all' — error report filter
   cloudStatus: '',     // '' | 'loading' | 'ok' | 'error' — last cloud fetch state
   reportTab: 'formal', // 'formal' | 'practice' — report center top tab
@@ -4385,6 +4392,32 @@ var I18N = {
   profile_phone_locked_short: {cn:'🔒 已绑定', en:'🔒 Locked'},
   profile_phone_first_bind_hint: {cn:'📱 手机号将作为您的学员编码（唯一），后续不可修改。换设备登录时直接用此号码即可找回全部学习记录。', en:'📱 Your phone will be your permanent account ID. Use it on any device to sign in to this account and retrieve all learning history.'},
   profile_phone_blacklisted: {cn:'🚫 该工号已被管理员禁用，无法进入账号。请联系培训负责人。', en:'🚫 This employee ID has been blocked by the administrator. Please contact the training team.'},
+  profile_emp_off_roster: {cn:'🚫 该工号已不在有效名单内（员工可能已离职），无法进入平台。如有疑问请联系培训负责人。', en:'🚫 This employee ID is no longer on the valid-ID list (the employee may have left). Please contact the training team.'},
+  // 管理端 · 有效工号名单
+  roster_tab: {cn:'有效工号', en:'Valid IDs'},
+  roster_title: {cn:'有效工号清单', en:'Valid Employee ID List'},
+  roster_desc: {cn:'名单一旦非空，就只放行名单内的工号：已离职人员的工号从名单移除后，他的账号在任何设备都无法再进入。', en:'Once the list is non-empty, ONLY listed IDs are allowed: removing a departed employee\'s ID locks their account out on every device.'},
+  roster_failopen: {cn:'名单为空时不做任何拦截（防止网络异常把全员锁在门外）。', en:'An empty list blocks nobody (so a network glitch can never lock everyone out).'},
+  roster_count: {cn:'名单内工号', en:'IDs on list'},
+  roster_updated: {cn:'最后更新', en:'Updated'},
+  roster_add_one: {cn:'添加单个工号', en:'Add one ID'},
+  roster_bulk: {cn:'批量录入（逗号 / 空格 / 换行 分隔均可）', en:'Bulk paste (comma / space / newline separated)'},
+  roster_bulk_ph: {cn:'例如：1001, 1002, 1003 或每行一个', en:'e.g. 1001, 1002, 1003 — or one per line'},
+  roster_btn_add: {cn:'添加到名单', en:'Add to list'},
+  roster_btn_replace: {cn:'用上面的内容替换整个名单', en:'Replace whole list with the above'},
+  roster_btn_import: {cn:'导入全部已注册工号', en:'Import all registered IDs'},
+  roster_btn_clear: {cn:'清空名单（停止拦截）', en:'Clear list (stop blocking)'},
+  roster_btn_refresh: {cn:'拉取云端名单', en:'Pull from cloud'},
+  roster_search_ph: {cn:'搜索工号…', en:'Search ID…'},
+  roster_empty: {cn:'名单为空，当前不做任何拦截。', en:'The list is empty — nobody is blocked.'},
+  roster_missing_title: {cn:'已注册但不在名单内（将被拦截）', en:'Registered but NOT on the list (will be blocked)'},
+  roster_missing_none: {cn:'所有已注册学员的工号都在名单内。', en:'Every registered employee ID is on the list.'},
+  roster_published: {cn:'✅ 已发布，学员端约 90 秒内生效。', en:'✅ Published — student devices update within ~90 s.'},
+  roster_publish_fail: {cn:'❌ 发布失败（网络异常），请重试。', en:'❌ Publish failed (network). Please retry.'},
+  roster_dup: {cn:'这些工号已在名单中，已跳过。', en:'These IDs are already on the list — skipped.'},
+  roster_none_valid: {cn:'没有识别到有效工号。', en:'No valid employee ID found.'},
+  roster_confirm_clear: {cn:'清空名单？清空后不再拦截任何工号。', en:'Clear the list? After clearing, no employee ID is blocked.'},
+  roster_confirm_replace: {cn:'用录入内容替换整个名单？不在新名单里的工号都会被拦截。', en:'Replace the whole list? Any ID missing from the new list will be blocked.'},
   // Employee-ID conflict (when a freshly typed empNo already belongs to a
   // different account). The user must NOT auto-enter the other account —
   // they get two explicit choices: (A) go back and correct their own empNo,
@@ -5322,6 +5355,150 @@ function blacklistReason(emp, phone) {
   }
   return null;
 }
+
+// ===== 有效工号名单（roster）：管理员维护，不在名单内 = 已离职/失效 =====
+// 与黑名单的差别：黑名单是「点名禁用某几个人」，名单是「只放行这几个人」。
+// 员工离职后管理员把他的工号从名单里删掉，他（在任何设备上）就再也进不去。
+//
+// 云端落点用 channels.admin_state：v1/v2 的 RLS 白名单里就有这个通道名，
+// 因此**不需要管理员再跑任何 SQL**（'race'、'roster' 这类新名字会被 RLS 拒）。
+// jsonb 没有 ntfy 的 3800 字节上限，几百上千个工号也放得下。
+//
+// 铁律：fail-open。名单为空 / 没拉到 / 网络异常时一律放行 —— 绝不能因为一次
+// 网络抖动把全员锁在门外。只有「名单已加载且至少有 1 个工号」才真正拦截。
+var ROSTER_CHANNEL = 'admin_state';
+var ROSTER_CACHE_KEY = 'cloudRoster';        // 学员端本地缓存
+var ROSTER_ADMIN_KEY = 'adminRoster';        // 管理端本地副本
+var ROSTER_MAX = 3000;
+
+function loadRoster() {
+  try {
+    var s = JSON.parse(localStorage.getItem(ROSTER_CACHE_KEY) || 'null');
+    if (s && Array.isArray(s.ids)) return s;
+  } catch (e) {}
+  return { ver: 0, ids: [], ts: 0 };
+}
+function saveRoster(r) {
+  try { localStorage.setItem(ROSTER_CACHE_KEY, JSON.stringify(r || { ver: 0, ids: [], ts: 0 })); } catch (e) {}
+}
+// 云端消息只有在更新（ver 更大）时才覆盖本地缓存。
+function applyRosterMessage(m) {
+  if (!m || m.t !== 'roster' || typeof m.ver !== 'number' || !Array.isArray(m.ids)) return false;
+  var cur = loadRoster();
+  if (m.ver <= cur.ver) return false;
+  saveRoster({ ver: m.ver, ids: m.ids || [], ts: m.ts || 0 });
+  return true;
+}
+function refreshRoster() {
+  if (!SB_ON) return Promise.resolve(false);
+  return sbGetChannelJson(ROSTER_CHANNEL).then(function (j) {
+    if (j && j.success && j.data) return applyRosterMessage(j.data);
+    return false;
+  }).catch(function () { return false; });
+}
+// 归一化一段录入文本（逗号 / 空格 / 换行 / 分号 / 顿号 都当分隔符）为工号数组。
+function parseRosterInput(raw) {
+  var out = [];
+  var parts = String(raw == null ? '' : raw).split(/[^0-9A-Za-z]+/);
+  for (var i = 0; i < parts.length; i++) {
+    var e = normEmpNo(parts[i]);
+    if (!e) continue;
+    if (out.indexOf(e) < 0) out.push(e);
+  }
+  return out;
+}
+function rosterHas(emp) {
+  var e = normEmpNo(emp);
+  if (!e) return false;
+  var r = loadRoster();
+  for (var i = 0; i < r.ids.length; i++) if (normEmpNo(r.ids[i]) === e) return true;
+  return false;
+}
+// 该工号是否「已失效」（名单已启用且里面没有它）。名单为空 ⇒ 不拦截。
+function isEmpNotInRoster(emp) {
+  var e = normEmpNo(emp);
+  if (!e) return false;
+  var r = loadRoster();
+  if (!r.ids || !r.ids.length) return false;
+  return !rosterHas(e);
+}
+// 登录/进账号的统一门禁：黑名单 或 不在有效名单 都算被拦。
+function isEmpBlocked(emp) {
+  return isEmpBlacklisted(emp) || isEmpNotInRoster(emp);
+}
+function empBlockMsg(emp) {
+  return isEmpBlacklisted(emp) ? t('profile_phone_blacklisted') : t('profile_emp_off_roster');
+}
+// 已登录会话的自查：工号失效就把这台设备踢回登录页。
+function enforceRosterSession() {
+  try {
+    var key = state.currentUser || getCurrentUser();
+    if (!key) return;
+    var emp = normEmpNo(empOfKey(key) || getProfileEmpNo() || '');
+    if (!emp) return;
+    if (!isEmpNotInRoster(emp)) return;
+    try { localStorage.removeItem('currentUser'); } catch (e1) {}
+    state.currentUser = '';
+    state.currentPage = 'home';
+    state.requireProfile = false;
+    state.pendingProfile = false;
+    state.navStack = [];
+    render();
+    loginErr(t('profile_emp_off_roster'));
+  } catch (e) {}
+}
+// 发布名单到云端（管理端是唯一写入方）。
+function publishRoster(ids) {
+  var list = (ids || []).slice(0, ROSTER_MAX);
+  var payload = { t: 'roster', ver: Date.now(), ids: list, ts: Date.now() };
+  if (!SB_ON) return Promise.resolve(false);
+  return sbSaveChannel(ROSTER_CHANNEL, payload).then(function () {
+    var snap = { ver: payload.ver, ids: list, ts: payload.ts };
+    saveRoster(snap);          // 本机（管理端）立即生效，便于自查
+    adminSaveRoster(snap);
+    return true;
+  }).catch(function () { return false; });
+}
+// ---- 管理端本地副本 ----
+function adminLoadRoster() {
+  try {
+    var s = JSON.parse(localStorage.getItem(ROSTER_ADMIN_KEY) || 'null');
+    if (s && Array.isArray(s.ids)) return s;
+  } catch (e) {}
+  return { ver: 0, ids: [], ts: 0 };
+}
+function adminSaveRoster(r) {
+  try { localStorage.setItem(ROSTER_ADMIN_KEY, JSON.stringify(r || { ver: 0, ids: [], ts: 0 })); } catch (e) {}
+}
+function adminFetchRoster() {
+  if (!SB_ON) return Promise.resolve(false);
+  return sbGetChannelJson(ROSTER_CHANNEL).then(function (j) {
+    if (!(j && j.success && j.data && j.data.t === 'roster')) return false;
+    var cur = adminLoadRoster();
+    if (j.data.ver && j.data.ver <= cur.ver) return false;
+    adminSaveRoster({ ver: j.data.ver, ids: j.data.ids || [], ts: j.data.ts || 0 });
+    saveRoster({ ver: j.data.ver, ids: j.data.ids || [], ts: j.data.ts || 0 });
+    return true;
+  }).catch(function () { return false; });
+}
+// 已注册学员里「工号不在名单内」的人 —— 他们就是会被拦在门外的账号。
+function adminRosterMissing() {
+  var r = adminLoadRoster();
+  if (!r.ids || !r.ids.length) return [];
+  // 用管理端副本判定（学员端缓存可能还没跟上），两者在发布时会同时写入。
+  var set = {};
+  for (var k = 0; k < r.ids.length; k++) set[normEmpNo(r.ids[k])] = true;
+  var recs = adminStudentRecords();
+  var out = [];
+  for (var i = 0; i < recs.length; i++) {
+    var emp = normEmpNo(adminStudentEmp(recs[i]));
+    if (!emp || set[emp]) continue;
+    out.push({ emp: emp, name: (recs[i].snap && (recs[i].snap.name || recs[i].snap.cn || recs[i].snap.en)) || emp });
+  }
+  out.sort(function (a, b) { return a.emp < b.emp ? -1 : (a.emp > b.emp ? 1 : 0); });
+  return out;
+}
+
 // Record one finished exam as a sync event — called exactly once from
 // submitExam() / endExamAutomatically() before navigating to the result page.
 // The event body (score / paper / duration / mode) stays small; the per-question
@@ -5580,26 +5757,38 @@ function loginSubmit() {
   // the code is wrong too (it gates the question bank).
   if (!code || code.toUpperCase() !== 'SZXRZ') { loginErr(t('err_code')); return; }
   if (!emp) { loginErr(t('login_req_emp')); focusId('loginEmp'); return; }
-  if (isEmpBlacklisted(emp)) { loginErr(t('profile_phone_blacklisted')); return; }
+  if (isEmpBlocked(emp)) { loginErr(empBlockMsg(emp)); return; }
   state.loginEmp = emp;
   state.loginBusy = true;
   state.loginMsg = '';
   state.loginDraft = null;
   render();
-  resolveEmpAccount(emp).then(function(r) {
-    state.loginBusy = false;
+  // 有效工号名单：进账号前先拉一次最新名单再判定。名单为空 / 拉不到时一律放行
+  //（fail-open），所以网络抖动永远不会把全员锁在门外；但名单有内容且不含该工号
+  // 时，说明这个人已经离职，直接拒绝进入。
+  refreshRoster().catch(function() { return false; }).then(function() {
     if (!state.loginEmp || normEmpNo(state.loginEmp) !== emp) return; // superseded
-    if (isEmpBlacklisted(emp)) { loginErr(t('profile_phone_blacklisted')); }
-    state.loginMode = !r.exists ? 'register' : (r.pin ? 'pin' : 'claim');
-    state.loginPinHash = r.pin || '';
-    state.loginNameHint = r.nameHint || '';
-    state.loginStep = 2;
-    render();
-    focusId(state.loginMode === 'pin' ? 'loginPin' : (state.loginMode === 'claim' ? 'loginClaimConfirm' : 'loginCn'));
-  }).catch(function() {
-    state.loginBusy = false;
-    loginErr(t('login_cloud_retry'));
-    render();
+    if (isEmpNotInRoster(emp)) {
+      state.loginBusy = false;
+      loginErr(t('profile_emp_off_roster'));
+      render();
+      return;
+    }
+    return resolveEmpAccount(emp).then(function(r) {
+      state.loginBusy = false;
+      if (!state.loginEmp || normEmpNo(state.loginEmp) !== emp) return; // superseded
+      if (isEmpBlacklisted(emp)) { loginErr(t('profile_phone_blacklisted')); }
+      state.loginMode = !r.exists ? 'register' : (r.pin ? 'pin' : 'claim');
+      state.loginPinHash = r.pin || '';
+      state.loginNameHint = r.nameHint || '';
+      state.loginStep = 2;
+      render();
+      focusId(state.loginMode === 'pin' ? 'loginPin' : (state.loginMode === 'claim' ? 'loginClaimConfirm' : 'loginCn'));
+    }).catch(function() {
+      state.loginBusy = false;
+      loginErr(t('login_cloud_retry'));
+      render();
+    });
   });
 }
 function loginBackToEmp() {
@@ -5639,7 +5828,7 @@ function loginPinSubmit() {
   var emp = state.loginEmp;
   var akey = empKeyFor(emp);
   if (!akey) { loginBackToEmp(); return; }
-  if (isEmpBlacklisted(emp)) { loginErr(t('profile_phone_blacklisted')); return; }
+  if (isEmpBlocked(emp)) { loginErr(empBlockMsg(emp)); return; }
   var typed = pinHash(emp, d.pin);
   var want = state.loginPinHash || '';
   if (want && pinHashMatches(typed, want)) {
@@ -5716,7 +5905,7 @@ function loginRegisterSubmit() {
   if (!isPinValid(d.pin)) { loginErr(t('login_pin_invalid')); return; }
   if (d.pin !== d.pin2) { loginErr(t('login_pin_mismatch')); return; }
   var emp = normEmpNo(state.loginEmp);
-  if (isEmpBlacklisted(emp)) { loginErr(t('profile_phone_blacklisted')); return; }
+  if (isEmpBlocked(emp)) { loginErr(empBlockMsg(emp)); return; }
   state.loginBusy = true;
   render();
   // Guardrail: re-check the directory before creating anything. If the ID was
@@ -5813,7 +6002,7 @@ function loginClaimSubmit() {
   if (!isPinValid(d.pin)) { loginErr(t('login_pin_invalid')); return; }
   if (d.pin !== d.pin2) { loginErr(t('login_pin_mismatch')); return; }
   var emp = normEmpNo(state.loginEmp);
-  if (isEmpBlacklisted(emp)) { loginErr(t('profile_phone_blacklisted')); return; }
+  if (isEmpBlocked(emp)) { loginErr(empBlockMsg(emp)); return; }
   state.loginBusy = true;
   render();
   resolveEmpAccount(emp).then(function(r) {
@@ -9768,7 +9957,7 @@ function renderAdminDashboard() {
   html += '<div class="admin-hub-card" onclick="adminState.studentsTab=\'list\';adminState.studentDetail=\'\';adminState.editStudent=\'\';navigate(\'adminStudents\')">';
   html += '<div class="admin-hub-icon">\ud83d\udc65</div>';
   html += '<div class="admin-hub-body"><div class="admin-hub-title">' + (state.lang === 'en' ? 'Student Management' : '\u5b66\u5458\u7ba1\u7406') + '</div>';
-  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Learning data, error reports, info corrections' : '\u5b66\u4e60\u60c5\u51b5\u00b7\u62a5\u9519\u5904\u7406\u00b7\u4fe1\u606f\u66f4\u6b63') + '</div></div>';
+  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Learning data, error reports, info corrections, blacklist, valid employee IDs' : '\u5b66\u4e60\u60c5\u51b5\u00b7\u62a5\u9519\u5904\u7406\u00b7\u4fe1\u606f\u66f4\u6b63\u00b7\u9ed1\u540d\u5355\u00b7\u6709\u6548\u5de5\u53f7') + '</div></div>';
   html += '<div class="admin-hub-arrow">\u203a</div></div>';
 
   html += '<div class="admin-hub-card" onclick="navigate(\'adminExamHub\')">';
@@ -9777,13 +9966,7 @@ function renderAdminDashboard() {
   html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Publish formal exams, scores & replays, CSV export' : '\u6b63\u5f0f\u8003\u8bd5\u53d1\u5e03\u00b7\u62a5\u544a\u4e2d\u5fc3\u00b7\u6210\u7ee9\u5bfc\u51fa') + '</div></div>';
   html += '<div class="admin-hub-arrow">\u203a</div></div>';
 
-  // Stage 4: blacklist hub card. Admins ban a phone and stop that account
-  // from re-entering on any device (cached locally and refreshed every 90 s).
-  html += '<div class="admin-hub-card" onclick="navigate(\'adminBlacklist\')">';
-  html += '<div class="admin-hub-icon">\ud83d\udeab</div>';
-  html += '<div class="admin-hub-body"><div class="admin-hub-title">' + (state.lang === 'en' ? 'Blacklist' : '\u9ed1\u540d\u5355\u7ba1\u7406') + '</div>';
-  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Block banned phones from signing in' : '\u7981\u7528\u8fdd\u89c4\u624b\u673a\u53f7\uff0c\u65e0\u6cd5\u8fdb\u5165\u5e73\u53f0') + '</div></div>';
-  html += '<div class="admin-hub-arrow">\u203a</div></div>';
+  // 黑名单已于 2026-10-27 降级为「学员管理」的下一层级（页签），不再是并列模块。
   html += '</div>';
   html += '<div class="admin-hub-card" onclick="navigate(\'adminRace\')">';
   html += '<div class="admin-hub-icon">⚡</div>';
@@ -10101,6 +10284,20 @@ function renderAdminBlacklist() {
   html += '<h1>\ud83d\udeab ' + (en ? 'Blacklist' : '\u9ed1\u540d\u5355\u7ba1\u7406') + '</h1>';
   html += '<div class="subtitle">' + (en ? 'Accounts blocked from signing in' : '已禁用的账号') + ' (' + cur.phones.length + '/' + BLACKLIST_MAX + ')</div>';
   html += '</div><div class="page">';
+  html += adminBlacklistPanelHtml();
+  html += '</div>';
+  return html;
+}
+
+// 黑名单面板（不含页面外壳）。被两处复用：独立的 adminBlacklist 页，以及
+// 「学员管理 → 黑名单」页签（黑名单已降级为学员管理的下一层级）。
+function adminBlacklistPanelHtml() {
+  var en = state.lang === 'en';
+  var cur = adminLoadBlacklist();
+  var html = '';
+  // Side effect: keep the relay-side message fresh so it never falls out of
+  // ntfy's 12 h retention window while this panel is open.
+  keepAliveBlacklist();
 
   html += '<div class="save-status synced">' + (en
     ? '\u2601\ufe0f Changes here publish to every student device within ~90 s. A banned employee ID cannot register a new account or re-enter an existing one on any device.'
@@ -10133,7 +10330,6 @@ function renderAdminBlacklist() {
       html += '</div></div>';
     }
   }
-  html += '</div>';
   return html;
 }
 
@@ -10170,6 +10366,198 @@ function adminBlacklistRemoveHandler(ident) {
     if (ok) render();
     else alert(en ? '\u274c Failed (network). Try again.' : '\u274c \u64cd\u4f5c\u5931\u8d25\uff08\u7f51\u7edc\u5f02\u5e38\uff09\uff0c\u8bf7\u91cd\u8bd5\u3002');
   });
+}
+
+// ===== 有效工号名单：管理端维护界面（学员管理 → 有效工号）=====
+// 名单非空时是「白名单」语义：只有名单内的工号能进。员工离职 ⇒ 管理员把他的
+// 工号从名单里删掉 ⇒ 该账号在任何设备都无法再进入（学员端每 ~90 秒拉一次云端）。
+function adminRosterMsg(msg, bad) {
+  var el = document.getElementById('rosterMsg');
+  if (el) {
+    el.textContent = msg || '';
+    el.style.color = bad ? '#c0392b' : '#2e7d32';
+  }
+}
+// 每次改动都立即发布到云端（与黑名单一致：所见即所发）。
+function adminRosterPublish(ids) {
+  return publishRoster(ids).then(function (ok) {
+    if (ok) adminRosterMsg(t('roster_published'));
+    else adminRosterMsg(t('roster_publish_fail'), true);
+    render();
+    return ok;
+  });
+}
+function adminRosterAddOne() {
+  var el = document.getElementById('rosterOne');
+  var ids = parseRosterInput(el ? el.value : '');
+  if (!ids.length) { adminRosterMsg(t('roster_none_valid'), true); return; }
+  var cur = adminLoadRoster().ids.slice();
+  var dup = [], added = 0;
+  for (var i = 0; i < ids.length; i++) {
+    if (cur.indexOf(ids[i]) >= 0) { dup.push(ids[i]); continue; }
+    cur.push(ids[i]); added++;
+  }
+  if (!added) { adminRosterMsg(t('roster_dup') + '（' + dup.join('、') + '）', true); return; }
+  if (el) el.value = '';
+  adminRosterPublish(cur);
+}
+function adminRosterBulkAdd() {
+  var el = document.getElementById('rosterBulk');
+  var ids = parseRosterInput(el ? el.value : '');
+  if (!ids.length) { adminRosterMsg(t('roster_none_valid'), true); return; }
+  var cur = adminLoadRoster().ids.slice();
+  var added = 0;
+  for (var i = 0; i < ids.length; i++) if (cur.indexOf(ids[i]) < 0) { cur.push(ids[i]); added++; }
+  if (!added) { adminRosterMsg(t('roster_dup'), true); return; }
+  if (el) el.value = '';
+  adminRosterPublish(cur);
+}
+function adminRosterBulkReplace() {
+  var el = document.getElementById('rosterBulk');
+  var ids = parseRosterInput(el ? el.value : '');
+  if (!ids.length) { adminRosterMsg(t('roster_none_valid'), true); return; }
+  if (!confirm(t('roster_confirm_replace'))) return;
+  if (el) el.value = '';
+  adminRosterPublish(ids);
+}
+function adminRosterRemoveHandler(emp) {
+  var e = normEmpNo(emp);
+  var cur = adminLoadRoster().ids.slice();
+  var idx = cur.indexOf(e);
+  if (!e || idx < 0) return;
+  if (!confirm((state.lang === 'en' ? 'Remove ID ' : '从名单移除工号 ') + e
+    + (state.lang === 'en' ? '? That account will be locked out on every device.'
+                           : '？移除后该账号在任何设备都无法再进入。'))) return;
+  cur.splice(idx, 1);
+  adminRosterPublish(cur);
+}
+// 把当前所有已注册学员的工号并入名单（初次建名单最省事的一条路）。
+function adminRosterImportRegistered() {
+  var recs = adminStudentRecords();
+  var cur = adminLoadRoster().ids.slice();
+  var added = 0;
+  for (var i = 0; i < recs.length; i++) {
+    var e = normEmpNo(adminStudentEmp(recs[i]));
+    if (!e || cur.indexOf(e) >= 0) continue;
+    cur.push(e); added++;
+  }
+  if (!added) { adminRosterMsg(t('roster_dup'), true); return; }
+  adminRosterPublish(cur);
+}
+// 从「已注册但不在名单内」的预警列表里一键补回某人（误删自救）。
+function adminRosterAddMissing(emp) {
+  var e = normEmpNo(emp);
+  var cur = adminLoadRoster().ids.slice();
+  if (!e || cur.indexOf(e) >= 0) return;
+  cur.push(e);
+  adminRosterPublish(cur);
+}
+function adminRosterClear() {
+  if (!confirm(t('roster_confirm_clear'))) return;
+  adminRosterPublish([]);
+}
+function adminRosterRefresh() {
+  adminRosterMsg(state.lang === 'en' ? 'Fetching…' : '正在拉取…');
+  adminFetchRoster().then(function (ok) {
+    if (ok) adminRosterMsg(state.lang === 'en' ? '✅ Pulled from cloud.' : '✅ 已拉取云端名单。');
+    else adminRosterMsg(state.lang === 'en' ? '⚠️ Cloud copy unchanged or unavailable.' : '⚠️ 云端名单无更新或暂时不可达。', true);
+    render();
+  });
+}
+function adminRosterQueryInput(v) {
+  adminState.rosterQuery = String(v == null ? '' : v);
+  render();
+  var el = document.getElementById('rosterSearch');
+  if (el && typeof el.focus === 'function') {
+    try { el.focus(); } catch (e) {}
+    try { if (el.setSelectionRange && el.value != null) el.setSelectionRange(el.value.length, el.value.length); } catch (e) {}
+  }
+}
+// 面板本体（不含页面外壳），由 renderAdminStudents 的『有效工号』页签渲染。
+function adminRosterPanelHtml() {
+  var en = state.lang === 'en';
+  // 首次打开页签时拉一次云端，保证换一台管理设备看到的也是同一份名单。
+  if (!adminState.rosterFetched) {
+    adminState.rosterFetched = true;
+    try {
+      adminFetchRoster().then(function () {
+        if (state.currentPage === 'adminStudents' && adminState.studentsTab === 'roster') render();
+      });
+    } catch (e) {}
+  }
+  var r = adminLoadRoster();
+  var html = '';
+  html += '<div class="save-status synced">' + escapeHtml(t('roster_desc'))
+    + '<br><span style="font-size:11px;opacity:.85;">' + escapeHtml(t('roster_failopen')) + '</span></div>';
+
+  html += '<div class="sync-note" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">';
+  html += '<span>📋 ' + t('roster_count') + '：<b>' + r.ids.length + '</b></span>';
+  html += '<span>' + t('roster_updated') + '：' + (r.ts ? fmtSyncTime(r.ts) : '—') + '</span>';
+  html += '<button class="admin-mini-btn" onclick="adminRosterRefresh()">' + t('roster_btn_refresh') + '</button>';
+  html += '</div>';
+  html += '<div class="login-error" id="rosterMsg" style="min-height:0;"></div>';
+
+  // ---- 录入 ----
+  html += '<div class="q-card" style="margin-top:10px;"><div class="profile-form">';
+  html += '<h4 style="margin:0 0 10px;">➕ ' + t('roster_add_one') + '</h4>';
+  html += '<input type="text" id="rosterOne" maxlength="40" inputmode="numeric" placeholder="' + (en ? 'e.g. 1001' : '例如：1001') + '" autocomplete="off">';
+  html += '<button class="nav-btn primary" style="width:100%;margin-top:8px;" onclick="adminRosterAddOne()">' + t('roster_btn_add') + '</button>';
+  html += '<h4 style="margin:14px 0 10px;">📥 ' + t('roster_bulk') + '</h4>';
+  html += '<textarea id="rosterBulk" rows="5" style="width:100%;font-family:monospace;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:8px;" placeholder="' + t('roster_bulk_ph') + '"></textarea>';
+  html += '<div class="action-row" style="margin-top:8px;">';
+  html += '<button class="action-btn nav-btn primary" style="flex:1;" onclick="adminRosterBulkAdd()">' + t('roster_btn_add') + '</button>';
+  html += '<button class="action-btn nav-btn secondary" style="flex:1;" onclick="adminRosterBulkReplace()">' + (en ? 'Replace list' : '替换名单') + '</button>';
+  html += '</div>';
+  html += '<div class="action-row" style="margin-top:8px;">';
+  html += '<button class="action-btn nav-btn secondary" style="flex:1;" onclick="adminRosterImportRegistered()">' + t('roster_btn_import') + '</button>';
+  html += '<button class="action-btn nav-btn danger" style="flex:1;" onclick="adminRosterClear()">' + t('roster_btn_clear') + '</button>';
+  html += '</div>';
+  html += '</div></div>';
+
+  // ---- 已注册但不在名单内（这些人会被拦在门外）----
+  var missing = adminRosterMissing();
+  html += '<h4 style="margin:16px 0 8px;">⚠️ ' + t('roster_missing_title') + (missing.length ? ' (' + missing.length + ')' : '') + '</h4>';
+  if (!r.ids.length) {
+    html += '<div class="sync-note">' + t('roster_empty') + '</div>';
+  } else if (!missing.length) {
+    html += '<div class="sync-note">' + t('roster_missing_none') + '</div>';
+  } else {
+    for (var m = 0; m < missing.length && m < 100; m++) {
+      html += '<div class="stu-row" style="cursor:default;">';
+      html += '<div class="stu-name">🚫 <b>' + escapeHtml(missing[m].emp) + '</b> <span style="font-weight:400;font-size:13px;color:#8a8f96;">· ' + escapeHtml(missing[m].name) + '</span></div>';
+      html += '<div class="action-row" style="margin-top:8px;">';
+      html += '<button class="action-btn nav-btn secondary" style="flex:1;" onclick="adminRosterAddMissing(\'' + jsKey(missing[m].emp) + '\')">' + (en ? 'Put back on list' : '重新加入名单') + '</button>';
+      html += '</div></div>';
+    }
+    if (missing.length > 100) html += '<div class="sync-note">' + (en ? '…and ' + (missing.length - 100) + ' more.' : '……另有 ' + (missing.length - 100) + ' 人未列出。') + '</div>';
+  }
+
+  // ---- 名单本体 ----
+  html += '<h4 style="margin:16px 0 8px;">📋 ' + t('roster_title') + ' (' + r.ids.length + ')</h4>';
+  if (!r.ids.length) {
+    html += '<div class="sync-note">' + t('roster_empty') + '</div>';
+  } else {
+    var q = String(adminState.rosterQuery || '').trim();
+    html += '<input type="text" id="rosterSearch" value="' + escapeHtml(q) + '" placeholder="' + t('roster_search_ph') + '" maxlength="20" autocomplete="off" style="width:100%;margin-bottom:8px;" oninput="adminRosterQueryInput(this.value)">';
+    var shown = [];
+    for (var i2 = 0; i2 < r.ids.length; i2++) {
+      if (q && String(r.ids[i2]).indexOf(q) < 0) continue;
+      shown.push(r.ids[i2]);
+    }
+    if (!shown.length) {
+      html += '<div class="sync-note">' + (en ? 'No ID matches.' : '没有匹配的工号。') + '</div>';
+    } else {
+      var cap = Math.min(shown.length, 200);
+      for (var i3 = 0; i3 < cap; i3++) {
+        html += '<div class="exam-row" style="cursor:default;"><span>✅ <b>' + escapeHtml(shown[i3]) + '</b></span>'
+          + '<button class="admin-mini-btn" onclick="adminRosterRemoveHandler(\'' + jsKey(shown[i3]) + '\')">' + (en ? 'Remove' : '移除') + '</button></div>';
+      }
+      if (shown.length > cap) {
+        html += '<div class="sync-note">' + (en ? 'Showing first ' + cap + ' of ' + shown.length + ' — use the search box.' : '仅显示前 ' + cap + ' 个（共 ' + shown.length + ' 个），可用上方搜索框查找。') + '</div>';
+      }
+    }
+  }
+  return html;
 }
 
 // ===== Admin: exam-management sub-hub (publish + report center) =====
@@ -12266,7 +12654,23 @@ function renderAdminStudents() {
   html += '<div class="tab-bar">';
   html += '<div class="chip ' + (adminState.studentsTab === 'list' ? 'active' : '') + '" onclick="adminState.studentsTab=\'list\';render()">👥 ' + (en ? 'Students' : '学员列表') + ' (' + recs.length + ')</div>';
   html += '<div class="chip ' + (adminState.studentsTab === 'reports' ? 'active' : '') + '" onclick="adminState.studentsTab=\'reports\';render()">🚩 ' + (en ? 'Reports' : '报错记录') + ' (' + openReports + ')</div>';
+  // 黑名单 / 有效工号是学员管理的下一层级（原来是与它并列的独立模块）。
+  var blCount = adminLoadBlacklist().phones.length;
+  var rosterCount = adminLoadRoster().ids.length;
+  html += '<div class="chip ' + (adminState.studentsTab === 'blacklist' ? 'active' : '') + '" onclick="adminState.studentsTab=\'blacklist\';render()">🚫 ' + (en ? 'Blacklist' : '黑名单') + ' (' + blCount + ')</div>';
+  html += '<div class="chip ' + (adminState.studentsTab === 'roster' ? 'active' : '') + '" onclick="adminState.studentsTab=\'roster\';render()">📋 ' + t('roster_tab') + ' (' + rosterCount + ')</div>';
   html += '</div>';
+
+  if (adminState.studentsTab === 'blacklist') {
+    html += adminBlacklistPanelHtml();
+    html += '</div>';
+    return html;
+  }
+  if (adminState.studentsTab === 'roster') {
+    html += adminRosterPanelHtml();
+    html += '</div>';
+    return html;
+  }
   html += '<div class="sync-note">' + statusLine + '</div>';
 
   if (adminState.studentsTab === 'reports') {
