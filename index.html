@@ -3748,7 +3748,16 @@ const state = {
   loginHasPin: false,    // whether the resolved account already has a PIN
   searchKeyword: '',
   lang: localStorage.getItem('appLang') || 'cn',
-  navStack: [],        // 学员端页面栈（仅内存，刷新即清空）：goBack() 据此逐级回上一层，而不是一律回首页
+  navStack: [],        // 学员端页面栈（仅内存，刷新即清空）：goBack() 据此
+  race: null,          // 进行中的限时答题赛 {conf,pool,idx,answers,startTs,...}
+  raceTimer: null,
+  raceBoard: null,     // 排行榜原始数据（student_snapshots 行）
+  raceBoardTab: 'period', // 'period' | 'dept' | 'best'
+  raceSyncState: null, // 'pending' | 'ok' | 'fail'
+  raceDeepLink: (function () {
+    try { return /[?&]page=race\b/.test((typeof location !== 'undefined' && location.search) || ''); }
+    catch (e) { return false; }
+  })(), // 二维码带 ?page=race → 登录后直达答题赛逐级回上一层，而不是一律回首页
 };
 
 // ===== Admin Panel State =====
@@ -4010,6 +4019,46 @@ var I18N = {
   result_unanswered: {cn:'未答', en:'Unanswered'},
   result_review: {cn:'查看解析', en:'Review Answers'},
   result_back: {cn:'返回', en:'Back'},
+  // ---- 限时答题赛 Speed Quiz ----
+  race_title: {cn:'限时答题赛', en:'Speed Quiz'},
+  race_sub: {cn:'限定时间内答得越快越准，排名越高', en:'Answer as many as you can before time runs out'},
+  race_start: {cn:'开始答题', en:'Start'},
+  race_pick_section: {cn:'选择板块', en:'Choose a section'},
+  race_pool_size: {cn:'题目池', en:'Question pool'},
+  race_limit: {cn:'限时', en:'Time limit'},
+  race_no_conf: {cn:'当前没有进行中的答题赛，请联系培训部', en:'No active quiz right now. Please contact Learning.'},
+  race_pending: {cn:'答题赛尚未开始', en:'The quiz has not started yet'},
+  race_ended: {cn:'本期答题赛已结束', en:'This round has ended'},
+  race_closed: {cn:'本期答题赛已关闭', en:'This round is closed'},
+  race_window: {cn:'活动时间', en:'Window'},
+  race_correct: {cn:'答对', en:'Correct'},
+  race_answered: {cn:'已答', en:'Answered'},
+  race_accuracy: {cn:'准确率', en:'Accuracy'},
+  race_my_rank: {cn:'我的排名', en:'My rank'},
+  race_board: {cn:'排行榜', en:'Leaderboard'},
+  race_board_all: {cn:'全酒店榜', en:'Hotel-wide'},
+  race_board_dept: {cn:'部门榜', en:'My division'},
+  race_board_best: {cn:'历史最佳榜', en:'All-time best'},
+  race_board_empty: {cn:'还没有人提交成绩', en:'No scores submitted yet'},
+  race_again: {cn:'再挑战一次', en:'Try again'},
+  race_view_board: {cn:'查看排行榜', en:'View leaderboard'},
+  race_review: {cn:'查看答案解析', en:'Review answers'},
+  race_submit_ok: {cn:'成绩已提交', en:'Score submitted'},
+  race_submit_fail: {cn:'成绩上传失败，将自动重试', en:'Upload failed, will retry automatically'},
+  race_time_up: {cn:'时间到', en:'Time is up'},
+  race_pool_done: {cn:'题目已答完', en:'All questions answered'},
+  race_exit_confirm: {cn:'现在退出本次成绩将不计入，确定退出吗？', en:'Leaving now will discard this attempt. Continue?'},
+  race_loading: {cn:'正在载入排行榜…', en:'Loading leaderboard…'},
+  race_you: {cn:'（我）', en:' (you)'},
+  race_admin_hub: {cn:'限时答题赛', en:'Speed Quiz'},
+  race_admin_hub_desc: {cn:'发布赛事、设置板块与时限、导出成绩', en:'Publish rounds, set section & time limit, export scores'},
+  race_admin_publish: {cn:'发布本期赛事', en:'Publish this round'},
+  race_admin_close: {cn:'立即关闭', en:'Close now'},
+  race_admin_export: {cn:'导出 CSV', en:'Export CSV'},
+  race_admin_title_ph: {cn:'如：十月限时答题赛', en:'e.g. October Speed Quiz'},
+  race_admin_published: {cn:'已发布，学员端即刻生效', en:'Published — live on student devices now'},
+  race_admin_saved: {cn:'已保存', en:'Saved'},
+  race_admin_no_scores: {cn:'本期还没有成绩', en:'No scores for this round yet'},
   nav_back: {cn:'返回', en:'Back'},
   nav_home: {cn:'首页', en:'Home'},
   nav_home_hint: {cn:'回到首页', en:'Go to home'},
@@ -4307,6 +4356,7 @@ function buildStudentBody() {
     snap: collectSyncSnapshot(),
     events: events,
     details: details,
+    race: raceLocalRecord(),
     ts: Date.now()
   });
 }
@@ -6113,8 +6163,552 @@ function renderHome() {
     html += '<span>📊 '+progressPct+'%</span>';
     html += '</div></div>';
   }
-  
+
+  // 限时答题赛入口：只在管理员发布了赛事时才显示，避免学员看到空页面。
+  var rc = raceConfOf();
+  html += '<div class="bank-card" style="border-color:#1a3a5c;background:linear-gradient(0deg,#fff,#fff) padding-box;" onclick="navigate(\'race\')">';
+  html += '<h3>⚡ '+t('race_title')+'</h3>';
+  html += '<div class="desc">'+t('race_sub')+'</div>';
+  html += '<div class="meta">';
+  if (rc) {
+    html += '<span>🎯 '+escapeHtml(raceSecName(rc.section||'all'))+'</span>';
+    html += '<span>⏱ '+(rc.limitSec||60)+(state.lang==='en'?'s':'秒')+'</span>';
+  } else {
+    html += '<span style="color:#888;">'+(state.lang==='en'?'No active round':'暂无进行中的赛事')+'</span>';
+  }
+  html += '</div></div>';
+
   return html;
+}
+
+// ============================================================================
+//  限时答题赛 Speed Quiz  (2026-10-27)
+//  独立的第四个模块：限时内尽可能多答题，按「答对题数 → 准确率」排名。
+//  赛事配置走 channels 表（管理端写 / 全员可读）；
+//  学员成绩挂在各自快照的 race 字段（人人可写自己的、人人可读全部）。
+// ============================================================================
+var RACE_SECTIONS = [
+  {key:'all',      cn:'全题库',      en:'All Questions',     icon:'📚'},
+  {key:'culinary', cn:'厨房部',      en:'Culinary',          icon:'🍳'},
+  {key:'fb',       cn:'餐饮部',      en:'F&B',               icon:'🍽'},
+  {key:'rooms',    cn:'房务部',      en:'Rooms',             icon:'🛏'},
+  {key:'general',  cn:'通用知识',    en:'General Knowledge', icon:'⭐'},
+  {key:'hr',       cn:'人力资源部',  en:'Human Resources',   icon:'👥'},
+  {key:'finance',  cn:'财务部',      en:'Finance',           icon:'💰'},
+  {key:'sm',       cn:'市场销售部',  en:'Sales & Marketing', icon:'📈'},
+  {key:'eng',      cn:'工程部',      en:'Engineering',       icon:'🔧'}
+];
+// 章节 → 板块。FSQM 入职试卷同时给厨房部和餐饮部（复制，不是移动）。
+var RACE_SECTION_SOURCE = {
+  culinary: ['FSQM-入职培训考试试卷','FSQM-常用食物保质期','卫生','FSQM-审计提问重点'],
+  fb:       ['FSQM-入职培训考试试卷','宴会','大堂吧','意大利餐厅','雪茄吧','全日制餐厅','星丽中餐厅','美食屋','客房送餐部','叶子吧'],
+  rooms:    ['防损部','客房部','水疗及健身中心','宾客服务部','行政酒廊','洗衣房'],
+  general:  ['丽思卡尔顿集团信息概述','酒店信息概述','黄金标准默写','丽思卡尔顿文化理念','质量','万豪旅享家','使用指引','高博卡'],
+  hr:       ['人力资源部'],
+  finance:  ['财务部','信息部'],
+  sm:       ['市场销售部'],
+  eng:      ['工程部']
+};
+var RACE_MIN_POOL = 60;              // 池子不足时用「通用知识」补齐，保证限时内不会重复出题
+var RACE_TIMES = [30, 45, 60, 90];
+
+function raceSecMeta(key) {
+  for (var i = 0; i < RACE_SECTIONS.length; i++) if (RACE_SECTIONS[i].key === key) return RACE_SECTIONS[i];
+  return {key: key, cn: key, en: key, icon: '📚'};
+}
+function raceSecName(key) { var m = raceSecMeta(key); return state.lang === 'en' ? m.en : m.cn; }
+function raceSecIcon(key) { return raceSecMeta(key).icon; }
+
+// 抢答只抽单选 / 多选 —— 填空题要打字，不适合秒表赛。
+function raceQuestionsOf(key) {
+  var all = (typeof QUESTION_DATA !== 'undefined' && QUESTION_DATA.manual) ? QUESTION_DATA.manual : [];
+  var out = [], seen = {};
+  if (key === 'all') {
+    for (var i = 0; i < all.length; i++) {
+      var q = all[i];
+      if (!q || q.type === 'fill' || seen[q.id]) continue;
+      seen[q.id] = 1; out.push(q);
+    }
+    return out;
+  }
+  var want = RACE_SECTION_SOURCE[key] || [];
+  for (var j = 0; j < all.length; j++) {
+    var q2 = all[j];
+    if (!q2 || q2.type === 'fill' || seen[q2.id]) continue;
+    if (want.indexOf(q2.section) >= 0) { seen[q2.id] = 1; out.push(q2); }
+  }
+  return out;
+}
+// 题池：本板块题目 +（不足时）通用知识补齐，全程去重 → 一期之内绝不重复出题。
+function racePoolOf(key) {
+  var pool = raceQuestionsOf(key);
+  if (key !== 'all' && key !== 'general' && pool.length < RACE_MIN_POOL) {
+    var have = {}, k;
+    for (k = 0; k < pool.length; k++) have[pool[k].id] = 1;
+    var filler = [];
+    var gen = raceQuestionsOf('general');
+    for (k = 0; k < gen.length; k++) if (!have[gen[k].id]) filler.push(gen[k]);
+    filler = shuffleArray(filler);
+    var need = RACE_MIN_POOL - pool.length;
+    for (k = 0; k < need && k < filler.length; k++) pool.push(filler[k]);
+  }
+  var prepared = prepareQuestions(pool);
+  return shuffleArray(prepared);
+}
+
+// ---- 赛事配置 ----
+function raceConfOf() {
+  try { var s = localStorage.getItem('raceConf'); if (!s) return null; var c = JSON.parse(s); return (c && c.id) ? c : null; }
+  catch (e) { return null; }
+}
+function raceSaveConf(c) { try { localStorage.setItem('raceConf', JSON.stringify(c)); } catch (e) {} }
+function racePullConf() {
+  if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbGetChannelJson !== 'function') return Promise.resolve(null);
+  return sbGetChannelJson('race').then(function (r) {
+    if (r && r.success && r.data && r.data.id) { raceSaveConf(r.data); return r.data; }
+    return null;
+  }, function () { return null; });
+}
+function raceStateOf(c) {
+  if (!c || !c.id) return 'none';
+  if (c.closed) return 'closed';
+  var now = Date.now();
+  if (c.startTime && now < Date.parse(c.startTime)) return 'pending';
+  if (c.endTime && now > Date.parse(c.endTime)) return 'ended';
+  return 'open';
+}
+function raceFmtWindow(c) {
+  if (!c) return '';
+  function f(v) { var d = new Date(v); if (!isFinite(d.getTime())) return ''; return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  var a = c.startTime ? f(c.startTime) : '', b = c.endTime ? f(c.endTime) : '';
+  if (a && b) return a + ' — ' + b;
+  return a || b || '';
+}
+
+// ---- 本地成绩记录（会随快照上传） ----
+function raceLocalRecord() {
+  var o = null;
+  try { var s = localStorage.getItem('raceRecord'); o = s ? JSON.parse(s) : null; } catch (e) { o = null; }
+  if (!o || typeof o !== 'object') o = {};
+  if (!o.byRound || typeof o.byRound !== 'object') o.byRound = {};
+  return o;
+}
+function raceSaveLocalRecord(rec) { try { localStorage.setItem('raceRecord', JSON.stringify(rec)); } catch (e) {} }
+function raceDisplayName() {
+  var p = state.profile || {};
+  return ((p.enName || '').trim() || (p.cnName || '').trim() || String(state.currentUser || ''));
+}
+function raceDeptName() {
+  var p = state.profile || {};
+  var d = (typeof profileDivision === 'function') ? profileDivision(p) : (p.division || '');
+  if (d && typeof d === 'object') return state.lang === 'en' ? (d.en || d.cn || '') : (d.cn || d.en || '');
+  return String(d || '');
+}
+
+// ---- 答题 ----
+function raceStart() {
+  var c = raceConfOf(), st = raceStateOf(c);
+  if (st !== 'open') {
+    alert(t(st === 'pending' ? 'race_pending' : st === 'ended' ? 'race_ended' : st === 'closed' ? 'race_closed' : 'race_no_conf'));
+    return;
+  }
+  var pool = racePoolOf(c.section || 'all');
+  if (!pool.length) { alert(t('no_questions')); return; }
+  state.race = { conf: c, pool: pool, idx: 0, answers: [], cur: null, startTs: Date.now(), endReason: null, correct: 0, answered: 0 };
+  clearRaceTimer();
+  state.raceTimer = setInterval(raceTick, 250);
+  navigate('racePlay');
+}
+function raceTick() {
+  var r = state.race; if (!r) { clearRaceTimer(); return; }
+  var left = Math.max(0, (r.conf.limitSec || 60) - Math.floor((Date.now() - r.startTs) / 1000));
+  var el = document.getElementById('raceTimer');
+  if (el) {
+    el.textContent = '⏱ ' + left + 's';
+    el.style.color = left <= 10 ? '#c0392b' : '#1a3a5c';
+  }
+  if (left <= 0) raceEnd('timeout');
+}
+function clearRaceTimer() { if (state.raceTimer) { clearInterval(state.raceTimer); state.raceTimer = null; } }
+function racePick(i) {
+  var r = state.race; if (!r) return;
+  var q = r.pool[r.idx];
+  if (q && q.type === 'multiple') {
+    if (!r.cur) r.cur = [];
+    var p = r.cur.indexOf(i);
+    if (p >= 0) r.cur.splice(p, 1); else r.cur.push(i);
+    render();
+    return;
+  }
+  r.cur = [i];
+  raceAdvance();
+}
+function raceAdvance() {
+  var r = state.race; if (!r) return;
+  r.answers[r.idx] = { ans: (r.cur && r.cur.length) ? r.cur.slice() : [] };
+  r.cur = null;
+  r.idx++;
+  if (r.idx >= r.pool.length) { raceEnd('pool'); return; }
+  render();
+}
+function raceGrade(q, ans) {
+  if (!q || !ans || !ans.length) return false;
+  if (q.type === 'fill') return (typeof checkAllFillAnswers === 'function') ? checkAllFillAnswers(ans, q.fill_answers) : false;
+  var ci = q.correct_answer || [];
+  return ans.length === ci.length && ans.every(function (x) { return ci.indexOf(x) >= 0; });
+}
+function raceEnd(reason) {
+  var r = state.race; if (!r || r.endReason) return;
+  clearRaceTimer();
+  r.endReason = reason || 'submit';
+  var correct = 0, answered = 0;
+  for (var i = 0; i < r.answers.length; i++) {
+    var a = r.answers[i];
+    if (!a || !a.ans || !a.ans.length) continue;
+    answered++;
+    if (raceGrade(r.pool[i], a.ans)) correct++;
+  }
+  r.correct = correct; r.answered = answered;
+  raceSubmitScore();
+  navigate('raceResult');
+}
+function raceSubmitScore() {
+  var r = state.race; if (!r || !r.conf) return Promise.resolve(false);
+  var acc = r.answered ? Math.round(r.correct / r.answered * 1000) / 10 : 0;
+  var entry = { raceId: r.conf.id, section: r.conf.section || 'all', correct: r.correct, answered: r.answered, acc: acc, ts: Date.now() };
+  var rec = raceLocalRecord();
+  var prev = rec.byRound[r.conf.id];
+  // 不限次数，取最好一次：先比答对题数，再比准确率。
+  if (!prev || entry.correct > prev.correct || (entry.correct === prev.correct && entry.acc > prev.acc)) rec.byRound[r.conf.id] = entry;
+  if (!rec.best || entry.correct > rec.best.correct || (entry.correct === rec.best.correct && entry.acc > rec.best.acc)) {
+    rec.best = { correct: entry.correct, answered: entry.answered, acc: entry.acc, ts: entry.ts, raceId: entry.raceId };
+  }
+  rec.name = raceDisplayName();
+  rec.dept = raceDeptName();
+  raceSaveLocalRecord(rec);
+  state.raceSyncState = 'pending';
+  return (typeof pushStudentSnapshotToKv === 'function')
+    ? pushStudentSnapshotToKv().then(function (ok) { state.raceSyncState = ok ? 'ok' : 'fail'; return ok; },
+                                     function () { state.raceSyncState = 'fail'; return false; })
+    : Promise.resolve(false);
+}
+function raceExitRace() {
+  if (state.race && !state.race.endReason) { clearRaceTimer(); state.race = null; }
+  goBack();
+}
+
+// ---- 排行榜 ----
+// 快照行 → race 记录。真实数据形如 {phone, record:{race:{...}}, ts}；
+// record 既可能是 jsonb 对象也可能是字符串，两条路都要能读。
+function raceRecordOf(it) {
+  if (!it) return null;
+  if (it.race) return it.race;
+  var rec = it.record;
+  if (!rec) return null;
+  if (typeof rec === 'string') { try { rec = JSON.parse(rec); } catch (e) { return null; } }
+  return (rec && rec.race) || null;
+}
+function raceBoardRows(scope) {
+  var list = state.raceBoard || [];
+  var c = raceConfOf();
+  var myDept = raceDeptName();
+  var rows = [];
+  for (var i = 0; i < list.length; i++) {
+    var raw = list[i];
+    var race = raceRecordOf(raw);
+    if (!race) continue;
+    var it = { phone: raw ? raw.phone : '', race: race };
+    if (scope === 'period') {
+      var e = (c && it.race.byRound) ? it.race.byRound[c.id] : null;
+      if (!e) continue;
+      rows.push({ key: it.phone, name: it.race.name || it.phone, dept: it.race.dept || '', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts });
+    } else if (scope === 'dept') {
+      var e2 = (c && it.race.byRound) ? it.race.byRound[c.id] : null;
+      if (!e2 || (it.race.dept || '') !== myDept) continue;
+      rows.push({ key: it.phone, name: it.race.name || it.phone, dept: it.race.dept || '', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: e2.ts });
+    } else {
+      if (!it.race.best) continue;
+      rows.push({ key: it.phone, name: it.race.name || it.phone, dept: it.race.dept || '', correct: it.race.best.correct, answered: it.race.best.answered || 0, acc: it.race.best.acc, ts: it.race.best.ts });
+    }
+  }
+  rows.sort(function (a, b) {
+    if (b.correct !== a.correct) return b.correct - a.correct;
+    if (b.acc !== a.acc) return b.acc - a.acc;
+    return (a.ts || 0) - (b.ts || 0);
+  });
+  return rows;
+}
+function raceFetchBoard() {
+  if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbListSnapshots !== 'function') return Promise.resolve([]);
+  return sbListSnapshots(0, true).then(function (rows) {
+    if (!Array.isArray(rows)) return [];
+    state.raceBoard = rows;
+    state.raceBoardTs = Date.now();
+    return rows;
+  }, function () { return []; });
+}
+
+// ---- 页面 ----
+function renderRaceHome() {
+  var c = raceConfOf(), st = raceStateOf(c);
+  var html = renderAppHeader({ title: '⚡ ' + t('race_title'), subtitle: t('race_sub') });
+  html += '<div class="page">';
+  if (st === 'none') {
+    html += '<div class="q-card" style="text-align:center;color:#888;padding:28px 16px;">' + t('race_no_conf') + '</div>';
+    html += '</div>';
+    return html;
+  }
+  var meta = raceSecMeta(c.section || 'all');
+  html += '<div class="q-card">';
+  html += '<h3 style="margin:0 0 6px;">' + (c.title ? escapeHtml(c.title) : t('race_title')) + '</h3>';
+  html += '<div style="font-size:14px;color:#444;line-height:1.9;">';
+  html += '🎯 ' + t('race_pick_section') + '：<b>' + meta.icon + ' ' + raceSecName(c.section || 'all') + '</b><br>';
+  html += '⏱ ' + t('race_limit') + '：<b>' + (c.limitSec || 60) + ' ' + (state.lang === 'en' ? 'seconds' : '秒') + '</b><br>';
+  if (c.startTime || c.endTime) html += '🗓 ' + t('race_window') + '：' + raceFmtWindow(c) + '<br>';
+  html += '📚 ' + t('race_pool_size') + '：' + racePoolOfSize(c.section || 'all') + ' ' + (state.lang === 'en' ? 'questions' : '题');
+  html += '</div></div>';
+  if (st === 'pending') html += '<div class="q-card" style="text-align:center;color:#a14a00;">' + t('race_pending') + '</div>';
+  if (st === 'ended') html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_ended') + '</div>';
+  if (st === 'closed') html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_closed') + '</div>';
+  if (st === 'open') {
+    html += '<button class="action-btn primary" style="width:100%;margin-top:6px;" onclick="raceStart()">⚡ ' + t('race_start') + '</button>';
+  }
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenBoard()">🏆 ' + t('race_board') + '</button>';
+  html += '</div>';
+  return html;
+}
+var _racePoolSizeCache = {};
+function racePoolOfSize(key) {
+  if (_racePoolSizeCache[key] == null) _racePoolSizeCache[key] = racePoolOf(key).length;
+  return _racePoolSizeCache[key];
+}
+function raceOpenBoard() {
+  navigate('raceBoard');
+  raceFetchBoard().then(function () { if (state.currentPage === 'raceBoard') render(); });
+}
+function renderRacePlay() {
+  var r = state.race;
+  if (!r || r.endReason) { return '<div class="page"><div class="q-card">' + t('race_no_conf') + '</div></div>'; }
+  var q = r.pool[r.idx];
+  if (!q) { return '<div class="page"></div>'; }
+  var html = renderAppHeader({ title: '⚡ ' + (r.conf.title || t('race_title')), subtitle: raceSecName(r.conf.section || 'all'), showBack: true, showHome: false });
+  html += '<div class="page">';
+  html += '<div id="raceTimer" style="text-align:center;font-size:26px;font-weight:700;color:#1a3a5c;margin:4px 0 12px;">⏱ ' + (r.conf.limitSec || 60) + 's</div>';
+  html += '<div class="q-card">';
+  html += '<div style="font-size:12px;color:#888;margin-bottom:6px;">' + (r.idx + 1) + ' / ' + r.pool.length + '</div>';
+  html += '<div class="q-text">' + escapeHtml(raceQText(q)).replace(/\n/g, '<br>') + '</div>';
+  var cur = r.cur || [];
+  for (var i = 0; i < (q.options || []).length; i++) {
+    var on = cur.indexOf(i) >= 0;
+    html += '<button class="option' + (on ? ' selected' : '') + '" style="display:block;width:100%;text-align:left;margin:6px 0;padding:10px 12px;border:1px solid ' + (on ? '#1a3a5c' : '#d8dee4') + ';border-radius:8px;background:' + (on ? '#e8f0fe' : '#fff') + ';font-size:14px;" onclick="racePick(' + i + ')">' + escapeHtml(raceOptText(q, i)) + '</button>';
+  }
+  if (q.type === 'multiple') {
+    html += '<button class="action-btn primary" style="width:100%;margin-top:10px;" onclick="raceAdvance()">' + (state.lang === 'en' ? 'Confirm' : '确认作答') + '</button>';
+  }
+  html += '</div></div>';
+  return html;
+}
+function raceQText(q) {
+  if (state.lang === 'en') return q.question_en || q.question || '';
+  return q.question_cn || q.question || '';
+}
+function raceOptText(q, i) {
+  var o = (q.options || [])[i] || {};
+  if (state.lang === 'en') return o.text_en || o.text || '';
+  return o.text_cn || o.text || '';
+}
+function raceCorrectText(q) {
+  var idxs = q.correct_answer || [], out = [];
+  for (var i = 0; i < idxs.length; i++) out.push(raceOptText(q, idxs[i]));
+  return out.join(state.lang === 'en' ? ' / ' : '、');
+}
+function raceUserText(q, ans) {
+  if (!ans || !ans.length) return '—';
+  var out = [];
+  for (var i = 0; i < ans.length; i++) out.push(raceOptText(q, ans[i]));
+  return out.join(state.lang === 'en' ? ' / ' : '、');
+}
+function renderRaceResult() {
+  var r = state.race;
+  if (!r) return '<div class="page"></div>';
+  var acc = r.answered ? Math.round(r.correct / r.answered * 1000) / 10 : 0;
+  var html = renderAppHeader({ title: '🏁 ' + t('race_title'), subtitle: r.endReason === 'timeout' ? t('race_time_up') : t('race_pool_done'), showBack: false });
+  html += '<div class="page">';
+  html += '<div class="q-card" style="text-align:center;">';
+  html += '<div style="font-size:40px;font-weight:700;color:#1a3a5c;">' + r.correct + '</div>';
+  html += '<div style="color:#666;font-size:13px;">' + t('race_correct') + ' · ' + t('race_answered') + ' ' + r.answered + ' · ' + t('race_accuracy') + ' ' + acc + '%</div>';
+  if (state.raceSyncState === 'fail') html += '<div style="color:#a14a00;font-size:12px;margin-top:8px;">⚠️ ' + t('race_submit_fail') + '</div>';
+  html += '</div>';
+  html += '<button class="action-btn primary" style="width:100%;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
+  if (raceStateOf(raceConfOf()) === 'open') {
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceStart()">⚡ ' + t('race_again') + '</button>';
+  }
+  html += '<div style="margin-top:16px;font-size:13px;font-weight:600;">📖 ' + t('race_review') + '</div>';
+  for (var i = 0; i < r.answers.length; i++) {
+    var a = r.answers[i];
+    if (!a || !a.ans || !a.ans.length) continue;
+    var q = r.pool[i];
+    var ok = raceGrade(q, a.ans);
+    html += '<div class="q-card" style="margin-top:10px;border-left:3px solid ' + (ok ? '#27ae60' : '#c0392b') + ';">';
+    html += '<div style="font-size:14px;font-weight:600;">' + (i + 1) + '. ' + escapeHtml(raceQText(q)).replace(/\n/g, '<br>') + '</div>';
+    html += '<div style="font-size:13px;margin-top:6px;' + (ok ? 'color:#27ae60;' : 'color:#c0392b;') + '">' + (ok ? '✓ ' : '✗ ') + escapeHtml(raceUserText(q, a.ans)) + '</div>';
+    if (!ok) html += '<div style="font-size:13px;color:#27ae60;margin-top:2px;">✓ ' + escapeHtml(raceCorrectText(q)) + '</div>';
+    var exp = state.lang === 'en' ? (q.explanation_en || q.explanation || '') : (q.explanation_cn || q.explanation || '');
+    if (exp) html += '<div style="font-size:12px;color:#666;margin-top:6px;line-height:1.6;">📖 ' + escapeHtml(exp).replace(/\n/g, '<br>') + '</div>';
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+function renderRaceBoard() {
+  var tab = state.raceBoardTab || 'period';
+  var html = renderAppHeader({ title: '🏆 ' + t('race_board'), subtitle: raceConfOf() ? (raceConfOf().title || '') : '' });
+  html += '<div class="page">';
+  html += '<div style="display:flex;gap:8px;margin-bottom:12px;">';
+  html += '<button class="action-btn ' + (tab === 'period' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'period\';render()">' + t('race_board_all') + '</button>';
+  html += '<button class="action-btn ' + (tab === 'dept' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'dept\';render()">' + t('race_board_dept') + '</button>';
+  html += '<button class="action-btn ' + (tab === 'best' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'best\';render()">' + t('race_board_best') + '</button>';
+  html += '</div>';
+  var rows = raceBoardRows(tab);
+  if (!state.raceBoard) {
+    html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_loading') + '</div>';
+  } else if (!rows.length) {
+    html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_board_empty') + '</div>';
+  } else {
+    var me = String(state.currentUser || '');
+    var myKey = '';
+    try { myKey = empKeyFor(); } catch (e) { myKey = ''; }
+    for (var i = 0; i < rows.length; i++) {
+      var rw = rows[i];
+      var isMe = myKey && rw.key === myKey;
+      var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#1a3a5c' : '#e2e6ea') + ';border-radius:10px;background:' + (isMe ? '#eef4fa' : '#fff') + ';">';
+      html += '<div style="width:32px;text-align:center;font-weight:700;color:#1a3a5c;">' + medal + '</div>';
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#1a3a5c;font-size:12px;">' + t('race_you') + '</span>' : '') + '</div>';
+      html += '<div style="font-size:12px;color:#888;">' + escapeHtml(rw.dept) + '</div>';
+      html += '</div>';
+      html += '<div style="text-align:right;">';
+      html += '<div style="font-size:16px;font-weight:700;color:#1a3a5c;">' + rw.correct + '</div>';
+      html += '<div style="font-size:12px;color:#888;">' + rw.acc + '%</div>';
+      html += '</div></div>';
+    }
+  }
+  if (raceStateOf(raceConfOf()) === 'open') {
+    html += '<button class="action-btn primary" style="width:100%;margin-top:12px;" onclick="raceStart()">⚡ ' + t('race_start') + '</button>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// ================= 限时答题赛 · 管理端 =================
+function renderAdminRace() {
+  var c = raceConfOf() || {};
+  var en = state.lang === 'en';
+  var html = renderAppHeader({ title: '⚡ ' + t('race_admin_hub'), subtitle: t('race_admin_hub_desc') });
+  html += '<div class="page">';
+  html += '<div class="q-card">';
+  html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">' + (en ? 'Round settings' : '本期赛事设置') + '</div>';
+  html += '<label style="font-size:12px;color:#666;">' + (en ? 'Title' : '赛事名称') + '</label>';
+  html += '<input id="raceTitle" class="admin-input" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + escapeHtml(c.title || '') + '" placeholder="' + t('race_admin_title_ph') + '">';
+  html += '<label style="font-size:12px;color:#666;">' + t('race_pick_section') + '</label>';
+  html += '<select id="raceSection" class="admin-input" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;">';
+  for (var i = 0; i < RACE_SECTIONS.length; i++) {
+    var s = RACE_SECTIONS[i];
+    html += '<option value="' + s.key + '"' + ((c.section || 'all') === s.key ? ' selected' : '') + '>' + s.icon + ' ' + (en ? s.en : s.cn) + '</option>';
+  }
+  html += '</select>';
+  html += '<label style="font-size:12px;color:#666;">' + t('race_limit') + '</label>';
+  html += '<select id="raceLimit" class="admin-input" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;">';
+  for (var j = 0; j < RACE_TIMES.length; j++) {
+    html += '<option value="' + RACE_TIMES[j] + '"' + ((c.limitSec || 60) === RACE_TIMES[j] ? ' selected' : '') + '>' + RACE_TIMES[j] + ' ' + (en ? 'seconds' : '秒') + '</option>';
+  }
+  html += '</select>';
+  html += '<label style="font-size:12px;color:#666;">' + (en ? 'Start (optional)' : '开始时间（可留空）') + '</label>';
+  html += '<input id="raceStart" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + (c.startTime ? raceInputDate(c.startTime) : '') + '">';
+  html += '<label style="font-size:12px;color:#666;">' + (en ? 'End (optional)' : '结束时间（可留空）') + '</label>';
+  html += '<input id="raceEnd" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + (c.endTime ? raceInputDate(c.endTime) : '') + '">';
+  html += '</div>';
+  html += '<button class="action-btn primary" style="width:100%;" onclick="adminRacePublish()">📣 ' + t('race_admin_publish') + '</button>';
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="adminRaceClose()">⛔ ' + t('race_admin_close') + '</button>';
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="adminRaceExport()">📥 ' + t('race_admin_export') + '</button>';
+  html += '<div id="raceAdminMsg" style="margin-top:10px;font-size:13px;color:#1a3a5c;"></div>';
+  if (c.id) {
+    html += '<div style="margin-top:16px;font-size:12px;color:#888;">' + (en ? 'Current status' : '当前状态') + '：' + raceStateOf(c) + ' · ' + raceFmtWindow(c) + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+function raceInputDate(v) {
+  var d = new Date(v);
+  if (!isFinite(d.getTime())) return '';
+  function p(n) { return String(n).padStart(2, '0'); }
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function adminRacePublish() {
+  var el = function (id) { return document.getElementById(id); };
+  var c = raceConfOf() || {};
+  c.id = c.id || ('r' + Date.now());
+  c.title = (el('raceTitle') && el('raceTitle').value || '').trim();
+  c.section = (el('raceSection') && el('raceSection').value) || 'all';
+  c.limitSec = parseInt((el('raceLimit') && el('raceLimit').value), 10) || 60;
+  var sv = el('raceStart') && el('raceStart').value, ev = el('raceEnd') && el('raceEnd').value;
+  c.startTime = sv ? new Date(sv).toISOString() : '';
+  c.endTime = ev ? new Date(ev).toISOString() : '';
+  c.closed = false;
+  c.ver = Date.now();
+  raceSaveConf(c);
+  if (typeof SB_ON !== 'undefined' && SB_ON && typeof sbSaveChannel === 'function') {
+    sbSaveChannel('race', c).then(function () { adminRaceMsg(t('race_admin_published')); },
+                                  function () { adminRaceMsg(t('race_submit_fail')); });
+  } else {
+    adminRaceMsg(t('race_admin_saved'));
+  }
+}
+function adminRaceClose() {
+  var c = raceConfOf();
+  if (!c) { adminRaceMsg(t('race_no_conf')); return; }
+  c.closed = true; c.ver = Date.now();
+  raceSaveConf(c);
+  if (typeof SB_ON !== 'undefined' && SB_ON && typeof sbSaveChannel === 'function') {
+    sbSaveChannel('race', c).then(function () { adminRaceMsg(t('race_admin_published')); render(); },
+                                  function () { adminRaceMsg(t('race_submit_fail')); });
+  } else { render(); }
+}
+function adminRaceMsg(msg) {
+  var el = document.getElementById('raceAdminMsg');
+  if (el) el.textContent = msg;
+}
+function adminRaceExport() {
+  var c = raceConfOf();
+  if (!c) { alert(t('race_no_conf')); return; }
+  if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbListSnapshots !== 'function') { alert(t('race_admin_no_scores')); return; }
+  sbListSnapshots(0, true).then(function (rows) {
+    if (!Array.isArray(rows)) { alert(t('race_admin_no_scores')); return; }
+    var out = [], i;
+    for (i = 0; i < rows.length; i++) {
+      var it = rows[i];
+      if (!it || !it.record) continue;
+      var race = null;
+      try { race = typeof it.record === 'string' ? JSON.parse(it.record).race : it.record.race; } catch (e) { race = null; }
+      if (!race) continue;
+      var e2 = race.byRound ? race.byRound[c.id] : null;
+      if (!e2) continue;
+      out.push({ name: race.name || '', dept: race.dept || '', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: new Date(e2.ts).toLocaleString('zh-CN') });
+    }
+    if (!out.length) { alert(t('race_admin_no_scores')); return; }
+    out.sort(function (a, b) { return (b.correct - a.correct) || (b.acc - a.acc); });
+    var csv = '\ufeff' + 'Rank,Name,Division,Correct,Answered,Accuracy,Time\n';
+    for (i = 0; i < out.length; i++) {
+      var r = out[i];
+      csv += [i + 1, '"' + String(r.name).replace(/"/g, '""') + '"', '"' + String(r.dept).replace(/"/g, '""') + '"', r.correct, r.answered, r.acc + '%', r.ts].join(',') + '\n';
+    }
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'speed-quiz-' + c.id + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }, function () { alert(t('race_admin_no_scores')); });
 }
 
 // ===== Personal Profile page =====
@@ -7037,6 +7631,12 @@ function goBack() {
     if (!confirmLeaveQuestion()) return;
     clearExamTimer();
     detachExamGuards();
+  }
+  // 限时答题赛进行中：退出即作废，先确认，再停表清状态。
+  if (from === 'racePlay' && state.race && !state.race.endReason) {
+    if (!confirm(t('race_exit_confirm'))) return;
+    clearRaceTimer();
+    state.race = null;
   }
   if (!state.navStack) state.navStack = [];
   var target = state.navStack.length ? state.navStack.pop() : 'home';
@@ -8591,6 +9191,11 @@ function renderAdminDashboard() {
   html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Block banned phones from signing in' : '\u7981\u7528\u8fdd\u89c4\u624b\u673a\u53f7\uff0c\u65e0\u6cd5\u8fdb\u5165\u5e73\u53f0') + '</div></div>';
   html += '<div class="admin-hub-arrow">\u203a</div></div>';
   html += '</div>';
+  html += '<div class="admin-hub-card" onclick="navigate(\'adminRace\')">';
+  html += '<div class="admin-hub-icon">⚡</div>';
+  html += '<div class="admin-hub-body"><div class="admin-hub-title">' + t('race_admin_hub') + '</div>';
+  html += '<div class="admin-hub-desc">' + t('race_admin_hub_desc') + '</div></div>';
+  html += '<div class="admin-hub-arrow">›</div></div>';
 
   if (hasLocalChanges) {
     html += '<div class="save-status local">' + (state.lang === 'en' ? '\u26a0\ufe0f Changes are saved and auto-synced to student devices (within ~90 s). Export JSON is for backup only.' : '\u26a0\ufe0f \u4fee\u6539\u5df2\u4fdd\u5b58\u5e76\u81ea\u52a8\u540c\u6b65\u7ed9\u5b66\u5458\u7aef\uff08\u7ea6 90 \u79d2\u5185\u751f\u6548\uff09\u3002\u300c\u5bfc\u51faJSON\u6570\u636e\u300d\u4ec5\u4f5c\u5907\u4efd\u7528\u3002') + '</div>';
@@ -12820,6 +13425,7 @@ function render() {
       case 'adminReports': app.innerHTML = renderAdminReports(); return;
       case 'adminGrading': app.innerHTML = renderAdminGrading(); return;
       case 'adminBlacklist': app.innerHTML = renderAdminBlacklist(); return;
+      case 'adminRace': app.innerHTML = renderAdminRace(); return;
     }
   }
   if (!state.currentUser) {
@@ -12849,6 +13455,12 @@ function render() {
     state.requireProfile = true;
     state.currentPage = 'profile';
   }
+  // 扫码直达：二维码带 ?page=race 时，登录（且资料完整）后直接进答题赛，
+  // 只触发一次，之后正常返回首页。
+  if (state.raceDeepLink && !state.raceDeepLinkDone && state.currentPage === 'home') {
+    state.raceDeepLinkDone = true;
+    state.currentPage = 'race';
+  }
   switch(state.currentPage) {
     case 'home': app.innerHTML = renderHome(); break;
     case 'profile': app.innerHTML = renderProfile(); break;
@@ -12860,6 +13472,10 @@ function render() {
     case 'examResult': app.innerHTML = renderExamResult(); break;
     case 'examReplay': app.innerHTML = renderExamReplay(); break;
     case 'examHistory': app.innerHTML = renderExamHistory(); break;
+    case 'race': app.innerHTML = renderRaceHome(); break;
+    case 'racePlay': app.innerHTML = renderRacePlay(); break;
+    case 'raceResult': app.innerHTML = renderRaceResult(); break;
+    case 'raceBoard': app.innerHTML = renderRaceBoard(); break;
     default: app.innerHTML = renderHome();
   }
 }
