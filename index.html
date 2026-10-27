@@ -3954,6 +3954,7 @@ var adminState = {
   bankScrollY: 0,       // scroll position to restore when returning to adminBank
   sectionPanel: '',     // manual bank tool panel: '' | 'order' | 'limit'
   dashPaper: 'all',     // 部门看板场次：'all' | 试卷 key | '__race__'
+  dashSession: '',      // 部门看板「具体场次」：'' = 该试卷全部场次，或 dashSessionKeyOf(ev)
   dashDept: '',         // 部门看板里展开的部门名
   dashDrawer: null,     // { key } — 右侧员工详情抽屉
   dashRaceMap: null,    // 答题赛成绩 map（akey → race record）
@@ -4216,6 +4217,9 @@ var I18N = {
   dash_sub: {cn:'按部门汇总参与度与成绩', en:'Participation & scores by division'},
   dash_session: {cn:'场次', en:'Session'},
   dash_all_sessions: {cn:'全部场次', en:'All sessions'},
+  dash_session_pick: {cn:'具体场次（某一次发布）', en:'Specific session (one published round)'},
+  dash_session_all: {cn:'该试卷全部场次', en:'All sessions of this paper'},
+  dash_session_scoped: {cn:'仅当前场次', en:'current session only'},
   dash_emp_n: {cn:'参与人数', en:'Employees'},
   dash_exam_n: {cn:'考试人次', en:'Attempts'},
   dash_avg: {cn:'平均正确率', en:'Avg correct'},
@@ -10323,9 +10327,60 @@ function dashFetchRace() {
     return m;
   }, function () { adminState.dashRaceLoading = false; return adminState.dashRaceMap || {}; });
 }
-// 员工级汇总（纯逻辑，便于单测）。paper: 'all' | 试卷 key | '__race__'
-function dashStudentRows(paper) {
+// ---- 具体场次（某一次发布的考试）----
+// 一次发布 = 一个场次实例。优先用 round（每次发布分配），老数据退回 sessionId，
+// 再退回「同一天」。练习模式没有场次概念 → 返回 ''（只出现在「全部场次」里）。
+function dashSessionKeyOf(ev) {
+  if (!ev || ev.mode !== 'formal') return '';
+  var base = ev.pk || ev.paper || '';
+  if (ev.round) return 'r|' + base + '|' + ev.round;
+  if (ev.sessionId) return 's|' + ev.sessionId;
+  var d = new Date(ev.ts || 0);
+  return 'd|' + base + '|' + d.getFullYear() + '-' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1) + '-' + (d.getDate() < 10 ? '0' : '') + d.getDate();
+}
+// 某试卷下所有已产生过答题记录的场次实例（按最近一次答题时间倒序）
+function dashSessionBuckets(paper) {
   paper = paper || 'all';
+  if (dashIsRace(paper)) return [];
+  var recs = adminStudentRecords();
+  var map = {}, order = [];
+  for (var i = 0; i < recs.length; i++) {
+    var exams = recs[i].exams || [];
+    for (var j = 0; j < exams.length; j++) {
+      var ev = exams[j];
+      if (!ev || ev.mode !== 'formal') continue;
+      if (paper !== 'all' && ev.paper !== paper) continue;
+      var k = dashSessionKeyOf(ev);
+      if (!k) continue;
+      if (!map[k]) { map[k] = { key: k, title: ev.title || '', paper: ev.paper || '', n: 0, tsStart: 0, tsEnd: 0 }; order.push(k); }
+      var b = map[k];
+      b.n++;
+      if (!b.title && ev.title) b.title = ev.title;
+      var ts = ev.ts || 0;
+      if (!b.tsStart || ts < b.tsStart) b.tsStart = ts;
+      if (ts > b.tsEnd) b.tsEnd = ts;
+    }
+  }
+  var out = [];
+  for (var m = 0; m < order.length; m++) out.push(map[order[m]]);
+  out.sort(function (a, b) { return (b.tsEnd || 0) - (a.tsEnd || 0); });
+  return out;
+}
+// 场次 chip 上的短标签：10-27 16:00 · 标题（N 人）
+function dashSessionLabel(b, en) {
+  if (!b) return '';
+  var d = new Date(b.tsStart || b.tsEnd || 0);
+  function p(n) { return (n < 10 ? '0' : '') + n; }
+  var day = p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  var name = b.title || syncPaperLabel(b.paper);
+  if (name.length > 14) name = name.slice(0, 14) + '…';
+  return day + ' · ' + name + ' · ' + b.n + (en ? '' : ' 人');
+}
+// 员工级汇总（纯逻辑，便于单测）。paper: 'all' | 试卷 key | '__race__'
+// sessKey：'' = 全部场次；否则只看这一个场次实例的记录
+function dashStudentRows(paper, sessKey) {
+  paper = paper || 'all';
+  sessKey = sessKey || '';
   var recs = adminStudentRecords();
   var out = [];
   for (var i = 0; i < recs.length; i++) {
@@ -10353,6 +10408,7 @@ function dashStudentRows(paper) {
     for (var j = 0; j < rec.exams.length; j++) {
       var ev = rec.exams[j];
       if (paper !== 'all' && ev.paper !== paper) continue;
+      if (sessKey && dashSessionKeyOf(ev) !== sessKey) continue;
       exams.push(ev);
     }
     if (!exams.length) continue;
@@ -10378,8 +10434,8 @@ function dashStudentRows(paper) {
   return out;
 }
 // 部门级聚合（纯逻辑）。人数 desc → 平均正确率 desc
-function dashDeptRows(paper) {
-  var rows = dashStudentRows(paper);
+function dashDeptRows(paper, sessKey) {
+  var rows = dashStudentRows(paper, sessKey);
   var map = {}, order = [];
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
@@ -10443,14 +10499,16 @@ function dashBuildCSV(rows, lang, isRace) {
 function adminDashExportCSV() {
   var en = state.lang === 'en';
   var paper = adminState.dashPaper || 'all';
-  var rows = dashStudentRows(paper);
+  var sessKey = adminState.dashSession || '';
+  var rows = dashStudentRows(paper, sessKey);
   if (!rows.length) { alert(t('dash_export_empty')); return; }
   var csv = '\ufeff' + dashBuildCSV(rows, state.lang, dashIsRace(paper));
   try {
     var d = new Date();
     function p(n) { return (n < 10 ? '0' : '') + n; }
     var stamp = d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes());
-    var fname = (en ? 'division_dashboard_' : '部门看板_') + (dashIsRace(paper) ? 'race' : paper) + '_' + stamp + '.csv';
+    var fname = (en ? 'division_dashboard_' : '部门看板_') + (dashIsRace(paper) ? 'race' : paper)
+      + (sessKey ? '_' + String(sessKey).replace(/[^a-zA-Z0-9_-]/g, '') : '') + '_' + stamp + '.csv';
     var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -10494,12 +10552,20 @@ function dashDrawerHtml() {
     }
   }
 
-  html += '<div style="font-size:13px;font-weight:600;margin:6px 0 8px;">' + t('dash_exam_list') + ' (' + rec.exams.length + ')</div>';
-  if (!rec.exams.length) {
+  // 选中具体场次时，抽屉里的考试记录也只看这一场
+  var dSess = adminState.dashSession || '';
+  var dExams = [];
+  for (var di = 0; di < rec.exams.length; di++) {
+    if (dSess && dashSessionKeyOf(rec.exams[di]) !== dSess) continue;
+    dExams.push(rec.exams[di]);
+  }
+  html += '<div style="font-size:13px;font-weight:600;margin:6px 0 8px;">' + t('dash_exam_list') + ' (' + dExams.length + ')'
+    + (dSess ? ' <span style="font-weight:400;color:#888;font-size:12px;">· ' + t('dash_session_scoped') + '</span>' : '') + '</div>';
+  if (!dExams.length) {
     html += '<div style="color:#888;font-size:13px;">' + (en ? 'No exam records yet.' : '还没有考试记录。') + '</div>';
   } else {
-    for (var k = 0; k < rec.exams.length && k < 12; k++) {
-      var ev = rec.exams[k];
+    for (var k = 0; k < dExams.length && k < 12; k++) {
+      var ev = dExams[k];
       var g = gradeExam(ev, null);
       var ok = !!g.passed;
       html += '<div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;margin-bottom:6px;">';
@@ -10523,6 +10589,7 @@ function renderAdminDash() {
   adminScheduleFullSync();
 
   var paper = adminState.dashPaper || 'all';
+  var sessKey = adminState.dashSession || '';
   var html = '<div class="app-header">';
   html += '<button class="back-btn" onclick="adminState.dashDrawer=null;navigate(\'adminDashboard\')">\u2190</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
@@ -10539,13 +10606,37 @@ function renderAdminDash() {
   // 场次切换
   html += '<div style="font-size:12px;color:#888;margin:2px 0 6px;">' + t('dash_session') + '</div>';
   html += '<div class="tab-bar">';
-  html += '<div class="chip ' + (paper === 'all' ? 'active' : '') + '" onclick="adminState.dashPaper=\'all\';adminState.dashDept=\'\';render()">' + t('dash_all_sessions') + '</div>';
+  html += '<div class="chip ' + (paper === 'all' ? 'active' : '') + '" onclick="adminState.dashPaper=\'all\';adminState.dashDept=\'\';adminState.dashSession=\'\';render()">' + t('dash_all_sessions') + '</div>';
   for (var pi = 0; pi < REPORT_PAPERS.length; pi++) {
     var pk = REPORT_PAPERS[pi];
-    html += '<div class="chip ' + (paper === pk ? 'active' : '') + '" onclick="adminState.dashPaper=\'' + pk + '\';adminState.dashDept=\'\';render()">' + escapeHtml(syncPaperLabel(pk)) + '</div>';
+    html += '<div class="chip ' + (paper === pk ? 'active' : '') + '" onclick="adminState.dashPaper=\'' + pk + '\';adminState.dashDept=\'\';adminState.dashSession=\'\';render()">' + escapeHtml(syncPaperLabel(pk)) + '</div>';
   }
-  html += '<div class="chip ' + (dashIsRace(paper) ? 'active' : '') + '" onclick="adminState.dashPaper=\'' + DASH_RACE_KEY + '\';adminState.dashDept=\'\';render()">\u26a1 ' + t('race_admin_hub') + '</div>';
+  html += '<div class="chip ' + (dashIsRace(paper) ? 'active' : '') + '" onclick="adminState.dashPaper=\'' + DASH_RACE_KEY + '\';adminState.dashDept=\'\';adminState.dashSession=\'\';render()">\u26a1 ' + t('race_admin_hub') + '</div>';
   html += '</div>';
+
+  // 二级：该试卷下的具体场次（某一次发布的考试）
+  if (!dashIsRace(paper)) {
+    var buckets = dashSessionBuckets(paper);
+    if (buckets.length) {
+      html += '<div style="font-size:12px;color:#888;margin:10px 0 6px;">' + t('dash_session_pick') + '</div>';
+      html += '<div class="tab-bar">';
+      html += '<div class="chip ' + (sessKey ? '' : 'active') + '" onclick="adminState.dashSession=\'\';adminState.dashDept=\'\';render()">' + t('dash_session_all') + '</div>';
+      for (var bi = 0; bi < buckets.length; bi++) {
+        var bk = buckets[bi];
+        var arg = jsKey(bk.key);
+        html += '<div class="chip ' + (sessKey === bk.key ? 'active' : '') + '" onclick="adminState.dashSession=\'' + arg + '\';adminState.dashDept=\'\';render()">' + escapeHtml(dashSessionLabel(bk, en)) + '</div>';
+      }
+      html += '</div>';
+      if (sessKey) {
+        var cur = null;
+        for (var cb = 0; cb < buckets.length; cb++) if (buckets[cb].key === sessKey) cur = buckets[cb];
+        html += '<div style="font-size:12px;color:#1a3a5c;margin:6px 0 2px;">\u25b8 '
+          + escapeHtml(cur ? (cur.title || syncPaperLabel(cur.paper)) : t('dash_session_all'))
+          + (cur ? ' \u00b7 ' + fmtSyncTime(cur.tsStart || cur.tsEnd) + ' \u00b7 ' + cur.n + ' ' + t('retake_people') : '')
+          + '</div>';
+      }
+    }
+  }
 
   if (dashIsRace(paper)) {
     if (!adminState.dashRaceMap && !adminState.dashRaceLoading) dashFetchRace();
@@ -10556,7 +10647,7 @@ function renderAdminDash() {
     }
   }
 
-  var depts = dashDeptRows(paper);
+  var depts = dashDeptRows(paper, sessKey);
   if (!depts.length) {
     html += '<div class="q-card" style="text-align:center;color:#888;">'
       + (adminState.cloudStatus === 'ok' || adminState.cloudStatus === 'partial' ? t('dash_empty') : t('dash_no_data')) + '</div>';
