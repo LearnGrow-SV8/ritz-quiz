@@ -3753,6 +3753,7 @@ const state = {
   raceTimer: null,
   raceBoard: null,     // 排行榜原始数据（student_snapshots 行）
   raceBoardTab: 'period', // 'period' | 'dept' | 'best'
+  raceBoardSec: '',    // 排行榜板块筛选，'' = 全部板块
   raceSyncState: null, // 'pending' | 'ok' | 'fail'
   raceDeepLink: (function () {
     try { return /[?&]page=race\b/.test((typeof location !== 'undefined' && location.search) || ''); }
@@ -4059,6 +4060,20 @@ var I18N = {
   race_admin_published: {cn:'已发布，学员端即刻生效', en:'Published — live on student devices now'},
   race_admin_saved: {cn:'已保存', en:'Saved'},
   race_admin_no_scores: {cn:'本期还没有成绩', en:'No scores for this round yet'},
+  race_mode: {cn:'板块选择方式', en:'Section selection'},
+  race_mode_choice: {cn:'学员自行选择板块', en:'Employees pick their own section'},
+  race_mode_admin: {cn:'管理员指定统一板块', en:'Admin sets one section for all'},
+  race_mode_choice_desc: {cn:'学员进来看见板块列表，自己挑一个再开始', en:'Employees see the section list and choose one before starting'},
+  race_mode_admin_desc: {cn:'所有人答同一套题，学员不能选', en:'Everyone answers the same section; no choice on the student side'},
+  race_allowed: {cn:'开放的板块', en:'Sections open'},
+  race_allowed_hint: {cn:'一个都不勾选 = 全部板块开放', en:'Select none = all sections open'},
+  race_choose_hint: {cn:'请选择一个板块开始答题', en:'Pick a section to start'},
+  race_confirm_start: {cn:'点开始后立刻计时', en:'The timer starts as soon as you begin'},
+  race_confirm_ask: {cn:'确定开始吗？', en:'Ready to start?'},
+  race_filter_label: {cn:'只看', en:'Filter'},
+  race_filter_all: {cn:'全部板块', en:'All sections'},
+  race_my_section: {cn:'你本期所选', en:'Your section'},
+  race_go_pick: {cn:'去选板块', en:'Pick a section'},
   nav_back: {cn:'返回', en:'Back'},
   nav_home: {cn:'首页', en:'Home'},
   nav_home_hint: {cn:'回到首页', en:'Go to home'},
@@ -6269,6 +6284,23 @@ function racePullConf() {
     return null;
   }, function () { return null; });
 }
+// 板块选择方式：'choice' = 学员自选（默认），'admin' = 管理员指定统一板块。
+// 缺字段的旧配置一律按 choice 处理（学员自选是这个模块的初衷）。
+function raceModeOf(c) { return (c && c.sectionMode === 'admin') ? 'admin' : 'choice'; }
+// 该板块在这一期里是否开放
+function raceAllowed(c, key) {
+  if (raceModeOf(c) === 'admin') return key === (c.section || 'all');
+  var allow = (c && c.allow) || [];
+  if (!allow.length) return true; // 一个都没勾 = 全部开放
+  return allow.indexOf(key) >= 0;
+}
+function raceAllowedList(c) {
+  var out = [], i;
+  for (i = 0; i < RACE_SECTIONS.length; i++) {
+    if (raceAllowed(c, RACE_SECTIONS[i].key)) out.push(RACE_SECTIONS[i].key);
+  }
+  return out;
+}
 function raceStateOf(c) {
   if (!c || !c.id) return 'none';
   if (c.closed) return 'closed';
@@ -6306,15 +6338,29 @@ function raceDeptName() {
 }
 
 // ---- 答题 ----
-function raceStart() {
+// 学员点某个板块卡片 → 二次确认（点下去立刻计时，防误触）→ 开跑
+function raceBegin(sectionKey) {
+  var c = raceConfOf();
+  if (!c) { alert(t('race_no_conf')); return; }
+  if (!raceAllowed(c, sectionKey)) { alert(t('race_no_conf')); return; }
+  var msg = (state.lang === 'en' ? 'Section: ' : '板块：') + raceSecIcon(sectionKey) + ' ' + raceSecName(sectionKey)
+    + ' · ' + (c.limitSec || 60) + 's\n' + t('race_confirm_start') + ' ' + t('race_confirm_ask');
+  if (!confirm(msg)) return;
+  raceStart(sectionKey);
+}
+// sectionKey 为空时按赛事配置推断：admin 模式用 conf.section；choice 模式必须先选板块。
+function raceStart(sectionKey) {
   var c = raceConfOf(), st = raceStateOf(c);
   if (st !== 'open') {
     alert(t(st === 'pending' ? 'race_pending' : st === 'ended' ? 'race_ended' : st === 'closed' ? 'race_closed' : 'race_no_conf'));
     return;
   }
-  var pool = racePoolOf(c.section || 'all');
+  var sec = sectionKey || (raceModeOf(c) === 'admin' ? (c.section || 'all') : '');
+  if (!sec) { alert(t('race_choose_hint')); return; }
+  if (!raceAllowed(c, sec)) { alert(t('race_no_conf')); return; }
+  var pool = racePoolOf(sec);
   if (!pool.length) { alert(t('no_questions')); return; }
-  state.race = { conf: c, pool: pool, idx: 0, answers: [], cur: null, startTs: Date.now(), endReason: null, correct: 0, answered: 0 };
+  state.race = { conf: c, section: sec, pool: pool, idx: 0, answers: [], cur: null, startTs: Date.now(), endReason: null, correct: 0, answered: 0 };
   clearRaceTimer();
   state.raceTimer = setInterval(raceTick, 250);
   navigate('racePlay');
@@ -6375,7 +6421,7 @@ function raceEnd(reason) {
 function raceSubmitScore() {
   var r = state.race; if (!r || !r.conf) return Promise.resolve(false);
   var acc = r.answered ? Math.round(r.correct / r.answered * 1000) / 10 : 0;
-  var entry = { raceId: r.conf.id, section: r.conf.section || 'all', correct: r.correct, answered: r.answered, acc: acc, ts: Date.now() };
+  var entry = { raceId: r.conf.id, section: r.section || r.conf.section || 'all', correct: r.correct, answered: r.answered, acc: acc, ts: Date.now() };
   var rec = raceLocalRecord();
   var prev = rec.byRound[r.conf.id];
   // 不限次数，取最好一次：先比答对题数，再比准确率。
@@ -6396,6 +6442,13 @@ function raceExitRace() {
   if (state.race && !state.race.endReason) { clearRaceTimer(); state.race = null; }
   goBack();
 }
+// 再挑战一次：学员自选模式下要回到板块列表重新挑，不能直接开跑
+function raceAgain() {
+  var c = raceConfOf();
+  if (raceStateOf(c) !== 'open') { alert(t('race_no_conf')); return; }
+  if (raceModeOf(c) === 'choice') { navigate('raceHome'); return; }
+  raceStart(c.section || 'all');
+}
 
 // ---- 排行榜 ----
 // 快照行 → race 记录。真实数据形如 {phone, record:{race:{...}}, ts}；
@@ -6408,10 +6461,16 @@ function raceRecordOf(it) {
   if (typeof rec === 'string') { try { rec = JSON.parse(rec); } catch (e) { return null; } }
   return (rec && rec.race) || null;
 }
+// 板块筛选：'' = 全看；否则只留该板块的成绩（学员自选板块后，跨板块直接比不太公平）
+function raceSecOk(entry, filter) {
+  if (!filter) return true;
+  return ((entry && entry.section) || 'all') === filter;
+}
 function raceBoardRows(scope) {
   var list = state.raceBoard || [];
   var c = raceConfOf();
   var myDept = raceDeptName();
+  var secFilter = state.raceBoardSec || '';
   var rows = [];
   for (var i = 0; i < list.length; i++) {
     var raw = list[i];
@@ -6421,14 +6480,17 @@ function raceBoardRows(scope) {
     if (scope === 'period') {
       var e = (c && it.race.byRound) ? it.race.byRound[c.id] : null;
       if (!e) continue;
-      rows.push({ key: it.phone, name: it.race.name || it.phone, dept: it.race.dept || '', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts });
+      if (!raceSecOk(e, secFilter)) continue;
+      rows.push({ key: it.phone, name: it.race.name || it.phone, dept: it.race.dept || '', section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts });
     } else if (scope === 'dept') {
       var e2 = (c && it.race.byRound) ? it.race.byRound[c.id] : null;
       if (!e2 || (it.race.dept || '') !== myDept) continue;
-      rows.push({ key: it.phone, name: it.race.name || it.phone, dept: it.race.dept || '', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: e2.ts });
+      if (!raceSecOk(e2, secFilter)) continue;
+      rows.push({ key: it.phone, name: it.race.name || it.phone, dept: it.race.dept || '', section: e2.section || 'all', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: e2.ts });
     } else {
       if (!it.race.best) continue;
-      rows.push({ key: it.phone, name: it.race.name || it.phone, dept: it.race.dept || '', correct: it.race.best.correct, answered: it.race.best.answered || 0, acc: it.race.best.acc, ts: it.race.best.ts });
+      if (!raceSecOk(it.race.best, secFilter)) continue;
+      rows.push({ key: it.phone, name: it.race.name || it.phone, dept: it.race.dept || '', section: it.race.best.section || 'all', correct: it.race.best.correct, answered: it.race.best.answered || 0, acc: it.race.best.acc, ts: it.race.best.ts });
     }
   }
   rows.sort(function (a, b) {
@@ -6458,20 +6520,39 @@ function renderRaceHome() {
     html += '</div>';
     return html;
   }
-  var meta = raceSecMeta(c.section || 'all');
+  var mode = raceModeOf(c);
   html += '<div class="q-card">';
   html += '<h3 style="margin:0 0 6px;">' + (c.title ? escapeHtml(c.title) : t('race_title')) + '</h3>';
   html += '<div style="font-size:14px;color:#444;line-height:1.9;">';
-  html += '🎯 ' + t('race_pick_section') + '：<b>' + meta.icon + ' ' + raceSecName(c.section || 'all') + '</b><br>';
+  if (mode === 'admin') {
+    html += '🎯 ' + t('race_pick_section') + '：<b>' + raceSecIcon(c.section || 'all') + ' ' + raceSecName(c.section || 'all') + '</b><br>';
+  }
   html += '⏱ ' + t('race_limit') + '：<b>' + (c.limitSec || 60) + ' ' + (state.lang === 'en' ? 'seconds' : '秒') + '</b><br>';
   if (c.startTime || c.endTime) html += '🗓 ' + t('race_window') + '：' + raceFmtWindow(c) + '<br>';
-  html += '📚 ' + t('race_pool_size') + '：' + racePoolOfSize(c.section || 'all') + ' ' + (state.lang === 'en' ? 'questions' : '题');
+  if (mode === 'admin') html += '📚 ' + t('race_pool_size') + '：' + racePoolOfSize(c.section || 'all') + ' ' + (state.lang === 'en' ? 'questions' : '题');
   html += '</div></div>';
   if (st === 'pending') html += '<div class="q-card" style="text-align:center;color:#a14a00;">' + t('race_pending') + '</div>';
   if (st === 'ended') html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_ended') + '</div>';
   if (st === 'closed') html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_closed') + '</div>';
   if (st === 'open') {
-    html += '<button class="action-btn primary" style="width:100%;margin-top:6px;" onclick="raceStart()">⚡ ' + t('race_start') + '</button>';
+    if (mode === 'choice') {
+      var allow = raceAllowedList(c);
+      html += '<div style="font-size:13px;font-weight:600;margin:4px 0 8px;">' + t('race_choose_hint') + '</div>';
+      for (var k = 0; k < allow.length; k++) {
+        var sk = allow[k];
+        html += '<div onclick="raceBegin(\'' + sk + '\')" style="display:flex;align-items:center;gap:10px;padding:12px;margin-bottom:8px;border:1px solid #d8dee4;border-radius:10px;background:#fff;cursor:pointer;">';
+        html += '<div style="font-size:20px;">' + raceSecIcon(sk) + '</div>';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-size:14px;font-weight:600;">' + raceSecName(sk) + '</div>';
+        html += '<div style="font-size:12px;color:#888;">' + racePoolOfSize(sk) + ' ' + (state.lang === 'en' ? 'questions' : '题') + '</div>';
+        html += '</div>';
+        html += '<div style="font-size:13px;color:#1a3a5c;font-weight:600;">' + t('race_start') + ' ›</div>';
+        html += '</div>';
+      }
+      if (!allow.length) html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_no_conf') + '</div>';
+    } else {
+      html += '<button class="action-btn primary" style="width:100%;margin-top:6px;" onclick="raceStart()">⚡ ' + t('race_start') + '</button>';
+    }
   }
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenBoard()">🏆 ' + t('race_board') + '</button>';
   html += '</div>';
@@ -6491,7 +6572,7 @@ function renderRacePlay() {
   if (!r || r.endReason) { return '<div class="page"><div class="q-card">' + t('race_no_conf') + '</div></div>'; }
   var q = r.pool[r.idx];
   if (!q) { return '<div class="page"></div>'; }
-  var html = renderAppHeader({ title: '⚡ ' + (r.conf.title || t('race_title')), subtitle: raceSecName(r.conf.section || 'all'), showBack: true, showHome: false });
+  var html = renderAppHeader({ title: '⚡ ' + (r.conf.title || t('race_title')), subtitle: raceSecIcon(r.section || 'all') + ' ' + raceSecName(r.section || 'all'), showBack: true, showHome: false });
   html += '<div class="page">';
   html += '<div id="raceTimer" style="text-align:center;font-size:26px;font-weight:700;color:#1a3a5c;margin:4px 0 12px;">⏱ ' + (r.conf.limitSec || 60) + 's</div>';
   html += '<div class="q-card">';
@@ -6532,7 +6613,7 @@ function renderRaceResult() {
   var r = state.race;
   if (!r) return '<div class="page"></div>';
   var acc = r.answered ? Math.round(r.correct / r.answered * 1000) / 10 : 0;
-  var html = renderAppHeader({ title: '🏁 ' + t('race_title'), subtitle: r.endReason === 'timeout' ? t('race_time_up') : t('race_pool_done'), showBack: false });
+  var html = renderAppHeader({ title: '🏁 ' + t('race_title'), subtitle: raceSecIcon(r.section || 'all') + ' ' + raceSecName(r.section || 'all') + ' · ' + (r.endReason === 'timeout' ? t('race_time_up') : t('race_pool_done')), showBack: false });
   html += '<div class="page">';
   html += '<div class="q-card" style="text-align:center;">';
   html += '<div style="font-size:40px;font-weight:700;color:#1a3a5c;">' + r.correct + '</div>';
@@ -6541,7 +6622,7 @@ function renderRaceResult() {
   html += '</div>';
   html += '<button class="action-btn primary" style="width:100%;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
   if (raceStateOf(raceConfOf()) === 'open') {
-    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceStart()">⚡ ' + t('race_again') + '</button>';
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceAgain()">⚡ ' + t('race_again') + '</button>';
   }
   html += '<div style="margin-top:16px;font-size:13px;font-weight:600;">📖 ' + t('race_review') + '</div>';
   for (var i = 0; i < r.answers.length; i++) {
@@ -6569,6 +6650,15 @@ function renderRaceBoard() {
   html += '<button class="action-btn ' + (tab === 'dept' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'dept\';render()">' + t('race_board_dept') + '</button>';
   html += '<button class="action-btn ' + (tab === 'best' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'best\';render()">' + t('race_board_best') + '</button>';
   html += '</div>';
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:#666;">';
+  html += '<span>' + t('race_filter_label') + '</span>';
+  html += '<select onchange="state.raceBoardSec=this.value;render()" style="flex:1;padding:6px 8px;border:1px solid #d8dee4;border-radius:6px;font-size:12px;">';
+  html += '<option value=""' + (state.raceBoardSec ? '' : ' selected') + '>' + t('race_filter_all') + '</option>';
+  for (var s = 0; s < RACE_SECTIONS.length; s++) {
+    var sk = RACE_SECTIONS[s].key;
+    html += '<option value="' + sk + '"' + (state.raceBoardSec === sk ? ' selected' : '') + '>' + RACE_SECTIONS[s].icon + ' ' + raceSecName(sk) + '</option>';
+  }
+  html += '</select></div>';
   var rows = raceBoardRows(tab);
   if (!state.raceBoard) {
     html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_loading') + '</div>';
@@ -6586,7 +6676,7 @@ function renderRaceBoard() {
       html += '<div style="width:32px;text-align:center;font-weight:700;color:#1a3a5c;">' + medal + '</div>';
       html += '<div style="flex:1;min-width:0;">';
       html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#1a3a5c;font-size:12px;">' + t('race_you') + '</span>' : '') + '</div>';
-      html += '<div style="font-size:12px;color:#888;">' + escapeHtml(rw.dept) + '</div>';
+      html += '<div style="font-size:12px;color:#888;">' + escapeHtml(rw.dept) + (rw.section ? ' · ' + raceSecIcon(rw.section) + ' ' + raceSecName(rw.section) : '') + '</div>';
       html += '</div>';
       html += '<div style="text-align:right;">';
       html += '<div style="font-size:16px;font-weight:700;color:#1a3a5c;">' + rw.correct + '</div>';
@@ -6595,7 +6685,8 @@ function renderRaceBoard() {
     }
   }
   if (raceStateOf(raceConfOf()) === 'open') {
-    html += '<button class="action-btn primary" style="width:100%;margin-top:12px;" onclick="raceStart()">⚡ ' + t('race_start') + '</button>';
+    var lbl = raceModeOf(raceConfOf()) === 'choice' ? t('race_go_pick') : t('race_start');
+    html += '<button class="action-btn primary" style="width:100%;margin-top:12px;" onclick="raceAgain()">⚡ ' + lbl + '</button>';
   }
   html += '</div>';
   return html;
@@ -6611,13 +6702,32 @@ function renderAdminRace() {
   html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">' + (en ? 'Round settings' : '本期赛事设置') + '</div>';
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'Title' : '赛事名称') + '</label>';
   html += '<input id="raceTitle" class="admin-input" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + escapeHtml(c.title || '') + '" placeholder="' + t('race_admin_title_ph') + '">';
-  html += '<label style="font-size:12px;color:#666;">' + t('race_pick_section') + '</label>';
-  html += '<select id="raceSection" class="admin-input" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;">';
+  var mode = raceModeOf(c);
+  html += '<label style="font-size:12px;color:#666;">' + t('race_mode') + '</label>';
+  html += '<select id="raceMode" onchange="adminRaceModeToggle()" class="admin-input" style="width:100%;padding:8px;margin:4px 0 4px;border:1px solid #d8dee4;border-radius:6px;">';
+  html += '<option value="choice"' + (mode === 'choice' ? ' selected' : '') + '>' + (en ? 'Employees pick their own section' : '学员自行选择板块') + '</option>';
+  html += '<option value="admin"' + (mode === 'admin' ? ' selected' : '') + '>' + (en ? 'Admin sets one section for all' : '管理员指定统一板块') + '</option>';
+  html += '</select>';
+  html += '<div id="raceModeDesc" style="font-size:12px;color:#888;margin:0 0 10px;">' + (mode === 'choice' ? t('race_mode_choice_desc') : t('race_mode_admin_desc')) + '</div>';
+  // 学员自选：勾选开放哪些板块（一个都不勾 = 全部开放）
+  html += '<div id="raceAllowBox" style="display:' + (mode === 'choice' ? 'block' : 'none') + ';">';
+  html += '<label style="font-size:12px;color:#666;">' + t('race_allowed') + '</label>';
+  html += '<div style="font-size:12px;color:#888;margin:2px 0 6px;">' + t('race_allowed_hint') + '</div>';
   for (var i = 0; i < RACE_SECTIONS.length; i++) {
     var s = RACE_SECTIONS[i];
-    html += '<option value="' + s.key + '"' + ((c.section || 'all') === s.key ? ' selected' : '') + '>' + s.icon + ' ' + (en ? s.en : s.cn) + '</option>';
+    var on = !c.allow || !c.allow.length || c.allow.indexOf(s.key) >= 0;
+    html += '<label style="display:block;font-size:13px;padding:4px 0;"><input type="checkbox" class="race-allow-chk" value="' + s.key + '"' + (on ? ' checked' : '') + '> ' + s.icon + ' ' + (en ? s.en : s.cn) + '</label>';
   }
-  html += '</select>';
+  html += '</div>';
+  // 管理员指定：单一板块下拉
+  html += '<div id="raceSectionBox" style="display:' + (mode === 'admin' ? 'block' : 'none') + ';">';
+  html += '<label style="font-size:12px;color:#666;">' + t('race_pick_section') + '</label>';
+  html += '<select id="raceSection" class="admin-input" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;">';
+  for (var i2 = 0; i2 < RACE_SECTIONS.length; i2++) {
+    var s2 = RACE_SECTIONS[i2];
+    html += '<option value="' + s2.key + '"' + ((c.section || 'all') === s2.key ? ' selected' : '') + '>' + s2.icon + ' ' + (en ? s2.en : s2.cn) + '</option>';
+  }
+  html += '</select></div>';
   html += '<label style="font-size:12px;color:#666;">' + t('race_limit') + '</label>';
   html += '<select id="raceLimit" class="admin-input" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;">';
   for (var j = 0; j < RACE_TIMES.length; j++) {
@@ -6635,6 +6745,7 @@ function renderAdminRace() {
   html += '<div id="raceAdminMsg" style="margin-top:10px;font-size:13px;color:#1a3a5c;"></div>';
   if (c.id) {
     html += '<div style="margin-top:16px;font-size:12px;color:#888;">' + (en ? 'Current status' : '当前状态') + '：' + raceStateOf(c) + ' · ' + raceFmtWindow(c) + '</div>';
+    html += '<div style="margin-top:4px;font-size:12px;color:#888;">' + t('race_mode') + '：' + (raceModeOf(c) === 'choice' ? t('race_mode_choice') : t('race_mode_admin') + '（' + raceSecIcon(c.section || 'all') + ' ' + raceSecName(c.section || 'all') + '）') + '</div>';
   }
   html += '</div>';
   return html;
@@ -6645,12 +6756,30 @@ function raceInputDate(v) {
   function p(n) { return String(n).padStart(2, '0'); }
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
+function adminRaceModeToggle() {
+  var el = document.getElementById('raceMode');
+  var m = (el && el.value) || 'choice';
+  var ab = document.getElementById('raceAllowBox'), sb = document.getElementById('raceSectionBox'), d = document.getElementById('raceModeDesc');
+  if (ab) ab.style.display = (m === 'choice') ? 'block' : 'none';
+  if (sb) sb.style.display = (m === 'admin') ? 'block' : 'none';
+  if (d) d.textContent = (m === 'choice') ? t('race_mode_choice_desc') : t('race_mode_admin_desc');
+}
 function adminRacePublish() {
   var el = function (id) { return document.getElementById(id); };
   var c = raceConfOf() || {};
   c.id = c.id || ('r' + Date.now());
   c.title = (el('raceTitle') && el('raceTitle').value || '').trim();
+  c.sectionMode = (el('raceMode') && el('raceMode').value) || 'choice';
   c.section = (el('raceSection') && el('raceSection').value) || 'all';
+  // 学员自选模式：收集勾选的板块；一个都没勾 = 全部开放（不让管理员把自己锁死）
+  if (c.sectionMode === 'choice') {
+    var chks = document.querySelectorAll ? document.querySelectorAll('.race-allow-chk') : [];
+    var allow = [], n;
+    for (n = 0; n < chks.length; n++) { if (chks[n].checked) allow.push(chks[n].value); }
+    c.allow = allow;
+  } else {
+    c.allow = [c.section];
+  }
   c.limitSec = parseInt((el('raceLimit') && el('raceLimit').value), 10) || 60;
   var sv = el('raceStart') && el('raceStart').value, ev = el('raceEnd') && el('raceEnd').value;
   c.startTime = sv ? new Date(sv).toISOString() : '';
@@ -6694,14 +6823,14 @@ function adminRaceExport() {
       if (!race) continue;
       var e2 = race.byRound ? race.byRound[c.id] : null;
       if (!e2) continue;
-      out.push({ name: race.name || '', dept: race.dept || '', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: new Date(e2.ts).toLocaleString('zh-CN') });
+      out.push({ name: race.name || '', dept: race.dept || '', section: e2.section || 'all', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: new Date(e2.ts).toLocaleString('zh-CN') });
     }
     if (!out.length) { alert(t('race_admin_no_scores')); return; }
     out.sort(function (a, b) { return (b.correct - a.correct) || (b.acc - a.acc); });
-    var csv = '\ufeff' + 'Rank,Name,Division,Correct,Answered,Accuracy,Time\n';
+    var csv = '\ufeff' + 'Rank,Name,Division,Section,Correct,Answered,Accuracy,Time\n';
     for (i = 0; i < out.length; i++) {
       var r = out[i];
-      csv += [i + 1, '"' + String(r.name).replace(/"/g, '""') + '"', '"' + String(r.dept).replace(/"/g, '""') + '"', r.correct, r.answered, r.acc + '%', r.ts].join(',') + '\n';
+      csv += [i + 1, '"' + String(r.name).replace(/"/g, '""') + '"', '"' + String(r.dept).replace(/"/g, '""') + '"', '"' + String(raceSecName(r.section)).replace(/"/g, '""') + '"', r.correct, r.answered, r.acc + '%', r.ts].join(',') + '\n';
     }
     var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     var a = document.createElement('a');
