@@ -4248,6 +4248,8 @@ var I18N = {
   exam_dl_closed: {cn:'该场考试已关闭。', en:'This exam is closed.'},
   win_quick: {cn:'快捷设置', en:'Quick set'},
   win_now_plus: {cn:'现在起', en:'Now +'},
+  win_apply: {cn:'应用', en:'Apply'},
+  win_custom_bad: {cn:'请输入 1–1440 之间的分钟数', en:'Please enter minutes between 1 and 1440'},
   win_default_tip: {cn:'默认「现在 → 30 分钟后」，可直接保存，也可在上方调整；到点后后台自动关闭', en:'Defaults to now → +30 min. Save as-is or adjust; the activity closes automatically when time is up'},
   race_mode: {cn:'板块选择方式', en:'Section selection'},
   race_mode_choice: {cn:'学员自行选择板块', en:'Employees pick their own section'},
@@ -6487,7 +6489,9 @@ function racePoolOf(key) {
 // 「现在 → 现在 + DEFAULT_WINDOW_MIN 分钟」，管理员可以直接保存，也可以在
 // 此基础上改。到点后后台自动关闭该场活动。
 var DEFAULT_WINDOW_MIN = 30;
-var DEFAULT_WINDOW_CHOICES = [30, 60, 120];
+var DEFAULT_WINDOW_CHOICES = [15, 30];
+var WINDOW_MIN_LIMIT = 1;      // 自定义时长下限（分钟）
+var WINDOW_MAX_LIMIT = 1440;   // 自定义时长上限（分钟）= 24 小时
 function __pad2(n) { return (n < 10 ? '0' : '') + n; }
 function localInputFromDate(d) {
   return d.getFullYear() + '-' + __pad2(d.getMonth() + 1) + '-' + __pad2(d.getDate()) + 'T' + __pad2(d.getHours()) + ':' + __pad2(d.getMinutes());
@@ -6514,15 +6518,41 @@ function adminFillExamWindow(pk, mins) {
 function adminFillRaceWindow(mins) {
   fillWindowInputs('raceStart', 'raceEnd', mins);
 }
-// 快捷按钮行：现在 +N 分钟
-function adminWindowQuickHtml(onclickPrefix, argSuffix) {
+// 手动输入的分钟数 → 回填「现在 → 现在 + N 分钟」
+function adminQuickApplyCustom(fnName, pk, inputId) {
+  var el = document.getElementById(inputId);
+  var raw = el ? String(el.value == null ? '' : el.value).trim() : '';
+  var v = parseInt(raw, 10);
+  if (!isFinite(v) || v < WINDOW_MIN_LIMIT) {
+    alert(t('win_custom_bad'));
+    if (el) { try { el.focus(); } catch (e) {} }
+    return;
+  }
+  if (v > WINDOW_MAX_LIMIT) v = WINDOW_MAX_LIMIT;
+  var fn = null;
+  try { fn = (typeof window !== 'undefined' && window[fnName]) || null; } catch (e) { fn = null; }
+  if (typeof fn !== 'function') { try { fn = (typeof globalThis !== 'undefined' && globalThis[fnName]) || null; } catch (e) { fn = null; } }
+  if (typeof fn !== 'function') return;
+  if (pk) fn(pk, v); else fn(v);
+}
+// 快捷按钮行：现在 +N 分钟（固定档位 + 手动输入任意分钟）
+// fnName：回填函数名；pk：试卷键（无则传 ''，如限时答题赛）；inputId：自定义分钟输入框 id
+function adminWindowQuickHtml(fnName, pk, inputId) {
   var en = state.lang === 'en';
+  var arg = pk ? "'" + pk + "'," : '';
   var h = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px;">';
   h += '<span style="font-size:11px;color:var(--text-light);">' + t('win_quick') + '</span>';
   for (var i = 0; i < DEFAULT_WINDOW_CHOICES.length; i++) {
     var m = DEFAULT_WINDOW_CHOICES[i];
-    h += '<button type="button" class="nav-btn secondary" style="flex:0 0 auto;padding:5px 9px;font-size:12px;" onclick="' + onclickPrefix + '(' + argSuffix + m + ')">' + t('win_now_plus') + ' ' + m + (en ? ' min' : ' 分钟') + '</button>';
+    h += '<button type="button" class="nav-btn secondary" style="flex:0 0 auto;padding:5px 9px;font-size:12px;" onclick="' + fnName + '(' + arg + m + ')">' + t('win_now_plus') + ' ' + m + (en ? ' min' : ' 分钟') + '</button>';
   }
+  h += '</div>';
+  // 手动输入任意分钟：现在起 __ 分钟
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">';
+  h += '<span style="font-size:11px;color:var(--text-light);">' + t('win_now_plus') + '</span>';
+  h += '<input id="' + inputId + '" type="number" inputmode="numeric" min="' + WINDOW_MIN_LIMIT + '" max="' + WINDOW_MAX_LIMIT + '" step="1" value="" placeholder="' + (en ? 'mins' : '分钟') + '" style="width:76px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();adminQuickApplyCustom(\'' + fnName + '\',\'' + (pk || '') + '\',\'' + inputId + '\')}">';
+  h += '<span style="font-size:11px;color:var(--text-light);">' + (en ? 'min' : '分钟') + '</span>';
+  h += '<button type="button" class="nav-btn secondary" style="flex:0 0 auto;padding:5px 9px;font-size:12px;" onclick="adminQuickApplyCustom(\'' + fnName + '\',\'' + (pk || '') + '\',\'' + inputId + '\')">' + t('win_apply') + '</button>';
   h += '</div>';
   h += '<div style="font-size:11px;color:var(--text-light);margin-top:2px;">' + t('win_default_tip') + '</div>';
   return h;
@@ -7042,7 +7072,7 @@ function renderAdminRace() {
   html += '<input id="raceStart" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((c.startTime ? raceInputDate(c.startTime) : '') || defaultStartInput(0)) + '">';
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'End (optional)' : '结束时间（可留空）') + '</label>';
   html += '<input id="raceEnd" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((c.endTime ? raceInputDate(c.endTime) : '') || defaultEndInput(DEFAULT_WINDOW_MIN)) + '">';
-  html += adminWindowQuickHtml('adminFillRaceWindow', '');
+  html += adminWindowQuickHtml('adminFillRaceWindow', '', 'raceQuickMin');
   html += '</div>';
   html += '<button class="action-btn primary" style="width:100%;" onclick="adminRacePublish()">📣 ' + t('race_admin_publish') + '</button>';
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="adminRaceClose()">⛔ ' + t('race_admin_close') + '</button>';
@@ -9387,7 +9417,7 @@ function renderAdminExams() {
     html += '<label style="flex:1;min-width:140px;font-size:12px;color:var(--text-light);">' + (state.lang === 'en' ? 'Start' : '开始') + '<input id="fx_start_' + pk + '" type="datetime-local" value="' + curStart + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:2px;" oninput="adminRecomputeSizeBadge(\'' + pk + '\')"></label>';
     html += '<label style="flex:1;min-width:140px;font-size:12px;color:var(--text-light);">' + (state.lang === 'en' ? 'End' : '截止') + '<input id="fx_end_' + pk + '" type="datetime-local" value="' + curEnd + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:2px;" oninput="adminRecomputeSizeBadge(\'' + pk + '\')"></label>';
     html += '</div>';
-    html += adminWindowQuickHtml('adminFillExamWindow', '\'' + pk + '\',');
+    html += adminWindowQuickHtml('adminFillExamWindow', pk, 'fxq_' + pk);
     // 每轮一次 + 重考验证码
     var curCode = (sess && sess.retakeCode) ? String(sess.retakeCode) : '';
     var roundTaken = adminRoundTakenCount(pk, sess);
