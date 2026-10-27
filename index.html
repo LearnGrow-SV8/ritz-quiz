@@ -779,6 +779,11 @@ var SB_KEY = 'sb_publishable_L0iHADNzbzl6GNia4npK0Q_djN_Rkes';
 var SB_ON = true;                 // flipped off for this session after N fails
 var SB_FAILS = 0;
 var SB_FAIL_MAX = 3;
+// 断路器曾经是"一次踩雷，整页会话永久放弃主库"：此后所有发布只会写进备用
+// 通道，而界面依旧提示发布成功 —— 2026-10-27 那场考试有 12 人扫码看不到考场
+// 就是这个形态。改成半开：关闭 SB_HALF_OPEN_MS 后自动放行一次试探。
+var SB_HALF_OPEN_MS = 20000;
+var SB_OPEN_AT = 0;
 var SB_POLL_TIMEOUT_MS = 12000;
 var SB_EDGE_TIMEOUT_MS = 15000;   // boot fallback budget (see the note above)
 var SB_SNAPSHOT_TIMEOUT_MS = 15000;
@@ -794,10 +799,17 @@ function sbMarkFail(tag) {
   SB_FAILS++;
   if (SB_FAILS >= SB_FAIL_MAX && SB_ON) {
     SB_ON = false;
-    try { console.warn('[sb] disabled for this session after ' + SB_FAILS + ' failures (' + tag + ')'); } catch (e) {}
+    SB_OPEN_AT = Date.now() + SB_HALF_OPEN_MS;
+    try { console.warn('[sb] paused ' + SB_HALF_OPEN_MS + 'ms after ' + SB_FAILS + ' failures (' + tag + ')'); } catch (e) {}
+    setTimeout(function () {
+      if (!SB_ON && Date.now() >= SB_OPEN_AT) { SB_ON = true; SB_FAILS = SB_FAIL_MAX - 1; }
+    }, SB_HALF_OPEN_MS + 50);
   }
 }
-function sbMarkOk() { SB_FAILS = 0; }
+function sbMarkOk() { SB_FAILS = 0; SB_ON = true; }
+// 发布前的强制复位：一次管理端发布绝不允许因为此前的读失败而悄悄降级到
+// 备用通道。发布是关键路径，宁可自己再试一次，也不要让学员端读不到。
+function sbResetBreaker() { SB_FAILS = 0; SB_ON = true; SB_OPEN_AT = 0; }
 
 function sbFetch(path, init, timeoutMs, tag) {
   init = init || {};
@@ -878,6 +890,19 @@ function sbRowsToText(rows) {
     }) + '\n';
   }
   return out;
+}
+// 定向读取最新几行考试场次（{t:'sessions'}）。理由见 refreshExamSessions(opts.deep)：
+// 按 topic 的整段轮询会被 examConf 保活消息挤爆 300 行上限，把关键的那一行漏掉。
+function sbPollSessionsRows(n) {
+  if (!SB_ON) return Promise.reject(new Error('sb off'));
+  var q = 'messages?topic=eq.exams&select=id,topic,body,created_at' +
+          '&body-%3E%3Et=eq.sessions&order=id.desc&limit=' + (n || 3);
+  return sbJson('/rest/v1/' + q, null, SB_POLL_TIMEOUT_MS, 'sb-sessions')
+    .then(function (rows) {
+      if (!Array.isArray(rows)) throw new Error('sb sessions shape');
+      sbMarkOk();
+      return rows.length ? sbRowsToText(rows) : '';
+    });
 }
 function sbPollTopicText(alias, since, timeoutMs) {
   if (!SB_ON) return Promise.reject(new Error('sb off'));
@@ -1571,11 +1596,24 @@ function askRetakeCode(pk, sess, prevTs) {
 // Pull the newest complete session list from the relay and cache it.
 // The same poll also picks up admin "profile fix" messages ({t:'pfFix'})
 // which correct a student's employee ID / names / department on their device.
-function refreshExamSessions() {
+function refreshExamSessions(opts) {
+  opts = opts || {};
   // poll=1 is ESSENTIAL: without it ntfy /json is an endless streaming
   // subscription — the connection never closes, r.text() hangs forever and
   // the sync silently never completes.
-  return pollTopicText('exams', EXAM_URL, 'all')
+  var read = pollTopicText('exams', EXAM_URL, 'all');
+  if (opts.deep) {
+    // 主库的 topic 轮询有 300 行上限。examConf 保活消息一旦把窗口塞满，
+    // sessions 那一行就会被挤出结果集，学员端于是永远停留在旧场次
+    // （表现就是"无考试/已结束"）。深链兜底时补一次定向查询，只取最新
+    // 3 行 sessions；常规 90 秒轮询不增加请求。
+    read = read.then(function (txt) {
+      return sbPollSessionsRows(3).then(function (extra) {
+        return extra ? (String(txt || '') + extra) : txt;
+      }, function () { return txt; });
+    });
+  }
+  return read
     .then(function(txt) {
       // ntfy /json is JSON-lines — parse line by line (same pitfall as the bank topic).
       var best = null, bestFix = null, bestConf = null;
@@ -1657,32 +1695,57 @@ function publishChannelWarn(res) {
     ? '\n\n⚠️ Note: this publish only reached the BACKUP channel, not the primary store. Hard-refresh this page (Ctrl+Shift+R) and publish once more.'
     : '\n\n⚠️ 注意：本次发布只走了备用通道，未写入主库。请按 Ctrl+Shift+R 强制刷新本页，然后重新发布一次。';
 }
+// 发布失败的统一说明。'primary' = 只写进了备用通道 ntfy：这时酒店 WiFi 的学员
+// 读不到新场次（备用通道在国内大部分网络不通），必须当成失败来处理。
+function examPublishFailMsg(res) {
+  var en = state.lang === 'en';
+  if (res && res.reason === 'primary') {
+    return en
+      ? '❌ Publish did NOT reach the primary store — students on many networks will still see "no exam".\n\nOnly the backup channel accepted it. Check this device\'s connection, then press Publish again.'
+      : '❌ 发布没有写进主库！很多学员（尤其是连酒店 WiFi 的）仍会看到「无考试/已结束」。\n\n本次只写进了备用通道。请检查本机网络后，再点一次「发布」。';
+  }
+  if (res && res.reason === 'too_large') {
+    return en
+      ? '❌ Publish payload is too large (' + res.size + ' bytes > 3800). Shorten the exam title, then retry.'
+      : '❌ 考试信息过大（' + res.size + ' 字节 > 3800），请精简考试标题或缩短起止时间后重试。';
+  }
+  return en
+    ? '❌ Publish failed (network). Check your connection and press Publish again — nothing was sent.'
+    : '❌ 发布失败（网络异常），本次没有发出。请检查网络后直接再点一次「发布」。';
+}
 function publishExamSessions(list) {
   var cfg = adminLoadExamConfig();
-  var payload = JSON.stringify({ t: 'sessions', ver: Date.now(), list: list });
+  var ver = Date.now();
+  var payload = JSON.stringify({ t: 'sessions', ver: ver, list: list });
   if (payload.length > 3800) {
     return Promise.resolve({ ok: false, reason: 'too_large', size: payload.length });
   }
+  var attempt = 0;
   var postOnce = function() {
+    attempt++;
+    // 关键：发布前复位断路器。此前的读超时不该让这一发悄悄只剩备用通道。
+    sbResetBreaker();
     return postTopicMessage('exams', EXAM_URL, payload).then(function(res) {
       if (!res || !res.ok) return { ok: false, reason: 'network', status: res && res.status };
+      // 只认主库。备用通道对一半学员是黑洞（国内网络基本连不上 ntfy.sh），
+      // 所以"主库没收到"必须算失败，让管理端看见并重试。
+      if (res.via !== 'supabase') return { ok: false, reason: 'primary', via: res.via };
       cfg.list = list;
-      cfg.ver = Date.now();
+      cfg.ver = ver;
       adminSaveExamConfig(cfg);
-      return { ok: true, size: payload.length, via: res.via };
+      return { ok: true, size: payload.length, via: 'supabase' };
     });
   };
-  // One automatic retry on transient network failure — many ntfy.sh posts
-  // bounce off the first request and succeed on the second within a couple
-  // of seconds. The retry keeps this UI intact (we never block the admin) but
-  // shortens the "mash the button" failure mode considerably.
-  return postOnce().then(function(r1) {
-    if (r1.ok || r1.reason === 'too_large') return r1;
-    return postOnce().then(function(r2) {
-      if (r2.ok || r2.reason === 'too_large') return r2;
-      return r1; // both attempts hit network; surface the original error
+  // 最多 3 次：第 1 次直发，第 2、3 次分别等 1.2 s / 3 s。网络抖动时自动补上，
+  // 依旧失败才回到界面报错。
+  var run = function() {
+    return postOnce().then(function(r) {
+      if (r.ok || r.reason === 'too_large') return r;
+      if (attempt >= 3) return r;
+      return new Promise(function(done) { setTimeout(done, attempt === 1 ? 1200 : 3000); }).then(run);
     });
-  });
+  };
+  return run();
 }
 
 // ===== Exam grading config (per-paper points-per-question + passing score) =====
@@ -3903,6 +3966,7 @@ const state = {
     return '';
   })(),
   examDeepLinkDone: false,
+  examResyncTried: false,   // 扫码失败后只给一次"重新同步"机会，避免死循环
 };
 
 // ===== Admin Panel State =====
@@ -9781,12 +9845,8 @@ function adminPublishExam(pk) {
         ? '✅ Published! Grading frozen for this exam: ' + g0.ppq + ' pts/question, ' + g0.ppBlank + ' pts/blank, pass ' + g0.pass + '. Students will see it within ~90 s.'
         : '✅ 已发布！本场考试计分口径已冻结：每题 ' + g0.ppq + ' 分、填空每空 ' + g0.ppBlank + ' 分、及格 ' + g0.pass + ' 分。学员端约 90 秒内可见（或下次打开时）。' + publishChannelWarn(res));
       render();
-    } else if (res && res.reason === 'too_large') {
-      alert(state.lang === 'en'
-        ? '❌ Publish payload is too large (' + res.size + ' bytes > 3800). Shorten the exam title or trim start/end ISO strings, then retry.'
-        : '❌ 考试信息过大（' + res.size + ' 字节 > 3800），请精简考试标题或缩短起止时间后重试。');
     } else {
-      alert(state.lang === 'en' ? '❌ Publish failed (network). Please check your connection and try again — the local config was kept.' : '❌ 发布失败（网络异常），请检查网络后重试；本设备的配置已保留。');
+      alert(examPublishFailMsg(res));
     }
   });
 }
@@ -9801,12 +9861,8 @@ function adminCloseExam(pk) {
     if (res && res.ok) {
       alert(state.lang === 'en' ? '✅ Exam closed.' : '✅ 已关闭。');
       render();
-    } else if (res && res.reason === 'too_large') {
-      alert(state.lang === 'en'
-        ? '❌ Payload too large (' + res.size + ' bytes > 3800). Try again after trimming other exam entries.'
-        : '❌ 消息过大（' + res.size + ' 字节 > 3800），请精简其他考试后再试。');
     } else {
-      alert(state.lang === 'en' ? '❌ Failed (network). Try again.' : '❌ 操作失败（网络异常），请重试。');
+      alert(examPublishFailMsg(res));
     }
   });
 }
@@ -9847,12 +9903,8 @@ function adminReopenExam(pk) {
     if (res && res.ok) {
       alert(state.lang === 'en' ? '✅ Exam reopened.' : '✅ 已重新开启。');
       render();
-    } else if (res && res.reason === 'too_large') {
-      alert(state.lang === 'en'
-        ? '❌ Payload too large (' + res.size + ' bytes > 3800). Try again after trimming other exam entries.'
-        : '❌ 消息过大（' + res.size + ' 字节 > 3800），请精简其他考试后再试。');
     } else {
-      alert(state.lang === 'en' ? '❌ Failed (network). Try again.' : '❌ 操作失败（网络异常），请重试。');
+      alert(examPublishFailMsg(res));
     }
   });
 }
@@ -9867,12 +9919,8 @@ function adminDeleteExam(pk) {
     if (res && res.ok) {
       alert(state.lang === 'en' ? '✅ Deleted and synced.' : '✅ 已删除并同步。');
       render();
-    } else if (res && res.reason === 'too_large') {
-      alert(state.lang === 'en'
-        ? '❌ Payload too large (' + res.size + ' bytes > 3800). Try again after trimming other exam entries.'
-        : '❌ 消息过大（' + res.size + ' 字节 > 3800），请精简其他考试后再试。');
     } else {
-      alert(state.lang === 'en' ? '❌ Failed (network). Try again.' : '❌ 操作失败（网络异常），请重试。');
+      alert(examPublishFailMsg(res));
     }
   });
 }
@@ -15353,22 +15401,56 @@ function examDeepLinkGo(pk, retry) {
   var sess = examSessionOf(pk);
   var ws = examWindowState(sess);
   if (ws === 'open') { startFormalExam(pk); return; }
-  // 场次信息可能还没同步到本机（首次扫码的设备）→ 拉一次再判断
+  // 场次信息可能还没同步到本机（首次扫码的设备）→ 拉一次再判断。
+  // 第三次（最后一次）读用 deep：额外定向取主库里最新的 sessions 行，
+  // 避免被 examConf 保活消息挤出 300 行的轮询窗口。
   if (retry > 0 && typeof refreshExamSessions === 'function') {
-    var again = function () { setTimeout(function () { examDeepLinkGo(pk, retry - 1); }, 400); };
+    var deep = retry === 1;
+    var again = function () { setTimeout(function () { examDeepLinkGo(pk, retry - 1); }, deep ? 200 : 500); };
     try {
-      var p = refreshExamSessions();
+      var p = refreshExamSessions({ deep: deep });
       if (p && typeof p.then === 'function') { p.then(again, again); return; }
     } catch (e) {}
-    setTimeout(again, 800);
+    setTimeout(again, 900);
     return;
   }
+  var en = state.lang === 'en';
   var msg;
   if (!sess || ws === 'none') msg = t('exam_dl_none');
   else if (ws === 'pending') msg = t('exam_dl_pending') + (sess.startTime ? ' ' + fmtExamWindow(sess.startTime) : '');
-  else if (ws === 'ended') msg = t('exam_dl_ended');
+  else if (ws === 'ended') msg = t('exam_dl_ended') + (sess.endTime ? (en ? ' (closed at ' : '（截止 ') + fmtExamWindow(sess.endTime) + (en ? ')' : '）') : '');
   else msg = t('exam_dl_closed');
-  alert(msg);
+  // 说清楚现在真正开放的是哪一场：很多"无考试"其实是扫错了二维码，
+  // 或者本机缓存的是几小时前的旧场次。
+  var openNow = examOpenSessionNames(pk);
+  msg += '\n\n' + (openNow
+    ? (en ? 'Currently open: ' + openNow + '. If that is not your exam, please confirm the QR code with the training team.'
+          : '当前真正开放的是：' + openNow + '。\n如果你要考的不是这一场，请跟培训负责人确认二维码。')
+    : (en ? 'No formal exam is open right now. Please contact the training team.'
+          : '现在没有任何一场正式考试处于开放状态，请联系培训负责人。'));
+  msg += '\n\n' + (en ? 'If it was just published, tap OK to re-sync and try again.'
+                     : '如果刚刚才发布，点「确定」重新同步后再试一次。');
+  if (state.examResyncTried) { alert(msg); return; }
+  if (!confirm(msg)) return;
+  state.examResyncTried = true;
+  refreshExamSessions({ deep: true }).then(function () {
+    setTimeout(function () { examDeepLinkGo(pk, 0); }, 300);
+  }, function () {
+    setTimeout(function () { examDeepLinkGo(pk, 0); }, 300);
+  });
+}
+// 除了 pk 本身之外，现在还有哪些正式考试是可进的（给扫码失败的学员看）
+function examOpenSessionNames(exceptPk) {
+  var all = loadExamSessions();
+  if (!all || !all.list) return '';
+  var out = [];
+  for (var k in all.list) {
+    if (k === exceptPk) continue;
+    if (!all.list[k]) continue;
+    if (examWindowState(all.list[k]) !== 'open') continue;
+    out.push(formalPaperLabel(k));
+  }
+  return out.join(state.lang === 'en' ? ', ' : '、');
 }
 
 render();
