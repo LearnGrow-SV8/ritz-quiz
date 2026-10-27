@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 64" width="260" height="64" role="img" aria-label="深圳星河丽思卡尔顿酒店">
+  <defs>
+    <linearGradient id="gg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E4EDF8"/>
+      <stop offset="1" stop-color="#A9C2E0"/>
+    </linearGradient>
+  </defs>
+  <!-- 皇冠 + 狮头（丽思卡尔顿标识意象，占位） -->
+  <g transform="translate(6,8)">
+    <path d="M2 26 L14 6 L26 20 L38 6 L50 26 Z" fill="none" stroke="#C9A227" stroke-width="2.4" stroke-linejoin="round"/>
+    <circle cx="14" cy="4" r="2.4" fill="#C9A227"/>
+    <circle cx="26" cy="4" r="2.4" fill="#C9A227"/>
+    <circle cx="38" cy="4" r="2.4" fill="#C9A227"/>
+    <circle cx="26" cy="38" r="13" fill="url(#gg)" stroke="#12305C" stroke-width="2"/>
+    <path d="M26 27 L26 20 M21 23 L19.5 18 M31 23 L32.5 18" stroke="#12305C" stroke-width="2" stroke-linecap="round" fill="none"/>
+    <circle cx="21" cy="35" r="1.7" fill="#12305C"/>
+    <circle cx="31" cy="35" r="1.7" fill="#12305C"/>
+    <path d="M21.5 41 Q26 44.5 30.5 41" stroke="#12305C" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  </g>
+  <text x="70" y="27" font-family="PingFang SC,Microsoft YaHei,Noto Sans SC,sans-serif" font-size="14" font-weight="700" fill="#FFFFFF" letter-spacing="1">深圳星河丽思卡尔顿酒店</text>
+  <text x="70" y="45" font-family="Georgia,serif" font-size="9.5" fill="#C3D6EE" letter-spacing="1.6">THE RITZ-CARLTON · SHENZHEN</text>
+</svg>
