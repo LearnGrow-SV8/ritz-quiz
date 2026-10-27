@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#12305C" />
+<meta name="robots" content="noindex,nofollow" />
+<title>管理后台 · 星河玩味</title>
+<link rel="icon" href="assets/img/logo.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="assets/css/app.css" />
+</head>
+<body>
+
+<div class="brandbar">
+  <img src="assets/img/logo.svg" alt="深圳星河丽思卡尔顿酒店" />
+  <div class="bt">
+    <b id="brName">星河玩味 · 管理后台</b>
+    <span id="brTag">Galaxy Guide · Admin Console</span>
+  </div>
+  <div class="sp"></div>
+  <div class="tool"><button class="ghostbtn" id="admLang">EN</button></div>
+</div>
+
+<div id="admBanner"></div>
+
+<div id="admLoginWrap" class="centerwrap">
+  <div class="card">
+    <h1 data-i18n="adminTitle">管理后台</h1>
+    <p class="sub">星河玩味 · Galaxy Guide</p>
+    <label class="fl" data-i18n="adminPwd">管理员口令</label>
+    <input class="inp" id="admPwd" type="password" autocomplete="current-password" />
+    <button class="btn blue" data-i18n="adminBtn" id="admGo">进入后台</button>
+    <div class="err" id="admErr"></div>
+  </div>
+</div>
+
+<div id="admMain" class="admwrap hidden">
+  <nav class="admnav" id="admNav"></nav>
+  <main class="admmain" id="admBody"></main>
+</div>
+
+<div class="toast" id="ggToast"></div>
+
+<script src="assets/js/core.js"></script>
+<script src="assets/js/admin.js"></script>
+<script>
+(function () {
+  var zh = GG.getLang() === 'zh';
+  document.documentElement.lang = zh ? 'zh-CN' : 'en';
+  document.getElementById('brName').textContent = (zh ? GG.t('adminTitle') + ' · ' + GG.t('app') : 'Admin · ' + GG.t('appEn'));
+  document.getElementById('brTag').textContent = zh ? GG.t('tagline') : GG.t('taglineEn');
+  document.getElementById('admLang').textContent = GG.t('lang');
+  Array.prototype.forEach.call(document.querySelectorAll('[data-i18n]'), function (el) {
+    el.textContent = GG.t(el.getAttribute('data-i18n'));
+  });
+  Adm.boot();
+})();
+</script>
+</body>
+</html>
