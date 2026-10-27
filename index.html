@@ -3759,6 +3759,21 @@ const state = {
     try { return /[?&]page=race\b/.test((typeof location !== 'undefined' && location.search) || ''); }
     catch (e) { return false; }
   })(), // 二维码带 ?page=race → 登录后直达答题赛逐级回上一层，而不是一律回首页
+  // 扫码直达正式考试：?exam=tsos_all / ?exam=tsos_kitchen
+  // （也兼容 ?page=exam&paper=<key>）→ 登录 + 资料完整后自动开考，只触发一次
+  examDeepLink: (function () {
+    try {
+      var s = (typeof location !== 'undefined' && location.search) || '';
+      var m = s.match(/[?&]exam=([A-Za-z0-9_-]+)/);
+      if (m && m[1]) return m[1];
+      if (/[?&]page=exam\b/.test(s)) {
+        var m2 = s.match(/[?&]paper=([A-Za-z0-9_-]+)/);
+        if (m2 && m2[1]) return m2[1];
+      }
+    } catch (e) {}
+    return '';
+  })(),
+  examDeepLinkDone: false,
 };
 
 // ===== Admin Panel State =====
@@ -4060,6 +4075,10 @@ var I18N = {
   race_admin_published: {cn:'已发布，学员端即刻生效', en:'Published — live on student devices now'},
   race_admin_saved: {cn:'已保存', en:'Saved'},
   race_admin_no_scores: {cn:'本期还没有成绩', en:'No scores for this round yet'},
+  exam_dl_none: {cn:'该场考试暂未开放，请联系管理员发布后再扫码。', en:'This exam is not open yet. Ask the admin to publish it, then scan again.'},
+  exam_dl_pending: {cn:'该场考试还未开始，开始时间：', en:'This exam has not started yet. Starts: '},
+  exam_dl_ended: {cn:'该场考试已结束。', en:'This exam has ended.'},
+  exam_dl_closed: {cn:'该场考试已关闭。', en:'This exam is closed.'},
   win_quick: {cn:'快捷设置', en:'Quick set'},
   win_now_plus: {cn:'现在起', en:'Now +'},
   win_default_tip: {cn:'默认「现在 → 30 分钟后」，可直接保存，也可在上方调整；到点后后台自动关闭', en:'Defaults to now → +30 min. Save as-is or adjust; the activity closes automatically when time is up'},
@@ -13701,6 +13720,38 @@ function render() {
     case 'raceBoard': app.innerHTML = renderRaceBoard(); break;
     default: app.innerHTML = renderHome();
   }
+  maybeExamDeepLink(); // ?exam=<key> 扫码直达：在首页就绪后自动开考
+}
+
+// 扫码直达正式考试。必须在 switch 之后调用：startFormalExam 内部会 navigate('question')
+// → 再调 render()，放在 switch 前面会嵌套渲染。
+function maybeExamDeepLink() {
+  if (!state.examDeepLink || state.examDeepLinkDone) return;
+  if (state.currentPage !== 'home') return;
+  state.examDeepLinkDone = true;
+  var pk = state.examDeepLink;
+  setTimeout(function () { examDeepLinkGo(pk, 2); }, 0);
+}
+function examDeepLinkGo(pk, retry) {
+  var sess = examSessionOf(pk);
+  var ws = examWindowState(sess);
+  if (ws === 'open') { startFormalExam(pk); return; }
+  // 场次信息可能还没同步到本机（首次扫码的设备）→ 拉一次再判断
+  if (retry > 0 && typeof refreshExamSessions === 'function') {
+    var again = function () { setTimeout(function () { examDeepLinkGo(pk, retry - 1); }, 400); };
+    try {
+      var p = refreshExamSessions();
+      if (p && typeof p.then === 'function') { p.then(again, again); return; }
+    } catch (e) {}
+    setTimeout(again, 800);
+    return;
+  }
+  var msg;
+  if (!sess || ws === 'none') msg = t('exam_dl_none');
+  else if (ws === 'pending') msg = t('exam_dl_pending') + (sess.startTime ? ' ' + fmtExamWindow(sess.startTime) : '');
+  else if (ws === 'ended') msg = t('exam_dl_ended');
+  else msg = t('exam_dl_closed');
+  alert(msg);
 }
 
 render();
