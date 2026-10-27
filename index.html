@@ -389,6 +389,13 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .admin-hub-card { display:flex; align-items:center; gap:14px; background:var(--card-bg); border:1px solid var(--border); border-radius:14px; padding:18px 16px; box-shadow:var(--shadow); cursor:pointer; transition:transform .12s ease, border-color .12s ease; }
 .admin-hub-card:active { transform:scale(.98); }
 .admin-hub-card:hover { border-color:var(--primary); }
+.dash-drawer-mask { position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,.35); z-index:120; }
+.dash-drawer { position:fixed; top:0; right:0; bottom:0; width:min(430px,94%); background:var(--card-bg,#fff); z-index:121; overflow-y:auto; box-shadow:-8px 0 28px rgba(0,0,0,.18); padding:18px 16px 60px; }
+.dash-dept-card { border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:10px; cursor:pointer; background:var(--card-bg,#fff); }
+.dash-dept-card.open { border-color:var(--primary); }
+.dash-emp-row { display:flex; align-items:center; gap:10px; padding:9px 10px; border-top:1px solid var(--border); cursor:pointer; }
+.dash-emp-row:active { background:#f2f5f8; }
+.dash-mini-btn { padding:5px 10px; font-size:12px; border:1px solid var(--border); border-radius:6px; background:#fff; cursor:pointer; color:var(--text,#222); }
 .admin-hub-icon { font-size:30px; flex:0 0 auto; width:52px; height:52px; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#eef3fa,#e3ecf7); border-radius:12px; }
 .admin-hub-body { flex:1; min-width:0; }
 .admin-hub-title { font-size:16px; font-weight:700; color:var(--text); }
@@ -3828,7 +3835,13 @@ var adminState = {
   reportPaper: 'all',  // 'all' | day21 | day21_kitchen | tsos | tsos_kitchen | manual
   reportDetail: null,  // { key: <userKey>, eid: <exam event id> } — replay view
   bankScrollY: 0,       // scroll position to restore when returning to adminBank
-  sectionPanel: ''      // manual bank tool panel: '' | 'order' | 'limit'
+  sectionPanel: '',     // manual bank tool panel: '' | 'order' | 'limit'
+  dashPaper: 'all',     // 部门看板场次：'all' | 试卷 key | '__race__'
+  dashDept: '',         // 部门看板里展开的部门名
+  dashDrawer: null,     // { key } — 右侧员工详情抽屉
+  dashRaceMap: null,    // 答题赛成绩 map（akey → race record）
+  dashRaceTs: 0,
+  dashRaceLoading: false
 };
 
 // ============ i18n System ============
@@ -4068,6 +4081,31 @@ var I18N = {
   race_you: {cn:'（我）', en:' (you)'},
   race_admin_hub: {cn:'限时答题赛', en:'Speed Quiz'},
   race_admin_hub_desc: {cn:'发布赛事、设置板块与时限、导出成绩', en:'Publish rounds, set section & time limit, export scores'},
+  dash_hub: {cn:'部门看板', en:'Division Dashboard'},
+  dash_hub_desc: {cn:'各部门参与情况 · 按场次导出 · 员工详情', en:'Participation by division · per-session export · employee detail'},
+  dash_title: {cn:'部门看板', en:'Division Dashboard'},
+  dash_sub: {cn:'按部门汇总参与度与成绩', en:'Participation & scores by division'},
+  dash_session: {cn:'场次', en:'Session'},
+  dash_all_sessions: {cn:'全部场次', en:'All sessions'},
+  dash_emp_n: {cn:'参与人数', en:'Employees'},
+  dash_exam_n: {cn:'考试人次', en:'Attempts'},
+  dash_avg: {cn:'平均正确率', en:'Avg correct'},
+  dash_pass_rate: {cn:'及格率', en:'Pass rate'},
+  dash_last: {cn:'最近活动', en:'Last activity'},
+  dash_no_dept: {cn:'未填部门', en:'No division'},
+  dash_empty: {cn:'当前场次还没有数据。', en:'No data for this session yet.'},
+  dash_no_data: {cn:'还没有收到学员数据，点「立即全量重拉」试试。', en:'No student data yet — try "Full re-sync".'},
+  dash_emp_list: {cn:'员工明细', en:'Employees'},
+  dash_close: {cn:'关闭', en:'Close'},
+  dash_view_replay: {cn:'看回放', en:'Replay'},
+  dash_no_replay: {cn:'无回放', en:'No replay'},
+  dash_race_score: {cn:'答题赛成绩', en:'Speed Quiz'},
+  dash_exam_list: {cn:'考试记录', en:'Exam records'},
+  dash_export: {cn:'导出 CSV（当前场次）', en:'Export CSV (current session)'},
+  dash_export_empty: {cn:'当前场次没有可导出的记录。', en:'Nothing to export for this session.'},
+  dash_race_loading: {cn:'正在拉取答题赛成绩…', en:'Loading Speed Quiz scores…'},
+  dash_race_none: {cn:'本期还没有人参加答题赛。', en:'No one has joined this round yet.'},
+  dash_best: {cn:'最好成绩', en:'Best'},
   race_admin_publish: {cn:'发布本期赛事', en:'Publish this round'},
   race_admin_close: {cn:'立即关闭', en:'Close now'},
   race_admin_export: {cn:'导出 CSV', en:'Export CSV'},
@@ -9454,6 +9492,12 @@ function renderAdminDashboard() {
   html += '<div class="admin-hub-desc">' + t('race_admin_hub_desc') + '</div></div>';
   html += '<div class="admin-hub-arrow">›</div></div>';
 
+  html += '<div class="admin-hub-card" onclick="navigate(\'adminDash\')">';
+  html += '<div class="admin-hub-icon">📊</div>';
+  html += '<div class="admin-hub-body"><div class="admin-hub-title">' + t('dash_hub') + '</div>';
+  html += '<div class="admin-hub-desc">' + t('dash_hub_desc') + '</div></div>';
+  html += '<div class="admin-hub-arrow">›</div></div>';
+
   if (hasLocalChanges) {
     html += '<div class="save-status local">' + (state.lang === 'en' ? '\u26a0\ufe0f Changes are saved and auto-synced to student devices (within ~90 s). Export JSON is for backup only.' : '\u26a0\ufe0f \u4fee\u6539\u5df2\u4fdd\u5b58\u5e76\u81ea\u52a8\u540c\u6b65\u7ed9\u5b66\u5458\u7aef\uff08\u7ea6 90 \u79d2\u5185\u751f\u6548\uff09\u3002\u300c\u5bfc\u51faJSON\u6570\u636e\u300d\u4ec5\u4f5c\u5907\u4efd\u7528\u3002') + '</div>';
   }
@@ -9998,6 +10042,315 @@ function adminOpenExamFromStudent(key, eid) {
   state.currentPage = 'adminReports';
   render();
   window.scrollTo(0, 0);
+}
+// ================= 部门看板 Division Dashboard =================
+// 管理端第 5 张 hub 卡：按大部门聚合参与度与成绩；可按场次切换；
+// 点部门展开员工列表，点员工开右侧抽屉看明细并可跳回放。
+var DASH_RACE_KEY = '__race__';
+
+function dashIsRace(paper) { return paper === DASH_RACE_KEY; }
+function dashPaperLabel(pk) {
+  if (dashIsRace(pk)) return '\u26a1 ' + t('race_admin_hub');
+  if (!pk || pk === 'all') return t('dash_all_sessions');
+  return syncPaperLabel(pk);
+}
+// 答题赛成绩不在学员事件流里（存在快照的 body.race），需要单独拉一次快照。
+function dashFetchRace() {
+  if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbListSnapshots !== 'function') return Promise.resolve({});
+  if (adminState.dashRaceLoading) return Promise.resolve(adminState.dashRaceMap || {});
+  adminState.dashRaceLoading = true;
+  return sbListSnapshots(0, true).then(function (rows) {
+    var m = {};
+    if (Array.isArray(rows)) {
+      for (var i = 0; i < rows.length; i++) {
+        var rec = raceRecordOf(rows[i]);
+        var k = (rows[i] && (rows[i].phone || rows[i].key || rows[i].akey)) || '';
+        if (rec && k) m[k] = rec;
+      }
+    }
+    adminState.dashRaceMap = m;
+    adminState.dashRaceTs = Date.now();
+    adminState.dashRaceLoading = false;
+    render();
+    return m;
+  }, function () { adminState.dashRaceLoading = false; return adminState.dashRaceMap || {}; });
+}
+// 员工级汇总（纯逻辑，便于单测）。paper: 'all' | 试卷 key | '__race__'
+function dashStudentRows(paper) {
+  paper = paper || 'all';
+  var recs = adminStudentRecords();
+  var out = [];
+  for (var i = 0; i < recs.length; i++) {
+    var rec = recs[i];
+    var snap = rec.snap || {};
+    var name = snap.name || snap.cnName || '';
+    var empNo = snap.empNo || '';
+    if (dashIsRace(paper)) {
+      var rr = (adminState.dashRaceMap || {})[rec.key];
+      if (!rr) continue;
+      var c = raceConfOf();
+      var e = (c && rr.byRound) ? rr.byRound[c.id] : null;
+      var use = e || rr.best || null;
+      if (!use) continue;
+      var deptStr = rr.dept || '';
+      out.push({
+        key: rec.key, name: rr.name || name || rec.key, empNo: empNo,
+        div: deptStr.split(' \u00b7 ')[0] || (snap.div || ''), dept: deptStr,
+        n: 1, avgPercent: use.acc || 0, bestPercent: use.acc || 0,
+        passN: 0, passTotal: 0, lastTs: use.ts || 0, race: use, exams: []
+      });
+      continue;
+    }
+    var exams = [];
+    for (var j = 0; j < rec.exams.length; j++) {
+      var ev = rec.exams[j];
+      if (paper !== 'all' && ev.paper !== paper) continue;
+      exams.push(ev);
+    }
+    if (!exams.length) continue;
+    var sum = 0, bestP = 0, passN = 0, last = 0;
+    for (var k = 0; k < exams.length; k++) {
+      var g = gradeExam(exams[k], null);
+      var pct = g.percent || 0;
+      sum += pct; if (pct > bestP) bestP = pct;
+      if (g.passed) passN++;
+      if ((exams[k].ts || 0) > last) last = exams[k].ts || 0;
+    }
+    out.push({
+      key: rec.key, name: name || rec.key, empNo: empNo,
+      div: snap.div || '', dept: snap.dept || '',
+      n: exams.length, avgPercent: Math.round(sum / exams.length), bestPercent: bestP,
+      passN: passN, passTotal: exams.length, lastTs: last, race: null, exams: exams
+    });
+  }
+  out.sort(function (a, b) {
+    if (b.avgPercent !== a.avgPercent) return b.avgPercent - a.avgPercent;
+    return (b.lastTs || 0) - (a.lastTs || 0);
+  });
+  return out;
+}
+// 部门级聚合（纯逻辑）。人数 desc → 平均正确率 desc
+function dashDeptRows(paper) {
+  var rows = dashStudentRows(paper);
+  var map = {}, order = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var key = r.div || '__none__';
+    if (!map[key]) {
+      map[key] = { div: key, empN: 0, examN: 0, sumPct: 0, cnt: 0, passN: 0, passTotal: 0, lastTs: 0, rows: [] };
+      order.push(key);
+    }
+    var d = map[key];
+    d.empN++; d.examN += r.n; d.rows.push(r);
+    d.sumPct += r.avgPercent; d.cnt++;
+    d.passN += r.passN; d.passTotal += r.passTotal;
+    if ((r.lastTs || 0) > d.lastTs) d.lastTs = r.lastTs || 0;
+  }
+  var out = [];
+  for (var j = 0; j < order.length; j++) {
+    var dd = map[order[j]];
+    dd.avgPercent = dd.cnt ? Math.round(dd.sumPct / dd.cnt) : 0;
+    dd.passRate = dd.passTotal ? Math.round(dd.passN / dd.passTotal * 100) : 0;
+    out.push(dd);
+  }
+  out.sort(function (a, b) {
+    if (b.empN !== a.empN) return b.empN - a.empN;
+    return b.avgPercent - a.avgPercent;
+  });
+  return out;
+}
+function dashDivLabel(div) {
+  if (!div || div === '__none__') return t('dash_no_dept');
+  return div;
+}
+function dashBuildCSV(rows, lang, isRace) {
+  var en = lang === 'en';
+  function q(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+  var head, lines;
+  if (isRace) {
+    head = en
+      ? ['Division', 'Name', 'Employee ID', 'Section', 'Correct', 'Answered', 'Accuracy %', 'Time']
+      : ['大部门', '姓名', '工号', '板块', '答对', '答题数', '正确率', '时间'];
+    lines = [head.map(q).join(',')];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i], rc = r.race || {};
+      lines.push([dashDivLabel(r.div), r.name, r.empNo,
+        rc.section ? raceSecName(rc.section) : '', rc.correct, rc.answered, rc.acc,
+        r.lastTs ? fmtSyncTime(r.lastTs) : ''].map(q).join(','));
+    }
+  } else {
+    head = en
+      ? ['Division', 'Department', 'Name', 'Employee ID', 'Attempts', 'Avg correct %', 'Best %', 'Passed', 'Last activity']
+      : ['大部门', '小部门', '姓名', '工号', '参与次数', '平均正确率', '最好成绩', '及格次数', '最近活动'];
+    lines = [head.map(q).join(',')];
+    for (var j = 0; j < rows.length; j++) {
+      var w = rows[j];
+      lines.push([dashDivLabel(w.div), w.dept, w.name, w.empNo, w.n, w.avgPercent,
+        w.bestPercent, w.passN + '/' + w.passTotal,
+        w.lastTs ? fmtSyncTime(w.lastTs) : ''].map(q).join(','));
+    }
+  }
+  return lines.join('\r\n');
+}
+function adminDashExportCSV() {
+  var en = state.lang === 'en';
+  var paper = adminState.dashPaper || 'all';
+  var rows = dashStudentRows(paper);
+  if (!rows.length) { alert(t('dash_export_empty')); return; }
+  var csv = '\ufeff' + dashBuildCSV(rows, state.lang, dashIsRace(paper));
+  try {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    var stamp = d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes());
+    var fname = (en ? 'division_dashboard_' : '部门看板_') + (dashIsRace(paper) ? 'race' : paper) + '_' + stamp + '.csv';
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = fname; a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { try { URL.revokeObjectURL(url); a.remove(); } catch (e) {} }, 500);
+  } catch (e) {
+    alert(en ? 'Export failed in this browser.' : '当前浏览器导出失败。');
+  }
+}
+function dashDrawerHtml() {
+  var en = state.lang === 'en';
+  var key = adminState.dashDrawer ? adminState.dashDrawer.key : '';
+  var recs = adminStudentRecords(), rec = null;
+  for (var i = 0; i < recs.length; i++) if (recs[i].key === key) { rec = recs[i]; break; }
+  var html = '<div class="dash-drawer-mask" onclick="adminState.dashDrawer=null;render()"></div>';
+  html += '<div class="dash-drawer">';
+  if (!rec) {
+    html += '<div style="color:#888;">' + (en ? 'No data for this employee.' : '该学员暂无数据。') + '</div>';
+    html += '<button class="dash-mini-btn" style="margin-top:12px;" onclick="adminState.dashDrawer=null;render()">' + t('dash_close') + '</button>';
+    html += '</div>';
+    return html;
+  }
+  var snap = rec.snap || {};
+  html += '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;">';
+  html += '<div style="flex:1;"><div style="font-size:17px;font-weight:700;">' + escapeHtml(snap.name || snap.cnName || rec.key) + '</div>';
+  html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + (snap.empNo ? '\u5de5\u53f7 ' + escapeHtml(String(snap.empNo)) + ' \u00b7 ' : '') + escapeHtml(adminDeptDivLabel(snap, en)) + '</div></div>';
+  html += '<button class="dash-mini-btn" onclick="adminState.dashDrawer=null;render()">' + t('dash_close') + '</button></div>';
+
+  var rr = (adminState.dashRaceMap || {})[rec.key];
+  if (rr) {
+    var c = raceConfOf();
+    var e = (c && rr.byRound) ? rr.byRound[c.id] : null;
+    var use = e || rr.best || null;
+    if (use) {
+      html += '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;background:#f7f9fb;">';
+      html += '<div style="font-size:12px;color:#888;">\u26a1 ' + t('dash_race_score') + '</div>';
+      html += '<div style="font-size:15px;font-weight:700;margin-top:4px;">' + (use.correct || 0) + ' \u9898 \u00b7 ' + (use.acc || 0) + '%</div>';
+      html += '<div style="font-size:12px;color:#888;margin-top:2px;">' + escapeHtml(raceSecName(use.section || 'all')) + (use.ts ? ' \u00b7 ' + fmtSyncTime(use.ts) : '') + '</div>';
+      html += '</div>';
+    }
+  }
+
+  html += '<div style="font-size:13px;font-weight:600;margin:6px 0 8px;">' + t('dash_exam_list') + ' (' + rec.exams.length + ')</div>';
+  if (!rec.exams.length) {
+    html += '<div style="color:#888;font-size:13px;">' + (en ? 'No exam records yet.' : '还没有考试记录。') + '</div>';
+  } else {
+    for (var k = 0; k < rec.exams.length && k < 12; k++) {
+      var ev = rec.exams[k];
+      var g = gradeExam(ev, null);
+      var ok = !!g.passed;
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;margin-bottom:6px;">';
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="font-size:13px;font-weight:600;">' + escapeHtml(syncPaperLabel(ev.paper)) + (ev.mode === 'formal' ? ' \u00b7 ' + (en ? 'Formal' : '\u6b63\u5f0f') : ' \u00b7 ' + (en ? 'Practice' : '\u6a21\u62df')) + '</div>';
+      html += '<div style="font-size:12px;color:#888;">' + fmtSyncTime(ev.ts) + ' \u00b7 ' + (ev.correct || 0) + '/' + (ev.total || 0) + ' \u00b7 ' + g.percent + '%</div>';
+      html += '</div>';
+      html += '<div style="font-size:15px;font-weight:700;color:' + (ok ? '#2e7d32' : '#c0392b') + ';">' + g.scoreAbs + '</div>';
+      if (ev.id) html += '<button class="dash-mini-btn" onclick="adminOpenExamFromStudent(\'' + jsKey(rec.key) + '\',\'' + jsKey(ev.id) + '\')">' + t('dash_view_replay') + '</button>';
+      else html += '<span style="font-size:11px;color:#aaa;">' + t('dash_no_replay') + '</span>';
+      html += '</div>';
+    }
+  }
+  html += '</div>';
+  return html;
+}
+function renderAdminDash() {
+  if (!adminState.authenticated) return renderAdminLogin();
+  var en = state.lang === 'en';
+  if (adminState.cloudStatus !== 'ok' && adminState.cloudStatus !== 'partial' && !adminCloudFetching) adminFetchCloudStudents();
+  adminScheduleFullSync();
+
+  var paper = adminState.dashPaper || 'all';
+  var html = '<div class="app-header">';
+  html += '<button class="back-btn" onclick="adminState.dashDrawer=null;navigate(\'adminDashboard\')">\u2190</button>';
+  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
+  html += '<h1>\ud83d\udcca ' + t('dash_title') + '</h1>';
+  html += '<div class="subtitle">' + t('dash_sub') + '</div>';
+  html += '</div><div class="page">';
+
+  var fullSyncBtn = '<button class="admin-mini-btn" onclick="adminForceFullSync()">' + (en ? '\u21bb Full re-sync' : '\u21bb \u7acb\u5373\u5168\u91cf\u91cd\u62c9') + '</button>';
+  if (adminState.cloudStatus === 'loading') html += '<div class="sync-note">\u23f3 ' + (en ? 'Fetching cloud data\u2026' : '\u6b63\u5728\u62c9\u53d6\u4e91\u7aef\u6570\u636e\u2026') + ' ' + fullSyncBtn + '</div>';
+  else if (adminState.cloudStatus === 'error') html += '<div class="sync-note">\u26a0\ufe0f ' + (en ? 'Cloud fetch failed. ' : '\u4e91\u7aef\u6570\u636e\u62c9\u53d6\u5931\u8d25\u3002') + fullSyncBtn + '</div>';
+  else if (adminState.cloudStatus === 'partial') html += '<div class="sync-note">\u26a0\ufe0f ' + (en ? 'Local list is INCOMPLETE. ' : '\u672c\u5730\u5217\u8868\u4e0d\u5b8c\u6574\u3002') + fullSyncBtn + '</div>';
+  else if (adminState.cloudStatus === 'ok') html += '<div class="sync-note">\u2601\ufe0f ' + (en ? 'Synced. ' : '\u5df2\u540c\u6b65\u3002') + fullSyncBtn + '</div>';
+
+  // 场次切换
+  html += '<div style="font-size:12px;color:#888;margin:2px 0 6px;">' + t('dash_session') + '</div>';
+  html += '<div class="tab-bar">';
+  html += '<div class="chip ' + (paper === 'all' ? 'active' : '') + '" onclick="adminState.dashPaper=\'all\';adminState.dashDept=\'\';render()">' + t('dash_all_sessions') + '</div>';
+  for (var pi = 0; pi < REPORT_PAPERS.length; pi++) {
+    var pk = REPORT_PAPERS[pi];
+    html += '<div class="chip ' + (paper === pk ? 'active' : '') + '" onclick="adminState.dashPaper=\'' + pk + '\';adminState.dashDept=\'\';render()">' + escapeHtml(syncPaperLabel(pk)) + '</div>';
+  }
+  html += '<div class="chip ' + (dashIsRace(paper) ? 'active' : '') + '" onclick="adminState.dashPaper=\'' + DASH_RACE_KEY + '\';adminState.dashDept=\'\';render()">\u26a1 ' + t('race_admin_hub') + '</div>';
+  html += '</div>';
+
+  if (dashIsRace(paper)) {
+    if (!adminState.dashRaceMap && !adminState.dashRaceLoading) dashFetchRace();
+    if (adminState.dashRaceLoading && !adminState.dashRaceMap) {
+      html += '<div class="q-card" style="text-align:center;color:#888;">' + t('dash_race_loading') + '</div>';
+      html += '</div>';
+      return html;
+    }
+  }
+
+  var depts = dashDeptRows(paper);
+  if (!depts.length) {
+    html += '<div class="q-card" style="text-align:center;color:#888;">'
+      + (adminState.cloudStatus === 'ok' || adminState.cloudStatus === 'partial' ? t('dash_empty') : t('dash_no_data')) + '</div>';
+  }
+  for (var d = 0; d < depts.length; d++) {
+    var dp = depts[d];
+    var open = adminState.dashDept === dp.div;
+    var deptArg = open ? "''" : "'" + jsKey(dp.div) + "'";
+    html += '<div class="dash-dept-card' + (open ? ' open' : '') + '" onclick="adminState.dashDept=' + deptArg + ';render()">';
+    html += '<div style="display:flex;align-items:center;gap:10px;">';
+    html += '<div style="flex:1;min-width:0;">';
+    html += '<div style="font-size:15px;font-weight:700;">' + escapeHtml(dashDivLabel(dp.div)) + '</div>';
+    html += '<div style="font-size:12px;color:#888;margin-top:3px;">'
+      + t('dash_emp_n') + ' ' + dp.empN
+      + ' \u00b7 ' + t('dash_exam_n') + ' ' + dp.examN
+      + (dashIsRace(paper) ? '' : ' \u00b7 ' + t('dash_pass_rate') + ' ' + dp.passRate + '%')
+      + '</div></div>';
+    html += '<div style="text-align:right;">';
+    html += '<div style="font-size:18px;font-weight:700;color:#1a3a5c;">' + dp.avgPercent + '%</div>';
+    html += '<div style="font-size:11px;color:#888;">' + t('dash_avg') + '</div>';
+    html += '</div><div style="color:#aaa;font-size:14px;">' + (open ? '\u25b2' : '\u25bc') + '</div></div>';
+    if (dp.lastTs) html += '<div style="font-size:11px;color:#aaa;margin-top:4px;">' + t('dash_last') + ' \u00b7 ' + fmtSyncTime(dp.lastTs) + '</div>';
+    if (open) {
+      html += '<div style="margin-top:8px;border-top:1px solid var(--border);">';
+      for (var m = 0; m < dp.rows.length; m++) {
+        var rw = dp.rows[m];
+        html += '<div class="dash-emp-row" onclick="event.stopPropagation();adminState.dashDrawer={key:\'' + jsKey(rw.key) + '\'};render()">';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (rw.empNo ? ' <span style="font-weight:400;color:#888;font-size:12px;">#' + escapeHtml(String(rw.empNo)) + '</span>' : '') + '</div>';
+        html += '<div style="font-size:12px;color:#888;">' + (dashIsRace(paper) ? (rw.race ? escapeHtml(raceSecName(rw.race.section || 'all')) : '') : (rw.n + ' \u6b21 \u00b7 ' + t('dash_best') + ' ' + rw.bestPercent + '%')) + '</div>';
+        html += '</div>';
+        html += '<div style="text-align:right;"><div style="font-size:15px;font-weight:700;color:#1a3a5c;">' + rw.avgPercent + '%</div></div>';
+        html += '<div style="color:#aaa;">\u203a</div></div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  html += '<button class="admin-export-btn" onclick="adminDashExportCSV()">\u2b07\ufe0f ' + t('dash_export') + '</button>';
+  if (adminState.dashDrawer) html += dashDrawerHtml();
+  html += '</div>';
+  return html;
 }
 function renderAdminReports() {
   if (!adminState.authenticated) return renderAdminLogin();
@@ -13683,6 +14036,7 @@ function render() {
       case 'adminGrading': app.innerHTML = renderAdminGrading(); return;
       case 'adminBlacklist': app.innerHTML = renderAdminBlacklist(); return;
       case 'adminRace': app.innerHTML = renderAdminRace(); return;
+      case 'adminDash': app.innerHTML = renderAdminDash(); return;
     }
   }
   if (!state.currentUser) {
