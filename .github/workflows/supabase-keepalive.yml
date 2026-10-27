@@ -21,3 +21,5 @@ jobs:
             echo "::error::Supabase ping failed with HTTP $code — project may be paused again"
             exit 1
           fi
+
+# verified: workflow scope granted
