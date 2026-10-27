@@ -1066,7 +1066,8 @@ function sbGetAccountJson(rowKey) {
         pinSetAt: rec.pinSetAt || 0,
         snap: rec.snap,
         events: Array.isArray(rec.events) ? rec.events : [],
-        details: (rec.details && typeof rec.details === 'object') ? rec.details : {}
+        details: (rec.details && typeof rec.details === 'object') ? rec.details : {},
+        fa: (rec.fa && typeof rec.fa === 'object') ? rec.fa : {}
       };
     }, function(e) { sbMarkFail('account-get'); throw e; });
 }
@@ -1183,7 +1184,11 @@ var BANK_REFRESH_MS = 90 * 1000;
 
 // ===== Formal exam sessions (admin-controlled publish windows) =====
 // Each of the 4 papers can carry ONE session: {status:'published'|'closed',
-// title, startTime, endTime (ISO), timeLimitSec, ver}. The admin panel is the
+// title, startTime, endTime (ISO), timeLimitSec, ver, round, retakeCode}.
+//   round      — 本轮编号。只在"真正开始新一轮"时改变（关闭后再发布 / 勾选开启新一轮 /
+//                上一轮已过期后再次发布）；改标题、改时间、关闭、重开都不变。
+//                学员端据此判断"本轮是否已考过"。
+//   retakeCode — 重考验证码（发布时设置）。留空 = 本轮不允许再考。
 // only writer; it publishes the full session list as a single small message
 // {t:'sessions', ver, list} — students fetch it on load + every ~90 s and
 // before starting a formal exam (cached copy in localStorage). Outside the
@@ -1450,6 +1455,118 @@ function examWindowState(session) {
   if (st && now < st) return 'pending';
   if (et && now >= et) return 'ended';
   return 'open';
+}
+
+// ===== 每轮一次 + 重考验证码 =====
+// 一次"尝试"的记录存在 localStorage: { "<paperKey>|<round>": {ts, done} }，
+// 另有一条兜底：本机考试历史里已有同轮的正式考试记录，也算参加过（换设备后
+// 历史会由云端事件重建）。开考瞬间就记账，所以中途退出/断网也算用掉了这一次。
+function formalRoundOf(sess) {
+  if (!sess) return '';
+  return String(sess.round || ('v' + (sess.ver || 0)));
+}
+function newFormalRoundId() {
+  return 'r' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+}
+function formalAttemptsKey(u) {
+  var k = String(u || '');
+  if (!k) { try { k = String(userKey() || ''); } catch (e) { k = ''; } }
+  return (k || 'anon') + '_formalAttempts';
+}
+function loadFormalAttempts(u) {
+  try {
+    var m = JSON.parse(localStorage.getItem(formalAttemptsKey(u)) || '{}');
+    return (m && typeof m === 'object' && !Array.isArray(m)) ? m : {};
+  } catch (e) { return {}; }
+}
+function saveFormalAttempts(m, u) {
+  try { localStorage.setItem(formalAttemptsKey(u), JSON.stringify(m || {})); } catch (e) {}
+}
+function formalAttemptSlot(pk, sess) { return String(pk) + '|' + formalRoundOf(sess); }
+// 本轮是否已参加 → 返回 {ts, done} 或 null
+function formalAttemptOf(pk, sess) {
+  if (!pk || !sess) return null;
+  var m = loadFormalAttempts();
+  var hit = m[formalAttemptSlot(pk, sess)];
+  if (hit && hit.ts) return hit;
+  var round = formalRoundOf(sess);
+  var legacyVer = String(round).replace(/^v/, '');
+  var hist = [];
+  try { hist = loadExamHistory(); } catch (e) { hist = []; }
+  for (var i = 0; i < hist.length; i++) {
+    var e = hist[i];
+    if (!e || e.mode !== 'formal') continue;
+    if (e.round && e.round === round) return { ts: e.ts || 0, done: true };
+    // 老记录（本次改版之前交的卷）没有 round，只有 sessionId = paperKey + '_' + ver
+    if (!e.round && e.sessionId && (e.sessionId === String(pk) + '_' + legacyVer ||
+                                    e.sessionId === String(pk) + '_' + (sess.ver || 0))) {
+      return { ts: e.ts || 0, done: true };
+    }
+  }
+  return null;
+}
+function claimFormalAttempt(pk, sess) {
+  var m = loadFormalAttempts();
+  m[formalAttemptSlot(pk, sess)] = { ts: Date.now(), done: false };
+  var keys = Object.keys(m);
+  if (keys.length > 12) {
+    keys.sort(function (a, b) { return (m[b] && m[b].ts || 0) - (m[a] && m[a].ts || 0); });
+    var out = {};
+    for (var i = 0; i < 12 && i < keys.length; i++) out[keys[i]] = m[keys[i]];
+    m = out;
+  }
+  saveFormalAttempts(m);
+}
+function markFormalAttemptDone(pk, sess) {
+  if (!pk || !sess) return;
+  var m = loadFormalAttempts();
+  var k = formalAttemptSlot(pk, sess);
+  if (m[k]) { m[k].done = true; saveFormalAttempts(m); }
+}
+// 重考验证码弹窗：返回 Promise<boolean>，true = 验证码正确，可以再考一次
+function askRetakeCode(pk, sess, prevTs) {
+  return new Promise(function (resolve) {
+    var en = state.lang === 'en';
+    var code = String((sess && sess.retakeCode) || '').trim();
+    var overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.innerHTML =
+      '<div class="confirm-box">' +
+        '<div class="confirm-title">🔒 ' + escapeHtml(t('formal_retake_title')) + '</div>' +
+        '<div class="confirm-body">' + escapeHtml(t('formal_retake_body').replace('{time}', prevTs ? fmtSyncTime(prevTs) : '')) + '</div>' +
+        '<input id="retakeCodeInput" type="text" inputmode="numeric" autocomplete="off" maxlength="12" ' +
+          'placeholder="' + escapeHtml(t('formal_retake_ph')) + '" ' +
+          'style="width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:20px;letter-spacing:6px;text-align:center;margin:10px 0 2px;">' +
+        '<div id="retakeCodeErr" style="min-height:16px;font-size:12px;color:#c0392b;margin-bottom:2px;"></div>' +
+        '<div class="confirm-actions">' +
+          '<button class="confirm-btn secondary" data-act="cancel">' + escapeHtml(en ? 'Cancel' : '取消') + '</button>' +
+          '<button class="confirm-btn primary" data-act="ok">' + escapeHtml(t('formal_retake_ok')) + '</button>' +
+        '</div>' +
+      '</div>';
+    function close(v) {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      resolve(v);
+    }
+    function submit() {
+      var el = overlay.querySelector('#retakeCodeInput');
+      var val = String((el && el.value) || '').replace(/\s+/g, '');
+      if (!val || val !== code) {
+        var err = overlay.querySelector('#retakeCodeErr');
+        if (err) err.textContent = t('formal_retake_wrong');
+        if (el) { try { el.focus(); el.select(); } catch (e) {} }
+        return;
+      }
+      close(true);
+    }
+    overlay.querySelector('[data-act="cancel"]').onclick = function () { close(false); };
+    overlay.querySelector('[data-act="ok"]').onclick = submit;
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(false); });
+    overlay.addEventListener('keydown', function (e) {
+      if (e && e.key === 'Enter') { e.preventDefault(); submit(); }
+    });
+    document.body.appendChild(overlay);
+    try { overlay.querySelector('#retakeCodeInput').focus(); } catch (e) {}
+  });
 }
 // Pull the newest complete session list from the relay and cache it.
 // The same poll also picks up admin "profile fix" messages ({t:'pfFix'})
@@ -1980,7 +2097,7 @@ function appliedPfFixes() {
   } catch (e) { return {}; }
 }
 // Every per-account record living under "<accountKey><suffix>" in localStorage.
-var ACCOUNT_DATA_SUFFIXES = ['', '_profile', '_wrongAnswers', '_collectedQuestions', '_practiceProgress', '_syncEvents'];
+var ACCOUNT_DATA_SUFFIXES = ['', '_profile', '_wrongAnswers', '_collectedQuestions', '_practiceProgress', '_syncEvents', '_formalAttempts'];
 function accountHasLocalData(key) {
   if (!key) return false;
   for (var i = 0; i < ACCOUNT_DATA_SUFFIXES.length; i++) {
@@ -3857,6 +3974,18 @@ var I18N = {
   formal_open: {cn:'进行中', en:'Open'},
   formal_ended: {cn:'已结束', en:'Ended'},
   formal_closed: {cn:'已关闭', en:'Closed'},
+  formal_taken: {cn:'本轮已参加', en:'Taken this round'},
+  formal_once_only: {cn:'本轮你已经参加过这场考试，不能重复参加。如需再考，请联系管理员索取验证码。', en:'You have already sat this round. A repeat attempt needs an access code from the admin.'},
+  formal_retake_title: {cn:'本轮已考过一次', en:'Already taken this round'},
+  formal_retake_body: {cn:'你在本轮已经参加过（{time}）。如确实需要再考一次，请输入管理员提供的验证码；验证码不正确则无法再次进入。', en:'You already sat this round ({time}). If you really need another attempt, enter the access code from your admin — an incorrect code blocks the retake.'},
+  formal_retake_ph: {cn:'输入验证码', en:'Access code'},
+  formal_retake_wrong: {cn:'验证码不正确，无法再次参加。', en:'Incorrect code — you cannot retake this round.'},
+  formal_retake_ok: {cn:'验证并开始', en:'Verify & start'},
+  retake_code_label: {cn:'重考验证码', en:'Retake code'},
+  retake_code_ph: {cn:'重考验证码，如 7321（留空 = 不允许重考）', en:'Retake code, e.g. 7321 (blank = no retake)'},
+  retake_new_round: {cn:'开启新一轮', en:'Start a new round'},
+  retake_round_taken: {cn:'本轮已考', en:'Taken this round'},
+  retake_people: {cn:'人', en:'employee(s)'},
   formal_start: {cn:'开始正式考试', en:'Start Formal Exam'},
   formal_limit: {cn:'限时', en:'Time limit'},
   formal_until: {cn:'截止', en:'Until'},
@@ -4434,6 +4563,8 @@ function buildStudentBody() {
     events: events,
     details: details,
     race: raceLocalRecord(),
+    // 重考闸门：本轮已考过的场次（换设备后靠它恢复"这一轮已考"的判定）
+    fa: loadFormalAttempts(),
     ts: Date.now()
   });
 }
@@ -4996,6 +5127,22 @@ function applyCloudAccountData(key, rec) {
       if (hist.length) localStorage.setItem(key + '__examHistory', JSON.stringify(hist));
     }
   } catch (e) {}
+  try {
+    // 跨设备兜底：把云端记录里的"本轮已考"并进本机（只增不减，幂等）
+    var faCloud = rec.fa;
+    if (faCloud && typeof faCloud === 'object') {
+      var faLocal = loadFormalAttempts(key), faDirty = false;
+      for (var fk in faCloud) {
+        var fv = faCloud[fk];
+        if (!fv || !fv.ts) continue;
+        if (!faLocal[fk] || (faLocal[fk].ts || 0) < fv.ts) {
+          faLocal[fk] = { ts: fv.ts, done: !!fv.done };
+          faDirty = true;
+        }
+      }
+      if (faDirty) saveFormalAttempts(faLocal, key);
+    }
+  } catch (e) {}
   return true;
 }
 // Enter the cloud-restored account: switch user, load data, land on home
@@ -5203,6 +5350,8 @@ function recordExamEvent() {
       sessionId: state.formalSession ? state.formalSession.sessionId : '',
       title: state.formalSession ? state.formalSession.title : '',
       paper: pkey,
+      pk: state.formalSession ? state.formalSession.paperKey : '',
+      round: state.formalSession ? (state.formalSession.round || '') : '',
       score: Math.round(correct / total * 100), // legacy percent — admin CSV & old replays
       total: total, correct: correct, wrong: wrong, unanswered: unanswered,
       // absolute-score fields (used by renderExamResult + admin replay):
@@ -7371,7 +7520,9 @@ function formalMenuCount(paperKey) {
   if (!sess || ws === 'none') return t('formal_none');
   if (ws === 'pending') return t('formal_pending') + (sess.startTime ? ' · ' + t('formal_from') + ' ' + fmtExamWindow(sess.startTime) : '');
   if (ws === 'ended') return t('formal_ended');
+  var taken = formalAttemptOf(paperKey, sess);
   var s = t('formal_open');
+  if (taken) s += ' · ' + t('formal_taken');
   if (sess.title) s += ' · ' + sess.title;
   if (sess.timeLimitSec) s += ' · ' + t('formal_limit') + ' ' + Math.round(sess.timeLimitSec / 60) + t('formal_min');
   return s;
@@ -7775,6 +7926,8 @@ function renderExamResult() {
       sessionId: state.formalSession ? state.formalSession.sessionId : '',
       title: state.formalSession ? state.formalSession.title : '',
       paper: pkey,
+      pk: state.formalSession ? state.formalSession.paperKey : '',
+      round: state.formalSession ? (state.formalSession.round || '') : '',
       score: percent, total: total, correct: correct, wrong: wrong, unanswered: unanswered,
       ppq: grading.ppq, ppBlank: grading.ppBlank, passAt: grading.pass,
       scoreAbs: scoreAbs, full: fullScore, passed: passed,
@@ -7794,6 +7947,9 @@ function renderExamResult() {
     try { localStorage.setItem(histKey, JSON.stringify(hist)); } catch (e) {}
     // Mirror into state so the in-page replay button has data right now,
     // without having to read localStorage again.
+    if (state.formalSession && state.formalSession.paperKey) {
+      markFormalAttemptDone(state.formalSession.paperKey, { round: state.formalSession.round });
+    }
     state.lastExamReplay = localEvt;
   } catch (e) {}
 
@@ -8116,12 +8272,24 @@ function bankQuestionTime(idx) {
 }
 // Start a formal exam on the given paper (content = the same full paper used
 // for the mock exam, shuffled). Gate: the cached session must be 'open'.
-function startFormalExam(paperKey) {
+function startFormalExam(paperKey, opts) {
+  opts = opts || {};
   var sess = examSessionOf(paperKey);
   // Re-check the live window with the student's clock — the cached session may
   // be a few minutes stale, but startTime/endTime themselves are checked live.
   var ws = examWindowState(sess);
   if (ws !== 'open') { alert(t('formal_not_open')); return; }
+  // 每轮只能考一次：本轮已交过卷 → 必须输入管理员发布的验证码才能再考。
+  // 例外：上一次没交卷（中途退出 / 断网 / 手机没电）不算考过，直接放行重进——
+  // 否则一次误触就锁死，而本轮仍然只有一次有效成绩。
+  var prevTry = formalAttemptOf(paperKey, sess);
+  if (prevTry && prevTry.done && !opts.retakeOk) {
+    if (!String(sess.retakeCode || '').trim()) { alert(t('formal_once_only')); return; }
+    askRetakeCode(paperKey, sess, prevTry.ts).then(function (ok) {
+      if (ok) startFormalExam(paperKey, { retakeOk: true });
+    });
+    return;
+  }
   var rawQuestions = resolvePaperQuestions(paperKey);
   if (!rawQuestions || rawQuestions.length === 0) { alert(t('no_questions')); return; }
   var bank = paperKey.split('_')[0];
@@ -8132,10 +8300,12 @@ function startFormalExam(paperKey) {
     paperKey: paperKey,
     gradingKey: gradingKeyOf(paperKey), // Stage-2: bankStateKey() space ('day21' vs 'day21_all')
     title: sess.title || '',
+    round: formalRoundOf(sess),
     sessionId: paperKey + '_' + (sess.ver || 0),
     timeLimitSec: sess.timeLimitSec || 0,
     grading: sess.grading || null // Stage-2: frozen grading snapshot from publish time
   };
+  claimFormalAttempt(paperKey, sess); // 本轮这一次用得从"开始答题"算起
   var shuffled = shuffleArray(rawQuestions.slice());
   state.questions = prepareQuestions(shuffled);
   state.currentIndex = 0;
@@ -9132,6 +9302,27 @@ function formalPaperLabel(pk) {
   var bank = pk.indexOf('day21') === 0 ? t('bank_day21') : t('bank_tsos');
   return bank + ' · ' + (pk.indexOf('_kitchen') > 0 ? t('paper_kitchen') : t('paper_all'));
 }
+// 本轮某个试卷已考人数（按工号去重）。轮次优先用 ev.round 精确匹配，
+// 老记录没有 round 时退回 sessionId 前缀匹配。
+function adminRoundTakenCount(pk, sess) {
+  try {
+    if (!pk || !sess) return 0;
+    var recs = adminStudentRecords() || [];
+    var round = formalRoundOf(sess);
+    var legacySid = String(pk) + '_' + String(round).replace(/^v/, '');
+    var seen = {}, n = 0;
+    for (var i = 0; i < recs.length; i++) {
+      var rec = recs[i], evs = rec.exams || [];
+      for (var j = 0; j < evs.length; j++) {
+        var ev = evs[j];
+        if (!ev || ev.mode !== 'formal') continue;
+        var hit = ev.round ? (ev.round === round) : (ev.sessionId === legacySid);
+        if (hit) { if (!seen[rec.key]) { seen[rec.key] = 1; n++; } break; }
+      }
+    }
+    return n;
+  } catch (e) { return 0; }
+}
 function renderAdminExams() {
   if (!adminState.authenticated) return renderAdminLogin();
   var cfg = autoCloseExpiredExams(); // 过了截止时间的已发布考试 → 自动关闭
@@ -9197,6 +9388,16 @@ function renderAdminExams() {
     html += '<label style="flex:1;min-width:140px;font-size:12px;color:var(--text-light);">' + (state.lang === 'en' ? 'End' : '截止') + '<input id="fx_end_' + pk + '" type="datetime-local" value="' + curEnd + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:2px;" oninput="adminRecomputeSizeBadge(\'' + pk + '\')"></label>';
     html += '</div>';
     html += adminWindowQuickHtml('adminFillExamWindow', '\'' + pk + '\',');
+    // 每轮一次 + 重考验证码
+    var curCode = (sess && sess.retakeCode) ? String(sess.retakeCode) : '';
+    var roundTaken = adminRoundTakenCount(pk, sess);
+    html += '<input id="fx_code_' + pk + '" type="text" inputmode="numeric" autocomplete="off" maxlength="12" value="' + escapeHtml(curCode) + '" placeholder="' + escapeHtml(t('retake_code_ph')) + '" style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;text-align:center;letter-spacing:2px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text-light);">';
+    html += '<span>🔒 ' + escapeHtml(t('retake_round_taken')) + ' ' + roundTaken + ' ' + escapeHtml(t('retake_people')) + '</span>';
+    if (sess) {
+      html += '<label style="display:flex;gap:4px;align-items:center;margin:0;"><input id="fx_newround_' + pk + '" type="checkbox" style="width:auto;margin:0;"> ' + escapeHtml(t('retake_new_round')) + '</label>';
+    }
+    html += '</div>';
     html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
     // Pre-publish payload size hint. Computed against the same shape
     // publishExamSessions() will send (full list, full-replace). Colour the
@@ -9206,8 +9407,9 @@ function renderAdminExams() {
       var previewList = JSON.parse(JSON.stringify(cfg.list));
       var gPrev = frozenGradingOf(pk); // match what adminPublishExam will actually send
       previewList[pk] = {
-        status: 'published', title: title, startTime: startV ? new Date(startV).toISOString() : new Date().toISOString(),
-        endTime: new Date(endV).toISOString(), timeLimitSec: limitMin * 60, ver: Date.now(),
+        status: 'published', title: curTitle, startTime: curStart ? new Date(curStart).toISOString() : new Date().toISOString(),
+        endTime: curEnd ? new Date(curEnd).toISOString() : '', timeLimitSec: parseInt(curLimit, 10) * 60, ver: Date.now(),
+        round: 'r0000000000000', retakeCode: (sess && sess.retakeCode) ? String(sess.retakeCode) : '',
         grading: gPrev
       };
       var previewSize = JSON.stringify({ t: 'sessions', ver: Date.now(), list: previewList }).length;
@@ -9250,6 +9452,15 @@ function adminPublishExam(pk) {
   if (!et) { alert(state.lang === 'en' ? 'Please set the end time (how long the exam stays open).' : '请设置截止时间（考试开放多久）。'); return; }
   var cfg = adminLoadExamConfig();
   var list = JSON.parse(JSON.stringify(cfg.list));
+  // 每轮一次 + 重考验证码：发布时一并设置
+  var codeEl = document.getElementById('fx_code_' + pk);
+  var retakeCode = String((codeEl && codeEl.value) || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 12);
+  var nrEl = document.getElementById('fx_newround_' + pk);
+  var forceNewRound = !!(nrEl && nrEl.checked);
+  var prevGate = list[pk];
+  var prevRoundEnded = !!(prevGate && prevGate.endTime && Date.parse(prevGate.endTime) <= Date.now());
+  var isNewRound = !prevGate || forceNewRound || prevGate.status === 'closed' || prevRoundEnded;
+  var roundId = isNewRound ? newFormalRoundId() : formalRoundOf(prevGate);
   var g0 = frozenGradingOf(pk); // Stage-2: freeze the grading scale into this exam
   // Stage-4 guard ("publish the scale BEFORE the exam"): every publish shows a
   // confirm dialog with the exact scale that will be frozen, plus warnings
@@ -9278,6 +9489,9 @@ function adminPublishExam(pk) {
   }
   var msg4 = (en4 ? '📏 Scale check before publishing "' + title.trim() + '"\n\n' + scaleLine + '\n\nChanging the grading config AFTER publishing will NOT affect this exam.' : '📏 发布前计分口径核对：「' + title.trim() + '」\n\n' + scaleLine + '\n\n发布之后再修改评分配置，不影响本场考试。');
   if (warns4.length) msg4 += '\n\n' + warns4.join('\n');
+  msg4 += (en4
+    ? '\n\n🔒 ' + (isNewRound ? 'This publish starts a NEW round' : 'This publish keeps the SAME round') + ' — each employee may sit this exam once; a retake requires the code ' + (retakeCode || '(not set — no retake allowed)') + '.'
+    : '\n\n🔒 ' + (isNewRound ? '本次发布为新的一轮' : '本次发布延续当前轮次') + '——每人只能考一次；重考验证码：' + (retakeCode || '（未设置，不允许重考）') + '。');
   msg4 += en4 ? '\n\nPublish now?' : '\n\n确认发布？';
   if (!confirm(msg4)) return;
   list[pk] = {
@@ -9287,6 +9501,8 @@ function adminPublishExam(pk) {
     endTime: new Date(endV).toISOString(),
     timeLimitSec: limitMin * 60,
     ver: Date.now(),
+    round: roundId,
+    retakeCode: retakeCode,
     grading: g0
   };
   publishExamSessions(list).then(function(res) {
@@ -9415,7 +9631,9 @@ function adminRecomputeSizeBadge(pk) {
       startTime: st,
       endTime: et,
       timeLimitSec: parseInt(limitEl && limitEl.value, 10) * 60,
-      ver: Date.now()
+      ver: Date.now(),
+      round: 'r0000000000000',
+      retakeCode: ((document.getElementById('fx_code_' + pk) || {}).value || '')
     };
     var sz = JSON.stringify({ t: 'sessions', ver: Date.now(), list: previewList }).length;
     badge.textContent = '📏 ' + sz + ' / 3800 B';
