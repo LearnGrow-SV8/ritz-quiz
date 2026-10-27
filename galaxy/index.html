@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<meta name="theme-color" content="#12305C" />
+<title>星河玩味 · Galaxy Guide</title>
+<link rel="icon" href="assets/img/logo.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="assets/css/app.css" />
+</head>
+<body>
+
+<div class="brandbar">
+  <img src="assets/img/logo.svg" alt="深圳星河丽思卡尔顿酒店" />
+  <div class="bt">
+    <b id="brName">星河玩味</b>
+    <span id="brTag">Galaxy Guide · 内部吃喝玩乐地图</span>
+  </div>
+  <div class="sp"></div>
+  <div class="tool">
+    <button class="ghostbtn" id="btnLang">EN</button>
+    <button class="ghostbtn" id="btnAdmin">管理后台</button>
+  </div>
+</div>
+
+<div id="bannerBox"></div>
+
+<!-- 第一道门：通行验证码 -->
+<div id="gate" class="centerwrap"></div>
+
+<!-- 第二道门：员工登录 -->
+<div id="login" class="centerwrap hidden"></div>
+
+<!-- 主应用 -->
+<div id="main" class="hidden">
+  <div class="toolbar">
+    <div class="searchwrap">
+      <input id="q" placeholder="搜索店名 / 地址…" />
+      <button class="clr" id="qclr">×</button>
+    </div>
+    <select class="sel" id="fDist"></select>
+    <div class="grow"></div>
+    <button class="ghostbtn" id="btnRank">🏆 排行榜</button>
+    <button class="ghostbtn" id="btnAdd">＋ 推荐</button>
+    <button class="ghostbtn" id="btnMine">👤</button>
+  </div>
+  <div class="chips" id="catChips"></div>
+  <div class="mapstage">
+    <div id="map"></div>
+    <div class="mapmsg hidden" id="mapMsg"></div>
+    <div class="mapbadge hidden" id="mapBadge"></div>
+    <div class="legend" id="legend"></div>
+    <div class="fabs">
+      <button class="fab gold" id="fabAdd" title="推荐新店">＋</button>
+      <button class="fab" id="fabRank" title="红黑榜">🏆</button>
+    </div>
+  </div>
+</div>
+
+<!-- 弹层 -->
+<div class="sheetmask" id="mask"></div>
+<div class="sheet" id="sheet">
+  <header>
+    <h3 id="sheetTitle"></h3>
+    <button class="xbtn" id="sheetX">×</button>
+  </header>
+  <div class="body" id="sheetBody"></div>
+  <div class="foot" id="sheetFoot"></div>
+</div>
+
+<div class="toast" id="ggToast"></div>
+
+<script src="assets/js/core.js"></script>
+<script src="assets/js/map.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/app.js"></script>
+<script>
+(function () {
+  var zh = GG.getLang() === 'zh';
+  document.documentElement.lang = zh ? 'zh-CN' : 'en';
+  document.title = zh ? '星河玩味 · Galaxy Guide' : 'Galaxy Guide · 星河玩味';
+  document.getElementById('brName').textContent = zh ? GG.t('app') : GG.t('appEn');
+  document.getElementById('brTag').textContent = zh ? GG.t('tagline') : GG.t('taglineEn');
+  GG.probe().then(function () {
+    return Auth.boot(App.boot);
+  });
+})();
+</script>
+</body>
+</html>
