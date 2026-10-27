@@ -4060,6 +4060,9 @@ var I18N = {
   race_admin_published: {cn:'已发布，学员端即刻生效', en:'Published — live on student devices now'},
   race_admin_saved: {cn:'已保存', en:'Saved'},
   race_admin_no_scores: {cn:'本期还没有成绩', en:'No scores for this round yet'},
+  win_quick: {cn:'快捷设置', en:'Quick set'},
+  win_now_plus: {cn:'现在起', en:'Now +'},
+  win_default_tip: {cn:'默认「现在 → 30 分钟后」，可直接保存，也可在上方调整；到点后后台自动关闭', en:'Defaults to now → +30 min. Save as-is or adjust; the activity closes automatically when time is up'},
   race_mode: {cn:'板块选择方式', en:'Section selection'},
   race_mode_choice: {cn:'学员自行选择板块', en:'Employees pick their own section'},
   race_mode_admin: {cn:'管理员指定统一板块', en:'Admin sets one section for all'},
@@ -6271,6 +6274,86 @@ function racePoolOf(key) {
   return shuffleArray(prepared);
 }
 
+// ===== 统一时间窗口默认值（2026-10-27） =====
+// 需求：所有"发布时间 / 开放时间"设置（正式考试、限时答题赛……）默认给
+// 「现在 → 现在 + DEFAULT_WINDOW_MIN 分钟」，管理员可以直接保存，也可以在
+// 此基础上改。到点后后台自动关闭该场活动。
+var DEFAULT_WINDOW_MIN = 30;
+var DEFAULT_WINDOW_CHOICES = [30, 60, 120];
+function __pad2(n) { return (n < 10 ? '0' : '') + n; }
+function localInputFromDate(d) {
+  return d.getFullYear() + '-' + __pad2(d.getMonth() + 1) + '-' + __pad2(d.getDate()) + 'T' + __pad2(d.getHours()) + ':' + __pad2(d.getMinutes());
+}
+// addMin = 相对"现在"的分钟偏移（秒/毫秒归零，适配 datetime-local 的分钟精度）
+function defaultStartInput(addMin) {
+  var d = new Date(Date.now() + (typeof addMin === 'number' ? addMin : 0) * 60000);
+  d.setSeconds(0, 0);
+  return localInputFromDate(d);
+}
+function defaultEndInput(addMin) {
+  return defaultStartInput(typeof addMin === 'number' ? addMin : DEFAULT_WINDOW_MIN);
+}
+// 把一对 datetime-local 输入框重填为「现在 → 现在 + mins 分钟」
+function fillWindowInputs(startId, endId, mins) {
+  var s = document.getElementById(startId), e = document.getElementById(endId);
+  if (s) s.value = defaultStartInput(0);
+  if (e) e.value = defaultEndInput(typeof mins === 'number' ? mins : DEFAULT_WINDOW_MIN);
+}
+function adminFillExamWindow(pk, mins) {
+  fillWindowInputs('fx_start_' + pk, 'fx_end_' + pk, mins);
+  if (typeof adminRecomputeSizeBadge === 'function') adminRecomputeSizeBadge(pk);
+}
+function adminFillRaceWindow(mins) {
+  fillWindowInputs('raceStart', 'raceEnd', mins);
+}
+// 快捷按钮行：现在 +N 分钟
+function adminWindowQuickHtml(onclickPrefix, argSuffix) {
+  var en = state.lang === 'en';
+  var h = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px;">';
+  h += '<span style="font-size:11px;color:var(--text-light);">' + t('win_quick') + '</span>';
+  for (var i = 0; i < DEFAULT_WINDOW_CHOICES.length; i++) {
+    var m = DEFAULT_WINDOW_CHOICES[i];
+    h += '<button type="button" class="nav-btn secondary" style="flex:0 0 auto;padding:5px 9px;font-size:12px;" onclick="' + onclickPrefix + '(' + argSuffix + m + ')">' + t('win_now_plus') + ' ' + m + (en ? ' min' : ' 分钟') + '</button>';
+  }
+  h += '</div>';
+  h += '<div style="font-size:11px;color:var(--text-light);margin-top:2px;">' + t('win_default_tip') + '</div>';
+  return h;
+}
+// 到点自动关闭：已发布的考试/赛事过了截止时间，后台把状态置为 closed，
+// 管理员不用手动点关闭。（学员端本来就靠 endTime 判断，行为一致。）
+function autoCloseExpiredExams() {
+  var cfg = adminLoadExamConfig();
+  var changed = 0, k;
+  for (k in cfg.list) {
+    var s = cfg.list[k];
+    if (!s || s.status !== 'published') continue;
+    if (!(s.endTime && Date.parse(s.endTime) <= Date.now())) continue;
+    s.status = 'closed';
+    s.autoClosed = true;
+    s.ver = Date.now();
+    changed++;
+  }
+  if (!changed) return cfg;
+  cfg.ver = Date.now();
+  adminSaveExamConfig(cfg);
+  // 同步给学员端（状态已是 closed，下次不会再命中，所以只推一次）
+  try { publishExamSessions(cfg.list); } catch (e) {}
+  return cfg;
+}
+function raceAutoClose() {
+  var c = raceConfOf();
+  if (!c || c.closed) return c;
+  if (raceStateOf(c) !== 'ended') return c;
+  c.closed = true;
+  c.autoClosed = true;
+  c.ver = Date.now();
+  raceSaveConf(c);
+  if (typeof SB_ON !== 'undefined' && SB_ON && typeof sbSaveChannel === 'function') {
+    try { sbSaveChannel('race', c); } catch (e) {}
+  }
+  return c;
+}
+
 // ---- 赛事配置 ----
 function raceConfOf() {
   try { var s = localStorage.getItem('raceConf'); if (!s) return null; var c = JSON.parse(s); return (c && c.id) ? c : null; }
@@ -6694,7 +6777,7 @@ function renderRaceBoard() {
 
 // ================= 限时答题赛 · 管理端 =================
 function renderAdminRace() {
-  var c = raceConfOf() || {};
+  var c = raceAutoClose() || {}; // 过了结束时间的赛事 → 自动关闭
   var en = state.lang === 'en';
   var html = renderAppHeader({ title: '⚡ ' + t('race_admin_hub'), subtitle: t('race_admin_hub_desc') });
   html += '<div class="page">';
@@ -6735,9 +6818,10 @@ function renderAdminRace() {
   }
   html += '</select>';
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'Start (optional)' : '开始时间（可留空）') + '</label>';
-  html += '<input id="raceStart" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + (c.startTime ? raceInputDate(c.startTime) : '') + '">';
+  html += '<input id="raceStart" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((c.startTime ? raceInputDate(c.startTime) : '') || defaultStartInput(0)) + '">';
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'End (optional)' : '结束时间（可留空）') + '</label>';
-  html += '<input id="raceEnd" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + (c.endTime ? raceInputDate(c.endTime) : '') + '">';
+  html += '<input id="raceEnd" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((c.endTime ? raceInputDate(c.endTime) : '') || defaultEndInput(DEFAULT_WINDOW_MIN)) + '">';
+  html += adminWindowQuickHtml('adminFillRaceWindow', '');
   html += '</div>';
   html += '<button class="action-btn primary" style="width:100%;" onclick="adminRacePublish()">📣 ' + t('race_admin_publish') + '</button>';
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="adminRaceClose()">⛔ ' + t('race_admin_close') + '</button>';
@@ -8978,7 +9062,7 @@ function formalPaperLabel(pk) {
 }
 function renderAdminExams() {
   if (!adminState.authenticated) return renderAdminLogin();
-  var cfg = adminLoadExamConfig();
+  var cfg = autoCloseExpiredExams(); // 过了截止时间的已发布考试 → 自动关闭
   var html = '<div class="app-header">';
   html += '<button class="back-btn" onclick="navigate(\'adminExamHub\')">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
@@ -9024,8 +9108,8 @@ function renderAdminExams() {
     }
     var curTitle = sess ? (sess.title || '') : '';
     var curLimit = sess && sess.timeLimitSec ? String(Math.round(sess.timeLimitSec / 60)) : '30';
-    var curStart = sess ? toLocalInputValue(sess.startTime) : '';
-    var curEnd = sess ? toLocalInputValue(sess.endTime) : '';
+    var curStart = (sess ? toLocalInputValue(sess.startTime) : '') || defaultStartInput(0);
+    var curEnd = (sess ? toLocalInputValue(sess.endTime) : '') || defaultEndInput(DEFAULT_WINDOW_MIN);
 
     html += '<div class="admin-bank-card">';
     html += '<h3>' + formalPaperLabel(pk) + ' ' + statusBadge + '</h3>';
@@ -9040,6 +9124,7 @@ function renderAdminExams() {
     html += '<label style="flex:1;min-width:140px;font-size:12px;color:var(--text-light);">' + (state.lang === 'en' ? 'Start' : '开始') + '<input id="fx_start_' + pk + '" type="datetime-local" value="' + curStart + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:2px;" oninput="adminRecomputeSizeBadge(\'' + pk + '\')"></label>';
     html += '<label style="flex:1;min-width:140px;font-size:12px;color:var(--text-light);">' + (state.lang === 'en' ? 'End' : '截止') + '<input id="fx_end_' + pk + '" type="datetime-local" value="' + curEnd + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:2px;" oninput="adminRecomputeSizeBadge(\'' + pk + '\')"></label>';
     html += '</div>';
+    html += adminWindowQuickHtml('adminFillExamWindow', '\'' + pk + '\',');
     html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
     // Pre-publish payload size hint. Computed against the same shape
     // publishExamSessions() will send (full list, full-replace). Colour the
@@ -9174,8 +9259,11 @@ function adminReopenExam(pk) {
   var cfg0 = adminLoadExamConfig();
   var sess0 = cfg0.list[pk];
   var endedHint = '';
-  if (sess0 && sess0.endTime && Date.parse(sess0.endTime) <= Date.now()) {
-    endedHint = state.lang === 'en' ? '\n\n⚠️ The end time has already passed — adjust the End field above and save, otherwise students will see it as ended.' : '\n\n⚠️ 截止时间已过——请先在上方修改截止时间并保存，否则学员端会显示“已结束”。';
+  var expired0 = !!(sess0 && sess0.endTime && Date.parse(sess0.endTime) <= Date.now());
+  if (expired0) {
+    endedHint = (state.lang === 'en'
+      ? '\n\n⏰ The end time has passed \u2014 it will be reset to now \u2192 +' + DEFAULT_WINDOW_MIN + ' min automatically (you can change it above afterwards).'
+      : '\n\n⏰ 截止时间已过\u2014\u2014将自动重置为「现在 \u2192 ' + DEFAULT_WINDOW_MIN + ' 分钟后」，你也可以在上方自行调整。');
   }
   // Stage-4: reopening re-freezes the CURRENT grading scale (Stage-2), so the
   // confirm must show exactly what will be frozen — the admin may have changed
@@ -9189,6 +9277,12 @@ function adminReopenExam(pk) {
   var list = JSON.parse(JSON.stringify(cfg.list));
   if (!list[pk]) return;
   list[pk].status = 'published';
+  // 已过期 → 按统一原则重设窗口：现在 → 现在 + DEFAULT_WINDOW_MIN 分钟
+  if (!list[pk].endTime || Date.parse(list[pk].endTime) <= Date.now()) {
+    list[pk].startTime = new Date().toISOString();
+    list[pk].endTime = new Date(Date.now() + DEFAULT_WINDOW_MIN * 60000).toISOString();
+  }
+  list[pk].autoClosed = false;
   list[pk].ver = Date.now();
   list[pk].grading = frozenGradingOf(pk); // Stage-2: re-freeze on reopen
   publishExamSessions(list).then(function(res) {
