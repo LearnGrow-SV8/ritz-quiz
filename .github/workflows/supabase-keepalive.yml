@@ -1,0 +1,23 @@
+name: Supabase keepalive
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST endpoint
+        run: |
+          code=$(curl -s -o /tmp/out.txt -w "%{http_code}" \
+            -H "apikey: sb_publishable_L0iHADNzbzl6GNia4npK0Q_djN_Rkes" \
+            -H "Authorization: Bearer sb_publishable_L0iHADNzbzl6GNia4npK0Q_djN_Rkes" \
+            "https://hkigwzzmvytpeudgkjik.supabase.co/rest/v1/accounts?select=phone&limit=1")
+          echo "HTTP $code"
+          head -c 200 /tmp/out.txt
+          if [ "$code" != "200" ]; then
+            echo "::error::Supabase ping failed with HTTP $code — project may be paused again"
+            exit 1
+          fi
