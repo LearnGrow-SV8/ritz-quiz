@@ -4446,6 +4446,9 @@ var I18N = {
   race_admin_export: {cn:'导出 CSV', en:'Export CSV'},
   race_admin_title_ph: {cn:'如：十月限时答题赛', en:'e.g. October Speed Quiz'},
   race_admin_published: {cn:'已发布，学员端即刻生效', en:'Published — live on student devices now'},
+  race_cloud_fail: {cn:'❌ 没有同步到云端，学员端看不到这场答题赛。请检查网络后重新点「发布」。', en:'❌ Not synced to the cloud — student devices cannot see this race. Check the network, then press Publish again.'},
+  race_syncing: {cn:'正在从云端重新同步…', en:'Re-syncing from the cloud…'},
+  race_cloud_ok: {cn:'☁️ 已同步到云端，学员端可见', en:'☁️ Synced to the cloud — visible on student devices'},
   race_admin_saved: {cn:'已保存', en:'Saved'},
   race_admin_no_scores: {cn:'本期还没有成绩', en:'No scores for this round yet'},
   exam_dl_none: {cn:'该场考试暂未开放，请联系管理员发布后再扫码。', en:'This exam is not open yet. Ask the admin to publish it, then scan again.'},
@@ -5525,6 +5528,23 @@ var ROSTER_CACHE_KEY = 'cloudRoster';        // 学员端本地缓存
 var ROSTER_ADMIN_KEY = 'adminRoster';        // 管理端本地副本
 var ROSTER_MAX = 3000;
 
+// admin_state 现在承载两样东西：有效工号名单（顶层 ids/ver/ts）和限时答题赛
+// 配置（race 键）。channels 是「一个 channel 一行」，所以任何一方写入都必须
+// **先读现有 → 合并自己的键 → 写回**，绝不能整体覆盖 —— 否则发名单会清掉
+// 赛事配置，发赛事会清掉名单。读失败时直接失败（宁可让管理员重试，也不盲写
+// 一份把名单清空的数据）。
+function sbMergeAdminState(patch) {
+  return sbGetChannelJson(ROSTER_CHANNEL).then(function (j) {
+    if (!(j && j.success)) throw new Error('admin_state unreadable');
+    var base = (j.data && typeof j.data === 'object') ? j.data : {};
+    var out = {};
+    for (var k in base) out[k] = base[k];
+    for (var p in patch) out[p] = patch[p];
+    if (!out.t) out.t = 'roster';
+    return sbSaveChannel(ROSTER_CHANNEL, out);
+  });
+}
+
 function loadRoster() {
   try {
     var s = JSON.parse(localStorage.getItem(ROSTER_CACHE_KEY) || 'null');
@@ -5546,8 +5566,13 @@ function applyRosterMessage(m) {
 function refreshRoster() {
   if (!SB_ON) return Promise.resolve(false);
   return sbGetChannelJson(ROSTER_CHANNEL).then(function (j) {
-    if (j && j.success && j.data) return applyRosterMessage(j.data);
-    return false;
+    if (!(j && j.success && j.data)) return false;
+    var changed = applyRosterMessage(j.data);
+    // 同一个 admin_state 行里还带着答题赛配置 —— 顺手应用，省一次请求。
+    // （2026-10-28：答题赛配置以前写在独立的 'race' 通道，被 RLS 拒绝，
+    //   学员端又没有拉取代码，导致"管理端发布了、学员端却无法答题"。）
+    if (j.data.race && applyRaceConf(j.data.race)) changed = true;
+    return changed;
   }).catch(function () { return false; });
 }
 // 归一化一段录入文本（逗号 / 空格 / 换行 / 分号 / 顿号 都当分隔符）为工号数组。
@@ -5601,12 +5626,12 @@ function enforceRosterSession() {
     loginErr(t('profile_emp_off_roster'));
   } catch (e) {}
 }
-// 发布名单到云端（管理端是唯一写入方）。
+// 发布名单到云端（管理端是唯一写入方）。走合并写，避免把 race 配置冲掉。
 function publishRoster(ids) {
   var list = (ids || []).slice(0, ROSTER_MAX);
   var payload = { t: 'roster', ver: Date.now(), ids: list, ts: Date.now() };
   if (!SB_ON) return Promise.resolve(false);
-  return sbSaveChannel(ROSTER_CHANNEL, payload).then(function () {
+  return sbMergeAdminState(payload).then(function () {
     var snap = { ver: payload.ver, ids: list, ts: payload.ts };
     saveRoster(snap);          // 本机（管理端）立即生效，便于自查
     adminSaveRoster(snap);
@@ -6974,9 +6999,7 @@ function raceAutoClose() {
   c.autoClosed = true;
   c.ver = Date.now();
   raceSaveConf(c);
-  if (typeof SB_ON !== 'undefined' && SB_ON && typeof sbSaveChannel === 'function') {
-    try { sbSaveChannel('race', c); } catch (e) {}
-  }
+  publishRaceConf(c);
   return c;
 }
 
@@ -6986,11 +7009,49 @@ function raceConfOf() {
   catch (e) { return null; }
 }
 function raceSaveConf(c) { try { localStorage.setItem('raceConf', JSON.stringify(c)); } catch (e) {} }
-function racePullConf() {
+// 云端配置 → 本机。只有云端更新（ver 不小于本机）才覆盖，避免把管理端尚未
+// 发布的本地编辑冲掉。返回「本机内容是否真的变了」。
+function applyRaceConf(c) {
+  if (!c || !c.id) return false;
+  var cur = raceConfOf();
+  if (cur && typeof cur.ver === 'number' && typeof c.ver === 'number' && c.ver < cur.ver) return false;
+  var a = '', b = '';
+  try { a = JSON.stringify(cur || null); b = JSON.stringify(c); } catch (e) {}
+  if (a === b) return false;
+  raceSaveConf(c);
+  return true;
+}
+// 发布赛事配置到云端。落点必须是 channels.admin_state —— channels 的 RLS
+// 白名单只有 admin_state / question_data / blacklist，'race' 这种名字会被
+// 直接 401 拒绝（2026-10-28 实测），这正是"管理端发布了、学员端却无法答题"
+// 的第一个原因。写入走合并写，不会碰同一行里的工号名单。
+function publishRaceConf(c) {
+  if (typeof SB_ON !== 'undefined' && !SB_ON) { adminState.raceCloud = 'off'; return Promise.resolve(false); }
+  if (typeof sbMergeAdminState !== 'function') { adminState.raceCloud = 'off'; return Promise.resolve(false); }
+  return sbMergeAdminState({ race: c }).then(function () {
+    adminState.raceCloud = 'ok';
+    return true;
+  }, function () {
+    adminState.raceCloud = 'fail';
+    return false;
+  });
+}
+// 主动从云端拉一次配置（进答题赛页面 / 轮询用）。正常情况下 refreshRoster()
+// 已经顺带应用了；这里用于"用户刚点进来、本地还没有配置"的即时补救。
+var _racePullAt = 0;
+function racePullConf(force) {
   if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbGetChannelJson !== 'function') return Promise.resolve(null);
-  return sbGetChannelJson('race').then(function (r) {
-    if (r && r.success && r.data && r.data.id) { raceSaveConf(r.data); return r.data; }
-    return null;
+  var now = Date.now();
+  if (!force && now - _racePullAt < 15000) return Promise.resolve(raceConfOf());
+  _racePullAt = now;
+  return sbGetChannelJson(ROSTER_CHANNEL).then(function (j) {
+    var d = (j && j.success && j.data) || null;
+    if (d && d.race && d.race.id) { applyRaceConf(d.race); return raceConfOf(); }
+    // 历史兼容：老版本写在独立的 'race' 通道（RLS 一直拒，实际从未读到过）
+    return sbGetChannelJson('race').then(function (r2) {
+      if (r2 && r2.success && r2.data && r2.data.id) { applyRaceConf(r2.data); return raceConfOf(); }
+      return null;
+    }, function () { return null; });
   }, function () { return null; });
 }
 // 板块选择方式：'choice' = 学员自选（默认），'admin' = 管理员指定统一板块。
@@ -7227,11 +7288,23 @@ function raceFetchBoard() {
 
 // ---- 页面 ----
 function renderRaceHome() {
+  // 2026-10-28：以前这里只读本机缓存，而学员端**从未**从云端拉过答题赛配置
+  // （racePullConf 定义了却没人调）—— 管理端一发布，学员端照样停在"没有答题赛"。
+  // 现在每次进页面都同步一次（15 s 节流），版本变了才重画。
+  if (Date.now() - (state.racePullAskedAt || 0) > 15000) {
+    state.racePullAskedAt = Date.now();
+    var _beforeVer = (raceConfOf() || {}).ver || 0;
+    racePullConf(true).then(function (conf) {
+      if (!conf || state.currentPage !== 'race') return;
+      if (((conf || {}).ver || 0) !== _beforeVer) render();
+    });
+  }
   var c = raceConfOf(), st = raceStateOf(c);
   var html = renderAppHeader({ title: '⚡ ' + t('race_title'), subtitle: t('race_sub') });
   html += '<div class="page">';
   if (st === 'none') {
-    html += '<div class="q-card" style="text-align:center;color:#888;padding:28px 16px;">' + t('race_no_conf') + '</div>';
+    html += '<div class="q-card" style="text-align:center;color:#888;padding:24px 16px;">' + t('race_no_conf');
+    html += '<div style="font-size:12px;color:#aaa;margin-top:6px;">' + t('race_syncing') + '</div></div>';
     html += '</div>';
     return html;
   }
@@ -7424,6 +7497,21 @@ function renderRaceBoard() {
 function renderAdminRace() {
   var c = raceAutoClose() || {}; // 过了结束时间的赛事 → 自动关闭
   var en = state.lang === 'en';
+  // 自愈（2026-10-28）：以前发布写的是被 RLS 拒绝的 'race' 通道，云端从来
+  // 没有这份配置。打开这个页面时若发现云端还是没有，就把本机这份补推上去，
+  // 免得管理员必须记得"再点一次发布"。只补"云端完全空"的情况，不覆盖云端更新。
+  if (c && c.id && !adminState.raceAutoPushed) {
+    adminState.raceAutoPushed = true;
+    try {
+      sbGetChannelJson(ROSTER_CHANNEL).then(function (j) {
+        var cloud = (j && j.success && j.data && j.data.race) || null;
+        if (cloud && cloud.id) { adminState.raceCloud = 'ok'; return; }
+        publishRaceConf(c).then(function (ok) {
+          if (ok && state.currentPage === 'adminRace') { try { render(); } catch (e) {} }
+        });
+      }, function () {});
+    } catch (e0) {}
+  }
   var html = renderAppHeader({ title: '⚡ ' + t('race_admin_hub'), subtitle: t('race_admin_hub_desc') });
   html += '<div class="page">';
   html += '<div class="q-card">';
@@ -7472,6 +7560,13 @@ function renderAdminRace() {
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="adminRaceClose()">⛔ ' + t('race_admin_close') + '</button>';
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="adminRaceExport()">📥 ' + t('race_admin_export') + '</button>';
   html += '<div id="raceAdminMsg" style="margin-top:10px;font-size:13px;color:#1a3a5c;"></div>';
+  // 云端同步状态：按上次发布的结果常驻显示，避免又出现"管理端说发布了、
+  // 学员端什么都没有"却没人察觉（2026-10-28 事故：写入被 RLS 拒绝）。
+  if (adminState.raceCloud === 'ok') {
+    html += '<div style="margin-top:8px;font-size:12px;color:#1e7a3c;">' + t('race_cloud_ok') + '</div>';
+  } else if (adminState.raceCloud === 'fail' || adminState.raceCloud === 'off') {
+    html += '<div style="margin-top:8px;font-size:12px;color:#b3261e;">' + t('race_cloud_fail') + '</div>';
+  }
   if (c.id) {
     html += '<div style="margin-top:16px;font-size:12px;color:#888;">' + (en ? 'Current status' : '当前状态') + '：' + raceStateOf(c) + ' · ' + raceFmtWindow(c) + '</div>';
     html += '<div style="margin-top:4px;font-size:12px;color:#888;">' + t('race_mode') + '：' + (raceModeOf(c) === 'choice' ? t('race_mode_choice') : t('race_mode_admin') + '（' + raceSecIcon(c.section || 'all') + ' ' + raceSecName(c.section || 'all') + '）') + '</div>';
@@ -7516,22 +7611,20 @@ function adminRacePublish() {
   c.closed = false;
   c.ver = Date.now();
   raceSaveConf(c);
-  if (typeof SB_ON !== 'undefined' && SB_ON && typeof sbSaveChannel === 'function') {
-    sbSaveChannel('race', c).then(function () { adminRaceMsg(t('race_admin_published')); },
-                                  function () { adminRaceMsg(t('race_submit_fail')); });
-  } else {
-    adminRaceMsg(t('race_admin_saved'));
-  }
+  publishRaceConf(c).then(function (ok) {
+    if (ok) { adminRaceMsg(t('race_admin_published')); if (typeof render === 'function') render(); }
+    else adminRaceMsg(t('race_cloud_fail'));
+  });
 }
 function adminRaceClose() {
   var c = raceConfOf();
   if (!c) { adminRaceMsg(t('race_no_conf')); return; }
   c.closed = true; c.ver = Date.now();
   raceSaveConf(c);
-  if (typeof SB_ON !== 'undefined' && SB_ON && typeof sbSaveChannel === 'function') {
-    sbSaveChannel('race', c).then(function () { adminRaceMsg(t('race_admin_published')); render(); },
-                                  function () { adminRaceMsg(t('race_submit_fail')); });
-  } else { render(); }
+  publishRaceConf(c).then(function (ok) {
+    adminRaceMsg(ok ? t('race_admin_published') : t('race_cloud_fail'));
+    if (typeof render === 'function') render();
+  });
 }
 function adminRaceMsg(msg) {
   var el = document.getElementById('raceAdminMsg');
