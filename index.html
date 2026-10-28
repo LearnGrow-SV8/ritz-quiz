@@ -7520,10 +7520,12 @@ function raceRowNameOf(raw, race) {
   var old = String((race && race.name) || '').trim();
   return en || cn || old || String((raw && (raw.akey || raw.key || raw.phone)) || '');
 }
-function raceBoardRows(scope) {
-  var list = state.raceBoard || [];
-  var c = raceConfOf();
-  var secFilter = state.raceBoardSec || '';
+// 榜单计算的纯函数版本：吃一份快照记录数组，不碰 state。学员端排行榜和管理端
+// 导出都走这里，保证两边口径永远一致（以前导出另写一套，容易出现"榜上是 30、
+// 导出是 20"这种对不上的情况）。
+function raceBoardRowsFrom(list, scope, secFilter, rid) {
+  list = list || [];
+  secFilter = secFilter || '';
   var rows = [];
   for (var i = 0; i < list.length; i++) {
     var raw = list[i];
@@ -7531,20 +7533,20 @@ function raceBoardRows(scope) {
     if (!race) continue;
     // 快照行里的身份键是 akey / key（形如 e123456）；phone 只是历史遗留字段，
     // 很多学员为空，用它会让「（我）」高亮永远匹配不上。
-    var it = { key: String((raw && (raw.akey || raw.key || raw.phone)) || ''), race: race };
+    var it = { key: String((raw && (raw.akey || raw.key || raw.phone)) || ''), race: race, raw: raw };
     it.name = raceRowNameOf(raw, race);
     if (scope === 'best') {
       // 历史最佳：切了板块就看**该板块**的历届最佳（同一个人可以在多张板块榜上
       // 各有一条成绩）；不切板块每人只出现一次，取他各板块里最好的那条。
       var b = raceBestEntryOf(it.race, secFilter);
       if (!b) continue;
-      rows.push({ key: it.key, name: it.name, dept: raceDeptOfRow(raw, it.race), section: b.section || secFilter || 'all', correct: b.correct, answered: b.answered || 0, acc: b.acc, ts: b.ts });
+      rows.push({ key: it.key, name: it.name, dept: raceDeptOfRow(raw, it.race), section: b.section || secFilter || 'all', correct: b.correct, answered: b.answered || 0, acc: b.acc, ts: b.ts, raw: raw });
     } else {
       // 总榜 = 本届（可带板块筛选）。带筛选时取**该板块**的最佳成绩，
       // 所以某人做过 A/B/C 三个板块，就会分别出现在三张板块榜上。
-      var e = raceRoundEntryOf(it.race, c && c.id, secFilter);
+      var e = raceRoundEntryOf(it.race, rid, secFilter);
       if (!e) continue;
-      rows.push({ key: it.key, name: it.name, dept: raceDeptOfRow(raw, it.race), section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts });
+      rows.push({ key: it.key, name: it.name, dept: raceDeptOfRow(raw, it.race), section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts, raw: raw });
     }
   }
   rows.sort(function (a, b) {
@@ -7553,6 +7555,10 @@ function raceBoardRows(scope) {
     return (a.ts || 0) - (b.ts || 0);
   });
   return rows;
+}
+function raceBoardRows(scope) {
+  var c = raceConfOf();
+  return raceBoardRowsFrom(state.raceBoard || [], scope, state.raceBoardSec || '', c && c.id);
 }
 // 历史最佳：sec 非空 → **该板块**的历届最佳；sec 空 → 各板块最佳里最好的那条
 // （每人只出现一次，跟全酒店榜口径一致）。
@@ -7626,15 +7632,15 @@ function raceDeptOfRow(raw, race) {
 }
 // 部门排名：把本届每个部门的**所有参赛员工**的成绩汇总，按总答对题数 → 总准确率
 // → 参赛人数排序（每人只算他在本届的最佳一条，避免多刷板块给部门灌分）。
-function raceDeptAggRows(secFilter) {
-  var list = state.raceBoard || [];
-  var c = raceConfOf();
+// 纯函数版本，管理端导出直接复用（口径必须一致）。
+function raceDeptAggRowsFrom(list, secFilter, rid) {
+  list = list || [];
   var map = {}, order = [];
   for (var i = 0; i < list.length; i++) {
     var raw = list[i];
     var race = raceRecordOf(raw);
     if (!race) continue;
-    var e = raceRoundEntryOf(race, c && c.id, secFilter || '');
+    var e = raceRoundEntryOf(race, rid, secFilter || '');
     if (!e) continue;
     var dept = raceDeptOfRow(raw, race);
     var row = map[dept];
@@ -7656,6 +7662,10 @@ function raceDeptAggRows(secFilter) {
     return String(a.dept) < String(b.dept) ? -1 : 1;
   });
   return rows;
+}
+function raceDeptAggRows(secFilter) {
+  var c = raceConfOf();
+  return raceDeptAggRowsFrom(state.raceBoard || [], secFilter, c && c.id);
 }
 // sbListSnapshots 解析后给的是 {success,count,records,ts}，不是数组。以前这里
 // 直接 Array.isArray(rows) 判断 → 永远走空分支，state.raceBoard 从头到尾没被
@@ -8096,6 +8106,10 @@ function renderAdminRace() {
   html += '<button class="action-btn primary" style="width:100%;" onclick="adminRacePublish()">📣 ' + t('race_admin_publish') + '</button>';
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="adminRaceClose()">⛔ ' + t('race_admin_close') + '</button>';
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="adminRaceExport()">📥 ' + t('race_admin_export') + '</button>';
+  html += '<div style="font-size:12px;color:#888;margin-top:6px;line-height:1.5;">'
+    + (en ? 'One CSV, four tables: overall / per section / department ranking / department ranking by section.'
+          : '导出的 CSV 里有四张表：个人总榜 · 个人各板块 · 部门排名 · 部门排名（按板块）')
+    + '</div>';
   html += '<div id="raceAdminMsg" style="margin-top:10px;font-size:13px;color:#1a3a5c;"></div>';
   // 云端同步状态：按上次发布的结果常驻显示，避免又出现"管理端说发布了、
   // 学员端什么都没有"却没人察觉（2026-10-28 事故：写入被 RLS 拒绝）。
@@ -8167,6 +8181,12 @@ function adminRaceMsg(msg) {
   var el = document.getElementById('raceAdminMsg');
   if (el) el.textContent = msg;
 }
+// 管理端导出：一个 CSV 里放四张表，口径与学员端排行榜完全一致（都走
+// raceBoardRowsFrom / raceDeptAggRowsFrom，不再自己另写一套循环）。
+//   ① 个人总榜      本届每人一条（跨板块取最好那条）
+//   ② 个人各板块    本届每人每板块一条（同一人可有多行）
+//   ③ 部门排名      本届各部门答对合计（每人只算最好一条）
+//   ④ 部门排名·按板块 每个板块单独一张部门榜
 function adminRaceExport() {
   var c = raceConfOf();
   if (!c) { alert(t('race_no_conf')); return; }
@@ -8175,26 +8195,98 @@ function adminRaceExport() {
     // sbListSnapshots 返回 {records:[…]}，不是数组 —— 直接当数组遍历会永远导出 0 条。
     var rows = (typeof sbSnapshotRecordList === 'function') ? sbSnapshotRecordList(res) : [];
     if (!rows.length) { alert(t('race_admin_no_scores')); return; }
-    var out = [], i;
-    for (i = 0; i < rows.length; i++) {
-      var race = raceRecordOf(rows[i]);
-      if (!race) continue;
-      var e2 = race.byRound ? race.byRound[c.id] : null;
-      if (!e2) continue;
-      var raw = rows[i] || {};
-      var sn = raw.snap || {};
-      var nm = (typeof dashNamesOf === 'function') ? dashNamesOf(sn, race.name) : { cn: race.name || '', en: '' };
-      out.push({ name: race.name || '', cn: nm.cn, en: nm.en,
-        empNo: (typeof dashEmpNoOf === 'function') ? dashEmpNoOf(sn, raw.akey || raw.key || '') : '',
-        dept: race.dept || '', section: e2.section || 'all', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: new Date(e2.ts).toLocaleString('zh-CN') });
+    var rid = c.id;
+    var isEn = state.lang === 'en';
+    var all = raceBoardRowsFrom(rows, 'period', '', rid);
+    if (!all.length) { alert(t('race_admin_no_scores')); return; }
+
+    // CSV 单元格：文本一律加引号（部门名里可能有逗号），数字原样输出，Excel 才认得出数值。
+    function Q(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+    function N(v) { return (v == null || v === '') ? '' : v; }
+    function when(ts) { return ts ? new Date(ts).toLocaleString(isEn ? 'en-US' : 'zh-CN') : ''; }
+    // 准确率统一保留一位小数（60% / 66.7% 两种写法混在一起不好对账）
+    function pct(v) { return (Math.round((v || 0) * 10) / 10).toFixed(1) + '%'; }
+    // 名字拆中英文、工号兜底，都走数据中心同一套函数，避免导出和页面显示不一致。
+    function metaOf(r) {
+      var raw = r.raw || {}, sn = raw.snap || {};
+      var nm = (typeof dashNamesOf === 'function') ? dashNamesOf(sn, r.name) : { cn: r.name || '', en: '' };
+      return {
+        cn: nm.cn || '', en: nm.en || '',
+        emp: (typeof dashEmpNoOf === 'function') ? dashEmpNoOf(sn, raw.akey || raw.key || '') : (sn.emp || ''),
+        dept: isEn ? deptDisplayName(r.dept) : r.dept
+      };
     }
-    if (!out.length) { alert(t('race_admin_no_scores')); return; }
-    out.sort(function (a, b) { return (b.correct - a.correct) || (b.acc - a.acc); });
-    var csv = '\ufeff' + 'Rank,Name (CN),Name (EN),Employee ID,Division,Section,Correct,Answered,Accuracy,Time\n';
-    for (i = 0; i < out.length; i++) {
-      var r = out[i];
-      csv += [i + 1, '"' + String(r.cn).replace(/"/g, '""') + '"', '"' + String(r.en).replace(/"/g, '""') + '"', '"' + String(r.empNo).replace(/"/g, '""') + '"', '"' + String(r.dept).replace(/"/g, '""') + '"', '"' + String(raceSecName(r.section)).replace(/"/g, '""') + '"', r.correct, r.answered, r.acc + '%', r.ts].join(',') + '\n';
+    var lines = [];
+    function line(arr) { lines.push(arr.join(',')); }
+    function blank() { lines.push(''); }
+    function title(txt) { lines.push(Q(txt)); }
+
+    line([Q(isEn ? 'Round' : '赛事'), Q(c.title || rid), Q(isEn ? 'Round ID' : '赛事编号'), Q(rid)]);
+    line([Q(isEn ? 'Exported at' : '导出时间'), Q(new Date().toLocaleString(isEn ? 'en-US' : 'zh-CN'))]);
+    line([Q(isEn ? 'How to read' : '口径说明'),
+      Q(isEn
+        ? 'Overall = one best attempt per person this round; Per-section = one best attempt per person per section; Department = sum of correct answers of all participants this round (one best attempt per person)'
+        : '个人总榜=本届每人只取最好的一条；个人各板块=本届每人在每个板块各取最好的一条；部门排名=本届该部门所有参赛员工答对题数相加（每人只算最好的一条）')]);
+    blank();
+
+    // ① 个人总榜
+    title(isEn ? '1) Overall (one row per person)' : '① 个人总榜（每人一条）');
+    line([Q(isEn ? 'Rank' : '排名'), Q(isEn ? 'Name (CN)' : '中文名'), Q(isEn ? 'Name (EN)' : '英文名'),
+      Q(isEn ? 'Employee ID' : '工号'), Q(isEn ? 'Division' : '部门'), Q(isEn ? 'Quiz section' : '答题板块'),
+      Q(isEn ? 'Correct' : '答对'), Q(isEn ? 'Answered' : '已答'), Q(isEn ? 'Accuracy' : '准确率'), Q(isEn ? 'Time' : '时间')]);
+    for (var i = 0; i < all.length; i++) {
+      var r0 = all[i], m0 = metaOf(r0);
+      line([N(i + 1), Q(m0.cn), Q(m0.en), Q(m0.emp), Q(m0.dept), Q(raceSecName(r0.section)),
+        N(r0.correct), N(r0.answered), Q(pct(r0.acc)), Q(when(r0.ts))]);
     }
+    blank();
+
+    // ② 个人各板块（逐个板块算，板块内名次才准）
+    title(isEn ? '2) Per section (one row per person per section)' : '② 个人各板块（每人每板块一条）');
+    line([Q(isEn ? 'Quiz section' : '答题板块'), Q(isEn ? 'Rank in section' : '板块内排名'),
+      Q(isEn ? 'Name (CN)' : '中文名'), Q(isEn ? 'Name (EN)' : '英文名'), Q(isEn ? 'Employee ID' : '工号'),
+      Q(isEn ? 'Division' : '部门'), Q(isEn ? 'Correct' : '答对'), Q(isEn ? 'Answered' : '已答'),
+      Q(isEn ? 'Accuracy' : '准确率'), Q(isEn ? 'Time' : '时间')]);
+    for (var s = 0; s < RACE_SECTIONS.length; s++) {
+      var sk = RACE_SECTIONS[s].key;
+      var srows = raceBoardRowsFrom(rows, 'period', sk, rid);
+      for (var j = 0; j < srows.length; j++) {
+        var r1 = srows[j], m1 = metaOf(r1);
+        line([Q(raceSecName(sk)), N(j + 1), Q(m1.cn), Q(m1.en), Q(m1.emp), Q(m1.dept),
+          N(r1.correct), N(r1.answered), Q(pct(r1.acc)), Q(when(r1.ts))]);
+      }
+    }
+    blank();
+
+    // ③ 部门排名（本届 · 不分板块）
+    title(isEn ? '3) Department ranking (this round)' : '③ 部门排名（本届 · 不分板块）');
+    line([Q(isEn ? 'Rank' : '排名'), Q(isEn ? 'Division' : '部门'), Q(isEn ? 'Participants' : '参赛人数'),
+      Q(isEn ? 'Total correct' : '答对合计'), Q(isEn ? 'Total answered' : '答题合计'),
+      Q(isEn ? 'Accuracy' : '准确率'), Q(isEn ? 'Avg correct' : '人均答对')]);
+    var dAll = raceDeptAggRowsFrom(rows, '', rid);
+    for (var d = 0; d < dAll.length; d++) {
+      var dp = dAll[d];
+      var per = dp.n ? Math.round(dp.correct / dp.n * 10) / 10 : 0;
+      line([N(d + 1), Q(isEn ? deptDisplayName(dp.dept) : dp.dept), N(dp.n), N(dp.correct), N(dp.answered), Q(pct(dp.acc)), N(per)]);
+    }
+    blank();
+
+    // ④ 部门排名 · 按板块（该板块没人参赛的部门不出现）
+    title(isEn ? '4) Department ranking by section' : '④ 部门排名 · 按板块');
+    line([Q(isEn ? 'Quiz section' : '答题板块'), Q(isEn ? 'Rank in section' : '板块内排名'), Q(isEn ? 'Division' : '部门'),
+      Q(isEn ? 'Participants' : '参赛人数'), Q(isEn ? 'Total correct' : '答对合计'),
+      Q(isEn ? 'Total answered' : '答题合计'), Q(isEn ? 'Accuracy' : '准确率'), Q(isEn ? 'Avg correct' : '人均答对')]);
+    for (var s2 = 0; s2 < RACE_SECTIONS.length; s2++) {
+      var sk2 = RACE_SECTIONS[s2].key;
+      var ds = raceDeptAggRowsFrom(rows, sk2, rid);
+      for (var k = 0; k < ds.length; k++) {
+        var dd = ds[k], per2 = dd.n ? Math.round(dd.correct / dd.n * 10) / 10 : 0;
+        line([Q(raceSecName(sk2)), N(k + 1), Q(isEn ? deptDisplayName(dd.dept) : dd.dept), N(dd.n),
+          N(dd.correct), N(dd.answered), Q(pct(dd.acc)), N(per2)]);
+      }
+    }
+
+    var csv = '\ufeff' + lines.join('\r\n') + '\r\n';
     var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
