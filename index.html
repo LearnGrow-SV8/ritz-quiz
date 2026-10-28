@@ -136,17 +136,15 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 @keyframes timerBlink { 50% { opacity: 0.3; } }
 .exam-score { font-size:14px; color:var(--text-light); }
 
-/* ===== 答题赛倒计时：会流动、随时间缩短的时间条 ===== */
-.race-timer-track { position:relative; height:10px; border-radius:6px; background:var(--primary-soft); border:1px solid var(--border); overflow:hidden; margin:-8px 0 14px; }
-.race-timer-fill { position:relative; height:100%; width:100%; border-radius:6px; background:var(--primary-light); transition:width .25s linear, background-color .3s linear; }
-/* 斜纹持续平移 = 时间"流动"的视觉 */
-.race-timer-fill::after { content:''; position:absolute; inset:0; border-radius:6px;
-  background-image:repeating-linear-gradient(115deg, rgba(255,255,255,.45) 0 7px, rgba(255,255,255,0) 7px 15px);
-  animation: raceTimerFlow .55s linear infinite; }
-@keyframes raceTimerFlow { from { background-position:0 0; } to { background-position:30px 0; } }
+/* ===== 答题赛倒计时：贴在「⏱ 60s ｜ 已答 N」矩形下沿的色块，随时间从满格缩到空 ===== */
+.exam-info.race-timer-box { display:block; padding:12px 16px 0; overflow:hidden; }
+.race-timer-line { display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; }
+/* 色块和矩形同宽（负 margin 抵消卡片内边距），视觉上就是矩形底部的一条 */
+.race-timer-track { position:relative; height:9px; margin:0 -16px; background:var(--primary-soft); overflow:hidden; }
+.race-timer-fill { position:relative; height:100%; width:100%; background:var(--primary-light); transition:width .25s linear, background-color .3s linear; }
 .race-timer-fill.warn { background:var(--warning); }
 .race-timer-fill.urgent { background:var(--danger); }
-.race-timer-track.urgent { border-color:var(--danger); }
+.race-timer-track.urgent { background:#fdeaea; }
 
 .result-card { text-align:center; padding:30px 20px; }
 .result-card .score-circle { width:120px; height:120px; border-radius:50%; margin:0 auto 16px; display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:700; border:4px solid; }
@@ -4371,6 +4369,8 @@ var I18N = {
   race_start: {cn:'开始答题', en:'Start'},
   race_pick_section: {cn:'选择板块', en:'Choose a section'},
   race_pool_size: {cn:'题目池', en:'Question pool'},
+  race_spare_hint: {cn:'本模块答完后自动补充通用知识', en:'General knowledge added after these'},
+  race_pool_spare: {cn:'本模块 {n} 题 · 答完后自动补充通用知识 {m} 题', en:'{n} in this section · {m} general added after'},
   race_limit: {cn:'答题时长', en:'Duration'},
   race_no_conf: {cn:'当前没有进行中的答题赛，请联系培训部', en:'No active quiz right now. Please contact Learning.'},
   race_pending: {cn:'答题赛尚未开始', en:'The quiz has not started yet'},
@@ -6911,21 +6911,35 @@ function raceQuestionsOf(key) {
   }
   return out;
 }
-// 题池：本板块题目 +（不足时）通用知识补齐，全程去重 → 一期之内绝不重复出题。
+// 题池：**只放本板块的题目**。通用知识不再一开始就掺进来（2026-10-28 改），
+// 改成挂在 state.race.spare 上做备胎，等本板块题目真的答完了、限时还没到才补。
 function racePoolOf(key) {
   var pool = raceQuestionsOf(key);
-  if (key !== 'all' && key !== 'general' && pool.length < RACE_MIN_POOL) {
-    var have = {}, k;
-    for (k = 0; k < pool.length; k++) have[pool[k].id] = 1;
-    var filler = [];
-    var gen = raceQuestionsOf('general');
-    for (k = 0; k < gen.length; k++) if (!have[gen[k].id]) filler.push(gen[k]);
-    filler = shuffleArray(filler);
-    var need = RACE_MIN_POOL - pool.length;
-    for (k = 0; k < need && k < filler.length; k++) pool.push(filler[k]);
-  }
-  var prepared = prepareQuestions(pool);
-  return shuffleArray(prepared);
+  return shuffleArray(prepareQuestions(pool));
+}
+// 备胎池：通用知识里剔除本板块已有的题目。all / general 本身就是全量，不需要备胎。
+function raceSparePoolOf(key, main) {
+  if (key === 'all' || key === 'general') return [];
+  var have = {}, k;
+  for (k = 0; k < (main || []).length; k++) if (main[k] && main[k].id) have[main[k].id] = 1;
+  var gen = raceQuestionsOf('general'), out = [];
+  for (k = 0; k < gen.length; k++) if (gen[k] && !have[gen[k].id]) { have[gen[k].id] = 1; out.push(gen[k]); }
+  return shuffleArray(prepareQuestions(out));
+}
+// 本板块答完后再补多少道。分批次补，而不是一次全塞进来。
+var RACE_SPARE_BATCH = 20;
+function raceTakeSpare(r) {
+  if (!r || !r.spare || !r.spare.length) return [];
+  return r.spare.splice(0, Math.min(RACE_SPARE_BATCH, r.spare.length));
+}
+function raceSpareSizeOf(key) {
+  if (key === 'all' || key === 'general') return 0;
+  var have = {}, k;
+  var main = raceQuestionsOf(key);
+  for (k = 0; k < main.length; k++) have[main[k].id] = 1;
+  var gen = raceQuestionsOf('general'), n = 0;
+  for (k = 0; k < gen.length; k++) if (gen[k] && !have[gen[k].id]) { have[gen[k].id] = 1; n++; }
+  return n;
 }
 
 // ===== 统一时间窗口默认值（2026-10-27） =====
@@ -7232,7 +7246,8 @@ function raceStart(sectionKey) {
   if (!raceAllowed(c, sec)) { alert(t('race_no_conf')); return; }
   var pool = racePoolOf(sec);
   if (!pool.length) { alert(t('no_questions')); return; }
-  state.race = { conf: c, section: sec, pool: pool, idx: 0, answers: [], cur: null, startTs: Date.now(), endReason: null, correct: 0, answered: 0 };
+  // 本板块题目优先；通用知识作为备胎，等本板块答完了还有时间再补进来
+  state.race = { conf: c, section: sec, pool: pool, spare: raceSparePoolOf(sec, pool), idx: 0, answers: [], cur: null, startTs: Date.now(), endReason: null, correct: 0, answered: 0 };
   clearRaceTimer();
   state.raceTimer = setInterval(raceTick, 250);
   navigate('racePlay');
@@ -7309,7 +7324,12 @@ function raceAdvance() {
   r.answers[r.idx] = { ans: (r.cur && r.cur.length) ? r.cur.slice() : [] };
   r.cur = null;
   r.idx++;
-  if (r.idx >= r.pool.length) { raceEnd('pool'); return; }
+  // 本板块题目答完了：限时还没到的话，从备胎池（通用知识）补一批进来继续答
+  if (r.idx >= r.pool.length) {
+    var add = raceTakeSpare(r);
+    if (add && add.length) r.pool = r.pool.concat(add);
+    else { raceEnd('pool'); return; }
+  }
   render();
 }
 function raceGrade(q, ans) {
@@ -7497,7 +7517,11 @@ function renderRaceHome() {
   }
   html += '⏱ ' + t('race_limit') + '：<b>' + (c.limitSec || 60) + ' ' + (state.lang === 'en' ? 'seconds' : '秒') + '</b><br>';
   if (c.startTime || c.endTime) html += '🗓 ' + t('race_window') + '：' + raceFmtWindow(c) + '<br>';
-  if (mode === 'admin') html += '📚 ' + t('race_pool_size') + '：' + racePoolOfSize(c.section || 'all') + ' ' + (state.lang === 'en' ? 'questions' : '题');
+  if (mode === 'admin') {
+    var _sz = racePoolOfSize(c.section || 'all'), _sp = raceSpareSizeOf(c.section || 'all');
+    html += '📚 ' + t('race_pool_size') + '：' + (_sp ? t('race_pool_spare').replace('{n}', _sz).replace('{m}', _sp)
+      : _sz + ' ' + (state.lang === 'en' ? 'questions' : '题'));
+  }
   html += '</div></div>';
   if (st === 'pending') html += '<div class="q-card" style="text-align:center;color:#a14a00;">' + t('race_pending') + '</div>';
   if (st === 'ended') html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_ended') + '</div>';
@@ -7517,7 +7541,8 @@ function renderRaceHome() {
         html += '<div style="font-size:20px;">' + raceSecIcon(sk) + '</div>';
         html += '<div style="flex:1;min-width:0;">';
         html += '<div style="font-size:14px;font-weight:600;">' + raceSecName(sk) + '</div>';
-        html += '<div style="font-size:12px;color:#888;">' + racePoolOfSize(sk) + ' ' + (state.lang === 'en' ? 'questions' : '题') + '</div>';
+        html += '<div style="font-size:12px;color:#888;">' + racePoolOfSize(sk) + ' ' + (state.lang === 'en' ? 'questions' : '题')
+          + (raceSpareSizeOf(sk) ? ' · ' + t('race_spare_hint') : '') + '</div>';
         html += '</div>';
         html += '<div style="font-size:13px;color:#1a3a5c;font-weight:600;">' + t('race_start') + ' ›</div>';
         html += '</div>';
@@ -7552,16 +7577,18 @@ function renderRacePlay() {
   var idx = r.idx;
   var html = renderAppHeader({ title: '⚡ ' + (r.conf.title || t('race_title')), subtitle: raceSecIcon(r.section || 'all') + ' ' + raceSecName(r.section || 'all'), showBack: true, showHome: false });
   html += '<div class="page">';
-  // 倒计时条：raceTick 每 250ms 只改 #raceTimer 这一个元素的文本，别的统计放旁边独立 span
-  html += '<div class="exam-info">';
+  // 倒计时：上排是「⏱ 60s ｜ 已答 N」，色块贴在这个矩形的下沿，
+  // 开局满格、随剩余时间连续缩短、归零即空。raceTick 每 250ms 只改宽度
+  // （配合 CSS transition 就是平滑缩短），切题重绘时按当前值重建，不会闪。
+  var pct0 = raceLeftPct(), lv0 = raceTimerLevel(pct0, raceLeftSec());
+  html += '<div class="exam-info race-timer-box">';
+  html += '<div class="race-timer-line">';
   html += '<span class="exam-timer" id="raceTimer">⏱ ' + raceLeftSec() + 's</span>';
   html += '<span class="exam-score">' + t('race_answered') + ' ' + idx + '</span>';
   html += '</div>';
-  // 时间条：开局满格，随剩余时间连续缩短，归零即空。
-  // raceTick 每 250ms 只改宽度（配合 CSS transition 就是平滑流动），切题重绘时按当前值重建。
-  var pct0 = raceLeftPct(), lv0 = raceTimerLevel(pct0, raceLeftSec());
   html += '<div class="race-timer-track' + (lv0 === 'urgent' ? ' urgent' : '') + '" id="raceTimerTrack">';
   html += '<div class="race-timer-fill' + (lv0 ? ' ' + lv0 : '') + '" id="raceTimerFill" style="width:' + pct0.toFixed(2) + '%;"></div>';
+  html += '</div>';
   html += '</div>';
   html += '<div class="q-card">';
   html += '<div class="q-header">';
