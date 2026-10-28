@@ -4467,7 +4467,10 @@ var I18N = {
   dash_race_score: {cn:'答题赛成绩', en:'Speed Quiz'},
   dash_exam_list: {cn:'考试记录', en:'Exam records'},
   dash_export: {cn:'导出 CSV（当前场次）', en:'Export CSV (current session)'},
+  dash_export_detail: {cn:'导出答题明细 CSV', en:'Export answer log CSV'},
   dash_export_empty: {cn:'当前场次没有可导出的记录。', en:'Nothing to export for this session.'},
+  dash_export_detail_empty: {cn:'选定时间范围内还没有答题记录。', en:'No answer records in the selected range.'},
+  dash_export_detail_hint: {cn:'按当前时间范围导出每一条答题记录（考试 / 练习 / 答题赛），含工号、中英文名、部门与板块。', en:'Exports every attempt in the selected range (exam / practice / speed quiz) with employee ID, CN+EN names, division and section.'},
   dash_race_loading: {cn:'正在拉取答题赛成绩…', en:'Loading Speed Quiz scores…'},
   dash_race_none: {cn:'本期还没有人参加答题赛。', en:'No one has joined this round yet.'},
   dash_best: {cn:'最好成绩', en:'Best'},
@@ -7933,14 +7936,19 @@ function adminRaceExport() {
       if (!race) continue;
       var e2 = race.byRound ? race.byRound[c.id] : null;
       if (!e2) continue;
-      out.push({ name: race.name || '', dept: race.dept || '', section: e2.section || 'all', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: new Date(e2.ts).toLocaleString('zh-CN') });
+      var raw = rows[i] || {};
+      var sn = raw.snap || {};
+      var nm = (typeof dashNamesOf === 'function') ? dashNamesOf(sn, race.name) : { cn: race.name || '', en: '' };
+      out.push({ name: race.name || '', cn: nm.cn, en: nm.en,
+        empNo: (typeof dashEmpNoOf === 'function') ? dashEmpNoOf(sn, raw.akey || raw.key || '') : '',
+        dept: race.dept || '', section: e2.section || 'all', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: new Date(e2.ts).toLocaleString('zh-CN') });
     }
     if (!out.length) { alert(t('race_admin_no_scores')); return; }
     out.sort(function (a, b) { return (b.correct - a.correct) || (b.acc - a.acc); });
-    var csv = '\ufeff' + 'Rank,Name,Division,Section,Correct,Answered,Accuracy,Time\n';
+    var csv = '\ufeff' + 'Rank,Name (CN),Name (EN),Employee ID,Division,Section,Correct,Answered,Accuracy,Time\n';
     for (i = 0; i < out.length; i++) {
       var r = out[i];
-      csv += [i + 1, '"' + String(r.name).replace(/"/g, '""') + '"', '"' + String(r.dept).replace(/"/g, '""') + '"', '"' + String(raceSecName(r.section)).replace(/"/g, '""') + '"', r.correct, r.answered, r.acc + '%', r.ts].join(',') + '\n';
+      csv += [i + 1, '"' + String(r.cn).replace(/"/g, '""') + '"', '"' + String(r.en).replace(/"/g, '""') + '"', '"' + String(r.empNo).replace(/"/g, '""') + '"', '"' + String(r.dept).replace(/"/g, '""') + '"', '"' + String(raceSecName(r.section)).replace(/"/g, '""') + '"', r.correct, r.answered, r.acc + '%', r.ts].join(',') + '\n';
     }
     var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     var a = document.createElement('a');
@@ -11182,8 +11190,8 @@ function buildReportCSV(rows, lang) {
     return m[r || ''] || r || (en ? 'Normal' : '正常');
   }
   var head = en
-    ? ['Time', 'Name', 'Employee ID', 'Division', 'Department', 'Type', 'Exam title', 'Paper', 'Score (pts)', 'Full (pts)', 'Pass line', 'Grading@submit', 'Result', 'Correct', 'Total', 'Percent', 'Unanswered', 'Duration (min)', 'End reason']
-    : ['时间', '姓名', '工号', '大部门', '小部门', '类型', '考试标题', '试卷', '得分', '满分', '及格分', '计分口径(提交时)', '结果', '正确数', '总题数', '正确率', '未答', '用时(分)', '结束原因'];
+    ? ['Time', 'Name (CN)', 'Name (EN)', 'Employee ID', 'Division', 'Department', 'Type', 'Exam title', 'Paper', 'Score (pts)', 'Full (pts)', 'Pass line', 'Grading@submit', 'Result', 'Correct', 'Total', 'Percent', 'Unanswered', 'Duration (min)', 'End reason']
+    : ['时间', '中文名', '英文名', '工号', '大部门', '小部门', '类型', '考试标题', '试卷', '得分', '满分', '及格分', '计分口径(提交时)', '结果', '正确数', '总题数', '正确率', '未答', '用时(分)', '结束原因'];
   var lines = [head.map(q).join(',')];
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i], ev = r.ev, s = r.snap;
@@ -11201,8 +11209,9 @@ function buildReportCSV(rows, lang) {
     var gSubmit = (typeof ev.ppq === 'number' ? (en ? 'ppq=' + ev.ppq : '每题=' + ev.ppq) : '') +
                   ',' + (typeof ev.passAt === 'number' ? (en ? 'pass=' + ev.passAt : '及格=' + ev.passAt) : '') +
                   (gMismatch ? (en ? ' (differs from current)' : '(与当前不同)') : '');
+    var nmR = (typeof dashNamesOf === 'function') ? dashNamesOf(s, s.name) : { cn: s.cn || s.name || '', en: s.en || '' };
     var line = [
-      fmtSyncTime(ev.ts), s.name || r.key.split('_')[0], s.emp || '',
+      fmtSyncTime(ev.ts), nmR.cn, nmR.en, s.emp || (typeof dashEmpNoOf === 'function' ? dashEmpNoOf(s, r.key) : ''),
       div, dept,
       ev.mode === 'formal' ? (en ? 'Formal' : '正式') : (en ? 'Practice' : '模拟'),
       ev.title || '', syncPaperLabel(ev.paper),
@@ -11344,10 +11353,12 @@ function dashActiveRows(from, to, topN) {
     var nDays = 0;
     for (var kk in days) if (days.hasOwnProperty(kk)) nDays++;
     if (!acts) continue;
+    var nmA = dashNamesOf(snap, snap.name);
     out.push({
       key: rec.key,
       name: snap.name || snap.cnName || rec.key,
-      empNo: snap.empNo || '',
+      cn: nmA.cn, en: nmA.en,
+      empNo: dashEmpNoOf(snap, rec.key),
       div: snap.div || '', dept: snap.dept || '',
       days: nDays, acts: acts,
       avg: sumN ? Math.round(sum / sumN) : 0,
@@ -11409,10 +11420,12 @@ function dashRaceRows(from, to, sec) {
       sumAcc += it.acc || 0; sumC += it.c || 0;
       if ((it.ts || 0) > last) last = it.ts || 0;
     }
+    var nmRace = dashNamesOf(snap, (rr && rr.name) || snap.name);
     out.push({
       key: rec.key,
       name: (rr && rr.name) || snap.name || snap.cnName || rec.key,
-      empNo: snap.empNo || '',
+      cn: nmRace.cn, en: nmRace.en,
+      empNo: dashEmpNoOf(snap, rec.key),
       div: snap.div || ((rr && rr.dept) || ''),
       dept: snap.dept || ((rr && rr.dept) || ''),
       times: items.length, best: best,
@@ -11574,8 +11587,10 @@ function dashStudentRows(paper, sessKey, opts) {
       var use = e || rr.best || null;
       if (!use) continue;
       var deptStr = rr.dept || '';
+      var nmR = dashNamesOf(snap, rr.name || name);
       out.push({
-        key: rec.key, name: rr.name || name || rec.key, empNo: empNo,
+        key: rec.key, name: rr.name || name || rec.key,
+        cn: nmR.cn, en: nmR.en, empNo: dashEmpNoOf(snap, rec.key),
         div: deptStr.split(' \u00b7 ')[0] || (snap.div || ''), dept: deptStr,
         n: 1, avgPercent: use.acc || 0, bestPercent: use.acc || 0,
         passN: 0, passTotal: 0, lastTs: use.ts || 0, race: use, exams: []
@@ -11601,8 +11616,10 @@ function dashStudentRows(paper, sessKey, opts) {
       if (g.passed) passN++;
       if ((exams[k].ts || 0) > last) last = exams[k].ts || 0;
     }
+    var nmS = dashNamesOf(snap, name);
     out.push({
-      key: rec.key, name: name || rec.key, empNo: empNo,
+      key: rec.key, name: name || rec.key,
+      cn: nmS.cn, en: nmS.en, empNo: dashEmpNoOf(snap, rec.key),
       div: snap.div || '', dept: snap.dept || '',
       n: exams.length, avgPercent: Math.round(sum / exams.length), bestPercent: bestP,
       passN: passN, passTotal: exams.length, lastTs: last, race: null, exams: exams
@@ -11648,29 +11665,177 @@ function dashDivLabel(div) {
   if (!div || div === '__none__') return t('dash_no_dept');
   return div;
 }
+// ---- 中英文名 / 工号 ----
+// 早期快照只有一个 name 字段（profileDisplayName 优先给英文名），没有独立的
+// cn / en。导出要分列给出中英文，这里按「是否含汉字」判断归属；
+// 判断不出来就留空 —— 绝不把英文名塞进中文名列，也绝不把中文名当成英文名。
+function dashHasCnChar(s) { return /[\u4e00-\u9fa5]/.test(String(s || '')); }
+function dashPickName(snap, wantCn) {
+  var s = snap || {};
+  if (wantCn && s.cn) return s.cn;
+  if (!wantCn && s.en) return s.en;
+  var n = String(s.name || '').trim();
+  if (!n) return '';
+  var parts = n.split('/');
+  for (var i = 0; i < parts.length; i++) {
+    var p = String(parts[i] || '').trim();
+    if (!p) continue;
+    if (dashHasCnChar(p) === !!wantCn) return p;
+  }
+  return '';
+}
+function dashNameCnOf(snap) { return dashPickName(snap, true); }
+function dashNameEnOf(snap) { return dashPickName(snap, false); }
+// 名字可能只存在于别处（答题赛记录里的 rr.name），一并考虑进去。
+function dashNamesOf(snap, fallback) {
+  var cn = dashPickName(snap, true), en = dashPickName(snap, false);
+  var fb = String(fallback || '').trim();
+  if (fb) {
+    if (!cn && dashHasCnChar(fb)) cn = fb;
+    else if (!en && !dashHasCnChar(fb)) en = fb;
+  }
+  return { cn: cn, en: en };
+}
+// ⚠️ 快照里的工号字段是 **emp**（不是 empNo）—— 以前各处写 snap.empNo 恒为空，
+// 导出的「工号」列一直是空的。统一走这里：emp → 从行键 e<工号> 兜底。
+function dashEmpNoOf(snap, key) {
+  var s = snap || {};
+  return String(s.emp || s.empNo || (typeof empOfKey === 'function' ? empOfKey(key) : '') || '');
+}
+
+// ---- 答题明细（一条记录一行） ----
+// 三种来源都收：正式考试 / 模拟练习（同为 exam 事件，靠 mode 区分）+
+// 答题赛流水（rr.log）。只受顶部「时间范围」约束，不看当前页签，
+// 所以一次导出就能拿到选定时间内的全部答题动作。
+function dashActivityRows(from, to) {
+  var recs = adminStudentRecords();
+  var out = [];
+  for (var i = 0; i < recs.length; i++) {
+    var rec = recs[i];
+    var snap = rec.snap || {};
+    var emp = dashEmpNoOf(snap, rec.key);
+    var cn = dashNameCnOf(snap), en = dashNameEnOf(snap);
+    var div = snap.div || '', dept = snap.dept || '';
+    var j, ev;
+    for (j = 0; j < (rec.exams || []).length; j++) {
+      ev = rec.exams[j];
+      if (!ev) continue;
+      var ts = ev.ts || 0;
+      if (from && ts < from) continue;
+      if (to && ts > to) continue;
+      var g = gradeExam(ev, null) || {};
+      var total = ev.total || 0, correct = ev.correct || 0;
+      out.push({
+        key: rec.key, ts: ts, kind: ev.mode === 'formal' ? 'formal' : 'practice',
+        title: ev.title || '', paper: ev.paper || '', sec: '',
+        correct: correct, total: total,
+        acc: total ? Math.round(correct / total * 100) : 0,
+        scoreAbs: g.scoreAbs, full: g.full, passed: !!g.passed,
+        dur: ev.dur || 0, reason: ev.reason || '',
+        empNo: emp, cn: cn, en: en, div: div, dept: dept
+      });
+    }
+    var rr = (adminState.dashRaceMap || {})[rec.key];
+    var items = dashRaceLogItems(rr, from, to, '');
+    for (j = 0; j < items.length; j++) {
+      var it = items[j];
+      out.push({
+        key: rec.key, ts: it.ts || 0, kind: 'race',
+        title: '', paper: '', sec: it.sec || 'all',
+        correct: it.c || 0, total: it.a || 0, acc: it.acc || 0,
+        scoreAbs: null, full: null, passed: null,
+        dur: 0, reason: '',
+        empNo: emp, cn: cn, en: en, div: div, dept: dept
+      });
+    }
+  }
+  out.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+  return out;
+}
+// Pure CSV builder for the answer log (one row per attempt).
+function dashBuildDetailCSV(rows, lang) {
+  var en = lang === 'en';
+  var NA = '\u2014';
+  function q(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+  // 表头/标签一律按 lang 参数硬编码，不读 state.lang —— 否则在中文界面下
+  // 选英文导出（或反过来）会串味。
+  function kindLabel(k) {
+    if (k === 'race') return en ? 'Speed quiz' : '答题赛';
+    if (k === 'formal') return en ? 'Formal exam' : '正式考试';
+    return en ? 'Practice' : '模拟练习';
+  }
+  function reasonLabel(r) {
+    var m = { '': NA, timeout: en ? 'Timeout' : '超时', switch: en ? 'Left early' : '提前退出' };
+    return m[r || ''] || r || NA;
+  }
+  var head = en
+    ? ['Time', 'Employee ID', 'Name (CN)', 'Name (EN)', 'Division', 'Department', 'Type', 'Section / Paper', 'Title', 'Correct', 'Questions', 'Accuracy %', 'Score (pts)', 'Full (pts)', 'Result', 'Duration (min)', 'End reason']
+    : ['\u65f6\u95f4', '\u5de5\u53f7', '\u4e2d\u6587\u540d', '\u82f1\u6587\u540d', '\u5927\u90e8\u95e8', '\u5c0f\u90e8\u95e8', '\u8bb0\u5f55\u7c7b\u578b', '\u677f\u5757 / \u8bd5\u5377', '\u6807\u9898', '\u7b54\u5bf9', '\u7b54\u9898\u6570', '\u6b63\u786e\u7387', '\u5f97\u5206', '\u6ee1\u5206', '\u7ed3\u679c', '\u7528\u65f6(\u5206)', '\u7ed3\u675f\u539f\u56e0'];
+  var lines = [head.map(q).join(',')];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var isRace = r.kind === 'race';
+    var sp = isRace ? raceSecName(r.sec) : syncPaperLabel(r.paper);
+    lines.push([
+      fmtSyncTime(r.ts), r.empNo, r.cn, r.en,
+      dashDivLabel(r.div), r.dept,
+      kindLabel(r.kind), sp, r.title || NA,
+      r.correct, r.total, (r.total ? r.acc + '%' : NA),
+      isRace ? NA : r.scoreAbs,
+      isRace ? NA : r.full,
+      isRace ? NA : (r.passed ? (en ? 'Passed' : '通过') : (en ? 'Failed' : '未通过')),
+      r.dur ? Math.round(r.dur / 60) : NA,
+      isRace ? NA : reasonLabel(r.reason)
+    ].map(q).join(','));
+  }
+  return lines.join('\r\n');
+}
+function adminDashExportDetailCSV() {
+  var en = state.lang === 'en';
+  var rb = dashRangeBounds(adminState.dashRange, adminState.dashFrom, adminState.dashTo);
+  var from = rb ? rb.from : 0, to = rb ? rb.to : 0;
+  var rows = dashActivityRows(from, to);
+  if (!rows.length) { alert(t('dash_export_detail_empty')); return; }
+  var csv = '\ufeff' + dashBuildDetailCSV(rows, state.lang);
+  try {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    var stamp = d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes());
+    var fname = (en ? 'data_center_answerlog_' : '\u6570\u636e\u4e2d\u5fc3_\u7b54\u9898\u660e\u7ec6_') + stamp + '.csv';
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = fname; a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { try { URL.revokeObjectURL(url); a.remove(); } catch (e) {} }, 500);
+  } catch (e) {
+    alert(en ? 'Export failed in this browser.' : '\u5f53\u524d\u6d4f\u89c8\u5668\u5bfc\u51fa\u5931\u8d25\u3002');
+  }
+}
 function dashBuildCSV(rows, lang, isRace) {
   var en = lang === 'en';
   function q(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
   var head, lines;
   if (isRace) {
     head = en
-      ? ['Division', 'Name', 'Employee ID', 'Section', 'Correct', 'Answered', 'Accuracy %', 'Time']
-      : ['大部门', '姓名', '工号', '板块', '答对', '答题数', '正确率', '时间'];
+      ? ['Division', 'Name (CN)', 'Name (EN)', 'Employee ID', 'Section', 'Correct', 'Answered', 'Accuracy %', 'Time']
+      : ['大部门', '中文名', '英文名', '工号', '板块', '答对', '答题数', '正确率', '时间'];
     lines = [head.map(q).join(',')];
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i], rc = r.race || {};
-      lines.push([dashDivLabel(r.div), r.name, r.empNo,
+      lines.push([dashDivLabel(r.div), r.cn || dashNameCnOf(r.snap), r.en || dashNameEnOf(r.snap), r.empNo,
         rc.section ? raceSecName(rc.section) : '', rc.correct, rc.answered, rc.acc,
         r.lastTs ? fmtSyncTime(r.lastTs) : ''].map(q).join(','));
     }
   } else {
     head = en
-      ? ['Division', 'Department', 'Name', 'Employee ID', 'Attempts', 'Avg correct %', 'Best %', 'Passed', 'Last activity']
-      : ['大部门', '小部门', '姓名', '工号', '参与次数', '平均正确率', '最好成绩', '及格次数', '最近活动'];
+      ? ['Division', 'Department', 'Name (CN)', 'Name (EN)', 'Employee ID', 'Attempts', 'Avg correct %', 'Best %', 'Passed', 'Last activity']
+      : ['大部门', '小部门', '中文名', '英文名', '工号', '参与次数', '平均正确率', '最好成绩', '及格次数', '最近活动'];
     lines = [head.map(q).join(',')];
     for (var j = 0; j < rows.length; j++) {
       var w = rows[j];
-      lines.push([dashDivLabel(w.div), w.dept, w.name, w.empNo, w.n, w.avgPercent,
+      lines.push([dashDivLabel(w.div), w.dept, w.cn || dashNameCnOf(w.snap), w.en || dashNameEnOf(w.snap),
+        w.empNo, w.n, w.avgPercent,
         w.bestPercent, w.passN + '/' + w.passTotal,
         w.lastTs ? fmtSyncTime(w.lastTs) : ''].map(q).join(','));
     }
@@ -11681,12 +11846,13 @@ function dashBuildActiveCSV(rows, lang) {
   var en = lang === 'en';
   function q(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
   var head = en
-    ? ['Rank', 'Name', 'Employee ID', 'Division', 'Department', 'Active days', 'Attempts', 'Avg correct %', 'Last activity']
-    : ['\u540d\u6b21', '\u59d3\u540d', '\u5de5\u53f7', '\u5927\u90e8\u95e8', '\u5c0f\u90e8\u95e8', '\u6d3b\u8dc3\u5929\u6570', '\u7b54\u9898\u6b21\u6570', '\u5e73\u5747\u6b63\u786e\u7387', '\u6700\u8fd1\u6d3b\u8dc3'];
+    ? ['Rank', 'Name (CN)', 'Name (EN)', 'Employee ID', 'Division', 'Department', 'Active days', 'Attempts', 'Avg correct %', 'Last activity']
+    : ['\u540d\u6b21', '\u4e2d\u6587\u540d', '\u82f1\u6587\u540d', '\u5de5\u53f7', '\u5927\u90e8\u95e8', '\u5c0f\u90e8\u95e8', '\u6d3b\u8dc3\u5929\u6570', '\u7b54\u9898\u6b21\u6570', '\u5e73\u5747\u6b63\u786e\u7387', '\u6700\u8fd1\u6d3b\u8dc3'];
   var lines = [head.map(q).join(',')];
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
-    lines.push([i + 1, r.name, r.empNo, dashDivLabel(r.div), r.dept, r.days, r.acts, r.avg,
+    lines.push([i + 1, r.cn || dashNameCnOf(r.snap), r.en || dashNameEnOf(r.snap), r.empNo,
+      dashDivLabel(r.div), r.dept, r.days, r.acts, r.avg,
       r.lastTs ? fmtSyncTime(r.lastTs) : ''].map(q).join(','));
   }
   return lines.join('\r\n');
@@ -11695,12 +11861,13 @@ function dashBuildRaceCSV(rows, lang) {
   var en = lang === 'en';
   function q(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
   var head = en
-    ? ['Name', 'Employee ID', 'Division', 'Department', 'Section', 'Runs', 'Best correct', 'Avg correct', 'Accuracy %', 'Last run']
-    : ['\u59d3\u540d', '\u5de5\u53f7', '\u5927\u90e8\u95e8', '\u5c0f\u90e8\u95e8', '\u677f\u5757', '\u6311\u6218\u6b21\u6570', '\u6700\u4f73\u7b54\u5bf9', '\u5e73\u5747\u7b54\u5bf9', '\u5e73\u5747\u6b63\u786e\u7387', '\u6700\u8fd1\u4e00\u6b21'];
+    ? ['Name (CN)', 'Name (EN)', 'Employee ID', 'Division', 'Department', 'Section', 'Runs', 'Best correct', 'Avg correct', 'Accuracy %', 'Last run']
+    : ['\u4e2d\u6587\u540d', '\u82f1\u6587\u540d', '\u5de5\u53f7', '\u5927\u90e8\u95e8', '\u5c0f\u90e8\u95e8', '\u677f\u5757', '\u6311\u6218\u6b21\u6570', '\u6700\u4f73\u7b54\u5bf9', '\u5e73\u5747\u7b54\u5bf9', '\u5e73\u5747\u6b63\u786e\u7387', '\u6700\u8fd1\u4e00\u6b21'];
   var lines = [head.map(q).join(',')];
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
-    lines.push([r.name, r.empNo, dashDivLabel(r.div), r.dept, raceSecName(r.sec),
+    lines.push([r.cn || dashNameCnOf(r.snap), r.en || dashNameEnOf(r.snap), r.empNo,
+      dashDivLabel(r.div), r.dept, raceSecName(r.sec),
       r.times, r.best, r.avgC, r.avgAcc, r.lastTs ? fmtSyncTime(r.lastTs) : ''].map(q).join(','));
   }
   return lines.join('\r\n');
@@ -11784,7 +11951,11 @@ function renderAdminDash() {
   else if (tab === 'exam') html += dashExamHtml(from, to, en);
   else html += dashRaceHtml(from, to, en);
 
-  html += '<button class="admin-export-btn" onclick="adminDashExportCSV()">\u2b07\ufe0f ' + t('dash_export') + '</button>';
+  html += '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">';
+  html += '<button class="admin-export-btn" style="flex:1 1 160px;width:auto;" onclick="adminDashExportCSV()">\u2b07\ufe0f ' + t('dash_export') + '</button>';
+  html += '<button class="admin-export-btn" style="flex:1 1 160px;width:auto;" onclick="adminDashExportDetailCSV()">\u2b07\ufe0f ' + t('dash_export_detail') + '</button>';
+  html += '</div>';
+  html += '<div style="font-size:11px;color:#999;line-height:1.5;margin:6px 0 2px;">' + t('dash_export_detail_hint') + '</div>';
   if (adminState.dashDrawer) html += dashDrawerHtml();
   html += '</div>';
   return html;
