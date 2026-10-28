@@ -4392,7 +4392,9 @@ var I18N = {
   race_board_best: {cn:'历史最佳榜', en:'All-time best'},
   race_board_hint_period: {cn:'本届赛事成绩 · 全酒店所有人一起排名；同一个人只取最好的一次（可以是他做得最好的那个板块）', en:'Current round · everyone in the hotel; one best attempt per person (whichever section they did best in)'},
   race_board_hint_dept: {cn:'本届赛事成绩 · 按部门把参赛员工的答对题数加起来排名，再比准确率（每人只算最好的一次）', en:'Current round · departments ranked by total correct answers, then accuracy (one best attempt per person)'},
-  race_board_hint_best: {cn:'历届个人最好成绩 · 全酒店所有人，发布新一届也不会清空', en:'Personal best across all rounds · everyone, never reset'},
+  race_board_hint_best: {cn:'历届个人最好成绩 · 全酒店所有人，发布新一届也不会清空；点上面的板块可看该板块的历史最佳', en:'All-time personal best · everyone, never reset; pick a section above to see that section\u2019s all-time best'},
+  race_board_best_mix_hint: {cn:'每人只显示他在各板块里最好的一条；想看某个板块的历史最佳，点上面的板块', en:'One best entry per person across sections — pick a section above for its all-time best'},
+  race_board_best_sec_hint: {cn:'该板块的历届个人最佳；同一个人在其他板块的最佳成绩会出现在对应的板块榜里', en:'All-time best in this section; the same person can also appear on other sections\u2019 boards'},
   race_board_hint_noconf: {cn:'（本机还没同步到赛事，本榜可能为空）', en:'(No round synced on this device, this board may be empty)'},
   race_board_empty: {cn:'还没有人提交成绩', en:'No scores submitted yet'},
   race_dept_people: {cn:'人参赛', en:'people'},
@@ -7184,6 +7186,17 @@ function raceFmtWindow(c) {
   return a || b || '';
 }
 
+// 成绩条目比较：a 是否比 b 更好（b 为空 → a 更好）。口径与排行榜排序一致：
+// 先比答对题数，再比准确率；完全打平就保留原来的那条（先到先得，不来回抖动）。
+function raceEntryBetter(a, b) {
+  if (!a || typeof a !== 'object') return false;
+  if (!b) return true;
+  var ac = a.correct || 0, bc = b.correct || 0;
+  if (ac !== bc) return ac > bc;
+  var aa = a.acc || 0, ba = b.acc || 0;
+  if (aa !== ba) return aa > ba;
+  return false;
+}
 // ---- 本地成绩记录（会随快照上传） ----
 function raceLocalRecord() {
   var o = null;
@@ -7191,6 +7204,7 @@ function raceLocalRecord() {
   if (!o || typeof o !== 'object') o = {};
   if (!o.byRound || typeof o.byRound !== 'object') o.byRound = {};
   if (!o.byRoundSec || typeof o.byRoundSec !== 'object') o.byRoundSec = {};
+  if (!o.bestSec || typeof o.bestSec !== 'object') o.bestSec = {};
   // 老记录只有 byRound（本届那一整条，不分工板块）—— 按它的板块回填一份到
   // byRoundSec，免得升级后以前的成绩突然从板块榜里消失。
   for (var rid in o.byRound) {
@@ -7200,6 +7214,31 @@ function raceLocalRecord() {
     if (!m0 || typeof m0 !== 'object') m0 = o.byRoundSec[rid] = {};
     var s0 = e0.section || 'all';
     if (!m0[s0]) m0[s0] = e0;
+  }
+  // 历届各板块最佳（bestSec）同样从已有数据回填：把各届各板块的最佳汇总一遍，
+  // 再加老的、只有一条的 best。这样升级后「历史最佳榜 + 某个板块」立刻有数据，
+  // 老学员不用重新答一遍题。
+  for (var rid2 in o.byRoundSec) {
+    var m2 = o.byRoundSec[rid2];
+    if (!m2 || typeof m2 !== 'object') continue;
+    for (var sk2 in m2) {
+      var e2 = m2[sk2];
+      if (!e2 || typeof e2 !== 'object') continue;
+      var k2 = e2.section || sk2 || 'all';
+      if (raceEntryBetter(e2, o.bestSec[k2])) o.bestSec[k2] = e2;
+    }
+  }
+  if (o.best && o.best.section && raceEntryBetter(o.best, o.bestSec[o.best.section])) {
+    o.bestSec[o.best.section] = o.best;
+  }
+  // 老 best 没记板块（最初版本只存了分数）——从 bestSec 里挑最好那条补上，
+  // 否则「历史最佳榜·全部」那行会一直显示成「全部板块」。
+  if (o.best && !o.best.section) {
+    var pick0 = null, pickSec = '';
+    for (var sk3 in o.bestSec) {
+      if (raceEntryBetter(o.bestSec[sk3], pick0)) { pick0 = o.bestSec[sk3]; pickSec = sk3; }
+    }
+    if (pick0) o.best.section = pick0.section || pickSec;
   }
   if (!Array.isArray(o.log)) o.log = [];
   return o;
@@ -7414,8 +7453,14 @@ function raceSubmitScore() {
   // 总榜：各板块最佳里的最佳
   var prev = rec.byRound[r.conf.id];
   if (!prev || entry.correct > prev.correct || (entry.correct === prev.correct && entry.acc > prev.acc)) rec.byRound[r.conf.id] = entry;
+  // 历史最佳：**每个板块各留一条**（bestSec）。同一个人历史上做过 A/B/C 三个板块，
+  // 就能分别出现在三张板块的历史最佳榜上；跨板块还是取最好那条（best）。
+  rec.bestSec = (rec.bestSec && typeof rec.bestSec === 'object') ? rec.bestSec : {};
+  if (raceEntryBetter(entry, rec.bestSec[entry.section])) {
+    rec.bestSec[entry.section] = { correct: entry.correct, answered: entry.answered, acc: entry.acc, ts: entry.ts, raceId: entry.raceId, section: entry.section };
+  }
   if (!rec.best || entry.correct > rec.best.correct || (entry.correct === rec.best.correct && entry.acc > rec.best.acc)) {
-    rec.best = { correct: entry.correct, answered: entry.answered, acc: entry.acc, ts: entry.ts, raceId: entry.raceId };
+    rec.best = { correct: entry.correct, answered: entry.answered, acc: entry.acc, ts: entry.ts, raceId: entry.raceId, section: entry.section };
   }
   // 挑战流水：每次交卷都记一条，供管理端按天 / 任意时间段统计。
   // 只保留最近 RACE_LOG_MAX 条，避免快照无限膨胀。
@@ -7456,7 +7501,9 @@ function raceRecordOf(it) {
   if (typeof rec === 'string') { try { rec = JSON.parse(rec); } catch (e) { return null; } }
   return (rec && rec.race) || null;
 }
-// 板块筛选：'' = 全看；否则只留该板块的成绩（学员自选板块后，跨板块直接比不太公平）
+// 板块筛选：挑中的板块直接去取"该板块自己的那条成绩"（本届看 byRoundSec，
+// 历史最佳看 bestSec），不再拿总最佳那条去过滤——否则做过三个板块的人
+// 只有成绩最好的那个板块能上板块榜。
 function raceSecOk(entry, filter) {
   if (!filter) return true;
   return ((entry && entry.section) || 'all') === filter;
@@ -7487,9 +7534,11 @@ function raceBoardRows(scope) {
     var it = { key: String((raw && (raw.akey || raw.key || raw.phone)) || ''), race: race };
     it.name = raceRowNameOf(raw, race);
     if (scope === 'best') {
-      if (!it.race.best) continue;
-      if (!raceSecOk(it.race.best, secFilter)) continue;
-      rows.push({ key: it.key, name: it.name, dept: it.race.dept || '', section: it.race.best.section || 'all', correct: it.race.best.correct, answered: it.race.best.answered || 0, acc: it.race.best.acc, ts: it.race.best.ts });
+      // 历史最佳：切了板块就看**该板块**的历届最佳（同一个人可以在多张板块榜上
+      // 各有一条成绩）；不切板块每人只出现一次，取他各板块里最好的那条。
+      var b = raceBestEntryOf(it.race, secFilter);
+      if (!b) continue;
+      rows.push({ key: it.key, name: it.name, dept: raceDeptOfRow(raw, it.race), section: b.section || secFilter || 'all', correct: b.correct, answered: b.answered || 0, acc: b.acc, ts: b.ts });
     } else {
       // 总榜 = 本届（可带板块筛选）。带筛选时取**该板块**的最佳成绩，
       // 所以某人做过 A/B/C 三个板块，就会分别出现在三张板块榜上。
@@ -7504,6 +7553,58 @@ function raceBoardRows(scope) {
     return (a.ts || 0) - (b.ts || 0);
   });
   return rows;
+}
+// 历史最佳：sec 非空 → **该板块**的历届最佳；sec 空 → 各板块最佳里最好的那条
+// （每人只出现一次，跟全酒店榜口径一致）。
+// 云端快照里的 race 可能是老版本写的（只有一条 best，没有 bestSec），所以逐级兜底：
+// bestSec → byRoundSec 里各届该板块的最好一条 → 更老的 byRound（带 section）
+// → 老的 best（要求板块对得上）。
+// 有了这层兜底，老学员不用重新答题，板块历史榜立刻就有他的成绩。
+function raceBestEntryOf(race, sec) {
+  if (!race) return null;
+  if (!sec) {
+    // 全部视图：把各板块最佳（bestSec）、各届各板块（byRoundSec）、更老的每届一条
+    // （byRound）和老的 best 全当候选，取最好的那条 —— 老记录一条不该漏。
+    var pick = race.best || null;
+    var all = race.bestSec;
+    if (all && typeof all === 'object') {
+      for (var s1 in all) { if (raceEntryBetter(all[s1], pick)) pick = all[s1]; }
+    }
+    var mA = race.byRoundSec;
+    if (mA && typeof mA === 'object') {
+      for (var ridA in mA) {
+        var mm = mA[ridA];
+        if (!mm || typeof mm !== 'object') continue;
+        for (var skA in mm) { if (raceEntryBetter(mm[skA], pick)) pick = mm[skA]; }
+      }
+    }
+    var rA = race.byRound;
+    if (rA && typeof rA === 'object') {
+      for (var ridB in rA) { if (raceEntryBetter(rA[ridB], pick)) pick = rA[ridB]; }
+    }
+    return pick;
+  }
+  var one = race.bestSec && race.bestSec[sec];
+  if (one) return one;
+  var m = race.byRoundSec, pick2 = null;
+  if (m && typeof m === 'object') {
+    for (var rid in m) {
+      var e = m[rid] && m[rid][sec];
+      if (e && raceEntryBetter(e, pick2)) pick2 = e;
+    }
+  }
+  if (pick2) return pick2;
+  // 更老的记录只有 byRound（每届一条、带 section）——按届挑该板块最好的那条。
+  var r0 = race.byRound, pick3 = null;
+  if (r0 && typeof r0 === 'object') {
+    for (var rid3 in r0) {
+      var e3 = r0[rid3];
+      if (e3 && ((e3.section || 'all') === sec) && raceEntryBetter(e3, pick3)) pick3 = e3;
+    }
+  }
+  if (pick3) return pick3;
+  var ob = race.best;
+  return (ob && ((ob.section || 'all') === sec)) ? ob : null;
 }
 // 某人某届的成绩：sec 为空 → 本届总最佳（byRound，各板块里最好的那条）；
 // sec 非空 → 该板块的最佳（byRoundSec[rid][sec]，老数据回退到 byRound 那条）。
@@ -7848,9 +7949,9 @@ function renderRaceBoard() {
   html += '</div>';
   html += '<div style="font-size:12px;color:#888;margin:2px 0 10px;">'
     + (sec ? (raceSecIcon(sec) + ' ' + escapeHtml(raceSecName(sec)) + ' \u00b7 '
-              + t(tab === 'dept' ? 'race_board_dept_sec_hint' : 'race_board_sec_hint'))
+              + t(tab === 'dept' ? 'race_board_dept_sec_hint' : (tab === 'best' ? 'race_board_best_sec_hint' : 'race_board_sec_hint')))
            : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 '
-              + t(tab === 'dept' ? 'race_board_dept_mix_hint' : 'race_board_mix_hint')))
+              + t(tab === 'dept' ? 'race_board_dept_mix_hint' : (tab === 'best' ? 'race_board_best_mix_hint' : 'race_board_mix_hint'))))
     + '</div>';
   var isDeptTab = tab === 'dept';
   var rows = isDeptTab ? raceDeptAggRows(sec) : raceBoardRows(tab);
