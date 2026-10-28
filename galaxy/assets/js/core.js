@@ -134,7 +134,26 @@ var GG = (function () {
       anonNote: '匿名备注', showName: '显示工号与姓名',
       audience: '适合人群', audEmp: '员工本人', audFam: '员工携亲友', audGuest: '丽思卡尔顿住店客人',
       audBiz: '商务宴请', audTeam: '团队建设', audSolo: '独自一人',
-      tutorial: '使用说明', backMap: '返回地图', saved_ok: '已保存并同步'
+      tutorial: '使用说明', backMap: '返回地图', saved_ok: '已保存并同步',
+      points: '积分', myPts: '我的积分', pointBoard: '推荐达人榜', pointMaster: '推荐达人',
+      ptsRule: '积分规则', ptsHint: '录入越完整，积分越高；推荐被大家认可还会持续加分',
+      mustTry: '必点 / 必看', mustTryAdd: '＋ 添加一条', mustTryPh: '例如：招牌牛肉丸 / 周三晚有驻唱',
+      mustTryEmpty: '还没有人补充必点项目', helper: '补充这家店',
+      helperTip: '给别人的店补照片、补必点项，同样可以拿积分',
+      photo: '照片', photoEnv: '环境照', photoDish: '品类照', photoOther: '其它',
+      photoAddEnv: '＋ 环境照', photoAddDish: '＋ 品类照', photoEmpty: '还没有人上传照片',
+      photoFull: '照片已达上限', pickTip2: '在下方地图上点一下，红点就是店铺位置',
+      locTitle: '店铺位置', locSearchTip: '输入店名自动带出地址和坐标',
+      locNone: '尚未选择位置', locOk: '位置已确定', locCenter: '用地图中心点',
+      locSkip: '暂不选，先提交', locSkipTip: '可以先提交，系统会按所选区域生成一个待校准位置，管理员审核时再微调',
+      locApproxTag: '坐标待校准',
+      complete: '信息完整度', estimate: '本条预计', ptsUnit: '分', ptsDetail: '积分明细',
+      ptsEarn: '本次可得', ptsBase: '提交基础分', ptsField: '资料完整分', ptsPhoto: '照片分',
+      ptsStar: '必点分', ptsUp: '每个赞同', ptsDown: '每个踩', ptsFloor: '单店扣分封底',
+      ptsFloorTip: '某家店即使被踩到底，最多也只扣完这家店挣来的积分，不会牵连其它店赚到的分数',
+      ptsSave: '保存规则', ptsContrib: '我来补充', ptsEmpty: '还没有同事拿到积分',
+      ptsReviewed: '需审核通过后生效', storageFull: '本机存储空间不足，照片可能未保存，请尽快切到云端模式',
+      rankStar: '达人榜', leader: '领跑'
     },
     en: {
       app: 'Galaxy Guide', tagline: 'Galaxy Ritz-Carlton Shenzhen · Insider Map',
@@ -191,7 +210,26 @@ var GG = (function () {
       anonNote: 'Anonymous notes', showName: 'Show employee no. and name',
       audience: 'Best for', audEmp: 'Colleagues', audFam: 'Colleagues + family', audGuest: 'In-house guests',
       audBiz: 'Business dining', audTeam: 'Team building', audSolo: 'Solo',
-      tutorial: 'How to use', backMap: 'Back to map', saved_ok: 'Saved & synced'
+      tutorial: 'How to use', backMap: 'Back to map', saved_ok: 'Saved & synced',
+      points: 'Points', myPts: 'My points', pointBoard: 'Top contributors', pointMaster: 'Recommendation Star',
+      ptsRule: 'Points rules', ptsHint: 'The more complete your entry, the more points — plus ongoing points as colleagues endorse it',
+      mustTry: 'Must try / must see', mustTryAdd: '＋ Add one', mustTryPh: 'e.g. signature beef balls / live band on Wednesdays',
+      mustTryEmpty: 'No must-try items yet', helper: 'Add to this place',
+      helperTip: 'Add photos or must-try items to someone else\'s place and earn points too',
+      photo: 'Photos', photoEnv: 'Venue', photoDish: 'Food & drinks', photoOther: 'Other',
+      photoAddEnv: '＋ Venue photo', photoAddDish: '＋ Food photo', photoEmpty: 'No photos yet',
+      photoFull: 'Photo limit reached', pickTip2: 'Tap anywhere on the map below — the red pin marks the venue',
+      locTitle: 'Location', locSearchTip: 'Type the venue name to pull in its address and coordinates',
+      locNone: 'No location picked yet', locOk: 'Location set', locCenter: 'Use map centre',
+      locSkip: 'Skip for now', locSkipTip: 'You can submit first — we will place it roughly in the chosen district for the admin to fine-tune',
+      locApproxTag: 'Approximate location',
+      complete: 'Profile completeness', estimate: 'Est. points', ptsUnit: 'pts', ptsDetail: 'Points breakdown',
+      ptsEarn: 'You will earn', ptsBase: 'Base for submitting', ptsField: 'Completeness', ptsPhoto: 'Photos',
+      ptsStar: 'Must-try items', ptsUp: 'Per agree', ptsDown: 'Per disagree', ptsFloor: 'Per-place floor',
+      ptsFloorTip: 'Even if a place bottoms out, it can only cancel the points earned from that same place — never your other points',
+      ptsSave: 'Save rules', ptsContrib: 'Add mine', ptsEmpty: 'No points earned yet',
+      ptsReviewed: 'Counts once approved', storageFull: 'Browser storage is full — photos may not be saved. Please switch to cloud mode',
+      rankStar: 'Contributors', leader: 'Leading'
     }
   };
 
@@ -214,6 +252,177 @@ var GG = (function () {
     return lang === 'en' ? (en || zh || '') : (zh || en || '');
   }
 
+  /* ---------- 图片压缩（上传前统一压到可接受体积） ---------- */
+  function compressImg(file, maxSide, q) {
+    maxSide = maxSide || 1000; q = q || 0.72;
+    return new Promise(function (res, rej) {
+      if (!file || !/^image\//.test(String(file.type || ''))) return rej(new Error('notimg'));
+      var fr = new FileReader();
+      fr.onerror = function () { rej(new Error('read')); };
+      fr.onload = function () {
+        var img = new Image();
+        img.onerror = function () { rej(new Error('decode')); };
+        img.onload = function () {
+          var w = img.width || 1, h = img.height || 1;
+          var sc = Math.min(1, maxSide / Math.max(w, h));
+          var cw = Math.max(1, Math.round(w * sc)), ch = Math.max(1, Math.round(h * sc));
+          var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+          var ctx = cv.getContext('2d');
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cw, ch);
+          ctx.drawImage(img, 0, 0, cw, ch);
+          try { res(cv.toDataURL('image/jpeg', q)); } catch (e) { rej(e); }
+        };
+        img.src = String(fr.result);
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+
+  /* ============ 积分规则 ============ */
+  function defaultPts() {
+    return {
+      base: 5,                 // 提交并通过审核：基础分
+      field: { addr: 1, hours: 1, phone: 1, price: 1, nameEn: 2, tags: 1, tips: 2, auds: 1, dist: 1 },
+      photoEach: 2, photoMax: 6,      // 自己上传照片（环境照/品类照）
+      starEach: 2, starMax: 5,        // 自己补充必点 / 必看
+      helperPhoto: 2, helperPhotoMax: 3,  // 给别人的店补照片
+      helperStar: 2, helperStarMax: 3,    // 给别人的店补必点项
+      helperNote: 1, helperNoteMax: 3,    // 在别人的店写有内容的备注
+      upEach: 2, downEach: 1,    // 每个赞同 +2；每个踩 −1（扣分比例刻意低于加分）
+      floorEnable: true          // 单店贡献封底为 0，不影响其它店铺赚到的积分
+    };
+  }
+  function ptsCfg(cfg) {
+    var d = defaultPts(), c = (cfg && cfg.pts) || {}, o = {}, k;
+    for (k in d) if (Object.prototype.hasOwnProperty.call(d, k)) o[k] = (c[k] != null ? c[k] : d[k]);
+    o.field = {};
+    for (k in d.field) if (Object.prototype.hasOwnProperty.call(d.field, k)) {
+      o.field[k] = ((c.field || {})[k] != null ? (c.field)[k] : d.field[k]);
+    }
+    return o;
+  }
+  function photosBy(p, emp) {
+    var e = normEmp(emp);
+    return ((p && p.photos) || []).filter(function (x) { return x && normEmp(x.by) === e; });
+  }
+  function starsBy(p, emp) {
+    var e = normEmp(emp);
+    return ((p && p.stars) || []).filter(function (x) { return x && normEmp(x.by) === e; });
+  }
+
+  /* 单条推荐【审核通过后】推荐人能拿多少分（含完整度、照片、必点） */
+  function draftPts(p, cfg, nPhoto, nStar) {
+    var R = ptsCfg(cfg), items = [], sum = 0;
+    function add(label, v) { if (v) { sum += v; items.push({ label: label, pts: v }); } }
+    add(t('ptsBase'), R.base);
+    if (p.address) add(t('addrL'), R.field.addr);
+    if (p.hours) add(t('hoursL'), R.field.hours);
+    if (p.phone) add(t('phoneL'), R.field.phone);
+    if (p.price) add(t('priceL'), R.field.price);
+    if (p.nameEn) add(t('enName'), R.field.nameEn);
+    if ((p.tags || []).length) add(t('tipsL') + ' · 标签', R.field.tags);
+    if (p.tips) add(t('tipsL'), R.field.tips);
+    if ((p.auds || []).length) add(t('audience'), R.field.auds);
+    if (p.dist) add(t('dist'), R.field.dist);
+    var np = Math.min(nPhoto != null ? nPhoto : photosBy(p, p.emp).length, R.photoMax);
+    if (np) add(t('photo') + ' × ' + np, np * R.photoEach);
+    var ns = Math.min(nStar != null ? nStar : starsBy(p, p.emp).length, R.starMax);
+    if (ns) add(t('mustTry') + ' × ' + ns, ns * R.starEach);
+    return { pts: sum, items: items };
+  }
+
+  /* 全量积分榜：返回 [{emp,name,dept,total,items:[{placeId,name,pts,raw,clamped,items}]}] */
+  function pointsBoard(places, votes, cfg) {
+    var R = ptsCfg(cfg), acc = {}, noteUsed = {};
+    function forEmp(emp) {
+      var e = normEmp(emp);
+      if (!e) return null;
+      if (!acc[e]) acc[e] = { emp: e, total: 0, items: [] };
+      return acc[e];
+    }
+    var pmap = {};
+    (places || []).forEach(function (p) { if (p) pmap[p.id] = p; });
+
+    (places || []).forEach(function (p) {
+      if (!p || p.status !== 'approved') return;
+      var author = normEmp(p.emp);
+      var owner = photosBy(p, author).length, ostat = starsBy(p, author).length;
+      if (author) {
+        // 推荐人自己的投票不计入他本人的认可积分（自己给自己点赞不算“被认可”）
+        var up = 0, down = 0;
+        (votes || []).forEach(function (v) {
+          if (!v || v.placeId !== p.id) return;
+          if (author && normEmp(v.emp) === author) return;
+          if (v.v > 0) up++; else if (v.v < 0) down++;
+        });
+        var g = { up: up, down: down };
+        var items = [], raw = 0;
+        function add(label, v) { raw += v; if (v) items.push({ label: label, pts: v }); }
+        add(t('ptsBase'), R.base);
+        if (p.address) add(t('addrL'), R.field.addr);
+        if (p.hours) add(t('hoursL'), R.field.hours);
+        if (p.phone) add(t('phoneL'), R.field.phone);
+        if (p.price) add(t('priceL'), R.field.price);
+        if (p.nameEn) add(t('enName'), R.field.nameEn);
+        if ((p.tags || []).length) add(t('name') + ' · 标签', R.field.tags);
+        if (p.tips) add(t('tipsL'), R.field.tips);
+        if ((p.auds || []).length) add(t('audience'), R.field.auds);
+        if (p.dist) add(t('dist'), R.field.dist);
+        var np = Math.min(owner, R.photoMax);
+        if (np) add(t('photo') + ' × ' + np, np * R.photoEach);
+        var ns = Math.min(ostat, R.starMax);
+        if (ns) add(t('mustTry') + ' × ' + ns, ns * R.starEach);
+        if (g.up) add('👍 ' + t('agree') + ' × ' + g.up, g.up * R.upEach);
+        if (g.down) add('👎 ' + t('disagree') + ' × ' + g.down, -(g.down * R.downEach));
+        var got = R.floorEnable ? Math.max(0, raw) : raw;
+        var a = forEmp(author);
+        a.total += got;
+        a.items.push({ placeId: p.id, name: p.nameZh || p.nameEn || '', raw: raw, pts: got, clamped: got !== raw, items: items });
+      }
+      // 补充贡献：给别人的店补照片 / 必点项 / 写备注
+      var helpers = {};
+      function bag(emp) {
+        var e = normEmp(emp);
+        if (!helpers[e]) helpers[e] = { photo: 0, star: 0 };
+        return helpers[e];
+      }
+      (p.photos || []).forEach(function (x) { if (x && normEmp(x.by) !== author) bag(x.by).photo++; });
+      (p.stars || []).forEach(function (x) { if (x && normEmp(x.by) !== author) bag(x.by).star++; });
+      Object.keys(helpers).forEach(function (emp) {
+        var h = helpers[emp], items = [], got = 0;
+        var np = Math.min(h.photo, R.helperPhotoMax);
+        if (np) { var v = np * R.helperPhoto; got += v; items.push({ label: t('photo') + ' × ' + np, pts: v }); }
+        var ns = Math.min(h.star, R.helperStarMax);
+        if (ns) { var v2 = ns * R.helperStar; got += v2; items.push({ label: t('mustTry') + ' × ' + ns, pts: v2 }); }
+        if (!got) return;
+        var a = forEmp(emp);
+        a.total += got;
+        a.items.push({ placeId: p.id, name: p.nameZh || p.nameEn || '', raw: got, pts: got, helper: true, items: items });
+      });
+    });
+
+    // 在别人店里写有内容的备注
+    (votes || []).forEach(function (v) {
+      if (!v || !v.note || String(v.note).length < 6) return;
+      var p = pmap[v.placeId];
+      if (!p || p.status !== 'approved') return;
+      if (normEmp(v.emp) === normEmp(p.emp)) return;
+      var e = normEmp(v.emp);
+      noteUsed[e] = (noteUsed[e] || 0) + 1;
+      if (noteUsed[e] > R.helperNoteMax) return;
+      var a = forEmp(e);
+      a.total += R.helperNote;
+      a.items.push({ placeId: p.id, name: p.nameZh || p.nameEn || '', pts: R.helperNote, raw: R.helperNote, helper: true, items: [{ label: '💬 ' + t('notes'), pts: R.helperNote }] });
+    });
+
+    return Object.keys(acc).map(function (k) { return acc[k]; }).sort(function (a, b) { return b.total - a.total; });
+  }
+  function pointsOf(emp, places, votes, cfg) {
+    var b = pointsBoard(places, votes, cfg), e = normEmp(emp);
+    for (var i = 0; i < b.length; i++) if (b[i].emp === e) return b[i];
+    return { emp: e, total: 0, items: [] };
+  }
+
   /* ============ 默认配置 ============ */
   function defaultConfig() {
     return {
@@ -227,6 +436,8 @@ var GG = (function () {
       thr: { gold: 8, loved: 3, watch: -2, grey: -3, black: -8, goldRatio: 0.8, goldMin: 10, greyMin: 5 },
       anonNote: true,          // 允许员工写匿名备注（写的时候自己勾选）
       showName: true,
+      // 积分规则（管理员可在后台调整）
+      pts: defaultPts(),
       cats: [
         { id: 'snack', zh: '小吃 · 街边', en: 'Street bites', color: '#F2994A', icon: '🍜' },
         { id: 'dine', zh: '正餐 · 餐厅', en: 'Dining', color: '#2D9CDB', icon: '🍽' },
@@ -266,7 +477,10 @@ var GG = (function () {
   function lget(k, d) {
     try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; }
   }
-  function lset(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function lset(k, v) {
+    try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+    catch (e) { if (e && /quota|exceed/i.test(String(e.name || e.message || ''))) toast(t('storageFull')); return false; }
+  }
 
   /* ============ Supabase 适配 ============ */
   var mode = null; // null=未知 true=云端 false=本地
@@ -486,6 +700,9 @@ var GG = (function () {
     usersList: usersList, userPut: userPut, userGet: userGet,
     cfgGet: cfgGet, cfgSet: cfgSet,
     tally: tally, tierOf: tierOf, sizeOf: sizeOf,
+    compressImg: compressImg,
+    defaultPts: defaultPts, ptsCfg: ptsCfg, draftPts: draftPts,
+    pointsBoard: pointsBoard, pointsOf: pointsOf, photosBy: photosBy, starsBy: starsBy,
     me: me, setMe: setMe, clearMe: clearMe,
     gatePassed: gatePassed, setGatePass: setGatePass,
     adminSession: adminSession, setAdmin: setAdmin, clearAdmin: clearAdmin,
