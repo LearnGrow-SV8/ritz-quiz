@@ -96,7 +96,12 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .option-letter { width:28px; height:28px; border-radius:50%; background:#fff; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; flex-shrink:0; }
 .option.correct .option-letter { background:var(--success); color:#fff; border-color:var(--success); }
 .option.wrong .option-letter { background:var(--danger); color:#fff; border-color:var(--danger); }
-.option-text { font-size:15px; line-height:1.5; flex:1; }
+/* 选项文字与左侧圆圈字母垂直居中：
+   圆圈固定 28px，而单行文字只有 22.5px（15px × 1.5）—— 以前两者都贴着顶边，
+   文字看起来比圆圈"高半格"，像是没对齐。给文字块一个 28px 最小高度并在内部
+   居中，单行时两者严格对齐；题目很长换行时仍然是文字顶上、圆圈跟着第一行，
+   不会跑到中间去。 */
+.option-text { font-size:15px; line-height:1.5; flex:1; min-width:0; min-height:28px; display:flex; align-items:center; }
 
 .fill-input { width:100%; padding:12px 14px; border:2px solid var(--border); border-radius:10px; font-size:15px; margin-bottom:8px; outline:none; transition:border-color 0.15s; }
 .fill-input:focus { border-color:var(--primary-light); }
@@ -4833,7 +4838,7 @@ function buildStudentBody() {
     snap: collectSyncSnapshot(),
     events: events,
     details: details,
-    race: raceLocalRecord(),
+    race: raceStampedRecord(),
     // 重考闸门：本轮已考过的场次（换设备后靠它恢复"这一轮已考"的判定）
     fa: loadFormalAttempts(),
     ts: Date.now()
@@ -7185,6 +7190,19 @@ function raceLocalRecord() {
   return o;
 }
 function raceSaveLocalRecord(rec) { try { localStorage.setItem('raceRecord', JSON.stringify(rec)); } catch (e) {} }
+// 上报前把 name / dept 按**当前资料**重新盖一遍。成绩记录是交卷那一刻整份存进
+// localStorage 的，学员之后改名（MM → Megan）、换部门都不会触发重写，云端快照、
+// 管理端导出、排行榜就会一直挂着旧名字。只在真的打过卡（有成绩）时才盖，
+// 免得给没参赛的人也塞一条空记录。
+function raceStampedRecord() {
+  var rec = raceLocalRecord();
+  if (!rec) return rec;
+  var played = !!rec.best || (rec.byRound && Object.keys(rec.byRound).length > 0);
+  if (!played) return rec;
+  rec.name = raceDisplayName();
+  rec.dept = raceDeptName();
+  return rec;
+}
 function raceDisplayName() {
   var p = state.profile || {};
   return ((p.enName || '').trim() || (p.cnName || '').trim() || String(state.currentUser || ''));
@@ -7412,6 +7430,18 @@ function raceSecOk(entry, filter) {
   if (!filter) return true;
   return ((entry && entry.section) || 'all') === filter;
 }
+// 排行榜上显示的名字：优先用**快照里当前的名字**，最后才用成绩记录里写死的那份。
+// 成绩记录的 race.name 是交卷那一刻抄进本机的，学员之后改名（MM → Megan）
+// 这份旧值不会自己更新，排行榜就会一直挂着旧名字。快照的 snap.en / snap.cn
+// 每次上报都按当前资料重建，拿它兜住。命名习惯与 profileDisplayName() 保持一致：
+// 英文名优先，没有英文名再用中文名。
+function raceRowNameOf(raw, race) {
+  var snap = (raw && raw.snap) || {};
+  var en = String(snap.en || '').trim();
+  var cn = String(snap.cn || '').trim();
+  var old = String((race && race.name) || '').trim();
+  return en || cn || old || String((raw && (raw.akey || raw.key || raw.phone)) || '');
+}
 function raceBoardRows(scope) {
   var list = state.raceBoard || [];
   var c = raceConfOf();
@@ -7425,20 +7455,21 @@ function raceBoardRows(scope) {
     // 快照行里的身份键是 akey / key（形如 e123456）；phone 只是历史遗留字段，
     // 很多学员为空，用它会让「（我）」高亮永远匹配不上。
     var it = { key: String((raw && (raw.akey || raw.key || raw.phone)) || ''), race: race };
+    it.name = raceRowNameOf(raw, race);
     if (scope === 'period') {
       var e = (c && it.race.byRound) ? it.race.byRound[c.id] : null;
       if (!e) continue;
       if (!raceSecOk(e, secFilter)) continue;
-      rows.push({ key: it.key, name: it.race.name || it.key, dept: it.race.dept || '', section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts });
+      rows.push({ key: it.key, name: it.name, dept: it.race.dept || '', section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts });
     } else if (scope === 'dept') {
       var e2 = (c && it.race.byRound) ? it.race.byRound[c.id] : null;
       if (!e2 || (it.race.dept || '') !== myDept) continue;
       if (!raceSecOk(e2, secFilter)) continue;
-      rows.push({ key: it.key, name: it.race.name || it.key, dept: it.race.dept || '', section: e2.section || 'all', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: e2.ts });
+      rows.push({ key: it.key, name: it.name, dept: it.race.dept || '', section: e2.section || 'all', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: e2.ts });
     } else {
       if (!it.race.best) continue;
       if (!raceSecOk(it.race.best, secFilter)) continue;
-      rows.push({ key: it.key, name: it.race.name || it.key, dept: it.race.dept || '', section: it.race.best.section || 'all', correct: it.race.best.correct, answered: it.race.best.answered || 0, acc: it.race.best.acc, ts: it.race.best.ts });
+      rows.push({ key: it.key, name: it.name, dept: it.race.dept || '', section: it.race.best.section || 'all', correct: it.race.best.correct, answered: it.race.best.answered || 0, acc: it.race.best.acc, ts: it.race.best.ts });
     }
   }
   rows.sort(function (a, b) {
@@ -7522,7 +7553,9 @@ function renderRaceHome() {
   html += '⏱ ' + t('race_limit') + '：<b>' + (c.limitSec || 60) + ' ' + (state.lang === 'en' ? 'seconds' : '秒') + '</b><br>';
   if (c.startTime || c.endTime) html += '🗓 ' + t('race_window') + '：' + raceFmtWindow(c) + '<br>';
   if (mode === 'admin') {
-    var _sz = racePoolOfSize(c.section || 'all'), _sp = raceSpareSizeOf(c.section || 'all');
+    // 题量已经够多（> RACE_SPARE_HINT_MAX_POOL）就不提"补充通用知识"这回事了
+    var _sz = racePoolOfSize(c.section || 'all');
+    var _sp = (_sz > RACE_SPARE_HINT_MAX_POOL) ? 0 : raceSpareSizeOf(c.section || 'all');
     html += '📚 ' + t('race_pool_size') + '：' + (_sp ? t('race_pool_spare').replace('{n}', _sz).replace('{m}', _sp)
       : _sz + ' ' + (state.lang === 'en' ? 'questions' : '题'));
   }
@@ -7545,8 +7578,9 @@ function renderRaceHome() {
         html += '<div style="font-size:20px;">' + raceSecIcon(sk) + '</div>';
         html += '<div style="flex:1;min-width:0;">';
         html += '<div style="font-size:14px;font-weight:600;">' + raceSecName(sk) + '</div>';
+        var _sh = raceSpareHintOf(sk);
         html += '<div style="font-size:12px;color:#888;">' + racePoolOfSize(sk) + ' ' + (state.lang === 'en' ? 'questions' : '题')
-          + (raceSpareSizeOf(sk) ? ' · ' + t('race_spare_hint') : '') + '</div>';
+          + (_sh ? ' · ' + _sh : '') + '</div>';
         html += '</div>';
         html += '<div style="font-size:13px;color:#1a3a5c;font-weight:600;">' + t('race_start') + ' ›</div>';
         html += '</div>';
@@ -7564,6 +7598,15 @@ var _racePoolSizeCache = {};
 function racePoolOfSize(key) {
   if (_racePoolSizeCache[key] == null) _racePoolSizeCache[key] = racePoolOf(key).length;
   return _racePoolSizeCache[key];
+}
+// "本模块答完后自动补充通用知识"这句只在**题真的可能不够**的时候才有意义。
+// 多数板块（如厨房 175 题、餐饮 108 题）限时内根本答不完，写上反而让人以为
+// 还要无限答下去 —— 超过 RACE_SPARE_HINT_MAX_POOL 题就不提示了。
+// 实际会补题的逻辑不变（raceTakeSpare 照旧），只是不再广而告之。
+var RACE_SPARE_HINT_MAX_POOL = 100;
+function raceSpareHintOf(key) {
+  if (racePoolOfSize(key) > RACE_SPARE_HINT_MAX_POOL) return '';
+  return raceSpareSizeOf(key) ? t('race_spare_hint') : '';
 }
 function raceOpenBoard() {
   navigate('raceBoard');
