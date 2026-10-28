@@ -163,12 +163,25 @@ var GMap = (function () {
     mini.setCenter(new window.TMap.LatLng(lat, lng));
     if (miniMark) miniMark.setGeometries([{ id: 'pick', styleId: 'p', position: new window.TMap.LatLng(lat, lng) }]);
   }
+  // 取当前中心点（"用地图中心点"按钮用，比点击取点更稳、更适合手机）
+  function pickerCenter() {
+    if (!mini) return null;
+    try {
+      var c = mini.getCenter();
+      return { lat: c.getLat(), lng: c.getLng() };
+    } catch (e) { return null; }
+  }
+  // 地图平移 / 缩放时回调（用于实时显示中心点坐标）
+  function pickerOnPan(fn) {
+    if (!mini || !fn) return;
+    try { mini.on('pan', fn); mini.on('zoom_changed', fn); mini.on('center_changed', fn); } catch (e) {}
+  }
   function destroyPicker() { try { if (mini) mini.destroy(); } catch (e) {} mini = null; miniMark = null; miniCb = null; }
 
   return {
     load: load, ready: ready, init: init, destroy: destroy, getMap: getMap,
     onMapClick: onMapClick, onMarkerClick: onMarkerClick,
     render: render, fit: fit, goto: goto, search: search, desat: desat, pinSvg: pinSvg,
-    initPicker: initPicker, pickerGo: pickerGo, destroyPicker: destroyPicker
+    initPicker: initPicker, pickerGo: pickerGo, pickerCenter: pickerCenter, pickerOnPan: pickerOnPan, destroyPicker: destroyPicker
   };
 })();
