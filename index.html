@@ -4388,15 +4388,17 @@ var I18N = {
   race_my_rank: {cn:'我的排名', en:'My rank'},
   race_board: {cn:'排行榜', en:'Leaderboard'},
   race_board_all: {cn:'全酒店榜', en:'Hotel-wide'},
-  race_board_dept: {cn:'部门榜', en:'My division'},
+  race_board_dept: {cn:'部门排名', en:'Departments'},
   race_board_best: {cn:'历史最佳榜', en:'All-time best'},
-  race_board_hint_period: {cn:'本届赛事成绩 · 全酒店所有人一起排名，发布新一届后重新计算', en:'Current round · everyone in the hotel, resets on a new round'},
-  race_board_hint_dept: {cn:'本届赛事成绩 · 只看你所在部门', en:'Current round · your division only'},
-  race_board_hint_dept_end: {cn:'的人', en:''},
-  race_board_hint_dept_none: {cn:'本届赛事成绩 · 你还没有填写部门，暂时看不到部门榜', en:'Current round · no division on your profile yet'},
+  race_board_hint_period: {cn:'本届赛事成绩 · 全酒店所有人一起排名；同一个人只取最好的一次（可以是他做得最好的那个板块）', en:'Current round · everyone in the hotel; one best attempt per person (whichever section they did best in)'},
+  race_board_hint_dept: {cn:'本届赛事成绩 · 按部门把参赛员工的答对题数加起来排名，再比准确率（每人只算最好的一次）', en:'Current round · departments ranked by total correct answers, then accuracy (one best attempt per person)'},
   race_board_hint_best: {cn:'历届个人最好成绩 · 全酒店所有人，发布新一届也不会清空', en:'Personal best across all rounds · everyone, never reset'},
   race_board_hint_noconf: {cn:'（本机还没同步到赛事，本榜可能为空）', en:'(No round synced on this device, this board may be empty)'},
   race_board_empty: {cn:'还没有人提交成绩', en:'No scores submitted yet'},
+  race_dept_people: {cn:'人参赛', en:'people'},
+  race_dept_answered: {cn:'共答', en:'answered'},
+  race_dept_avg: {cn:'人均答对', en:'avg correct'},
+  race_dept_unknown: {cn:'未填写部门', en:'No department'},
   race_again: {cn:'再挑战一次', en:'Try again'},
   race_confirm: {cn:'确认作答', en:'Confirm'},
   race_confirm_hint: {cn:'选好后点下方「确认作答」，确认后不能修改', en:'Tap Confirm below once you choose - it cannot be changed'},
@@ -4513,6 +4515,8 @@ var I18N = {
   race_filter_all: {cn:'全部板块总榜', en:'Overall — all sections'},
   race_board_mix_hint: {cn:'各板块成绩混合排名，仅供整体参考', en:'All sections mixed — for overall reference only'},
   race_board_sec_hint: {cn:'本榜只统计选择该板块的成绩，同板块内部相比', en:'Only scores from this section — compared within the same section'},
+  race_board_dept_sec_hint: {cn:'部门排名只统计该板块的成绩', en:'Department ranking from this section only'},
+  race_board_dept_mix_hint: {cn:'部门之间比，成绩来自各部门参赛员工的全部板块', en:'Departments against each other, across all sections their members played'},
   race_my_section: {cn:'你本期所选', en:'Your section'},
   race_go_pick: {cn:'去选板块参与挑战吧！', en:'Pick a section and join the challenge!'},
   nav_back: {cn:'返回', en:'Back'},
@@ -7186,6 +7190,17 @@ function raceLocalRecord() {
   try { var s = localStorage.getItem('raceRecord'); o = s ? JSON.parse(s) : null; } catch (e) { o = null; }
   if (!o || typeof o !== 'object') o = {};
   if (!o.byRound || typeof o.byRound !== 'object') o.byRound = {};
+  if (!o.byRoundSec || typeof o.byRoundSec !== 'object') o.byRoundSec = {};
+  // 老记录只有 byRound（本届那一整条，不分工板块）—— 按它的板块回填一份到
+  // byRoundSec，免得升级后以前的成绩突然从板块榜里消失。
+  for (var rid in o.byRound) {
+    var e0 = o.byRound[rid];
+    if (!e0 || typeof e0 !== 'object') continue;
+    var m0 = o.byRoundSec[rid];
+    if (!m0 || typeof m0 !== 'object') m0 = o.byRoundSec[rid] = {};
+    var s0 = e0.section || 'all';
+    if (!m0[s0]) m0[s0] = e0;
+  }
   if (!Array.isArray(o.log)) o.log = [];
   return o;
 }
@@ -7211,6 +7226,13 @@ function raceDeptName() {
   var p = state.profile || {};
   var d = (typeof profileDivision === 'function') ? profileDivision(p) : (p.division || '');
   if (d && typeof d === 'object') return state.lang === 'en' ? (d.en || d.cn || '') : (d.cn || d.en || '');
+  return String(d || '');
+}
+// 我自己的大部门**中文名**（资料里永远是中文），用来跟快照的 snap.div 对上。
+function raceMyDeptCn() {
+  var p = state.profile || {};
+  var d = p.division || '';
+  if (d && typeof d === 'object') return String(d.cn || d.en || '');
   return String(d || '');
 }
 // 成绩快照里的部门是**写入时的中文名**（如「人力资源部」「人力资源部 · 培训部」），
@@ -7380,8 +7402,17 @@ function raceSubmitScore() {
   var acc = r.answered ? Math.round(r.correct / r.answered * 1000) / 10 : 0;
   var entry = { raceId: r.conf.id, section: r.section || r.conf.section || 'all', correct: r.correct, answered: r.answered, acc: acc, ts: Date.now() };
   var rec = raceLocalRecord();
+  // 每人每届在**每个板块**各留一份最佳成绩（byRoundSec[赛事id][板块]），
+  // 这样总榜只取他最好那个板块的那条（byRound），但他做的其他板块依然能上
+  // 对应板块的榜 —— 同一个人可以同时在 A / B / C 三个板块榜里各有一条成绩。
+  rec.byRoundSec = (rec.byRoundSec && typeof rec.byRoundSec === 'object') ? rec.byRoundSec : {};
+  var rid0 = r.conf.id, secMap = rec.byRoundSec[rid0];
+  if (!secMap || typeof secMap !== 'object') secMap = rec.byRoundSec[rid0] = {};
+  var psec = secMap[entry.section];
+  // 不限次数，同一板块内取最好一次：先比答对题数，再比准确率。
+  if (!psec || entry.correct > psec.correct || (entry.correct === psec.correct && entry.acc > psec.acc)) secMap[entry.section] = entry;
+  // 总榜：各板块最佳里的最佳
   var prev = rec.byRound[r.conf.id];
-  // 不限次数，取最好一次：先比答对题数，再比准确率。
   if (!prev || entry.correct > prev.correct || (entry.correct === prev.correct && entry.acc > prev.acc)) rec.byRound[r.conf.id] = entry;
   if (!rec.best || entry.correct > rec.best.correct || (entry.correct === rec.best.correct && entry.acc > rec.best.acc)) {
     rec.best = { correct: entry.correct, answered: entry.answered, acc: entry.acc, ts: entry.ts, raceId: entry.raceId };
@@ -7445,7 +7476,6 @@ function raceRowNameOf(raw, race) {
 function raceBoardRows(scope) {
   var list = state.raceBoard || [];
   var c = raceConfOf();
-  var myDept = raceDeptName();
   var secFilter = state.raceBoardSec || '';
   var rows = [];
   for (var i = 0; i < list.length; i++) {
@@ -7456,26 +7486,73 @@ function raceBoardRows(scope) {
     // 很多学员为空，用它会让「（我）」高亮永远匹配不上。
     var it = { key: String((raw && (raw.akey || raw.key || raw.phone)) || ''), race: race };
     it.name = raceRowNameOf(raw, race);
-    if (scope === 'period') {
-      var e = (c && it.race.byRound) ? it.race.byRound[c.id] : null;
-      if (!e) continue;
-      if (!raceSecOk(e, secFilter)) continue;
-      rows.push({ key: it.key, name: it.name, dept: it.race.dept || '', section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts });
-    } else if (scope === 'dept') {
-      var e2 = (c && it.race.byRound) ? it.race.byRound[c.id] : null;
-      if (!e2 || (it.race.dept || '') !== myDept) continue;
-      if (!raceSecOk(e2, secFilter)) continue;
-      rows.push({ key: it.key, name: it.name, dept: it.race.dept || '', section: e2.section || 'all', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: e2.ts });
-    } else {
+    if (scope === 'best') {
       if (!it.race.best) continue;
       if (!raceSecOk(it.race.best, secFilter)) continue;
       rows.push({ key: it.key, name: it.name, dept: it.race.dept || '', section: it.race.best.section || 'all', correct: it.race.best.correct, answered: it.race.best.answered || 0, acc: it.race.best.acc, ts: it.race.best.ts });
+    } else {
+      // 总榜 = 本届（可带板块筛选）。带筛选时取**该板块**的最佳成绩，
+      // 所以某人做过 A/B/C 三个板块，就会分别出现在三张板块榜上。
+      var e = raceRoundEntryOf(it.race, c && c.id, secFilter);
+      if (!e) continue;
+      rows.push({ key: it.key, name: it.name, dept: raceDeptOfRow(raw, it.race), section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts });
     }
   }
   rows.sort(function (a, b) {
     if (b.correct !== a.correct) return b.correct - a.correct;
     if (b.acc !== a.acc) return b.acc - a.acc;
     return (a.ts || 0) - (b.ts || 0);
+  });
+  return rows;
+}
+// 某人某届的成绩：sec 为空 → 本届总最佳（byRound，各板块里最好的那条）；
+// sec 非空 → 该板块的最佳（byRoundSec[rid][sec]，老数据回退到 byRound 那条）。
+function raceRoundEntryOf(race, rid, sec) {
+  if (!race || !rid) return null;
+  if (!sec) return (race.byRound && race.byRound[rid]) || null;
+  var m = race.byRoundSec && race.byRoundSec[rid];
+  if (m && m[sec]) return m[sec];
+  var e = race.byRound && race.byRound[rid];
+  return (e && ((e.section || 'all') === sec)) ? e : null;
+}
+// 部门排名的分组键：用**快照里的大部门中文名**（snap.div）。
+// 成绩记录里的 race.dept 是交卷时按当时语言写的（英文界面就是英文名），
+// 拿它分组会把同一个部门拆成中英两组；快照的 div 永远是中文，显示时再翻译。
+function raceDeptOfRow(raw, race) {
+  var snap = (raw && raw.snap) || {};
+  var d = String(snap.div || '').trim();
+  return d || String((race && race.dept) || '').trim();
+}
+// 部门排名：把本届每个部门的**所有参赛员工**的成绩汇总，按总答对题数 → 总准确率
+// → 参赛人数排序（每人只算他在本届的最佳一条，避免多刷板块给部门灌分）。
+function raceDeptAggRows(secFilter) {
+  var list = state.raceBoard || [];
+  var c = raceConfOf();
+  var map = {}, order = [];
+  for (var i = 0; i < list.length; i++) {
+    var raw = list[i];
+    var race = raceRecordOf(raw);
+    if (!race) continue;
+    var e = raceRoundEntryOf(race, c && c.id, secFilter || '');
+    if (!e) continue;
+    var dept = raceDeptOfRow(raw, race);
+    var row = map[dept];
+    if (!row) { row = map[dept] = { dept: dept, n: 0, correct: 0, answered: 0, acc: 0 }; order.push(dept); }
+    row.n++;
+    row.correct += (e.correct || 0);
+    row.answered += (e.answered || 0);
+  }
+  var rows = [];
+  for (var k = 0; k < order.length; k++) {
+    var r = map[order[k]];
+    r.acc = r.answered ? Math.round(r.correct / r.answered * 1000) / 10 : 0;
+    rows.push(r);
+  }
+  rows.sort(function (a, b) {
+    if (b.correct !== a.correct) return b.correct - a.correct;
+    if (b.acc !== a.acc) return b.acc - a.acc;
+    if (b.n !== a.n) return b.n - a.n;
+    return String(a.dept) < String(b.dept) ? -1 : 1;
   });
   return rows;
 }
@@ -7728,15 +7805,13 @@ function raceBoardChip(key, label, active) {
     + 'white-space:nowrap;cursor:pointer;background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';">'
     + label + '</button>';
 }
-// 三个榜的口径不一样（本届全员 / 本届本部门 / 历届个人最佳），页签下面用一行灰字讲清楚，
-// 免得学员以为"点了没反应"，或者换届后看到前两个榜空了以为成绩丢了。
+// 三个榜的口径不一样（本届全员最佳 / 本届部门汇总 / 历届个人最佳），页签下面用一行
+// 灰字讲清楚，免得学员以为"点了没反应"，或者换届后看到前两个榜空了以为成绩丢了。
 function raceBoardScopeHint(tab) {
   var s;
   if (tab === 'best') return '\ud83c\udfc5 ' + t('race_board_hint_best');
   if (tab === 'dept') {
-    var d = raceDeptName();
-    s = d ? ('\ud83c\udfe2 ' + t('race_board_hint_dept') + '\u300c' + escapeHtml(d) + '\u300d' + t('race_board_hint_dept_end'))
-          : ('\ud83c\udfe2 ' + t('race_board_hint_dept_none'));
+    s = '\ud83c\udfe2 ' + t('race_board_hint_dept');
   } else {
     s = '\ud83c\udfe8 ' + t('race_board_hint_period');
   }
@@ -7772,10 +7847,13 @@ function renderRaceBoard() {
   }
   html += '</div>';
   html += '<div style="font-size:12px;color:#888;margin:2px 0 10px;">'
-    + (sec ? (raceSecIcon(sec) + ' ' + escapeHtml(raceSecName(sec)) + ' \u00b7 ' + t('race_board_sec_hint'))
-           : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 ' + t('race_board_mix_hint')))
+    + (sec ? (raceSecIcon(sec) + ' ' + escapeHtml(raceSecName(sec)) + ' \u00b7 '
+              + t(tab === 'dept' ? 'race_board_dept_sec_hint' : 'race_board_sec_hint'))
+           : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 '
+              + t(tab === 'dept' ? 'race_board_dept_mix_hint' : 'race_board_mix_hint')))
     + '</div>';
-  var rows = raceBoardRows(tab);
+  var isDeptTab = tab === 'dept';
+  var rows = isDeptTab ? raceDeptAggRows(sec) : raceBoardRows(tab);
   // 已经有数据就当 ready（不管状态位），避免"数据都在却被状态位挡住继续转圈"。
   var hasData = Array.isArray(state.raceBoard);
   var bst = hasData ? 'ready' : (state.raceBoardState || 'loading');
@@ -7793,6 +7871,29 @@ function renderRaceBoard() {
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceBoardReload(true)">🔄 ' + t('race_board_retry') + '</button>';
   } else if (!rows.length) {
     html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_board_empty') + '</div>';
+  } else if (isDeptTab) {
+    // 部门排名：一行一个部门，右侧是该部门**全体参赛员工**的答对题数合计，
+    // 下面一行灰字给人数 / 总题数 / 人均，方便判断"是人多还是真强"。
+    var myDeptCn = raceMyDeptCn();
+    for (var di = 0; di < rows.length; di++) {
+      var dr = rows[di];
+      var isMine = myDeptCn && dr.dept === myDeptCn;
+      var dMedal = di === 0 ? '🥇' : di === 1 ? '🥈' : di === 2 ? '🥉' : (di + 1);
+      var per = dr.n ? Math.round(dr.correct / dr.n * 10) / 10 : 0;
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMine ? '#1a3a5c' : '#e2e6ea') + ';border-radius:10px;background:' + (isMine ? '#eef4fa' : '#fff') + ';">';
+      html += '<div style="width:32px;text-align:center;font-weight:700;color:#1a3a5c;">' + dMedal + '</div>';
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(deptDisplayName(dr.dept) || t('race_dept_unknown'))
+        + (isMine ? '<span style="color:#1a3a5c;font-size:12px;">' + t('race_you') + '</span>' : '') + '</div>';
+      html += '<div style="font-size:12px;color:#888;">'
+        + dr.n + ' ' + t('race_dept_people') + ' \u00b7 ' + t('race_dept_answered') + ' ' + dr.answered
+        + ' \u00b7 ' + t('race_dept_avg') + ' ' + per + '</div>';
+      html += '</div>';
+      html += '<div style="text-align:right;">';
+      html += '<div style="font-size:16px;font-weight:700;color:#1a3a5c;">' + dr.correct + '</div>';
+      html += '<div style="font-size:12px;color:#888;">' + dr.acc + '%</div>';
+      html += '</div></div>';
+    }
   } else {
     var me = String(state.currentUser || '');
     var myKey = '';
