@@ -1704,6 +1704,11 @@ function examPublishFailMsg(res) {
       ? '❌ Publish did NOT reach the primary store — students on many networks will still see "no exam".\n\nOnly the backup channel accepted it. Check this device\'s connection, then press Publish again.'
       : '❌ 发布没有写进主库！很多学员（尤其是连酒店 WiFi 的）仍会看到「无考试/已结束」。\n\n本次只写进了备用通道。请检查本机网络后，再点一次「发布」。';
   }
+  if (res && res.reason === 'verify') {
+    return en
+      ? '❌ The primary store did not return this publish when re-read — students would not see it.\n\nThe page will keep retrying every 30 s. If it keeps failing, switch network (e.g. phone hotspot) and press Publish again.'
+      : '❌ 发布后回读主库没读到这一版，学员端仍看不到本场考试。\n\n系统每 30 秒自动重试一次；若一直失败，请换网络（如手机热点）后重新发布。';
+  }
   if (res && res.reason === 'too_large') {
     return en
       ? '❌ Publish payload is too large (' + res.size + ' bytes > 3800). Shorten the exam title, then retry.'
@@ -1712,6 +1717,80 @@ function examPublishFailMsg(res) {
   return en
     ? '❌ Publish failed (network). Check your connection and press Publish again — nothing was sent.'
     : '❌ 发布失败（网络异常），本次没有发出。请检查网络后直接再点一次「发布」。';
+}
+// 发布后的回读校验（2026-10-28）。主库 POST 返回成功只是"服务端收下了请求"，
+// 真正决定学员看到什么的是"这条 sessions 现在读不读得到"。所以发布完立刻按
+// ver 回读一次，读不到就当没发成功。
+//   返回 true  = 主库里确实有这一版
+//   返回 false = 主库里没有（必须重试）
+//   返回 null  = 回读本身失败（网络抖动），不因此否定一次已确认的写入
+function verifyExamPublish(ver) {
+  try { sbResetBreaker(); } catch (e) {}
+  var q = 'messages?topic=eq.exams&select=id,body,created_at' +
+          '&body-%3E%3Et=eq.sessions&order=id.desc&limit=5';
+  return sbJson('/rest/v1/' + q, null, 8000, 'sb-verify').then(function (rows) {
+    // 响应形状不对（不是数组）= 这次回读没结论，不能拿来否定一次已确认的写入
+    if (!Array.isArray(rows)) return null;
+    if (!rows.length) return false;
+    for (var i = 0; i < rows.length; i++) {
+      var b = rows[i] && rows[i].body;
+      if (b && b.t === 'sessions' && b.ver === ver) return true;
+    }
+    return false;
+  }, function () { return null; });
+}
+// 失败即入队：管理端每 30 s 自动补发一次，不需要管理员一直盯着按钮。
+var EXAM_PENDING_KEY = 'pendingExamPublish';
+function loadPendingExamPublish() {
+  try {
+    var r = JSON.parse(localStorage.getItem(EXAM_PENDING_KEY) || 'null');
+    if (r && r.list) return r;
+  } catch (e) {}
+  return null;
+}
+function savePendingExamPublish(list, reason) {
+  try {
+    localStorage.setItem(EXAM_PENDING_KEY, JSON.stringify({ list: list, reason: reason || '', at: Date.now() }));
+  } catch (e) {}
+}
+function clearPendingExamPublish() {
+  try { localStorage.removeItem(EXAM_PENDING_KEY); } catch (e) {}
+}
+var EXAM_PENDING_FLUSHING = false;
+function flushPendingExamPublish() {
+  var rec = loadPendingExamPublish();
+  if (!rec) return Promise.resolve(false);
+  if (Date.now() - (rec.at || 0) < 30000) return Promise.resolve(false);
+  if (EXAM_PENDING_FLUSHING) return Promise.resolve(false);
+  EXAM_PENDING_FLUSHING = true;
+  return publishExamSessions(rec.list).then(function (r) {
+    EXAM_PENDING_FLUSHING = false;
+    if (r && r.ok) {
+      clearPendingExamPublish();
+      if (typeof render === 'function') { try { render(); } catch (e) {} }
+      return true;
+    }
+    return false;
+  }, function () { EXAM_PENDING_FLUSHING = false; return false; });
+}
+function adminRetryExamPublish() {
+  var rec = loadPendingExamPublish();
+  if (!rec) {
+    alert(state.lang === 'en' ? '✅ Nothing waiting to re-publish.' : '✅ 没有待补发的发布。');
+    return;
+  }
+  rec.at = 0;
+  try { localStorage.setItem(EXAM_PENDING_KEY, JSON.stringify(rec)); } catch (e) {}
+  flushPendingExamPublish().then(function (ok) {
+    if (ok) {
+      alert(state.lang === 'en'
+        ? '✅ Re-published to the primary store — students will now see this exam.'
+        : '✅ 已补发到主库，学员端现在能看到本场考试。');
+    } else {
+      alert(examPublishFailMsg({ reason: rec.reason || 'network' }));
+    }
+    if (typeof render === 'function') { try { render(); } catch (e) {} }
+  });
 }
 function publishExamSessions(list) {
   var cfg = adminLoadExamConfig();
@@ -1730,10 +1809,14 @@ function publishExamSessions(list) {
       // 只认主库。备用通道对一半学员是黑洞（国内网络基本连不上 ntfy.sh），
       // 所以"主库没收到"必须算失败，让管理端看见并重试。
       if (res.via !== 'supabase') return { ok: false, reason: 'primary', via: res.via };
-      cfg.list = list;
-      cfg.ver = ver;
-      adminSaveExamConfig(cfg);
-      return { ok: true, size: payload.length, via: 'supabase' };
+      return verifyExamPublish(ver).then(function (v) {
+        if (v === false) return { ok: false, reason: 'verify', via: 'supabase' };
+        cfg.list = list;
+        cfg.ver = ver;
+        adminSaveExamConfig(cfg);
+        clearPendingExamPublish();
+        return { ok: true, size: payload.length, via: 'supabase', verified: v === true };
+      });
     });
   };
   // 最多 3 次：第 1 次直发，第 2、3 次分别等 1.2 s / 3 s。网络抖动时自动补上，
@@ -1745,7 +1828,11 @@ function publishExamSessions(list) {
       return new Promise(function(done) { setTimeout(done, attempt === 1 ? 1200 : 3000); }).then(run);
     });
   };
-  return run();
+  return run().then(function(r) {
+    // 失败入队（payload 过大要管理员自己精简，不自动重试）
+    if (!r.ok && r.reason !== 'too_large') savePendingExamPublish(list, r.reason);
+    return r;
+  });
 }
 
 // ===== Exam grading config (per-paper points-per-question + passing score) =====
@@ -3063,6 +3150,9 @@ var CLOUD_SYNC_READY = false; // true after the first relay round-trip settles
     // A previous publish that failed partway is retried now; the live override
     // is also re-published every 6 h so ntfy's 12 h retention never expires it.
     flushPendingBankPublish();
+    // 2026-10-28：发布考试场次失败后自动补发（每 30 s 一次）。昨天 12 位学员
+    // 扫不到考场，根因就是一次"界面显示成功、实际没进主库"的发布。
+    flushPendingExamPublish();
     keepAliveBankOverride();
     try { keepAliveExamGrading(); } catch (e) {}
     // The two helpers below reference `state` synchronously; the IIFE that
@@ -9670,6 +9760,25 @@ function renderAdminExams() {
   html += '<div class="save-status synced">' + (state.lang === 'en'
     ? '☁️ Publishing here instantly notifies every student device (visible within ~90 s, or on next open). Papers stay identical to the full mock-exam papers.'
     : '☁️ 此处发布后所有学员端立即收到通知（约 10 分钟内或下次打开时生效）。试卷内容与模拟考试的全套试卷保持一致。') + '</div>';
+
+  // 2026-10-28：上一次发布没进主库时必须一直亮着 —— 昨天 12 位学员扫不到考场，
+  // 就是因为界面显示"已发布"而主库里根本没有这场。
+  var pend = loadPendingExamPublish();
+  if (pend) {
+    var en = state.lang === 'en';
+    var pendWhy = pend.reason === 'primary'
+      ? (en ? '只写进了备用通道' : '只写进了备用通道')
+      : (pend.reason === 'verify'
+        ? (en ? '回读主库时没读到这一版' : '回读主库时没读到这一版')
+        : (en ? '网络失败' : '网络失败'));
+    html += '<div class="save-status" style="background:#fff3e0;border:1px solid #f0a35e;color:#8a4b00;text-align:left;">';
+    html += '<div>⚠️ <b>' + (en ? 'Last publish did NOT reach the primary store (' : '上次发布没有写进主库（') + pendWhy + (en ? ')' : '）') + '</b>';
+    html += '<div style="margin-top:4px;font-size:12px;opacity:.85;">' + (en
+      ? 'Students may still see "no exam / exam ended". This page retries automatically every 30 s.'
+      : '学员端可能仍显示「无考试/已结束」。本页每 30 秒自动重试一次。') + '</div></div>';
+    html += '<button class="action-btn" style="margin-top:8px;" onclick="adminRetryExamPublish()">' + (en ? 'Retry now' : '立即重试') + '</button>';
+    html += '</div>';
+  }
 
   // Live status summary across the 4 papers.
   var sumOpen = 0, sumPending = 0, sumEnded = 0, sumClosed = 0;
