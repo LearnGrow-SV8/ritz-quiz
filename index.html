@@ -6881,7 +6881,8 @@ var RACE_SECTION_SOURCE = {
   sm:       ['市场销售部'],
   eng:      ['工程部']
 };
-var RACE_MIN_POOL = 60;              // 池子不足时用「通用知识」补齐，保证限时内不会重复出题
+// 注意：RACE_MIN_POOL 已**不再**用于填充题池（2026-10-28 改）。题池只放本板块题，
+// 通用知识挂在 state.race.spare 上当备胎，本板块答完且限时未到才分批补（见 raceTakeSpare）。
 var RACE_TIMES = [30, 45, 60, 90];
 
 function raceSecMeta(key) {
