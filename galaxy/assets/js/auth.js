@@ -158,6 +158,7 @@ var Auth = (function () {
 
   function stepRegister() {
     mode = 'register';
+    var zh = GG.getLang() === 'zh';
     var s = $('lgStep');
     s.innerHTML =
       '<div class="rowline"><span class="pill">' + t('empNo') + ' ' + GG.esc(pendingEmp) + '</span><span class="pill">首次使用</span></div>' +
@@ -165,11 +166,26 @@ var Auth = (function () {
       '<input class="inp" id="rgName" autocomplete="off" />' +
       '<div class="grid2">' +
       '<div><label class="fl">' + t('enName') + '</label><input class="inp" id="rgNameEn" autocomplete="off" /></div>' +
-      '<div><label class="fl">' + t('dept') + '</label><input class="inp" id="rgDept" autocomplete="off" /></div>' +
+      '<div><label class="fl">' + t('div') + '</label><select class="inp" id="rgDiv">' +
+      '<option value="">' + t('divPh') + '</option>' +
+      GG.DEPTS.map(function (d, i) {
+        return '<option value="' + i + '">' + GG.esc(zh ? d.cn : d.en) + '</option>';
+      }).join('') +
+      '</select></div>' +
       '</div>' +
+      '<label class="fl">' + t('dept') + '</label>' +
+      '<select class="inp" id="rgDept"><option value="">' + t('deptPh') + '</option></select>' +
       '<label class="fl">' + t('newPassword') + '</label>' +
       '<input class="inp" id="lgPin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" />' +
       '<button class="btn blue" id="lgGo">' + t('regBtn') + '</button>';
+    // 大部门 → 子部门两级联动（与答题平台同款交互）
+    $('rgDiv').addEventListener('change', function () {
+      var d = GG.DEPTS[+this.value];
+      $('rgDept').innerHTML = '<option value="">' + t('deptPh') + '</option>' +
+        (d ? d.subs.map(function (x, i) {
+          return '<option value="' + i + '">' + GG.esc(zh ? x.cn : x.en) + '</option>';
+        }).join('') : '');
+    });
     $('rgName').focus();
     $('lgGo').addEventListener('click', doRegister);
   }
@@ -178,6 +194,8 @@ var Auth = (function () {
     var pin = String(($('lgPin') || {}).value || '').trim();
     if (!name) { err(t('nameReq')); return; }
     if (!GG.isPinValid(pin)) { err(t('pinReq')); return; }
+    var divObj = GG.DEPTS[+($('rgDiv') || {}).value] || null;
+    var subObj = divObj ? divObj.subs[+($('rgDept') || {}).value] : null;
     busy = true;
     GG.userGet(pendingEmp).then(function (exist) {
       if (exist) { busy = false; return exist.pinHash ? stepPin(exist) : stepClaim(exist); }
@@ -185,7 +203,8 @@ var Auth = (function () {
         var u = {
           emp: pendingEmp, name: name,
           nameEn: String(($('rgNameEn') || {}).value || '').trim(),
-          dept: String(($('rgDept') || {}).value || '').trim(),
+          div: divObj ? divObj.cn : '', divEn: divObj ? divObj.en : '',
+          dept: subObj ? subObj.cn : '', deptEn: subObj ? subObj.en : '',
           pinHash: h, pinSetAt: GG.now(), createdAt: GG.now()
         };
         return GG.userPut(u).then(function () { busy = false; enter(u); });
