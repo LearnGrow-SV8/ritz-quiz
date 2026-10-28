@@ -28,8 +28,27 @@ var GG = (function () {
   function uid(p) { return (p || 'p') + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   function now() { return Date.now(); }
   function clone(o) { return JSON.parse(JSON.stringify(o == null ? {} : o)); }
-  function normEmp(s) { return String(s == null ? '' : s).replace(/\s+/g, '').replace(/^e/i, '').toUpperCase(); }
+  // 对齐答题平台 normEmpNo：纯数字工号去前导零（4 位工号与"补 0 变 5 位"视为同一人）
+  function normEmp(s) {
+    var v = String(s == null ? '' : s).replace(/\s+/g, '').replace(/^e/i, '').toUpperCase();
+    if (/^\d+$/.test(v)) {
+      var t = v.replace(/^0+/, '');
+      return t === '' ? v : t;
+    }
+    return v;
+  }
   function isPinValid(p) { return /^[0-9]{6}$/.test(String(p || '')); }
+
+  /* 部门结构：与答题平台（刷题平台）完全一致，保证两边的部门口径统一 */
+  var DEPTS = [{"en":"Culinary","cn":"厨房部","subs":[{"en":"Culinary Administration","cn":"厨房办公室"},{"en":"All Day Dining Kitchen","cn":"全日制厨房"},{"en":"Banquet Kitchen","cn":"宴会厨房"},{"en":"Chinese Kitchen","cn":"中厨房"},{"en":"Italian Kitchen","cn":"意大利厨房"},{"en":"Pastry","cn":"饼房"},{"en":"Stewarding","cn":"管事部"}]},{"en":"Engineering","cn":"工程部","subs":[{"en":"Engineering Administration","cn":"工程部办公室"},{"en":"Operations","cn":"运营"}]},{"en":"Executive Office","cn":"行政办公室","subs":[{"en":"Executive Office","cn":"行政办公室"}]},{"en":"F&B","cn":"餐饮部","subs":[{"en":"F&B Administration","cn":"餐饮部办公室"},{"en":"Banquet","cn":"宴会部"},{"en":"Curv","cn":"雪茄吧"},{"en":"Fix","cn":"美食屋"},{"en":"Flavorz","cn":"全日制餐厅"},{"en":"In Room Dining","cn":"送餐部"},{"en":"Onyx","cn":"大堂吧"},{"en":"Paletto","cn":"意大利餐厅"},{"en":"XingLi Restaurant","cn":"星丽中餐厅"}]},{"en":"Finance","cn":"财务部","subs":[{"en":"Finance Administration","cn":"财务部办公室"},{"en":"Accounting","cn":"会计部"},{"en":"Purchasing","cn":"采购部"},{"en":"IT","cn":"IT"}]},{"en":"Human Resources","cn":"人力资源部","subs":[{"en":"HR Administration","cn":"人力资源部办公室"},{"en":"Dormitory","cn":"员工宿舍"},{"en":"Employee Dining","cn":"员工餐厅"},{"en":"Learning","cn":"培训部"},{"en":"Personnel","cn":"人事部"}]},{"en":"Rooms","cn":"房务部","subs":[{"en":"Rooms Administration","cn":"房务部办公室"},{"en":"FD & DM","cn":"前台 & 值班经理"},{"en":"GR& GS","cn":"礼宾部 & 宾客关系部"},{"en":"Housekeeping","cn":"客房部"},{"en":"Laundry","cn":"洗衣房"},{"en":"Loss Prevention","cn":"防损部"},{"en":"PBX","cn":"总机"},{"en":"Ritz Club","cn":"行政酒廊"},{"en":"Spa & Fitness","cn":"水疗与健身中心"}]},{"en":"S & M","cn":"市场销售部","subs":[{"en":"S&M Administration","cn":"市场销售部办公室"},{"en":"Catering","cn":"宴会销售部"},{"en":"Public Relations","cn":"公关部"},{"en":"Reservation","cn":"预订部"},{"en":"Sales","cn":"销售部"}]}];
+  // 按当前语言取员工部门显示文案（大部门 · 子部门）
+  function deptLabel(u) {
+    if (!u) return '';
+    var en = getLang() === 'en';
+    var div = en ? (u.divEn || u.div) : (u.div || u.divEn);
+    var dep = en ? (u.deptEn || u.dept) : (u.dept || u.deptEn);
+    return [div, dep].filter(Boolean).join(' · ');
+  }
 
   function sha256hex(str) {
     var c = window.crypto || window.msCrypto;
@@ -69,6 +88,8 @@ var GG = (function () {
       loginTitle: '员工登录', loginSub: '使用工号登录，首次使用请设置 6 位密码',
       empNo: '工号', password: '密码（6 位数字）', newPassword: '设置密码（6 位数字）',
       cnName: '中文姓名', enName: 'English Name', dept: '部门',
+      div: '大部门', divPh: '请选择大部门', deptPh: '请选择子部门',
+      anon: '匿名', postAnon: '匿名写这条备注', allowAnon: '允许员工匿名写备注',
       loginBtn: '登录', regBtn: '注册并进入', claimBtn: '确认并设置密码',
       claimTip: '系统已存在工号记录，请设置密码完成认领',
       empReq: '请输入工号', nameReq: '请输入中文姓名', pinReq: '密码必须是 6 位数字',
@@ -124,6 +145,8 @@ var GG = (function () {
       loginTitle: 'Colleague Sign-in', loginSub: 'Sign in with your employee number, or set a 6-digit password on first use',
       empNo: 'Employee No.', password: 'Password (6 digits)', newPassword: 'Set password (6 digits)',
       cnName: 'Chinese name', enName: 'English Name', dept: 'Department',
+      div: 'Division', divPh: 'Select a division', deptPh: 'Select a department',
+      anon: 'Anonymous', postAnon: 'Post this note anonymously', allowAnon: 'Allow anonymous notes',
       loginBtn: 'Sign in', regBtn: 'Register & enter', claimBtn: 'Confirm & set password',
       claimTip: 'This employee number already exists — set a password to claim it',
       empReq: 'Employee number required', nameReq: 'Chinese name required', pinReq: 'Password must be 6 digits',
@@ -198,11 +221,11 @@ var GG = (function () {
       gateCode: 'RC2026',      // 明文备份（仅本地模式/首次引导用）
       gateDays: 30,
       adminHash: '',
-      mapKey: '',
+      mapKey: 'GGZBZ-FAULA-NWGKD-C47YL-BOIS2-E6FZJ',   // 腾讯位置服务 Key（员工提供，可在后台更换）
       center: { lat: 22.5376, lng: 114.0235 },   // 深圳星河丽思卡尔顿（福田）
       zoom: 12,
       thr: { gold: 8, loved: 3, watch: -2, grey: -3, black: -8, goldRatio: 0.8, goldMin: 10, greyMin: 5 },
-      anonNote: false,
+      anonNote: true,          // 允许员工写匿名备注（写的时候自己勾选）
       showName: true,
       cats: [
         { id: 'snack', zh: '小吃 · 街边', en: 'Street bites', color: '#F2994A', icon: '🍜' },
@@ -317,10 +340,10 @@ var GG = (function () {
   /* -------- votes -------- */
   function votesList() {
     if (mode === true) {
-      return sbFetch('gg_votes?select=place_id,emp,v,note,updated_at&limit=5000', {}, 12000)
+      return sbFetch('gg_votes?select=place_id,emp,v,note,anon,updated_at&limit=5000', {}, 12000)
         .then(function (rows) {
           return (rows || []).map(function (r) {
-            return { placeId: r.place_id, emp: r.emp, v: r.v, note: r.note, ts: Date.parse(r.updated_at) || 0 };
+            return { placeId: r.place_id, emp: r.emp, v: r.v, note: r.note, anon: !!r.anon, ts: Date.parse(r.updated_at) || 0 };
           });
         }).catch(function () { return lget(LS.votes, []); });
     }
@@ -335,7 +358,7 @@ var GG = (function () {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify({
-        place_id: v.placeId, emp: v.emp, v: v.v, note: v.note || null, updated_at: new Date(v.ts || now()).toISOString()
+        place_id: v.placeId, emp: v.emp, v: v.v, note: v.note || null, anon: !!v.anon, updated_at: new Date(v.ts || now()).toISOString()
       })
     }, 12000).then(function () { return true; }, function () { return false; });
   }
@@ -395,7 +418,7 @@ var GG = (function () {
     for (var i = 0; i < votes.length; i++) {
       var v = votes[i]; if (!v || v.placeId !== placeId) continue;
       if (v.v > 0) up++; else if (v.v < 0) down++;
-      if (v.note) notes.push({ emp: v.emp, text: v.note, ts: v.ts || 0 });
+      if (v.note) notes.push({ emp: v.emp, text: v.note, anon: !!v.anon, ts: v.ts || 0 });
     }
     notes.sort(function (a, b) { return b.ts - a.ts; });
     return { up: up, down: down, net: up - down, notes: notes };
@@ -454,6 +477,7 @@ var GG = (function () {
     normEmp: normEmp, isPinValid: isPinValid, sha256hex: sha256hex,
     pinHash: pinHash, gateHash: gateHash, adminHash: adminHash, safeEq: safeEq,
     t: t, setLang: setLang, getLang: getLang, biling: biling, I18N: I18N,
+    DEPTS: DEPTS, deptLabel: deptLabel,
     defaultConfig: defaultConfig,
     lget: lget, lset: lset,
     probe: probe, isCloud: isCloud, setMode: setMode,
