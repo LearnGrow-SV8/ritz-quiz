@@ -48,6 +48,7 @@ var Adm = (function () {
   function reload() {
     return Promise.all([GG.cfgGet(), GG.placesList(), GG.votesList(), GG.usersList()]).then(function (r) {
       S.cfg = r[0]; S.places = r[1] || []; S.votes = r[2] || []; S.users = r[3] || [];
+      S.board = GG.pointsBoard(S.places, S.votes, S.cfg);
     });
   }
 
@@ -55,7 +56,7 @@ var Adm = (function () {
     reload().then(function () {
       var nav = [['overview', t('overview')], ['audit', t('audit')], ['places', t('allP')],
         ['cats', t('categories')], ['dists', t('districts')], ['thr', t('thresholds')],
-        ['bulk', t('bulk')], ['users', t('users')], ['config', t('settings')]];
+        ['bulk', t('bulk')], ['users', t('users')], ['pts', t('ptsRule')], ['config', t('settings')]];
       $('admNav').innerHTML = nav.map(function (n) {
         return '<button class="ni' + (S.tab === n[0] ? ' on' : '') + '" data-n="' + n[0] + '">' + n[1] + '</button>';
       }).join('');
@@ -63,7 +64,7 @@ var Adm = (function () {
         b.addEventListener('click', function () { S.tab = b.getAttribute('data-n'); render(); });
       });
       var f = { overview: viewOverview, audit: viewAudit, places: viewPlaces, cats: viewCats,
-        dists: viewDists, thr: viewThr, bulk: viewBulk, users: viewUsers, config: viewConfig }[S.tab];
+        dists: viewDists, thr: viewThr, bulk: viewBulk, users: viewUsers, pts: viewPts, config: viewConfig }[S.tab];
       $('admBody').innerHTML = f ? f() : '';
       if (f) f.bind && f.bind();
     });
@@ -141,7 +142,11 @@ var Adm = (function () {
       t('dist') + '</th><th>' + t('submitter') + '</th><th>' + t('reasonL') + '</th><th>' + t('status') + '</th><th>' + t('actions') + '</th></tr></thead><tbody>';
     h += list.length ? list.map(function (p) {
       var c = catOf(p.cat);
-      return '<tr><td><b>' + esc(L(p, 'name')) + '</b><div class="rkmeta">' + (p.lat != null ? p.lat.toFixed(4) + ',' + p.lng.toFixed(4) : '无坐标') + '</div></td>' +
+      return '<tr><td><b>' + esc(L(p, 'name')) + '</b>' +
+        (p.locApprox ? ' <span class="status pending">' + esc(t('locApproxTag')) + '</span>' : '') +
+        '<div class="rkmeta">' + (p.lat != null ? p.lat.toFixed(4) + ',' + p.lng.toFixed(4) : '无坐标') +
+        (p.photos && p.photos.length ? ' · 📷' + p.photos.length : '') +
+        (p.stars && p.stars.length ? ' · ⭐' + p.stars.length : '') + '</div></td>' +
         '<td><span class="pd-cat" style="background:' + c.color + '22;color:' + c.color + '">' + c.icon + ' ' + esc(L(c, 'name')) + '</span></td>' +
         '<td>' + esc(distName(p.dist, p)) + '</td>' +
         '<td>' + esc(p.empName || p.emp || '—') + '<div class="rkmeta">' + fmt(p.createdAt) + '</div></td>' +
@@ -386,6 +391,60 @@ var Adm = (function () {
     return h;
   }
 
+  /* ---------------- 积分规则 ---------------- */
+  var PTS_FIELDS = [['addr', 'addrL'], ['hours', 'hoursL'], ['phone', 'phoneL'], ['price', 'priceL'],
+    ['nameEn', 'enName'], ['tags', 'tipsL'], ['tips', 'tipsL'], ['auds', 'audience'], ['dist', 'dist']];
+  function viewPts() {
+    var R = GG.ptsCfg(S.cfg), board = S.board || [];
+    var h = '<h2>' + t('ptsRule') + '</h2><div class="dsc">' + t('ptsHint') + '</div>';
+    h += '<div class="panel"><h3>🏆 ' + t('pointBoard') + '（TOP 10）</h3>' +
+      (board.length ? '<table class="tbl"><thead><tr><th>#</th><th>' + t('submitter') + '</th><th>' +
+        t('dept') + '</th><th>' + t('points') + '</th></tr></thead><tbody>' +
+        board.slice(0, 10).map(function (b, i) {
+          var u = S.users.filter(function (x) { return GG.normEmp(x.emp) === b.emp; })[0] || {};
+          return '<tr><td>' + (i === 0 ? '👑' : i + 1) + '</td><td><b>' + esc(u.name || ('#' + b.emp)) + '</b></td>' +
+            '<td>' + esc(GG.deptLabel(u)) + '</td><td><b>' + b.total + '</b> ' + esc(t('ptsUnit')) + '</td></tr>';
+        }).join('') + '</tbody></table>' : '<div class="empty">' + t('ptsEmpty') + '</div>') + '</div>';
+    h += '<div class="panel"><h3>' + t('points') + '</h3><div class="grid2">' +
+      fld(t('ptsBase'), '<input id="ppBase" type="number" value="' + R.base + '">') +
+      fld(t('ptsUp'), '<input id="ppUp" type="number" value="' + R.upEach + '">') +
+      fld(t('ptsDown') + '（填正数，表示扣多少）', '<input id="ppDown" type="number" value="' + R.downEach + '">') +
+      fld(t('ptsUnit') + ' / ' + t('photo'), '<input id="ppPhoto" type="number" value="' + R.photoEach + '">') +
+      fld(t('photo') + ' 计数上限', '<input id="ppPhotoMax" type="number" value="' + R.photoMax + '">') +
+      fld(t('ptsUnit') + ' / ' + t('mustTry'), '<input id="ppStar" type="number" value="' + R.starEach + '">') +
+      fld(t('mustTry') + ' 计数上限', '<input id="ppStarMax" type="number" value="' + R.starMax + '">') +
+      fld(t('helper') + ' · ' + t('photo'), '<input id="ppHP" type="number" value="' + R.helperPhoto + '">') +
+      fld(t('helper') + ' · ' + t('mustTry'), '<input id="ppHS" type="number" value="' + R.helperStar + '">') +
+      fld(t('helper') + ' · 💬 ' + t('notes'), '<input id="ppHN" type="number" value="' + R.helperNote + '">') +
+      '</div>' +
+      '<label class="chkline mt14"><input type="checkbox" id="ppFloor"' + (R.floorEnable ? ' checked' : '') + '> ' +
+      esc(t('ptsFloor')) + ' — ' + esc(t('ptsFloorTip')) + '</label>' +
+      '<div class="btnrow mt14"><button class="mini ok" id="ppSave">' + t('ptsSave') + '</button></div></div>';
+    h += '<div class="panel"><h3>' + t('complete') + '</h3><div class="dsc">每补齐一项资料额外加分</div><div class="grid2">' +
+      PTS_FIELDS.map(function (f) {
+        var lab = t(f[1]) + (f[0] === 'tags' ? ' · 标签' : '');
+        return fld(lab, '<input id="ppf_' + f[0] + '" type="number" value="' + R.field[f[0]] + '">');
+      }).join('') + '</div>' +
+      '<div class="btnrow mt14"><button class="mini ok" id="ppSave2">' + t('ptsSave') + '</button></div></div>';
+    viewPts.bind = function () {
+      var save = function () { collectPts(); };
+      $('ppSave').addEventListener('click', save);
+      $('ppSave2').addEventListener('click', save);
+    };
+    return h;
+  }
+  function collectPts() {
+    var o = {
+      base: +$('ppBase').value || 0, upEach: +$('ppUp').value || 0, downEach: +$('ppDown').value || 0,
+      photoEach: +$('ppPhoto').value || 0, photoMax: +$('ppPhotoMax').value || 0,
+      starEach: +$('ppStar').value || 0, starMax: +$('ppStarMax').value || 0,
+      helperPhoto: +$('ppHP').value || 0, helperStar: +$('ppHS').value || 0, helperNote: +$('ppHN').value || 0,
+      floorEnable: $('ppFloor').checked, field: {}
+    };
+    PTS_FIELDS.forEach(function (f) { o.field[f[0]] = +$('ppf_' + f[0]).value || 0; });
+    GG.cfgSet('pts', o).then(function () { GG.toast(t('saved_ok')); render(); });
+  }
+
   /* ---------------- 批量导入 ---------------- */
   function viewBulk() {
     var cats = (S.cfg.cats || []).map(function (c) { return c.id + '=' + L(c, 'name'); }).join('，');
@@ -460,20 +519,27 @@ var Adm = (function () {
 
   /* ---------------- 员工管理 ---------------- */
   function viewUsers() {
-    var list = S.users.slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
-    var h = '<h2>' + t('users') + '</h2><div class="dsc">' + t('total') + ' ' + list.length + '</div>' +
+    var board = S.board || [];
+    function ptsOf(emp) {
+      for (var i = 0; i < board.length; i++) if (GG.normEmp(board[i].emp) === GG.normEmp(emp)) return board[i].total;
+      return 0;
+    }
+    var list = S.users.slice().sort(function (a, b) { return ptsOf(b.emp) - ptsOf(a.emp) || (b.createdAt || 0) - (a.createdAt || 0); });
+    var h = '<h2>' + t('users') + '</h2><div class="dsc">' + t('total') + ' ' + list.length + ' · 按' + t('points') + '排序</div>' +
       '<div class="panel"><table class="tbl"><thead><tr><th>' + t('empNo') + '</th><th>' + t('cnName') + '</th><th>' +
-      t('dept') + '</th><th>注册时间</th><th>密码</th><th>' + t('status') + '</th><th>' + t('actions') + '</th></tr></thead><tbody>';
+      t('dept') + '</th><th>' + t('points') + '</th><th>注册时间</th><th>密码</th><th>' + t('status') + '</th><th>' + t('actions') + '</th></tr></thead><tbody>';
     h += list.length ? list.map(function (u) {
       var vc = S.votes.filter(function (v) { return v && GG.normEmp(v.emp) === GG.normEmp(u.emp); }).length;
+      var sub = S.places.filter(function (p) { return GG.normEmp(p.emp) === GG.normEmp(u.emp); }).length;
       return '<tr><td><b>' + esc(u.emp) + '</b></td><td>' + esc(u.name || '') + ' <span class="rkmeta">' + esc(u.nameEn || '') + '</span></td>' +
-        '<td>' + esc(GG.deptLabel(u)) + '</td><td>' + fmt(u.createdAt) + '</td>' +
+        '<td>' + esc(GG.deptLabel(u)) + '</td><td><b>' + ptsOf(u.emp) + '</b> <span class="rkmeta">' + sub + ' 店</span></td>' +
+        '<td>' + fmt(u.createdAt) + '</td>' +
         '<td>' + (u.pinHash ? '已设置' : '<span style="color:var(--warn)">未设置</span>') + '</td>' +
         '<td>' + (u.blocked ? '<span class="status rejected">已停用</span>' : '<span class="status approved">正常</span>') +
         ' <span class="rkmeta">' + vc + ' 次互动</span></td>' +
         '<td class="nowrap"><button class="mini gh" data-rp="' + esc(u.emp) + '">重置密码</button> ' +
         '<button class="mini ' + (u.blocked ? 'ok' : 'no') + '" data-bk="' + esc(u.emp) + '">' + (u.blocked ? '启用' : '停用') + '</button></td></tr>';
-    }).join('') : '<tr><td colspan="7"><div class="empty">' + t('none') + '</div></td></tr>';
+    }).join('') : '<tr><td colspan="8"><div class="empty">' + t('none') + '</div></td></tr>';
     h += '</tbody></table></div>';
     viewUsers.bind = function () {
       Array.prototype.forEach.call($('admBody').querySelectorAll('[data-rp]'), function (b) {
