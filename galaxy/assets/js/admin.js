@@ -467,7 +467,7 @@ var Adm = (function () {
     h += list.length ? list.map(function (u) {
       var vc = S.votes.filter(function (v) { return v && GG.normEmp(v.emp) === GG.normEmp(u.emp); }).length;
       return '<tr><td><b>' + esc(u.emp) + '</b></td><td>' + esc(u.name || '') + ' <span class="rkmeta">' + esc(u.nameEn || '') + '</span></td>' +
-        '<td>' + esc(u.dept || '') + '</td><td>' + fmt(u.createdAt) + '</td>' +
+        '<td>' + esc(GG.deptLabel(u)) + '</td><td>' + fmt(u.createdAt) + '</td>' +
         '<td>' + (u.pinHash ? '已设置' : '<span style="color:var(--warn)">未设置</span>') + '</td>' +
         '<td>' + (u.blocked ? '<span class="status rejected">已停用</span>' : '<span class="status approved">正常</span>') +
         ' <span class="rkmeta">' + vc + ' 次互动</span></td>' +
@@ -517,7 +517,7 @@ var Adm = (function () {
       fld('默认缩放', '<input id="cZoom" type="number" value="' + ((S.cfg && S.cfg.zoom) || 12) + '">') +
       '<button class="mini bl" id="cCenterSave">' + t('saved_ok') + '</button></div>' +
       '<div class="panel"><h3>隐私</h3>' +
-      '<label class="chkline"><input type="checkbox" id="cAnon"' + (S.cfg.anonNote ? ' checked' : '') + '> 备注默认匿名</label>' +
+      '<label class="chkline"><input type="checkbox" id="cAnon"' + (S.cfg.anonNote ? ' checked' : '') + '> ' + t('allowAnon') + '</label>' +
       '<label class="chkline"><input type="checkbox" id="cShow"' + (S.cfg.showName !== false ? ' checked' : '') + '> ' + t('showName') + '</label>' +
       '<button class="mini bl mt8" id="cPrivSave">' + t('saved_ok') + '</button></div>' +
       '<div class="panel"><div class="btnrow"><button class="mini gh" id="cOut">' + t('logout') + '</button>' +
