@@ -136,6 +136,18 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 @keyframes timerBlink { 50% { opacity: 0.3; } }
 .exam-score { font-size:14px; color:var(--text-light); }
 
+/* ===== 答题赛倒计时：会流动、随时间缩短的时间条 ===== */
+.race-timer-track { position:relative; height:10px; border-radius:6px; background:var(--primary-soft); border:1px solid var(--border); overflow:hidden; margin:-8px 0 14px; }
+.race-timer-fill { position:relative; height:100%; width:100%; border-radius:6px; background:var(--primary-light); transition:width .25s linear, background-color .3s linear; }
+/* 斜纹持续平移 = 时间"流动"的视觉 */
+.race-timer-fill::after { content:''; position:absolute; inset:0; border-radius:6px;
+  background-image:repeating-linear-gradient(115deg, rgba(255,255,255,.45) 0 7px, rgba(255,255,255,0) 7px 15px);
+  animation: raceTimerFlow .55s linear infinite; }
+@keyframes raceTimerFlow { from { background-position:0 0; } to { background-position:30px 0; } }
+.race-timer-fill.warn { background:var(--warning); }
+.race-timer-fill.urgent { background:var(--danger); }
+.race-timer-track.urgent { border-color:var(--danger); }
+
 .result-card { text-align:center; padding:30px 20px; }
 .result-card .score-circle { width:120px; height:120px; border-radius:50%; margin:0 auto 16px; display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:700; border:4px solid; }
 .result-card .score-circle.pass { border-color:var(--success); color:var(--success); }
@@ -7223,25 +7235,59 @@ function raceStart(sectionKey) {
   state.raceTimer = setInterval(raceTick, 250);
   navigate('racePlay');
 }
-// 剩余秒数。渲染和 tick 共用同一处计算，避免两处算法漂移。
-function raceLeftSec() {
+// 剩余毫秒。渲染和 tick 共用同一处计算，避免两处算法漂移；
+// 用毫秒是为了让时间条连续流动（只看整秒会一跳一跳）。
+function raceLeftMs() {
   var r = state.race;
   if (!r) return 0;
-  return Math.max(0, (r.conf.limitSec || 60) - Math.floor((Date.now() - r.startTs) / 1000));
+  return Math.max(0, (r.conf.limitSec || 60) * 1000 - (Date.now() - r.startTs));
+}
+// 剩余秒数（向上取整：一直到真正归零才显示 0）
+function raceLeftSec() {
+  return Math.ceil(raceLeftMs() / 1000);
+}
+// 剩余比例 0~100，时间条宽度用
+function raceLeftPct() {
+  var r = state.race;
+  if (!r) return 0;
+  var total = (r.conf.limitSec || 60) * 1000;
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(100, raceLeftMs() / total * 100));
+}
+// 时间条配色：>50% 品牌蓝，>10s 橙，<=10s 红
+function raceTimerLevel(pct, leftSec) {
+  if (leftSec <= 10) return 'urgent';
+  if (pct <= 50) return 'warn';
+  return '';
 }
 function raceTick() {
   var r = state.race; if (!r) { clearRaceTimer(); return; }
-  var left = raceLeftSec();
+  var left = raceLeftSec(), pct = raceLeftPct(), lv = raceTimerLevel(pct, left);
   var el = document.getElementById('raceTimer');
   if (el) {
     el.textContent = '⏱ ' + left + 's';
     el.className = 'exam-timer' + (left <= 10 ? ' urgent' : '');
   }
-  if (left <= 0) raceEnd('timeout');
+  var fill = document.getElementById('raceTimerFill');
+  if (fill) {
+    fill.style.width = pct.toFixed(2) + '%';
+    fill.className = 'race-timer-fill' + (lv ? ' ' + lv : '');
+  }
+  var track = document.getElementById('raceTimerTrack');
+  if (track) track.className = 'race-timer-track' + (lv === 'urgent' ? ' urgent' : '');
+  if (left <= 0) {
+    // 稍微等一下再收卷：让时间条完整走到 0（空掉），而不是刚变红就跳结果页
+    if (!r.ending) {
+      r.ending = true;
+      setTimeout(function () { raceEnd('timeout'); }, RACE_END_DELAY_MS);
+    }
+  }
 }
 function clearRaceTimer() { if (state.raceTimer) { clearInterval(state.raceTimer); state.raceTimer = null; } }
+// 时间归零后到真正收卷之间的缓冲，给时间条留出走完的动画时间
+var RACE_END_DELAY_MS = 350;
 function racePick(i) {
-  var r = state.race; if (!r) return;
+  var r = state.race; if (!r || r.ending) return;
   var q = r.pool[r.idx];
   if (q && q.type === 'multiple') {
     if (!r.cur) r.cur = [];
@@ -7254,7 +7300,7 @@ function racePick(i) {
   raceAdvance();
 }
 function raceAdvance() {
-  var r = state.race; if (!r) return;
+  var r = state.race; if (!r || r.ending) return;
   r.answers[r.idx] = { ans: (r.cur && r.cur.length) ? r.cur.slice() : [] };
   r.cur = null;
   r.idx++;
@@ -7505,6 +7551,12 @@ function renderRacePlay() {
   html += '<div class="exam-info">';
   html += '<span class="exam-timer" id="raceTimer">⏱ ' + raceLeftSec() + 's</span>';
   html += '<span class="exam-score">' + t('race_answered') + ' ' + idx + '</span>';
+  html += '</div>';
+  // 时间条：开局满格，随剩余时间连续缩短，归零即空。
+  // raceTick 每 250ms 只改宽度（配合 CSS transition 就是平滑流动），切题重绘时按当前值重建。
+  var pct0 = raceLeftPct(), lv0 = raceTimerLevel(pct0, raceLeftSec());
+  html += '<div class="race-timer-track' + (lv0 === 'urgent' ? ' urgent' : '') + '" id="raceTimerTrack">';
+  html += '<div class="race-timer-fill' + (lv0 ? ' ' + lv0 : '') + '" id="raceTimerFill" style="width:' + pct0.toFixed(2) + '%;"></div>';
   html += '</div>';
   html += '<div class="q-card">';
   html += '<div class="q-header">';
