@@ -218,10 +218,13 @@ var App = (function () {
     h += '<div class="notes"><h4>' + t('notes') + '（' + p._notes.length + '）</h4>';
     if (!p._notes.length) h += '<div class="rkmeta">' + t('noNote') + '</div>';
     p._notes.forEach(function (n) {
-      var who = (!S.cfg.anonNote && S.cfg.showName) ? nameOf(n.emp) : (S.cfg.anonNote ? '' : n.emp);
+      var who = n.anon ? t('anon') : (S.cfg.showName === false ? '' : nameOf(n.emp));
       h += '<div class="note"><div class="who"><span>' + esc(who || '—') + '</span><span>' + fmtDate(n.ts) + '</span></div>' + esc(n.text) + '</div>';
     });
     h += '<div class="notebox"><input id="nText" placeholder="' + esc(t('notePh')) + '" /><button id="nSend">' + t('noteSend') + '</button></div>';
+    if (S.cfg.anonNote) {
+      h += '<label class="chkline" style="margin:8px 0 0"><input type="checkbox" id="nAnon" /> ' + esc(t('postAnon')) + '</label>';
+    }
     h += '</div>';
 
     openSheet(t('detail'), h);
@@ -259,7 +262,8 @@ var App = (function () {
     var txt = String(($('nText') || {}).value || '').trim();
     if (!txt) return;
     var mine = myVote(p.id);
-    GG.votePut({ placeId: p.id, emp: GG.normEmp(S.me.emp), v: mine.v || 0, note: txt, ts: GG.now() })
+    var anon = !!(S.cfg.anonNote && $('nAnon') && $('nAnon').checked);
+    GG.votePut({ placeId: p.id, emp: GG.normEmp(S.me.emp), v: mine.v || 0, note: txt, anon: anon, ts: GG.now() })
       .then(function () { refresh(false).then(function () { openPlace(p.id); }); });
   }
 
@@ -321,7 +325,7 @@ var App = (function () {
   function openMine() {
     var h = '<div class="kv"><div class="k">' + t('empNo') + '</div><div class="v">' + esc(S.me.emp) + '</div></div>' +
       '<div class="kv"><div class="k">' + t('cnName') + '</div><div class="v">' + esc(S.me.name || '—') + '</div></div>' +
-      '<div class="kv"><div class="k">' + t('dept') + '</div><div class="v">' + esc(S.me.dept || '—') + '</div></div>' +
+      '<div class="kv"><div class="k">' + t('dept') + '</div><div class="v">' + esc(GG.deptLabel(S.me) || '—') + '</div></div>' +
       '<div class="divider"></div>' +
       '<div class="btnrow">' +
       '<button class="btn sm line" id="mSub">' + t('mySub') + '</button>' +
