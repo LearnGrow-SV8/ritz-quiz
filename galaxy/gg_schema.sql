@@ -19,15 +19,18 @@ create table if not exists public.gg_places (
 );
 create index if not exists gg_places_updated_idx on public.gg_places (updated_at desc);
 
--- ---------- 2. 投票与备注（一人一店一条，可改） ----------
+-- ---------- 2. 投票与备注（一人一店一条，可改；anon=该条备注匿名展示） ----------
 create table if not exists public.gg_votes (
   place_id    text        not null,
   emp         text        not null,
   v           smallint    not null default 0,
   note        text,
+  anon        boolean     not null default false,
   updated_at  timestamptz not null default now(),
   primary key (place_id, emp)
 );
+-- 兼容已建过旧版表的环境（幂等补列）
+alter table public.gg_votes add column if not exists anon boolean not null default false;
 create index if not exists gg_votes_updated_idx on public.gg_votes (updated_at desc);
 
 -- ---------- 3. 员工账户 ----------
