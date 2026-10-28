@@ -4394,6 +4394,8 @@ var I18N = {
   race_board_empty: {cn:'还没有人提交成绩', en:'No scores submitted yet'},
   race_again: {cn:'再挑战一次', en:'Try again'},
   race_confirm: {cn:'确认作答', en:'Confirm'},
+  race_confirm_hint: {cn:'选好后点下方「确认作答」，确认后不能修改', en:'Tap Confirm below once you choose - it cannot be changed'},
+  race_need_pick: {cn:'请先选择一个答案再确认', en:'Please choose an answer first'},
   race_view_board: {cn:'查看排行榜', en:'View leaderboard'},
   race_review: {cn:'查看答案解析', en:'Review answers'},
   race_submit_ok: {cn:'成绩已提交', en:'Score submitted'},
@@ -7286,6 +7288,8 @@ function raceTick() {
 function clearRaceTimer() { if (state.raceTimer) { clearInterval(state.raceTimer); state.raceTimer = null; } }
 // 时间归零后到真正收卷之间的缓冲，给时间条留出走完的动画时间
 var RACE_END_DELAY_MS = 350;
+// 点选项只是"选中"，不提交；单选和多选都要再点「确认作答」（防误触选错）。
+// 单选再点一次同一项 = 取消选择。
 function racePick(i) {
   var r = state.race; if (!r || r.ending) return;
   var q = r.pool[r.idx];
@@ -7296,11 +7300,12 @@ function racePick(i) {
     render();
     return;
   }
-  r.cur = [i];
-  raceAdvance();
+  r.cur = (r.cur && r.cur.length === 1 && r.cur[0] === i) ? null : [i];
+  render();
 }
 function raceAdvance() {
   var r = state.race; if (!r || r.ending) return;
+  if (!r.cur || !r.cur.length) { alert(t('race_need_pick')); return; }
   r.answers[r.idx] = { ans: (r.cur && r.cur.length) ? r.cur.slice() : [] };
   r.cur = null;
   r.idx++;
@@ -7567,6 +7572,9 @@ function renderRacePlay() {
   var cur = r.cur || [];
   if (q.type === 'multiple') {
     html += '<div class="fill-hint">💡 ' + t('multi_hint') + '</div>';
+  } else {
+    // 单选题改成"先选中再确认"，给一句提示，避免有人点完选项不知道还要确认
+    html += '<div class="fill-hint">💡 ' + t('race_confirm_hint') + '</div>';
   }
   html += '<div class="options">';
   for (var i = 0; i < (q.options || []).length; i++) {
@@ -7578,9 +7586,9 @@ function renderRacePlay() {
   }
   html += '</div>';
   html += '</div>';
-  if (q.type === 'multiple') {
-    html += '<div class="q-nav"><button class="nav-btn primary" style="flex:1;" onclick="raceAdvance()">' + t('race_confirm') + '</button></div>';
-  }
+  // 单选/多选都要点「确认作答」才提交，减少误触选错
+  var picked = cur.length > 0;
+  html += '<div class="q-nav"><button class="nav-btn ' + (picked ? 'primary' : 'secondary') + '" style="flex:1;" onclick="raceAdvance()">' + t('race_confirm') + '</button></div>';
   html += '</div>';
   return html;
 }
