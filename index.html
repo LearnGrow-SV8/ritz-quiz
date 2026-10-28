@@ -4373,6 +4373,12 @@ var I18N = {
   race_board_all: {cn:'全酒店榜', en:'Hotel-wide'},
   race_board_dept: {cn:'部门榜', en:'My division'},
   race_board_best: {cn:'历史最佳榜', en:'All-time best'},
+  race_board_hint_period: {cn:'本届赛事成绩 · 全酒店所有人一起排名，发布新一届后重新计算', en:'Current round · everyone in the hotel, resets on a new round'},
+  race_board_hint_dept: {cn:'本届赛事成绩 · 只看你所在部门', en:'Current round · your division only'},
+  race_board_hint_dept_end: {cn:'的人', en:''},
+  race_board_hint_dept_none: {cn:'本届赛事成绩 · 你还没有填写部门，暂时看不到部门榜', en:'Current round · no division on your profile yet'},
+  race_board_hint_best: {cn:'历届个人最好成绩 · 全酒店所有人，发布新一届也不会清空', en:'Personal best across all rounds · everyone, never reset'},
+  race_board_hint_noconf: {cn:'（本机还没同步到赛事，本榜可能为空）', en:'(No round synced on this device, this board may be empty)'},
   race_board_empty: {cn:'还没有人提交成绩', en:'No scores submitted yet'},
   race_again: {cn:'再挑战一次', en:'Try again'},
   race_view_board: {cn:'查看排行榜', en:'View leaderboard'},
@@ -7488,6 +7494,22 @@ function raceBoardChip(key, label, active) {
     + 'white-space:nowrap;cursor:pointer;background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';">'
     + label + '</button>';
 }
+// 三个榜的口径不一样（本届全员 / 本届本部门 / 历届个人最佳），页签下面用一行灰字讲清楚，
+// 免得学员以为"点了没反应"，或者换届后看到前两个榜空了以为成绩丢了。
+function raceBoardScopeHint(tab) {
+  var s;
+  if (tab === 'best') return '\ud83c\udfc5 ' + t('race_board_hint_best');
+  if (tab === 'dept') {
+    var d = raceDeptName();
+    s = d ? ('\ud83c\udfe2 ' + t('race_board_hint_dept') + '\u300c' + escapeHtml(d) + '\u300d' + t('race_board_hint_dept_end'))
+          : ('\ud83c\udfe2 ' + t('race_board_hint_dept_none'));
+  } else {
+    s = '\ud83c\udfe8 ' + t('race_board_hint_period');
+  }
+  // 前两个榜强依赖本机有没有同步到当前这一届赛事，没同步到就必定为空，提前说清楚。
+  if (!raceConfOf()) s += ' ' + t('race_board_hint_noconf');
+  return s;
+}
 function renderRaceBoard() {
   var tab = state.raceBoardTab || 'period';
   var html = renderAppHeader({ title: '🏆 ' + t('race_board'), subtitle: raceConfOf() ? (raceConfOf().title || '') : '' });
@@ -7501,11 +7523,12 @@ function renderRaceBoard() {
       if (state.currentPage === 'raceBoard' && (state.raceBoardTs || 0) !== _tsBefore) render();
     });
   }
-  html += '<div style="display:flex;gap:8px;margin-bottom:12px;">';
+  html += '<div style="display:flex;gap:8px;margin-bottom:6px;">';
   html += '<button class="action-btn ' + (tab === 'period' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'period\';render()">' + t('race_board_all') + '</button>';
   html += '<button class="action-btn ' + (tab === 'dept' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'dept\';render()">' + t('race_board_dept') + '</button>';
   html += '<button class="action-btn ' + (tab === 'best' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'best\';render()">' + t('race_board_best') + '</button>';
   html += '</div>';
+  html += '<div style="font-size:12px;color:#999;line-height:1.5;margin:0 0 10px;">' + raceBoardScopeHint(tab) + '</div>';
   var sec = state.raceBoardSec || '';
   html += '<div style="display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch;">';
   html += raceBoardChip('', '\ud83d\udcca ' + t('race_filter_all'), !sec);
