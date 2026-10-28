@@ -4353,7 +4353,7 @@ var I18N = {
   race_start: {cn:'开始答题', en:'Start'},
   race_pick_section: {cn:'选择板块', en:'Choose a section'},
   race_pool_size: {cn:'题目池', en:'Question pool'},
-  race_limit: {cn:'限时', en:'Time limit'},
+  race_limit: {cn:'答题时长', en:'Duration'},
   race_no_conf: {cn:'当前没有进行中的答题赛，请联系培训部', en:'No active quiz right now. Please contact Learning.'},
   race_pending: {cn:'答题赛尚未开始', en:'The quiz has not started yet'},
   race_ended: {cn:'本期答题赛已结束', en:'This round has ended'},
@@ -4377,6 +4377,9 @@ var I18N = {
   race_pool_done: {cn:'题目已答完', en:'All questions answered'},
   race_exit_confirm: {cn:'现在退出本次成绩将不计入，确定退出吗？', en:'Leaving now will discard this attempt. Continue?'},
   race_loading: {cn:'正在载入排行榜…', en:'Loading leaderboard…'},
+  race_board_fail: {cn:'排行榜拉取失败，请检查网络后重试', en:'Could not load the leaderboard. Check your connection and retry.'},
+  race_board_retry: {cn:'重新载入排行榜', en:'Reload leaderboard'},
+  race_board_off: {cn:'当前无法连接云端，暂时看不到排行榜', en:'Cloud unreachable — the leaderboard is unavailable right now.'},
   race_you: {cn:'（我）', en:' (you)'},
   race_admin_hub: {cn:'限时答题赛', en:'Speed Quiz'},
   race_admin_hub_desc: {cn:'发布赛事、设置板块与时限、导出成绩', en:'Publish rounds, set section & time limit, export scores'},
@@ -7252,21 +7255,23 @@ function raceBoardRows(scope) {
     var raw = list[i];
     var race = raceRecordOf(raw);
     if (!race) continue;
-    var it = { phone: raw ? raw.phone : '', race: race };
+    // 快照行里的身份键是 akey / key（形如 e123456）；phone 只是历史遗留字段，
+    // 很多学员为空，用它会让「（我）」高亮永远匹配不上。
+    var it = { key: String((raw && (raw.akey || raw.key || raw.phone)) || ''), race: race };
     if (scope === 'period') {
       var e = (c && it.race.byRound) ? it.race.byRound[c.id] : null;
       if (!e) continue;
       if (!raceSecOk(e, secFilter)) continue;
-      rows.push({ key: it.phone, name: it.race.name || it.phone, dept: it.race.dept || '', section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts });
+      rows.push({ key: it.key, name: it.race.name || it.key, dept: it.race.dept || '', section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts });
     } else if (scope === 'dept') {
       var e2 = (c && it.race.byRound) ? it.race.byRound[c.id] : null;
       if (!e2 || (it.race.dept || '') !== myDept) continue;
       if (!raceSecOk(e2, secFilter)) continue;
-      rows.push({ key: it.phone, name: it.race.name || it.phone, dept: it.race.dept || '', section: e2.section || 'all', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: e2.ts });
+      rows.push({ key: it.key, name: it.race.name || it.key, dept: it.race.dept || '', section: e2.section || 'all', correct: e2.correct, answered: e2.answered, acc: e2.acc, ts: e2.ts });
     } else {
       if (!it.race.best) continue;
       if (!raceSecOk(it.race.best, secFilter)) continue;
-      rows.push({ key: it.phone, name: it.race.name || it.phone, dept: it.race.dept || '', section: it.race.best.section || 'all', correct: it.race.best.correct, answered: it.race.best.answered || 0, acc: it.race.best.acc, ts: it.race.best.ts });
+      rows.push({ key: it.key, name: it.race.name || it.key, dept: it.race.dept || '', section: it.race.best.section || 'all', correct: it.race.best.correct, answered: it.race.best.answered || 0, acc: it.race.best.acc, ts: it.race.best.ts });
     }
   }
   rows.sort(function (a, b) {
@@ -7276,14 +7281,46 @@ function raceBoardRows(scope) {
   });
   return rows;
 }
-function raceFetchBoard() {
-  if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbListSnapshots !== 'function') return Promise.resolve([]);
-  return sbListSnapshots(0, true).then(function (rows) {
-    if (!Array.isArray(rows)) return [];
+// sbListSnapshots 解析后给的是 {success,count,records,ts}，不是数组。以前这里
+// 直接 Array.isArray(rows) 判断 → 永远走空分支，state.raceBoard 从头到尾没被
+// 赋过值 → 排行榜永远停在「正在载入排行榜…」。统一从这个入口归一成记录数组。
+function sbSnapshotRecordList(res) {
+  if (!res) return [];
+  if (Array.isArray(res)) return res;
+  if (Array.isArray(res.records)) return res.records;
+  return [];
+}
+function raceFetchBoard(force) {
+  if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbListSnapshots !== 'function') {
+    state.raceBoardState = 'off';
+    return Promise.resolve([]);
+  }
+  // 已拿到数据且 15 s 内 → 直接用缓存，避免切板块/切榜单时反复打云端。
+  if (!force && state.raceBoardState === 'ready' && Date.now() - (state.raceBoardTs || 0) < 15000) {
+    return Promise.resolve(state.raceBoard || []);
+  }
+  if (state.raceBoardFetching) return Promise.resolve(state.raceBoard || []);
+  state.raceBoardFetching = true;
+  state.raceBoardState = 'loading';
+  return sbListSnapshots(0, true).then(function (res) {
+    state.raceBoardFetching = false;
+    var rows = sbSnapshotRecordList(res);
     state.raceBoard = rows;
     state.raceBoardTs = Date.now();
+    state.raceBoardState = 'ready';
     return rows;
-  }, function () { return []; });
+  }, function () {
+    state.raceBoardFetching = false;
+    state.raceBoardState = 'error';
+    return [];
+  });
+}
+// 页面里调用：拿完数据自己重画一次。
+function raceBoardReload(force) {
+  state.raceBoardTs = 0;
+  return raceFetchBoard(true).then(function () {
+    if (typeof render === 'function' && state.currentPage === 'raceBoard') render();
+  });
 }
 
 // ---- 页面 ----
@@ -7325,7 +7362,12 @@ function renderRaceHome() {
   if (st === 'open') {
     if (mode === 'choice') {
       var allow = raceAllowedList(c);
-      html += '<div style="font-size:13px;font-weight:600;margin:4px 0 8px;">' + t('race_choose_hint') + '</div>';
+      // 以前只是一行 13px 的小灰字，学员经常没看见 → 改成醒目的提示条。
+      html += '<div style="display:flex;align-items:center;justify-content:center;gap:6px;'
+        + 'margin:12px 0;padding:13px 10px;border-radius:10px;text-align:center;'
+        + 'background:linear-gradient(90deg,#fff4e0,#ffe9cc);border:1px solid #f0b357;'
+        + 'color:#8a4b00;font-size:16px;font-weight:700;letter-spacing:.5px;'
+        + 'box-shadow:0 2px 6px rgba(240,179,87,.25);">👇 ' + t('race_choose_hint') + ' 👇</div>';
       for (var k = 0; k < allow.length; k++) {
         var sk = allow[k];
         html += '<div onclick="raceBegin(\'' + sk + '\')" style="display:flex;align-items:center;gap:10px;padding:12px;margin-bottom:8px;border:1px solid #d8dee4;border-radius:10px;background:#fff;cursor:pointer;">';
@@ -7353,7 +7395,8 @@ function racePoolOfSize(key) {
 }
 function raceOpenBoard() {
   navigate('raceBoard');
-  raceFetchBoard().then(function () { if (state.currentPage === 'raceBoard') render(); });
+  // 刚交完卷就点排行榜的话，缓存里没有自己这次的成绩 → 强制拉一次新的。
+  raceFetchBoard(true).then(function () { if (state.currentPage === 'raceBoard') render(); });
 }
 function renderRacePlay() {
   var r = state.race;
@@ -7443,6 +7486,15 @@ function renderRaceBoard() {
   var tab = state.raceBoardTab || 'period';
   var html = renderAppHeader({ title: '🏆 ' + t('race_board'), subtitle: raceConfOf() ? (raceConfOf().title || '') : '' });
   html += '<div class="page">';
+  // 每次进页面都保证有一份数据（15 s 节流）。以前只有点「排行榜」按钮时才拉，
+  // 从结果页 / 深链 / 返回键进来都是空的 → 永远停在「正在载入排行榜…」。
+  var _tsBefore = state.raceBoardTs || 0;
+  // 失败 / 断网时不要自己偷偷重试，否则错误提示会被"正在载入"盖掉，用户看不出问题。
+  if (state.raceBoardState !== 'error' && state.raceBoardState !== 'off') {
+    raceFetchBoard(false).then(function () {
+      if (state.currentPage === 'raceBoard' && (state.raceBoardTs || 0) !== _tsBefore) render();
+    });
+  }
   html += '<div style="display:flex;gap:8px;margin-bottom:12px;">';
   html += '<button class="action-btn ' + (tab === 'period' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'period\';render()">' + t('race_board_all') + '</button>';
   html += '<button class="action-btn ' + (tab === 'dept' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'dept\';render()">' + t('race_board_dept') + '</button>';
@@ -7461,14 +7513,33 @@ function renderRaceBoard() {
            : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 ' + t('race_board_mix_hint')))
     + '</div>';
   var rows = raceBoardRows(tab);
-  if (!state.raceBoard) {
+  // 已经有数据就当 ready（不管状态位），避免"数据都在却被状态位挡住继续转圈"。
+  var hasData = Array.isArray(state.raceBoard);
+  var bst = hasData ? 'ready' : (state.raceBoardState || 'loading');
+  if (hasData && state.raceBoardState === 'error') {
+    html += '<div class="q-card" style="text-align:center;color:#a14a00;font-size:12px;">⚠️ ' + t('race_board_fail') + '</div>';
+  }
+  if (bst === 'error') {
+    html += '<div class="q-card" style="text-align:center;color:#b3261e;">' + t('race_board_fail') + '</div>';
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceBoardReload(true)">🔄 ' + t('race_board_retry') + '</button>';
+  } else if (bst === 'off') {
+    html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_board_off') + '</div>';
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceBoardReload(true)">🔄 ' + t('race_board_retry') + '</button>';
+  } else if (bst !== 'ready') {
     html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_loading') + '</div>';
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceBoardReload(true)">🔄 ' + t('race_board_retry') + '</button>';
   } else if (!rows.length) {
     html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_board_empty') + '</div>';
   } else {
     var me = String(state.currentUser || '');
     var myKey = '';
-    try { myKey = empKeyFor(); } catch (e) { myKey = ''; }
+    // empKeyFor() 不传参数时恒返回 ''（normEmpNo(undefined)=''）——「（我）」高亮
+    // 从来没生效过。改用账户行键的规范化入口，工号键 / 老格式键都能对上。
+    try {
+      myKey = (typeof accountRowKeyForUser === 'function')
+        ? accountRowKeyForUser(String(state.currentUser || ''), state.profile || {})
+        : String(state.currentUser || '');
+    } catch (e) { myKey = String(state.currentUser || ''); }
     for (var i = 0; i < rows.length; i++) {
       var rw = rows[i];
       var isMe = myKey && rw.key === myKey;
@@ -7634,14 +7705,13 @@ function adminRaceExport() {
   var c = raceConfOf();
   if (!c) { alert(t('race_no_conf')); return; }
   if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbListSnapshots !== 'function') { alert(t('race_admin_no_scores')); return; }
-  sbListSnapshots(0, true).then(function (rows) {
-    if (!Array.isArray(rows)) { alert(t('race_admin_no_scores')); return; }
+  sbListSnapshots(0, true).then(function (res) {
+    // sbListSnapshots 返回 {records:[…]}，不是数组 —— 直接当数组遍历会永远导出 0 条。
+    var rows = (typeof sbSnapshotRecordList === 'function') ? sbSnapshotRecordList(res) : [];
+    if (!rows.length) { alert(t('race_admin_no_scores')); return; }
     var out = [], i;
     for (i = 0; i < rows.length; i++) {
-      var it = rows[i];
-      if (!it || !it.record) continue;
-      var race = null;
-      try { race = typeof it.record === 'string' ? JSON.parse(it.record).race : it.record.race; } catch (e) { race = null; }
+      var race = raceRecordOf(rows[i]);
       if (!race) continue;
       var e2 = race.byRound ? race.byRound[c.id] : null;
       if (!e2) continue;
@@ -11198,14 +11268,14 @@ function dashFetchRace() {
   if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbListSnapshots !== 'function') return Promise.resolve({});
   if (adminState.dashRaceLoading) return Promise.resolve(adminState.dashRaceMap || {});
   adminState.dashRaceLoading = true;
-  return sbListSnapshots(0, true).then(function (rows) {
+  return sbListSnapshots(0, true).then(function (res) {
     var m = {};
-    if (Array.isArray(rows)) {
-      for (var i = 0; i < rows.length; i++) {
-        var rec = raceRecordOf(rows[i]);
-        var k = (rows[i] && (rows[i].phone || rows[i].key || rows[i].akey)) || '';
-        if (rec && k) m[k] = rec;
-      }
+    // 同一个坑：sbListSnapshots 返回的是 {records:[…]}，不是数组。
+    var rows = (typeof sbSnapshotRecordList === 'function') ? sbSnapshotRecordList(res) : [];
+    for (var i = 0; i < rows.length; i++) {
+      var rec = raceRecordOf(rows[i]);
+      var k = (rows[i] && (rows[i].akey || rows[i].key || rows[i].phone)) || '';
+      if (rec && k) m[k] = rec;
     }
     adminState.dashRaceMap = m;
     adminState.dashRaceTs = Date.now();
