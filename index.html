@@ -722,7 +722,7 @@ function qExplanationOf(q) {
 }
 
 // Source: D:\※ The Ritz-Carlton, Shenzhen\2026 刷题平台\部门列表.xlsx
-var DEPARTMENTS = [{"en":"Culinary","cn":"厨房部","subs":[{"en":"Culinary Administration","cn":"厨房办公室"},{"en":"All Day Dining Kitchen","cn":"全日制厨房"},{"en":"Banquet Kitchen","cn":"宴会厨房"},{"en":"Chinese Kitchen","cn":"中厨房"},{"en":"Italian Kitchen","cn":"意大利厨房"},{"en":"Pastry","cn":"饼房"},{"en":"Stewarding","cn":"管事部"}]},{"en":"Engineering","cn":"工程部","subs":[{"en":"Engineering Administration","cn":"工程部办公室"},{"en":"Operations","cn":"运营"}]},{"en":"Executive Office","cn":"行政办公室","subs":[{"en":"Executive Office","cn":"行政办公室"}]},{"en":"F&B","cn":"餐饮部","subs":[{"en":"F&B Administration","cn":"餐饮部办公室"},{"en":"Banquet","cn":"宴会部"},{"en":"Curv","cn":"雪茄吧"},{"en":"Fix","cn":"美食屋"},{"en":"Flavorz","cn":"全日制餐厅"},{"en":"In Room Dining","cn":"送餐部"},{"en":"Onyx","cn":"大堂吧"},{"en":"Paletto","cn":"意大利餐厅"},{"en":"XingLi Restaurant","cn":"星丽中餐厅"}]},{"en":"Finance","cn":"财务部","subs":[{"en":"Finance Administration","cn":"财务部办公室"},{"en":"Accounting","cn":"会计部"},{"en":"Purchasing","cn":"采购部"},{"en":"IT","cn":"IT"}]},{"en":"HR","cn":"人力资源部","subs":[{"en":"HR Administration","cn":"人力资源部办公室"},{"en":"Dormitory","cn":"员工宿舍"},{"en":"Employee Dining","cn":"员工餐厅"},{"en":"Learning","cn":"培训部"},{"en":"Personnel","cn":"人事部"}]},{"en":"Rooms","cn":"房务部","subs":[{"en":"Rooms Administration","cn":"房务部办公室"},{"en":"FD & DM","cn":"前台 & 值班经理"},{"en":"GR& GS","cn":"礼宾部 & 宾客关系部"},{"en":"Housekeeping","cn":"客房部"},{"en":"Laundry","cn":"洗衣房"},{"en":"Loss Prevention","cn":"防损部"},{"en":"PBX","cn":"总机"},{"en":"Ritz Club","cn":"行政酒廊"},{"en":"Spa & Fitness","cn":"水疗与健身中心"}]},{"en":"S & M","cn":"市场销售部","subs":[{"en":"S&M Administration","cn":"市场销售部办公室"},{"en":"Catering","cn":"宴会销售部"},{"en":"Public Relations","cn":"公关部"},{"en":"Reservation","cn":"预订部"},{"en":"Sales","cn":"销售部"}]}];
+var DEPARTMENTS = [{"en":"Culinary","cn":"厨房部","subs":[{"en":"Culinary Administration","cn":"厨房办公室"},{"en":"All Day Dining Kitchen","cn":"全日制厨房"},{"en":"Banquet Kitchen","cn":"宴会厨房"},{"en":"Chinese Kitchen","cn":"中厨房"},{"en":"Italian Kitchen","cn":"意大利厨房"},{"en":"Pastry","cn":"饼房"},{"en":"Stewarding","cn":"管事部"}]},{"en":"Engineering","cn":"工程部","subs":[{"en":"Engineering Administration","cn":"工程部办公室"},{"en":"Operations","cn":"运营"}]},{"en":"Executive Office","cn":"行政办公室","subs":[{"en":"Executive Office","cn":"行政办公室"}]},{"en":"F&B","cn":"餐饮部","subs":[{"en":"F&B Administration","cn":"餐饮部办公室"},{"en":"Banquet","cn":"宴会部"},{"en":"Curv","cn":"雪茄吧"},{"en":"Fix","cn":"美食屋"},{"en":"Flavorz","cn":"全日制餐厅"},{"en":"In Room Dining","cn":"送餐部"},{"en":"Onyx","cn":"大堂吧"},{"en":"Paletto","cn":"意大利餐厅"},{"en":"XingLi Restaurant","cn":"星丽中餐厅"}]},{"en":"Finance","cn":"财务部","subs":[{"en":"Finance Administration","cn":"财务部办公室"},{"en":"Accounting","cn":"会计部"},{"en":"Purchasing","cn":"采购部"},{"en":"IT","cn":"IT"}]},{"en":"Human Resources","cn":"人力资源部","subs":[{"en":"HR Administration","cn":"人力资源部办公室"},{"en":"Dormitory","cn":"员工宿舍"},{"en":"Employee Dining","cn":"员工餐厅"},{"en":"Learning","cn":"培训部"},{"en":"Personnel","cn":"人事部"}]},{"en":"Rooms","cn":"房务部","subs":[{"en":"Rooms Administration","cn":"房务部办公室"},{"en":"FD & DM","cn":"前台 & 值班经理"},{"en":"GR& GS","cn":"礼宾部 & 宾客关系部"},{"en":"Housekeeping","cn":"客房部"},{"en":"Laundry","cn":"洗衣房"},{"en":"Loss Prevention","cn":"防损部"},{"en":"PBX","cn":"总机"},{"en":"Ritz Club","cn":"行政酒廊"},{"en":"Spa & Fitness","cn":"水疗与健身中心"}]},{"en":"S & M","cn":"市场销售部","subs":[{"en":"S&M Administration","cn":"市场销售部办公室"},{"en":"Catering","cn":"宴会销售部"},{"en":"Public Relations","cn":"公关部"},{"en":"Reservation","cn":"预订部"},{"en":"Sales","cn":"销售部"}]}];
 
 // Save original data for reset
 var ORIGINAL_DATA = JSON.parse(JSON.stringify({day21:QUESTION_DATA.day21, tsos:QUESTION_DATA.tsos, manual:QUESTION_DATA.manual, sections:QUESTION_DATA.sections||[], papers:QUESTION_DATA.papers, config:QUESTION_DATA.config||{}}));
@@ -4381,6 +4381,7 @@ var I18N = {
   race_board_hint_noconf: {cn:'（本机还没同步到赛事，本榜可能为空）', en:'(No round synced on this device, this board may be empty)'},
   race_board_empty: {cn:'还没有人提交成绩', en:'No scores submitted yet'},
   race_again: {cn:'再挑战一次', en:'Try again'},
+  race_confirm: {cn:'确认作答', en:'Confirm'},
   race_view_board: {cn:'查看排行榜', en:'View leaderboard'},
   race_review: {cn:'查看答案解析', en:'Review answers'},
   race_submit_ok: {cn:'成绩已提交', en:'Score submitted'},
@@ -4474,6 +4475,7 @@ var I18N = {
   win_now_plus: {cn:'现在起', en:'Now +'},
   win_apply: {cn:'应用', en:'Apply'},
   win_custom_bad: {cn:'请输入 1–1440 之间的分钟数', en:'Please enter minutes between 1 and 1440'},
+  win_custom_bad_hours: {cn:'请输入 1–24 之间的小时数', en:'Please enter hours between 1 and 24'},
   win_default_tip: {cn:'默认「现在 → 30 分钟后」，可直接保存，也可在上方调整；到点后后台自动关闭', en:'Defaults to now → +30 min. Save as-is or adjust; the activity closes automatically when time is up'},
   race_mode: {cn:'板块选择方式', en:'Section selection'},
   race_mode_choice: {cn:'学员自行选择板块', en:'Employees pick their own section'},
@@ -4490,7 +4492,7 @@ var I18N = {
   race_board_mix_hint: {cn:'各板块成绩混合排名，仅供整体参考', en:'All sections mixed — for overall reference only'},
   race_board_sec_hint: {cn:'本榜只统计选择该板块的成绩，同板块内部相比', en:'Only scores from this section — compared within the same section'},
   race_my_section: {cn:'你本期所选', en:'Your section'},
-  race_go_pick: {cn:'去选板块', en:'Pick a section'},
+  race_go_pick: {cn:'去选板块参与挑战吧！', en:'Pick a section and join the challenge!'},
   nav_back: {cn:'返回', en:'Back'},
   nav_home: {cn:'首页', en:'Home'},
   nav_home_hint: {cn:'回到首页', en:'Go to home'},
@@ -6985,6 +6987,45 @@ function adminWindowQuickHtml(fnName, pk, inputId) {
   h += '<div style="font-size:11px;color:var(--text-light);margin-top:2px;">' + t('win_default_tip') + '</div>';
   return h;
 }
+// 限时答题赛专用：赛事通常按「小时」开（半天 / 一天），分钟档位不好用。
+// 档位是小时，回填函数仍然收分钟（×60），复用同一套窗口逻辑。
+var RACE_WINDOW_HOURS = [1, 24];
+function adminWindowQuickHoursHtml(fnName, pk, inputId) {
+  var en = state.lang === 'en';
+  var arg = pk ? "'" + pk + "'," : '';
+  var h = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px;">';
+  h += '<span style="font-size:11px;color:var(--text-light);">' + t('win_quick') + '</span>';
+  for (var i = 0; i < RACE_WINDOW_HOURS.length; i++) {
+    var hrs = RACE_WINDOW_HOURS[i];
+    h += '<button type="button" class="nav-btn secondary" style="flex:0 0 auto;padding:5px 9px;font-size:12px;" onclick="' + fnName + '(' + arg + (hrs * 60) + ')">' + t('win_now_plus') + ' ' + hrs + (en ? ' hr' : ' 小时') + '</button>';
+  }
+  h += '</div>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">';
+  h += '<span style="font-size:11px;color:var(--text-light);">' + t('win_now_plus') + '</span>';
+  h += '<input id="' + inputId + '" type="number" inputmode="numeric" min="1" max="' + Math.floor(WINDOW_MAX_LIMIT / 60) + '" step="1" value="" placeholder="' + (en ? 'hours' : '小时') + '" style="width:76px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();adminQuickApplyHours(\'' + fnName + '\',\'' + (pk || '') + '\',\'' + inputId + '\')}">';
+  h += '<span style="font-size:11px;color:var(--text-light);">' + (en ? 'hr' : '小时') + '</span>';
+  h += '<button type="button" class="nav-btn secondary" style="flex:0 0 auto;padding:5px 9px;font-size:12px;" onclick="adminQuickApplyHours(\'' + fnName + '\',\'' + (pk || '') + '\',\'' + inputId + '\')">' + t('win_apply') + '</button>';
+  h += '</div>';
+  return h;
+}
+// 自定义小时 → 分钟 → 回填。上限沿用 WINDOW_MAX_LIMIT（1440 分钟 = 24 小时）。
+function adminQuickApplyHours(fnName, pk, inputId) {
+  var el = document.getElementById(inputId);
+  var raw = el ? String(el.value == null ? '' : el.value).trim() : '';
+  var hrs = parseInt(raw, 10);
+  if (!isFinite(hrs) || hrs < 1) {
+    alert(t('win_custom_bad_hours'));
+    if (el) { try { el.focus(); } catch (e) {} }
+    return;
+  }
+  var mins = hrs * 60;
+  if (mins > WINDOW_MAX_LIMIT) mins = WINDOW_MAX_LIMIT;
+  var fn = null;
+  try { fn = (typeof window !== 'undefined' && window[fnName]) || null; } catch (e) { fn = null; }
+  if (typeof fn !== 'function') { try { fn = (typeof globalThis !== 'undefined' && globalThis[fnName]) || null; } catch (e) { fn = null; } }
+  if (typeof fn !== 'function') return;
+  if (pk) fn(pk, mins); else fn(mins);
+}
 // 到点自动关闭：已发布的考试/赛事过了截止时间，后台把状态置为 closed，
 // 管理员不用手动点关闭。（学员端本来就靠 endTime 判断，行为一致。）
 function autoCloseExpiredExams() {
@@ -7122,6 +7163,37 @@ function raceDeptName() {
   if (d && typeof d === 'object') return state.lang === 'en' ? (d.en || d.cn || '') : (d.cn || d.en || '');
   return String(d || '');
 }
+// 成绩快照里的部门是**写入时的中文名**（如「人力资源部」「人力资源部 · 培训部」），
+// 英文模式下照搬就会显示中文。这里按 DEPARTMENTS（含子部门）逐段翻译；
+// 查不到就原样返回（宁可显示中文，也不要显示空白）。
+function deptEnOf(cn) {
+  var s = String(cn || '');
+  if (!s) return '';
+  if (typeof DEPARTMENTS === 'undefined' || !Array.isArray(DEPARTMENTS)) return s;
+  var parts = s.split('\u00b7');
+  for (var i = 0; i < parts.length; i++) {
+    var p = String(parts[i] || '').trim();
+    if (!p) { parts[i] = ''; continue; }
+    var hit = '';
+    for (var a = 0; a < DEPARTMENTS.length && !hit; a++) {
+      var d = DEPARTMENTS[a] || {};
+      if (d.cn === p) { hit = d.en || p; break; }
+      var subs = d.subs || [];
+      for (var b = 0; b < subs.length; b++) {
+        if (subs[b] && subs[b].cn === p) { hit = subs[b].en || p; break; }
+      }
+    }
+    parts[i] = hit || p;
+  }
+  return parts.join(' \u00b7 ').replace(/\s+/g, ' ').trim();
+}
+// 展示用的部门名：英文模式 → 英文名，中文模式原样。
+// 注意：**只用于显示**，比较（部门榜筛选）必须用原始值 raceDeptName()。
+function deptDisplayName(name) {
+  var s = String(name || '');
+  if (!s) return '';
+  return (state.lang === 'en') ? deptEnOf(s) : s;
+}
 
 // ---- 答题 ----
 // 学员点某个板块卡片 → 二次确认（点下去立刻计时，防误触）→ 开跑
@@ -7151,13 +7223,19 @@ function raceStart(sectionKey) {
   state.raceTimer = setInterval(raceTick, 250);
   navigate('racePlay');
 }
+// 剩余秒数。渲染和 tick 共用同一处计算，避免两处算法漂移。
+function raceLeftSec() {
+  var r = state.race;
+  if (!r) return 0;
+  return Math.max(0, (r.conf.limitSec || 60) - Math.floor((Date.now() - r.startTs) / 1000));
+}
 function raceTick() {
   var r = state.race; if (!r) { clearRaceTimer(); return; }
-  var left = Math.max(0, (r.conf.limitSec || 60) - Math.floor((Date.now() - r.startTs) / 1000));
+  var left = raceLeftSec();
   var el = document.getElementById('raceTimer');
   if (el) {
     el.textContent = '⏱ ' + left + 's';
-    el.style.color = left <= 10 ? '#c0392b' : '#1a3a5c';
+    el.className = 'exam-timer' + (left <= 10 ? ' urgent' : '');
   }
   if (left <= 0) raceEnd('timeout');
 }
@@ -7237,7 +7315,9 @@ function raceExitRace() {
 function raceAgain() {
   var c = raceConfOf();
   if (raceStateOf(c) !== 'open') { alert(t('race_no_conf')); return; }
-  if (raceModeOf(c) === 'choice') { navigate('raceHome'); return; }
+  // 板块选择页的页面名是 'race'（renderRaceHome），不是 'raceHome'——写错会落到
+  // switch 的 default 分支 = 首页，看起来就像"点了没反应/被弹回首页"。
+  if (raceModeOf(c) === 'choice') { navigate('race'); return; }
   raceStart(c.section || 'all');
 }
 
@@ -7410,26 +7490,46 @@ function raceOpenBoard() {
   // 刚交完卷就点排行榜的话，缓存里没有自己这次的成绩 → 强制拉一次新的。
   raceFetchBoard(true).then(function () { if (state.currentPage === 'raceBoard') render(); });
 }
+// 答题界面沿用**正常刷题**的题干 / 选项 / 按钮结构（.q-card → .q-header → .q-text →
+// .options/.option/.option-letter + .option-text，按钮用 .q-nav > .nav-btn），
+// 学员不用在两种风格之间切换。只有顶部的倒计时条是答题赛独有的。
 function renderRacePlay() {
   var r = state.race;
   if (!r || r.endReason) { return '<div class="page"><div class="q-card">' + t('race_no_conf') + '</div></div>'; }
   var q = r.pool[r.idx];
   if (!q) { return '<div class="page"></div>'; }
+  var idx = r.idx;
   var html = renderAppHeader({ title: '⚡ ' + (r.conf.title || t('race_title')), subtitle: raceSecIcon(r.section || 'all') + ' ' + raceSecName(r.section || 'all'), showBack: true, showHome: false });
   html += '<div class="page">';
-  html += '<div id="raceTimer" style="text-align:center;font-size:26px;font-weight:700;color:#1a3a5c;margin:4px 0 12px;">⏱ ' + (r.conf.limitSec || 60) + 's</div>';
+  // 倒计时条：raceTick 每 250ms 只改 #raceTimer 这一个元素的文本，别的统计放旁边独立 span
+  html += '<div class="exam-info">';
+  html += '<span class="exam-timer" id="raceTimer">⏱ ' + raceLeftSec() + 's</span>';
+  html += '<span class="exam-score">' + t('race_answered') + ' ' + idx + '</span>';
+  html += '</div>';
   html += '<div class="q-card">';
-  html += '<div style="font-size:12px;color:#888;margin-bottom:6px;">' + (r.idx + 1) + ' / ' + r.pool.length + '</div>';
+  html += '<div class="q-header">';
+  html += '<span class="q-num">' + t('q_prefix') + (idx + 1) + t('q_suffix') + '</span>';
+  html += '<span class="q-type-badge ' + (q.type || 'single') + '">' + getTypeText(q.type) + '</span>';
+  html += '</div>';
   html += '<div class="q-text">' + escapeHtml(raceQText(q)).replace(/\n/g, '<br>') + '</div>';
   var cur = r.cur || [];
+  if (q.type === 'multiple') {
+    html += '<div class="fill-hint">💡 ' + t('multi_hint') + '</div>';
+  }
+  html += '<div class="options">';
   for (var i = 0; i < (q.options || []).length; i++) {
     var on = cur.indexOf(i) >= 0;
-    html += '<button class="option' + (on ? ' selected' : '') + '" style="display:block;width:100%;text-align:left;margin:6px 0;padding:10px 12px;border:1px solid ' + (on ? '#1a3a5c' : '#d8dee4') + ';border-radius:8px;background:' + (on ? '#e8f0fe' : '#fff') + ';font-size:14px;" onclick="racePick(' + i + ')">' + escapeHtml(raceOptText(q, i)) + '</button>';
+    html += '<div class="option' + (on ? ' selected' : '') + '" onclick="racePick(' + i + ')">';
+    html += '<div class="option-letter">' + String.fromCharCode(65 + i) + '</div>';
+    html += '<div class="option-text">' + escapeHtml(raceOptText(q, i)) + '</div>';
+    html += '</div>';
   }
+  html += '</div>';
+  html += '</div>';
   if (q.type === 'multiple') {
-    html += '<button class="action-btn primary" style="width:100%;margin-top:10px;" onclick="raceAdvance()">' + (state.lang === 'en' ? 'Confirm' : '确认作答') + '</button>';
+    html += '<div class="q-nav"><button class="nav-btn primary" style="flex:1;" onclick="raceAdvance()">' + t('race_confirm') + '</button></div>';
   }
-  html += '</div></div>';
+  html += '</div>';
   return html;
 }
 function raceQText(q) {
@@ -7577,7 +7677,7 @@ function renderRaceBoard() {
       html += '<div style="width:32px;text-align:center;font-weight:700;color:#1a3a5c;">' + medal + '</div>';
       html += '<div style="flex:1;min-width:0;">';
       html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#1a3a5c;font-size:12px;">' + t('race_you') + '</span>' : '') + '</div>';
-      html += '<div style="font-size:12px;color:#888;">' + escapeHtml(rw.dept) + (rw.section && !sec ? ' \u00b7 ' + raceSecIcon(rw.section) + ' ' + raceSecName(rw.section) : '') + '</div>';
+      html += '<div style="font-size:12px;color:#888;">' + escapeHtml(deptDisplayName(rw.dept)) + (rw.section && !sec ? ' \u00b7 ' + raceSecIcon(rw.section) + ' ' + raceSecName(rw.section) : '') + '</div>';
       html += '</div>';
       html += '<div style="text-align:right;">';
       html += '<div style="font-size:16px;font-weight:700;color:#1a3a5c;">' + rw.correct + '</div>';
@@ -7654,7 +7754,8 @@ function renderAdminRace() {
   html += '<input id="raceStart" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((c.startTime ? raceInputDate(c.startTime) : '') || defaultStartInput(0)) + '">';
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'End (optional)' : '结束时间（可留空）') + '</label>';
   html += '<input id="raceEnd" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((c.endTime ? raceInputDate(c.endTime) : '') || defaultEndInput(DEFAULT_WINDOW_MIN)) + '">';
-  html += adminWindowQuickHtml('adminFillRaceWindow', '', 'raceQuickMin');
+  // 答题赛按小时开（1 小时 / 24 小时 / 自定义小时），考试的分钟档位不改。
+  html += adminWindowQuickHoursHtml('adminFillRaceWindow', '', 'raceQuickHour');
   html += '</div>';
   html += '<button class="action-btn primary" style="width:100%;" onclick="adminRacePublish()">📣 ' + t('race_admin_publish') + '</button>';
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="adminRaceClose()">⛔ ' + t('race_admin_close') + '</button>';
