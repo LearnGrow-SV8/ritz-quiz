@@ -4132,6 +4132,10 @@ var adminState = {
   studentsTab: 'list', // 'list' | 'reports' — admin student-learning panel tab
   studentDetail: '',   // userKey of the student whose detail view is open
   editStudent: '',     // userKey being edited in the admin student-info form
+  // 打开学员详情前，学员列表的滚动位置与那一行是谁。返回列表时按它还原，
+  // 这样管理员可以顺着清单一路改下去，不用每次重新下滑找人。
+  studentListScrollY: 0,
+  studentListLastKey: '',
   adminEmpQuery: '',   // Stage 9: name → employee-ID lookup / list filter box
   rosterQuery: '',     // 有效工号名单里的搜索词
   rosterFetched: false,// 有效工号名单是否已从云端拉过一次
@@ -13693,11 +13697,53 @@ function adminDeptDivLabel(snap, en) {
   if (!out) out = en ? 'No department' : '未填部门';
   return out;
 }
+// 打开学员详情前先记住「列表滚到哪了、点的是哪一行」，返回时按这个还原。
+// 管理员的实际用法是顺着清单一个一个改资料，每次都回到列表顶部等于要重新下滑找人。
+function adminOpenStudentDetail(key) {
+  try { adminState.studentListScrollY = window.scrollY || window.pageYOffset || 0; } catch (e) {}
+  adminState.studentListLastKey = key || '';
+  adminState.studentDetail = key || '';
+  adminState.editStudent = '';
+  render();
+  try { window.scrollTo(0, 0); } catch (e) {}
+}
+// 从学员详情返回：一定回到学员列表（不是管理端首页），并还原进入前的位置。
+function adminBackFromStudent() {
+  var y = adminState.studentListScrollY || 0;
+  var key = adminState.studentListLastKey || '';
+  adminState.studentDetail = '';
+  adminState.editStudent = '';
+  adminState.studentsTab = 'list';
+  state.currentPage = 'adminStudents';
+  render();
+  adminRestoreStudentListScroll(y, key);
+}
+// 先按像素还原；若清单内容/顺序变了导致那一行不在可视区，再按元素定位兜底。
+function adminRestoreStudentListScroll(y, key) {
+  setTimeout(function () {
+    var row = null;
+    if (key) {
+      try {
+        var rows = document.querySelectorAll('.stu-row[data-stu-key]');
+        for (var i = 0; i < rows.length; i++) {
+          if (rows[i].getAttribute('data-stu-key') === key) { row = rows[i]; break; }
+        }
+      } catch (e) {}
+    }
+    try { window.scrollTo(0, y || 0); } catch (e) {}
+    if (!row) return;
+    try {
+      var r = row.getBoundingClientRect();
+      var vh = window.innerHeight || 600;
+      if (r.top < 0 || r.bottom > vh) row.scrollIntoView({ block: 'center' });
+    } catch (e) {}
+  }, 60);
+}
 function renderAdminStudents() {
   if (!adminState.authenticated) return renderAdminLogin();
   var en = state.lang === 'en';
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminState.studentDetail=\'\';navigate(\'adminDashboard\')">←</button>';
+  html += '<button class="back-btn" onclick="' + (adminState.studentDetail ? 'adminBackFromStudent()' : 'navigate(\'adminDashboard\')') + '">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>📊 ' + (en ? 'Student Learning Data' : '学员学习情况') + '</h1>';
   html += '<div class="subtitle">' + (en ? 'Cloud-synced' : '云端同步') + '</div>';
@@ -13749,7 +13795,7 @@ function renderAdminStudents() {
     for (var i = 0; i < all.length; i++) if (all[i].key === adminState.studentDetail) { rec = all[i]; break; }
     if (!rec) {
       html += '<div class="empty-state"><p>' + (en ? 'No cloud data for this student.' : '该学员暂无云端数据。') + '</p></div>';
-      html += '<button class="nav-btn secondary" style="width:100%" onclick="adminState.studentDetail=\'\';render()">← ' + (en ? 'Back to list' : '返回列表') + '</button>';
+      html += '<button class="nav-btn secondary" style="width:100%" onclick="adminBackFromStudent()">← ' + (en ? 'Back to list' : '返回列表') + '</button>';
       html += '</div>';
       return html;
     }
@@ -13888,7 +13934,7 @@ function renderAdminStudents() {
     }
 
     html += '<div class="action-row" style="margin-top:16px;">';
-    html += '<button class="action-btn nav-btn secondary" onclick="adminState.studentDetail=\'\';render()">← ' + (en ? 'Back to list' : '返回列表') + '</button>';
+    html += '<button class="action-btn nav-btn secondary" onclick="adminBackFromStudent()">← ' + (en ? 'Back to list' : '返回列表') + '</button>';
     html += '<button class="action-btn nav-btn secondary" onclick="adminState.editStudent=\'' + jsKey(rec.key) + '\';render()">✏️ ' + (en ? 'Edit info' : '编辑信息') + '</button>';
     html += '<button class="action-btn nav-btn secondary" style="color:#c0392b;" onclick="adminRemoveStudent(\'' + jsKey(rec.key) + '\')">🗑 ' + (en ? 'Remove cached data' : '删除该学员缓存') + '</button>';
     html += '</div>';
@@ -13967,9 +14013,9 @@ function renderAdminStudents() {
       } else {
         for (var f = 0; f < found.length && f < 8; f++) {
           var fr = found[f];
-          html += '<div class="exam-row" style="cursor:pointer;" onclick="adminState.adminEmpQuery=\'\';' + (fr.inCloud
-            ? 'adminState.studentDetail=\'' + jsKey(fr.key) + '\';'
-            : 'adminState.editStudent=\'\';') + 'render()"><span>' + escapeHtml(fr.name) + (fr.en ? ' · ' + escapeHtml(fr.en) : '') + '</span><b style="font-size:15px;color:#2c4a8a;">' + (fr.emp ? escapeHtml(t('admin_emp_no')) + ' ' + escapeHtml(fr.emp) : escapeHtml(fr.key)) + '</b></div>';
+          html += '<div class="exam-row" style="cursor:pointer;" onclick="' + (fr.inCloud
+            ? 'adminOpenStudentDetail(\'' + jsKey(fr.key) + '\')'
+            : 'adminState.editStudent=\'\';render()') + '"><span>' + escapeHtml(fr.name) + (fr.en ? ' · ' + escapeHtml(fr.en) : '') + '</span><b style="font-size:15px;color:#2c4a8a;">' + (fr.emp ? escapeHtml(t('admin_emp_no')) + ' ' + escapeHtml(fr.emp) : escapeHtml(fr.key)) + '</b></div>';
         }
         if (!found[0].inCloud) {
           html += '<div class="sync-note" style="margin-top:6px;font-size:11px;">' + (en
@@ -14012,7 +14058,11 @@ function renderAdminStudents() {
       var empTag = ' <span style="font-weight:400;font-size:12px;color:#8a8f96;">' + (emp2 ? escapeHtml(t('admin_emp_no')) + ' ' + escapeHtml(emp2) : escapeHtml(rec2.key)) + '</span>';
       var banTag = isBanned ? ' <span style="font-weight:400;font-size:11px;color:#c0392b;">🚫 ' + (en ? 'banned' : '已禁用') + '</span>' : '';
       var noPinTag = (!snap2.pinSetAt && !isBanned) ? ' <span style="font-weight:400;font-size:11px;color:#b8860b;">🔑 ' + (en ? 'no PIN' : '未设 PIN') + '</span>' : '';
-      html += '<div class="stu-row" onclick="adminState.studentDetail=\'' + jsKey(rec2.key) + '\';render()">';
+      // 刚看过的那一行淡底色标记一下，返回列表时一眼看到自己改到哪了。
+      var justBack = (rec2.key === adminState.studentListLastKey && !adminState.studentDetail)
+        ? 'background:#f2f6ff;'
+        : '';
+      html += '<div class="stu-row" data-stu-key="' + escapeHtml(rec2.key) + '" style="' + justBack + '" onclick="adminOpenStudentDetail(\'' + jsKey(rec2.key) + '\')">';
       html += '<div class="stu-name">' + escapeHtml(name) + cnTag2 + empTag + banTag + noPinTag + '</div>';
       html += '<div class="stu-meta">' + adminDeptDivLabel(snap2, en) + ' · ' + (en ? 'active ' : '活跃 ') + fmtSyncTime(snap2.ts) + '</div>';
       html += '<div class="stu-stats">';
@@ -14072,8 +14122,7 @@ function adminRemoveStudent(stuKey) {
   if (!confirm((en ? 'Remove cached data of ' : '删除该学员的云端缓存记录？') + name + (en ? '?' : '？' + '（仅删除本面板缓存，不影响学员设备上的数据）'))) return;
   delete cache.students[stuKey];
   adminSaveStudentCache(cache);
-  adminState.studentDetail = '';
-  render();
+  adminBackFromStudent();
 }
 // Stage 9: toggle this account's ban directly from the detail view. The ban is
 // written under the account's EMPLOYEE ID (the stable identity since Stage 9);
@@ -14159,6 +14208,10 @@ function adminRenameCacheStudent(stuKey, fix) {
     if (fix.divEn || fix.divCn) { s.divEn = fix.divEn || ''; s.div = fix.divCn || ''; }
     if (fix.deptEn || fix.deptCn) { s.deptEn = fix.deptEn || ''; s.dept = fix.deptCn || ''; }
   }
+  // 工号一变身份键就变：详情视图和「返回列表要定位到哪一行」都得跟着换，
+  // 否则返回后既找不到人，淡底色标记也留在了一个已不存在的键上。
+  if (adminState.studentDetail === stuKey) adminState.studentDetail = newKey;
+  if (adminState.studentListLastKey === stuKey) adminState.studentListLastKey = newKey;
   adminSaveStudentCache(cache);
   return newKey;
 }
@@ -14238,7 +14291,8 @@ function adminSaveStudentEdit(stuKey) {
   }
   // 本地缓存视图立刻更新（管理员自己马上能看到新名字）
   var newKey = adminRenameCacheStudent(stuKey, fix);
-  if (adminState.studentDetail === stuKey) adminState.studentDetail = newKey;
+  // （身份键变化后 studentDetail / studentListLastKey 的跟随在
+  //   adminRenameCacheStudent 里统一处理，那里才知道新键是什么。）
   // 同时把更正直接写进云端档案：排行榜读的是云端快照，等学员端应用中继消息
   // 太不可靠（中继在国内常连不上），直接写才能保证"改完就生效"。
   adminPushFixToSnapshot(stuKey, fix).then(function(cloudOk) {
