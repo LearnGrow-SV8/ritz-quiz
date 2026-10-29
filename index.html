@@ -4390,12 +4390,12 @@ var I18N = {
   race_board_all: {cn:'全酒店榜', en:'Hotel-wide'},
   race_board_dept: {cn:'部门排名', en:'Departments'},
   race_board_best: {cn:'历史最佳榜', en:'All-time best'},
-  race_board_hint_period: {cn:'本届赛事成绩 · 全酒店所有人一起排名；同一个人只取最好的一次（可以是他做得最好的那个板块）', en:'Current round · everyone in the hotel; one best attempt per person (whichever section they did best in)'},
-  race_board_hint_dept: {cn:'本届赛事成绩 · 按部门把参赛员工的答对题数加起来排名，再比准确率（每人只算最好的一次）；行政办公室 / 财务部 / 人力资源部 / 市场销售部 / 工程部按大部门排名，餐饮 / 厨房 / 房务按下属小部门排名（如客房部、防损部）', en:'Current round · departments ranked by total correct answers, then accuracy (one best attempt per person). Executive Office / Finance / HR / Sales & Marketing / Engineering rank as whole divisions; F&B / Culinary / Rooms rank by their sub-departments (e.g. Housekeeping, Loss Prevention)'},
-  race_board_hint_best: {cn:'历届个人最好成绩 · 全酒店所有人，发布新一届也不会清空；点上面的板块可看该板块的历史最佳', en:'All-time personal best · everyone, never reset; pick a section above to see that section\u2019s all-time best'},
-  race_board_best_mix_hint: {cn:'每人只显示他在各板块里最好的一条；想看某个板块的历史最佳，点上面的板块', en:'One best entry per person across sections — pick a section above for its all-time best'},
-  race_board_best_sec_hint: {cn:'该板块的历届个人最佳；同一个人在其他板块的最佳成绩会出现在对应的板块榜里', en:'All-time best in this section; the same person can also appear on other sections\u2019 boards'},
-  race_board_hint_noconf: {cn:'（本机还没同步到赛事，本榜可能为空）', en:'(No round synced on this device, this board may be empty)'},
+  race_board_hint_period: {cn:'统计范围：本届赛事全酒店参赛的绅士淑女。每人只计一条最佳成绩，即其所答板块中得分最高的一次。', en:'Scope: all Ladies and Gentlemen taking part in this round. Each person counts one best result only \u2014 the highest score among the sections they answered.'},
+  race_board_hint_dept: {cn:'统计范围：本届赛事全酒店参赛部门。各部门按参赛人员的答对题数合计排名，答对题数相同时比较准确率，每人只计一条最佳成绩。<br>层级口径：行政办公室、财务部、人力资源部、市场销售部、工程部以部门为单位排名；餐饮部、厨房部、房务部以所属下一级部门（如客房部、防损部）为单位排名。', en:'Scope: all departments taking part in this round. Departments are ranked by total correct answers, then by accuracy, counting one best result per person.<br>Ranking level: Executive Office, Finance, Human Resources, Sales & Marketing and Engineering are ranked as whole departments; Food & Beverage, Culinary and Rooms are ranked by their next-level departments (e.g. Housekeeping, Loss Prevention).'},
+  race_board_hint_best: {cn:'统计范围：全酒店所有绅士淑女的历史个人最佳成绩，按板块分别记录，发布新一届赛事后不清空。同一人可在多个板块分别参与排名。', en:'Scope: the all-time personal best of all Ladies and Gentlemen in the hotel, recorded per section and kept when a new round is published. The same person can be ranked in more than one section.'},
+  race_board_best_mix_hint: {cn:'每人显示其在各板块中的最佳成绩；如需查看某一板块的单项排名，请选择上方的对应板块。', en:'One best result per person across sections; to view a single section, select that section above.'},
+  race_board_best_sec_hint: {cn:'本榜为历届个人最佳排名，仅统计本板块；同一人在其他板块的最佳成绩计入对应板块榜单。', en:'All-time personal best in this section only; a person\u2019s best results in other sections appear on those sections\u2019 boards.'},
+  race_board_hint_noconf: {cn:'当前设备尚未同步本届赛事数据，榜单为空属正常现象，请稍后刷新。', en:'This device has not synced the current round yet, so the board may be empty. Please refresh later.'},
   race_board_empty: {cn:'还没有人提交成绩', en:'No scores submitted yet'},
   race_dept_people: {cn:'人参赛', en:'people'},
   race_dept_answered: {cn:'共答', en:'answered'},
@@ -4515,10 +4515,10 @@ var I18N = {
   race_confirm_ask: {cn:'确定开始吗？', en:'Ready to start?'},
   race_filter_label: {cn:'只看', en:'Filter'},
   race_filter_all: {cn:'全部板块总榜', en:'Overall — all sections'},
-  race_board_mix_hint: {cn:'各板块成绩混合排名，仅供整体参考', en:'All sections mixed — for overall reference only'},
-  race_board_sec_hint: {cn:'本榜只统计选择该板块的成绩，同板块内部相比', en:'Only scores from this section — compared within the same section'},
-  race_board_dept_sec_hint: {cn:'部门排名只统计该板块的成绩', en:'Department ranking from this section only'},
-  race_board_dept_mix_hint: {cn:'部门之间比，成绩来自各部门参赛员工的全部板块', en:'Departments against each other, across all sections their members played'},
+  race_board_mix_hint: {cn:'汇总全部板块成绩统一排名，仅作整体参考；各板块题目不同，跨板块成绩不具直接可比性。', en:'All sections combined into one ranking for overall reference only; sections differ in content, so cross-section scores are not directly comparable.'},
+  race_board_sec_hint: {cn:'仅统计选择本板块的成绩，全部成绩在同一板块内比较。', en:'Only results from this section are counted; all results are compared within the same section.'},
+  race_board_dept_sec_hint: {cn:'仅统计本板块的成绩。', en:'Results from this section only.'},
+  race_board_dept_mix_hint: {cn:'统计各部门参赛人员在全部板块的成绩合计。', en:'Combines the results of each department\u2019s members across all sections.'},
   race_my_section: {cn:'你本期所选', en:'Your section'},
   race_go_pick: {cn:'去选板块参与挑战吧！', en:'Pick a section and join the challenge!'},
   nav_back: {cn:'返回', en:'Back'},
@@ -7962,6 +7962,7 @@ function raceBoardChip(key, label, active) {
 }
 // 三个榜的口径不一样（本届全员最佳 / 本届部门汇总 / 历届个人最佳），页签下面用一行
 // 灰字讲清楚，免得学员以为"点了没反应"，或者换届后看到前两个榜空了以为成绩丢了。
+// 文案统一用「统计范围：…」的书面口径，不再用口语补充说明。
 function raceBoardScopeHint(tab) {
   var s;
   if (tab === 'best') return '\ud83c\udfc5 ' + t('race_board_hint_best');
@@ -7971,7 +7972,8 @@ function raceBoardScopeHint(tab) {
     s = '\ud83c\udfe8 ' + t('race_board_hint_period');
   }
   // 前两个榜强依赖本机有没有同步到当前这一届赛事，没同步到就必定为空，提前说清楚。
-  if (!raceConfOf()) s += ' ' + t('race_board_hint_noconf');
+  // 换行而不是接在同一句后面，两条信息各自完整。
+  if (!raceConfOf()) s += '<br>' + t('race_board_hint_noconf');
   return s;
 }
 function renderRaceBoard() {
