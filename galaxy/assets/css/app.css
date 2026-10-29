@@ -337,6 +337,8 @@ textarea.code{width:100%;min-height:190px;font-family:ui-monospace,Consolas,Menl
 .mapwrap{position:relative;margin-top:10px}
 .mapwrap .cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;
   font-size:24px;line-height:1;color:var(--danger);font-weight:700;text-shadow:0 0 3px #fff,0 0 6px #fff}
+.mapwrap .dragcover{position:absolute;left:0;top:0;right:0;bottom:0;z-index:4;cursor:grab;touch-action:none}
+.mapwrap .dragcover:active{cursor:grabbing}
 .mapfall{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
   padding:12px;color:var(--muted);font-size:12px;line-height:1.7}
 .apptag{display:inline-block;background:#F2C94C;color:#6B4E00;font-size:10.5px;padding:1px 7px;border-radius:99px}
