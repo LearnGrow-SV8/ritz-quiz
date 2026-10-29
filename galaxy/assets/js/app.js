@@ -91,6 +91,7 @@ var App = (function () {
       renderMap(refit);
       updateBadge();
       updatePtsBadge();
+      syncSome();          // 后台静默跟随地图更新，失败也不影响使用
     });
   }
   function updatePtsBadge() {
@@ -198,6 +199,15 @@ var App = (function () {
   function openPlace(id) {
     var p = S.places.filter(function (x) { return x.id === id; })[0];
     if (!p) return;
+    // 打开详情时顺手跟地图核对一次；有更新就静默改掉并重开（poiSyncedAt 已刷新，不会循环）
+    if (placeStale(p)) {
+      autoSync(p).then(function (ok) {
+        if (!ok) return;
+        decorate();
+        openPlace(id);
+        GG.toast(t('syncedTip'));
+      });
+    }
     var c = p._cat, mine = myVote(p.id);
     var tierName = { gold: t('gold'), up: t('upT'), norm: t('normT'), watch: t('watchT'), grey: t('greyT'), black: t('blackT') }[p._tier];
     var auds = (p.auds || []).map(function (a) {
@@ -510,12 +520,13 @@ var App = (function () {
   function isAdminUnlocked() { return !!GG.adminSession(); }
 
   /* ============ 上传推荐 ============ */
-  var draft = null, PH_MAXF = 6;
+  var draft = null, PH_MAXF = 6, catSel = (S.cfg.cats[0] || {}).id || '';
   function openAdd(editP) {
     draft = editP ? GG.clone(editP) : {
       id: GG.uid('p'), nameZh: '', nameEn: '', cat: (S.cfg.cats[0] || {}).id || '', dist: '',
       address: '', lat: null, lng: null, phone: '', hours: '', price: '', auds: [],
       reason: '', tips: '', tags: [], stars: [], photos: [], locApprox: false,
+      poiId: '', poiLocked: false, poiSyncedAt: 0,
       emp: GG.normEmp(S.me.emp), empName: S.me.name || '',
       createdAt: GG.now(), status: 'pending', updatedAt: GG.now()
     };
@@ -528,45 +539,64 @@ var App = (function () {
     var d = draft;
     var h = '';
 
-    /* ---------- ① 位置（第一步，给足三条路） ---------- */
+    /* ---------- ① 位置：搜名字 or 拖地图，二选一即可，坐标自动得到 ---------- */
     h += '<div class="blk locblk"><h4>📍 ' + esc(t('locTitle')) + ' <span class="req">*</span></h4>' +
       '<div class="rkmeta">' + esc(t('locSearchTip')) + '</div>' +
-      '<div class="addrow"><input id="aSearch" placeholder="' + esc(t('searchPh')) + '" /><button class="mini bl" id="aGo">🔍</button></div>' +
+      '<div class="addrow"><input id="aSearch" placeholder="' + esc(t('searchPh')) + '" autocomplete="off" />' +
+      '<button class="mini bl" id="aGo">🔍</button></div>' +
       '<div id="aRes" class="mt8"></div>' +
       '<div class="mapwrap"><div class="minimap" id="aMap"></div><div class="cross">＋</div></div>' +
-      '<div class="pickbar"><span id="aCoord">' + coordText(d) + '</span><span style="flex:1"></span>' +
-      '<button class="mini bl" id="aCenter">' + esc(t('locCenter')) + '</button></div>' +
-      '<div class="rkmeta mt8">' + esc(t('pickTip2')) + '</div>' +
-      '<div class="hint">' + esc(t('locSkipTip')) + '</div>' +
+      '<div id="aLocStat" class="locstat">' + esc(t('dragTip')) + '</div>' +
+      '<div id="aPoiCard"></div>' +
       '</div>';
 
-    /* ---------- ② 基本信息 ---------- */
-    h += '<div class="grid2">' +
-      '<div class="fld"><label>' + t('name') + '（中）<span class="req">*</span></label><input id="aName" value="' + esc(d.nameZh) + '" /></div>' +
-      '<div class="fld"><label>' + t('name') + '（EN）</label><input id="aNameEn" value="' + esc(d.nameEn || '') + '" /></div>' +
-      '</div>';
-    h += '<div class="grid2">' +
-      '<div class="fld"><label>' + t('cat') + '<span class="req">*</span></label><select id="aCat">' +
-      (S.cfg.cats || []).map(function (c) { return '<option value="' + c.id + '"' + (d.cat === c.id ? ' selected' : '') + '>' + esc(L(c, 'name')) + '</option>'; }).join('') +
+    /* ---------- ② 地图已经帮忙填好的信息（默认收起，需要时再展开改） ---------- */
+    h += '<div class="blk autoblk"><div class="autohd" id="aAutoHd">' +
+      '<span class="autodot">✅</span><span>' + esc(t('autoFillTitle')) + '</span>' +
+      '<b id="aAutoSum" class="autosum"></b>' +
+      '<span class="autotog" id="aAutoTog">' + esc(t('manualEdit')) + '</span>' +
+      '</div>' +
+      '<div id="aAutoBody" class="autobody hide">' +
+      '<div class="rkmeta mb8">' + esc(t('autoFillTip')) + '</div>' +
+      '<div class="fld"><label>' + esc(t('name')) + '（中）</label><input id="aName" value="' + esc(d.nameZh) + '" /></div>' +
+      '<div class="fld"><label>' + esc(t('name')) + '（EN）</label><input id="aNameEn" value="' + esc(d.nameEn || '') + '" /></div>' +
+      '<div class="fld"><label>' + esc(t('addrL')) + '</label><input id="aAddr" value="' + esc(d.address || '') + '" /></div>' +
+      '<div class="fld"><label>' + esc(t('phoneL')) + '</label><input id="aPhone" value="' + esc(d.phone || '') + '" /></div>' +
+      '<div class="fld"><label>' + esc(t('dist')) + '</label><select id="aDist"><option value="">—</option>' +
+      (S.cfg.dists || []).map(function (x) {
+        return '<option value="' + esc(x.id) + '"' + (d.dist === x.id ? ' selected' : '') + '>' + esc(L(x, 'name')) + '</option>';
+      }).join('') +
       '</select></div>' +
-      '<div class="fld"><label>' + t('dist') + '</label><select id="aDist"><option value="">—</option>' +
-      (S.cfg.dists || []).map(function (x) { return '<option value="' + x.id + '"' + (d.dist === x.id ? ' selected' : '') + '>' + esc(L(x, 'name')) + '</option>'; }).join('') +
-      '</select></div></div>';
-    h += '<div class="fld"><label>' + t('addrL') + '</label><input id="aAddr" value="' + esc(d.address || '') + '" /></div>';
-    h += '<div class="grid2">' +
-      '<div class="fld"><label>' + t('phoneL') + '</label><input id="aPhone" value="' + esc(d.phone || '') + '" /></div>' +
-      '<div class="fld"><label>' + t('hoursL') + '</label><input id="aHours" value="' + esc(d.hours || '') + '" /></div>' +
-      '</div>';
-    h += '<div class="fld"><label>' + t('priceL') + '（¥）</label><input id="aPrice" inputmode="numeric" value="' + esc(d.price || '') + '" /></div>';
-    h += '<div class="fld"><label>' + t('audience') + '</label><div class="multi" id="aAuds">' +
-      (S.cfg.auds || []).map(function (a) {
-        return '<span class="m' + ((d.auds || []).indexOf(a.id) >= 0 ? ' on' : '') + '" data-a="' + a.id + '">' + esc(L(a, 'name')) + '</span>';
-      }).join('') + '</div></div>';
+      '<button class="mini gh" id="aLockBtn" type="button">' + esc(t('poiLockBtn')) + '</button>' +
+      '<div class="hint">' + esc(t('poiLockTip')) + '</div>' +
+      '</div></div>';
 
-    /* ---------- ③ 推荐理由 / 必点项 / 照片 ---------- */
-    h += '<div class="fld"><label>' + t('reasonL') + '<span class="req">*</span></label><textarea id="aReason" placeholder="为什么值得去？">' + esc(d.reason || '') + '</textarea></div>';
-    h += '<div class="fld"><label>' + t('tipsL') + '</label><textarea id="aTips">' + esc(d.tips || '') + '</textarea></div>';
-    h += '<div class="fld"><label>标签（逗号分隔）</label><input id="aTags" value="' + esc((d.tags || []).join(',')) + '" /></div>';
+    /* ---------- ③ 员工真正需要填的：分类 + 理由 + 人群 ---------- */
+    h += '<div class="blk"><h4>✍️ ' + esc(t('onlyAsk')) + '</h4>' +
+      '<div class="fld"><label>' + esc(t('cat')) + '<span class="req">*</span></label>' +
+      '<div class="multi" id="aCat">' +
+      (S.cfg.cats || []).map(function (c) {
+        return '<span class="m' + (catSel === c.id ? ' on' : '') + '" data-cat="' + esc(c.id) + '">' +
+          esc(c.icon || '') + ' ' + esc(L(c, 'name')) + '</span>';
+      }).join('') + '</div></div>' +
+      '<div class="fld"><label>' + esc(t('reasonL')) + '<span class="req">*</span></label>' +
+      '<textarea id="aReason" placeholder="' + esc(t('reasonPh')) + '">' + esc(d.reason || '') + '</textarea></div>' +
+      '<div class="fld"><label>' + esc(t('audience')) + '</label><div class="multi" id="aAuds">' +
+      (S.cfg.auds || []).map(function (a) {
+        return '<span class="m' + ((d.auds || []).indexOf(a.id) >= 0 ? ' on' : '') + '" data-a="' + esc(a.id) + '">' + esc(L(a, 'name')) + '</span>';
+      }).join('') + '</div></div>' +
+      '</div>';
+
+    /* ---------- ④ 更多详情：选填，默认收起，不占用员工注意力 ---------- */
+    h += '<div class="blk"><div class="autohd" id="aMoreHd">' +
+      '<span class="autodot">📎</span><span>' + esc(t('moreOpt')) + '</span>' +
+      '<span class="autotog" id="aMoreTog">' + esc(t('moreShow')) + '</span></div>' +
+      '<div id="aMoreBody" class="autobody hide">' +
+      '<div class="fld"><label>' + esc(t('hoursL')) + '</label><input id="aHours" value="' + esc(d.hours || '') + '" /></div>' +
+      '<div class="fld"><label>' + esc(t('priceL')) + '（¥）</label><input id="aPrice" inputmode="numeric" value="' + esc(d.price || '') + '" /></div>' +
+      '<div class="fld"><label>' + esc(t('tipsL')) + '</label><textarea id="aTips">' + esc(d.tips || '') + '</textarea></div>' +
+      '<div class="fld"><label>' + esc(t('tagsL')) + '</label><input id="aTags" value="' + esc((d.tags || []).join(',')) + '" /></div>' +
+      '</div></div>';
 
     h += '<div class="blk"><h4>⭐ ' + esc(t('mustTry')) + '</h4>' +
       '<div class="addrow"><input id="aStarNew" placeholder="' + esc(t('mustTryPh')) + '" /><button class="mini bl" id="aStarAdd">' + esc(t('mustTryAdd')) + '</button></div>' +
@@ -592,21 +622,30 @@ var App = (function () {
     Array.prototype.forEach.call($('sheetBody').querySelectorAll('#aAuds .m'), function (m) {
       m.addEventListener('click', function () { m.classList.toggle('on'); onChange(); });
     });
+    // 分类改成点标签（单选），比下拉少两步
+    Array.prototype.forEach.call($('sheetBody').querySelectorAll('#aCat .m'), function (m) {
+      m.addEventListener('click', function () {
+        catSel = m.getAttribute('data-cat') || catSel;
+        Array.prototype.forEach.call($('sheetBody').querySelectorAll('#aCat .m'), function (x) { x.classList.remove('on'); });
+        m.classList.add('on'); onChange();
+      });
+    });
+    bindTog('aAutoHd', 'aAutoBody', 'aAutoTog', 'manualEdit', 'manualHide');
+    bindTog('aMoreHd', 'aMoreBody', 'aMoreTog', 'moreShow', 'manualHide');
     $('aCancel').addEventListener('click', closeSheet);
-    $('aSave').addEventListener('click', saveAdd);
+    $('aSave').addEventListener('click', askConfirm);
     $('aGo').addEventListener('click', doSearch);
+    $('aSearch').addEventListener('input', onSearchInput);
     $('aSearch').addEventListener('keydown', function (e) { if (e.key === 'Enter') doSearch(); });
+    if ($('aLockBtn')) $('aLockBtn').addEventListener('click', function () {
+      draft.poiLocked = true; GG.toast(t('poiLockTip')); updateAutoSummary();
+    });
     $('aStarAdd').addEventListener('click', function () { addFormStar(); });
     $('aStarNew').addEventListener('keydown', function (e) { if (e.key === 'Enter') addFormStar(); });
     $('aPhEnvBtn').addEventListener('click', function () { $('aPhEnv').click(); });
     $('aPhDishBtn').addEventListener('click', function () { $('aPhDish').click(); });
     $('aPhEnv').addEventListener('change', function () { addFormPhotos(this.files, 'env'); this.value = ''; });
     $('aPhDish').addEventListener('change', function () { addFormPhotos(this.files, 'dish'); this.value = ''; });
-    $('aCenter').addEventListener('click', function () {
-      var c = GMap.pickerCenter();
-      if (!c) { GG.toast(t('mapNoKey')); return; }
-      setCoord(c.lat, c.lng);
-    });
     if (!estBound) {
       // input/change 监听挂在常驻节点上，只绑一次，避免重复累加
       $('sheetBody').addEventListener('input', onChange);
@@ -614,10 +653,19 @@ var App = (function () {
       estBound = true;
     }
 
-    renderFormStars(); renderFormPhotos(); onChange();
+    renderFormStars(); renderFormPhotos(); onChange(); updateLocUI();
 
     // 迷你取点地图（失败也不阻塞：可用搜索或跳过）
     setTimeout(function () { initFormPicker(); }, 80);
+  }
+
+  function bindTog(hdId, bodyId, togId, showKey, hideKey) {
+    var hd = $(hdId), body = $(bodyId), tog = $(togId);
+    if (!hd || !body) return;
+    hd.addEventListener('click', function () {
+      var hidden = body.classList.toggle('hide');
+      if (tog) tog.textContent = hidden ? t(showKey) : t(hideKey);
+    });
   }
 
   function coordText(d) {
@@ -625,10 +673,120 @@ var App = (function () {
     return '✅ <b>' + esc(t('locOk')) + '：' + d.lat.toFixed(6) + ', ' + d.lng.toFixed(6) + '</b>' +
       (d.locApprox ? ' <span class="apptag">' + esc(t('locApproxTag')) + '</span>' : '');
   }
-  function setCoord(lat, lng) {
+
+  /* ============ 地图自动带入：名称 / 地址 / 电话 / 区域 ============ */
+  var lastPois = [], lastPoiIdx = 0;
+
+  function distIdOf(name) {
+    var ds = (S.cfg && S.cfg.dists) || [];
+    if (!name) return '';
+    for (var i = 0; i < ds.length; i++) {
+      var z = String(ds[i].zh || ''), e = String(ds[i].en || '');
+      if (z && (name.indexOf(z) >= 0 || z.indexOf(name) >= 0)) return ds[i].id;
+      if (e && name.toLowerCase().indexOf(e.toLowerCase()) >= 0) return ds[i].id;
+    }
+    return '';
+  }
+  function distNameOf(id) {
+    var ds = (S.cfg && S.cfg.dists) || [];
+    for (var i = 0; i < ds.length; i++) if (ds[i].id === id) return L(ds[i], 'name');
+    return '';
+  }
+  // 把地图返回的信息写进草稿 + 折叠区输入框（手动锁定过就不再覆盖）
+  function applyPoiInfo(poi, geo) {
+    var d = draft;
+    geo = geo || {};
+    if (!d.poiLocked) {
+      if (poi && poi.title) d.nameZh = poi.title;
+      if (poi && poi.address) d.address = poi.address;
+      if (poi && poi.tel) d.phone = poi.tel || d.phone;
+      if (geo.address && !d.address) d.address = geo.address;
+    }
+    if (poi && poi.id) d.poiId = poi.id;
+    var gid = distIdOf(geo.district);
+    if (gid) d.dist = gid;
+    if (geo.lat != null) { d.lat = geo.lat; d.lng = geo.lng; d.locApprox = false; }
+    d.poiSyncedAt = GG.now();
+    // 记一份「地图给的快照」，提交确认时用来区分哪些是地图带的、哪些是自己改的
+    d.autoSet = { name: d.nameZh || '', address: d.address || '', phone: d.phone || '', dist: gid ? d.dist : (d.autoSet || {}).dist };
+    syncAutoInputs(); updateLocUI(); updateAutoSummary(); onChange();
+  }
+  function srcOf(field) {
+    var s = (draft.autoSet || {})[field];
+    var v = draft[field === 'name' ? 'nameZh' : field] || '';
+    return (v && s && v === s) ? 'map' : (v ? 'self' : '');
+  }
+  function syncAutoInputs() {
+    var d = draft;
+    if ($('aName')) $('aName').value = d.nameZh || '';
+    if ($('aNameEn')) $('aNameEn').value = d.nameEn || '';
+    if ($('aAddr')) $('aAddr').value = d.address || '';
+    if ($('aPhone')) $('aPhone').value = d.phone || '';
+    if ($('aDist')) $('aDist').value = d.dist || '';
+  }
+  function updateAutoSummary() {
+    var el = $('aAutoSum'); if (!el) return;
+    var d = draft, parts = [];
+    if (d.nameZh) parts.push(d.nameZh);
+    if (d.address) parts.push(d.address);
+    if (d.phone) parts.push(d.phone);
+    var dn = distNameOf(d.dist);
+    if (dn) parts.push(dn);
+    el.innerHTML = parts.length ? esc(parts.join(' · ')) : '<span class="rkmeta">' + esc(t('locNone')) + '</span>';
+  }
+  function updateLocUI() {
+    var card = $('aPoiCard'), st = $('aLocStat'), d = draft;
+    if (st) {
+      st.innerHTML = d.lat != null
+        ? '<span class="rkmeta">📍 ' + d.lat.toFixed(6) + ', ' + d.lng.toFixed(6) + '</span>'
+        : '<span class="rkmeta">' + esc(t('dragTip')) + '</span>';
+    }
+    if (!card) return;
+    if (!d.nameZh && !d.address && !d.phone) { card.innerHTML = ''; return; }
+    var rows = '';
+    if (d.nameZh) rows += '<div class="poline pook"><b>🏠 ' + esc(d.nameZh) + '</b></div>';
+    if (d.address) rows += '<div class="poline rkmeta">' + esc(d.address) + '</div>';
+    if (d.phone) rows += '<div class="poline rkmeta">☎ ' + esc(d.phone) + '</div>';
+    var dn = distNameOf(d.dist);
+    if (dn) rows += '<div class="poline rkmeta">🗺 ' + esc(dn) + '</div>';
+    card.innerHTML = '<div class="poicard"><div class="pohd">✅ ' + esc(t('poiPicked')) + '</div>' + rows +
+      '<div class="poacts"><span id="aPoiSwitch">' + esc(t('poiSwitch')) + '</span>' +
+      '<span id="aPoiNone">' + esc(t('poiNone')) + '</span></div></div>';
+    if ($('aPoiSwitch')) $('aPoiSwitch').addEventListener('click', pickOtherPoi);
+    if ($('aPoiNone')) $('aPoiNone').addEventListener('click', function () {
+      draft.nameZh = ''; draft.address = ''; draft.phone = '';
+      draft.autoSet = {}; draft.poiId = ''; draft.poiLocked = true;   // 地图没匹配对，之后以手动为准
+      syncAutoInputs(); updateLocUI(); updateAutoSummary(); onChange();
+    });
+  }
+  // 拖动/点击后反查：自动得到名称、地址、电话、区域
+  function reverseFill(lat, lng) {
+    var key = (S.cfg && S.cfg.mapKey) || '';
+    if (!key) { setCoord(lat, lng, true); return; }
+    var st = $('aLocStat');
+    if (st) st.innerHTML = '<span class="rkmeta">📍 ' + lat.toFixed(6) + ', ' + lng.toFixed(6) + ' · ' + esc(t('locating')) + '</span>';
+    GMap.geocode(lat, lng, key).then(function (g) {
+      lastPois = g.pois || []; lastPoiIdx = 0;
+      var p = null;
+      for (var i = 0; i < lastPois.length; i++) {
+        if (draft.nameZh && lastPois[i].title === draft.nameZh) { p = lastPois[i]; break; }
+      }
+      if (!p) p = lastPois[0] || null;
+      applyPoiInfo(p, { address: g.address, district: g.district, lat: lat, lng: lng });
+      var s2 = $('aLocStat');
+      if (s2) s2.innerHTML = '<span class="rkmeta">📍 ' + lat.toFixed(6) + ', ' + lng.toFixed(6) +
+        (p ? '' : ' · ' + esc(t('locNoPoi'))) + '</span>';
+    }, function () {
+      setCoord(lat, lng, true);
+      var s2 = $('aLocStat');
+      if (s2) s2.innerHTML = '<span class="rkmeta">📍 ' + lat.toFixed(6) + ', ' + lng.toFixed(6) + ' · ' + esc(t('locNoPoi')) + '</span>';
+    });
+  }
+
+  function setCoord(lat, lng, silent) {
     draft.lat = lat; draft.lng = lng; draft.locApprox = false;
-    $('aCoord').innerHTML = coordText(draft);
-    GG.toast(t('locOk'));
+    updateLocUI(); updateAutoSummary();
+    if (!silent) GG.toast(t('locOk'));
     onChange();
   }
   function initFormPicker() {
@@ -642,13 +800,16 @@ var App = (function () {
       GMap.destroyPicker();   // 二次打开时先清掉旧实例，避免画布叠加导致点不动
       GMap.initPicker(box, la, lo, function (x, y) {
         if (x == null || y == null) return;
-        setCoord(x, y);
+        reverseFill(x, y);            // 点一下：取点并自动识别是哪家店
       });
-      GMap.pickerOnPan(function () {
-        try {
-          var c = GMap.pickerCenter();
-          if (c) box.setAttribute('data-c', c.lat.toFixed(5) + ',' + c.lng.toFixed(5));
-        } catch (e) {}
+      // 拖地图：松手 500ms 后自动反查地址/店名，无需再点任何按钮
+      GMap.pickerOnPan(function (c) {
+        if (!c) return;
+        draft.lat = c.lat; draft.lng = c.lng; draft.locApprox = false;
+        var st = $('aLocStat');
+        if (st) st.innerHTML = '<span class="rkmeta">📍 ' + c.lat.toFixed(6) + ', ' + c.lng.toFixed(6) + ' · ' + esc(t('locating')) + '</span>';
+        clearTimeout(panTimer);
+        panTimer = setTimeout(function () { reverseFill(c.lat, c.lng); }, 500);
       });
     };
     if (GMap.ready()) return done();
@@ -661,6 +822,7 @@ var App = (function () {
       box.innerHTML = '<div class="mapfall">' + esc(t('mapKeyFail')) + '</div>';
     });
   }
+  var panTimer = null;
 
   function addFormStar() {
     var v = String($('aStarNew').value || '').trim();
@@ -736,6 +898,8 @@ var App = (function () {
     if (!$('aPts')) return;
     var g = function (id) { return ($(id) || {}).value; };
     var tmp = {
+
+      cat: catSel,
       address: String(g('aAddr') || '').trim(),
       hours: String(g('aHours') || '').trim(),
       phone: String(g('aPhone') || '').trim(),
@@ -753,47 +917,150 @@ var App = (function () {
     }).join(' ');
   }
 
+  var searchTm = null;
+  function onSearchInput() { clearTimeout(searchTm); searchTm = setTimeout(doSearch, 350); }
+
   function doSearch() {
-    var kw = String($('aSearch').value || '').trim();
-    if (!kw) return;
+    var kw = String(($('aSearch') || {}).value || '').trim();
+    var res = $('aRes');
+    if (!kw) { if (res) res.innerHTML = ''; return; }
     var key = (S.cfg && S.cfg.mapKey) || '';
-    if (!key) { $('aRes').innerHTML = '<div class="rkmeta">' + t('mapNoKey') + '</div>'; return; }
-    $('aRes').innerHTML = '<div class="rkmeta">' + t('loading') + '</div>';
+    if (!key) { if (res) res.innerHTML = '<div class="rkmeta">' + esc(t('mapNoKey')) + '</div>'; return; }
+    if (res) res.innerHTML = '<div class="rkmeta">' + esc(t('loading')) + '</div>';
     GMap.search(kw, key, '深圳').then(function (arr) {
       arr = arr || [];
-      $('aRes').innerHTML = arr.length ? arr.map(function (o, i) {
+      // 存下来，后面「换附近一个」可以来回切
+      lastPois = arr.map(function (o) {
+        return {
+          id: o.id, title: o.title, address: o.address, tel: o.tel || '',
+          ad: (o.ad_info || {}).district || '',
+          lat: o.location && o.location.lat, lng: o.location && o.location.lng
+        };
+      });
+      lastPoiIdx = -1;
+      if (!res) return;
+      res.innerHTML = arr.length ? arr.map(function (o, i) {
         return '<div class="rankrow" data-i="' + i + '" style="cursor:pointer"><div class="rkno">📍</div>' +
           '<div class="rkmain"><div class="rkname">' + esc(o.title) + '</div>' +
           '<div class="rkmeta">' + esc(o.address || '') + '</div></div></div>';
-      }).join('') : '<div class="rkmeta">' + t('none') + '</div>';
-      Array.prototype.forEach.call($('aRes').querySelectorAll('.rankrow'), function (r) {
-        r.addEventListener('click', function () {
-          var o = arr[+r.getAttribute('data-i')];
-          if (!o || !o.location) return;
-          setCoord(o.location.lat, o.location.lng);
-          if (!$('aName').value) $('aName').value = o.title;
-          if (!$('aAddr').value) $('aAddr').value = o.address || '';
-          if (GMap.ready()) GMap.pickerGo(o.location.lat, o.location.lng);
-          onChange();
-        });
+      }).join('') : '<div class="rkmeta">' + esc(t('none')) + '</div>';
+      Array.prototype.forEach.call(res.querySelectorAll('.rankrow'), function (r) {
+        r.addEventListener('click', function () { pickPoi(+r.getAttribute('data-i')); });
       });
-    }, function () { $('aRes').innerHTML = '<div class="rkmeta">' + t('mapKeyFail') + '</div>'; });
+    }, function () { if (res) res.innerHTML = '<div class="rkmeta">' + esc(t('mapKeyFail')) + '</div>'; });
   }
 
-  function saveAdd() {
+  // 选中一家：名称 / 地址 / 电话 / 区域 / 坐标，一次性全部自动带出
+  function pickPoi(i) {
+    var p = lastPois[i];
+    if (!p) return;
+    lastPoiIdx = i;
+    applyPoiInfo(
+      { id: p.id, title: p.title, address: p.address, tel: p.tel },
+      { lat: p.lat, lng: p.lng, address: p.address, district: p.ad }
+    );
+    if (GMap.ready()) GMap.pickerGo(p.lat, p.lng);
+    var res = $('aRes'); if (res) res.innerHTML = '';
+    var sb = $('aSearch'); if (sb) sb.value = p.title || '';
+  }
+
+  function pickOtherPoi() {
+    if (!lastPois.length) return;
+    lastPoiIdx = (lastPoiIdx + 1) % lastPois.length;
+    var p = lastPois[lastPoiIdx];
+    applyPoiInfo(
+      { id: p.id, title: p.title, address: p.address, tel: p.tel },
+      { lat: p.lat != null ? p.lat : draft.lat, lng: p.lng != null ? p.lng : draft.lng, district: p.ad }
+    );
+    if (p.lat != null && GMap.ready()) GMap.pickerGo(p.lat, p.lng);
+  }
+
+  /* ---------- 提交前确认：地图同步来的信息，让提交者最后过一眼 ---------- */
+  function gv(id) { return String(($(id) || {}).value || '').trim(); }
+
+  // 把表单收进草稿（表单被确认卡替换后就读不到了，必须先收）
+  function collect() {
     var d = draft;
-    d.nameZh = String($('aName').value || '').trim();
-    d.nameEn = String($('aNameEn').value || '').trim();
-    d.cat = $('aCat').value;
-    d.dist = $('aDist').value;
-    d.address = String($('aAddr').value || '').trim();
-    d.phone = String($('aPhone').value || '').trim();
-    d.hours = String($('aHours').value || '').trim();
-    d.price = String($('aPrice').value || '').trim();
-    d.reason = String($('aReason').value || '').trim();
-    d.tips = String($('aTips').value || '').trim();
-    d.tags = String($('aTags').value || '').split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean);
-    d.auds = Array.prototype.map.call($('sheetBody').querySelectorAll('#aAuds .m.on'), function (m) { return m.getAttribute('data-a'); });
+    if ($('aName')) d.nameZh = gv('aName');
+    if ($('aNameEn')) d.nameEn = gv('aNameEn');
+    if ($('aAddr')) d.address = gv('aAddr');
+    if ($('aPhone')) d.phone = gv('aPhone');
+    if ($('aDist')) d.dist = gv('aDist');
+    if ($('aHours')) d.hours = gv('aHours');
+    if ($('aPrice')) d.price = gv('aPrice');
+    if ($('aReason')) d.reason = gv('aReason');
+    if ($('aTips')) d.tips = gv('aTips');
+    if ($('aTags')) d.tags = gv('aTags').split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    if ($('sheetBody').querySelector('#aAuds')) {
+      d.auds = Array.prototype.map.call($('sheetBody').querySelectorAll('#aAuds .m.on'), function (m) { return m.getAttribute('data-a'); });
+    }
+    d.cat = catSel || '';
+    var e = $('aErr');
+    if (!d.nameZh) return { ok: false, msg: t('nameReq2'), el: e };
+    if (!d.cat) return { ok: false, msg: t('catReq'), el: e };
+    if (!d.reason) return { ok: false, msg: t('reasonReq'), el: e };
+    return { ok: true };
+  }
+
+  function cfmRow(k, v, src) {
+    if (!v) return '';
+    var tag = src === 'map' ? '<span class="cfmsrc">' + esc(t('fromMap')) + '</span>'
+      : src === 'self' ? '<span class="cfmsrc self">' + esc(t('selfFilled')) + '</span>' : '';
+    return '<div class="cfmline"><div class="cfmk">' + esc(k) + '</div><div class="cfmval">' + esc(v) + tag + '</div></div>';
+  }
+
+  function askConfirm() {
+    var r = collect();
+    if (!r.ok) {
+      var e = $('aErr');
+      if (e) e.textContent = r.msg;
+      else GG.toast(r.msg);
+      return;
+    }
+    var d = draft;
+    var h = '';
+    h += '<div class="cfmbox"><h4>✅ ' + esc(t('confirmTitle')) + '</h4>' +
+      '<div class="rkmeta">' + esc(t('confirmTip')) + '</div>' +
+      cfmRow(t('name'), d.nameZh, srcOf('name')) +
+      cfmRow(t('addrL'), d.address, srcOf('address')) +
+      cfmRow(t('phoneL'), d.phone, srcOf('phone')) +
+      cfmRow(t('dist'), distNameOf(d.dist), (d.autoSet || {}).dist === d.dist && d.dist ? 'map' : (d.dist ? 'self' : '')) +
+      '</div>';
+
+    h += '<div class="cfmbox"><h4>✍️ ' + esc(t('onlyAsk')) + '</h4>' +
+      cfmRow(t('cat'), L(catOf(d.cat), 'name'), '') +
+      cfmRow(t('reasonL'), d.reason, 'self') +
+      cfmRow(t('audience'), (d.auds || []).map(function (a) {
+        var o = (S.cfg.auds || []).filter(function (x) { return x.id === a; })[0];
+        return o ? L(o, 'name') : '';
+      }).filter(Boolean).join('、'), '') +
+      '</div>';
+
+    var extras = [];
+    if ((d.stars || []).length) extras.push('⭐ ' + t('mustTry') + ' × ' + d.stars.length);
+    if ((d.photos || []).length) extras.push('📷 ' + t('photo') + ' × ' + d.photos.length);
+    if (d.hours) extras.push('🕒 ' + d.hours);
+    if (d.price) extras.push('💰 ¥' + d.price);
+    if ((d.tags || []).length) extras.push('🏷 ' + d.tags.join('、'));
+    if (extras.length) {
+      h += '<div class="cfmbox"><h4>📎 ' + esc(t('moreOpt')) + '</h4>' +
+        '<div class="cfmval">' + esc(extras.join(' · ')) + '</div></div>';
+    }
+
+    h += '<div class="rkmeta" style="margin-top:8px">📍 ' +
+      (d.lat != null ? d.lat.toFixed(6) + ', ' + d.lng.toFixed(6)
+        : esc(t('locSkipTip'))) + '</div>';
+    h += '<div class="err" id="aErr"></div>';
+
+    openSheet('✅ ' + t('confirmTitle'), h, true);
+    $('sheetFoot').innerHTML = '<button class="btn line" id="aBack">' + esc(t('confirmEdit')) + '</button>' +
+      '<button class="btn blue" id="aSubmit">' + esc(t('confirmOk')) + '</button>';
+    $('aBack').addEventListener('click', function () { renderAdd(); });
+    $('aSubmit').addEventListener('click', doSubmit);
+  }
+
+  function doSubmit() {
+    var d = draft;
     var me = GG.normEmp(S.me.emp);
     (d.photos || []).forEach(function (x) { if (!x.by) { x.by = me; x.ts = x.ts || GG.now(); } });
     (d.stars || []).forEach(function (x) { if (!x.by) { x.by = me; x.ts = x.ts || GG.now(); } });
@@ -801,9 +1068,9 @@ var App = (function () {
     if (!d.stars || !d.stars.length) delete d.stars;
 
     var e = $('aErr');
-    if (!d.nameZh) { e.textContent = t('nameReq2'); return; }
-    if (!d.cat) { e.textContent = t('catReq'); return; }
-    if (!d.reason) { e.textContent = t('reasonReq'); return; }
+    // 名称是地图给的，之后地图改名才允许跟随；员工自己写的名字永远不覆盖
+    var as = d.autoSet || {};
+    d.nameAuto = !!(as.name && d.nameZh && as.name === d.nameZh);
     // 没选点也不卡住：按所选区域中心生成一个待校准坐标，管理员审核时可微调
     if (d.lat == null || d.lng == null) {
       var dd = (S.cfg.dists || []).filter(function (x) { return x.id === d.dist; })[0];
@@ -813,13 +1080,63 @@ var App = (function () {
       d.locApprox = true;
     } else { d.locApprox = false; }
     d.updatedAt = GG.now();
-    e.textContent = '';
-    $('aSave').disabled = true;
+    if (e) e.textContent = '';
+    var btn = $('aSubmit');
+    if (btn) btn.disabled = true;
     GG.placesPut(d).then(function () {
-      $('aSave').disabled = false;
+      if (btn) btn.disabled = false;
       GG.toast(t('submitOk'));
       closeSheet();
       refresh(true);
+    }, function (err) {
+      if (btn) btn.disabled = false;
+      if (e) e.textContent = (err && err.message) || 'save failed';
+    });
+  }
+
+  /* ============ 店铺信息随地图自动跟随更新 ============ */
+  var SYNC_MS = 7 * 24 * 3600 * 1000;   // 超过 7 天就在打开时静默刷新一次
+  function placeStale(p) {
+    if (!p || p.poiLocked) return false;
+    if (p.lat == null || p.lng == null) return false;
+    return (GG.now() - (p.poiSyncedAt || 0)) > SYNC_MS;
+  }
+  // 只更新「原本就来自地图」的字段，人工改过的绝不覆盖
+  function autoSync(p) {
+    var key = (S.cfg && S.cfg.mapKey) || '';
+    if (!key || !p || p.poiLocked) return Promise.resolve(false);
+    if (p.lat == null || p.lng == null) return Promise.resolve(false);
+    return GMap.geocode(p.lat, p.lng, key).then(function (g) {
+      var pois = g.pois || [], hit = null, i;
+      for (i = 0; i < pois.length; i++) {
+        if (p.poiId && pois[i].id === p.poiId) { hit = pois[i]; break; }
+      }
+      if (!hit) for (i = 0; i < pois.length; i++) {
+        if (pois[i].title && pois[i].title === p.nameZh) { hit = pois[i]; break; }
+      }
+      if (!hit && p.poiId) return false;          // 有 POI 绑定却查不到，不动，避免误改
+      if (!hit) hit = pois[0] || null;
+      var changed = false;
+      if (hit) {
+        if (hit.id && hit.id !== p.poiId) { p.poiId = hit.id; changed = true; }
+        if (p.nameAuto && hit.title && hit.title !== p.nameZh) { p.nameZh = hit.title; changed = true; }
+        if (hit.address && hit.address !== p.address) { p.address = hit.address; changed = true; }
+        if (hit.tel && hit.tel !== p.phone) { p.phone = hit.tel; changed = true; }
+      }
+      var gid = distIdOf(g.district);
+      if (gid && gid !== p.dist) { p.dist = gid; changed = true; }
+      p.poiSyncedAt = GG.now();
+      if (changed) { p.updatedAt = GG.now(); return GG.placesPut(p).then(function () { return true; }, function () { return true; }); }
+      return false;
+    }, function () { return false; });
+  }
+  // 列表加载后，挑两条陈旧的静默刷新（不打断员工操作）
+  function syncSome() {
+    var key = (S.cfg && S.cfg.mapKey) || '';
+    if (!key) return;
+    var q = S.places.filter(placeStale).slice(0, 2);
+    q.forEach(function (p) {
+      autoSync(p).then(function (ok) { if (ok) { decorate(); renderMap(false); } });
     });
   }
 
