@@ -831,6 +831,7 @@ var App = (function () {
         clearTimeout(panTimer);
         panTimer = setTimeout(function () { reverseFill(c.lat, c.lng); }, 500);
       });
+      attachGestures(box);
     };
     if (GMap.ready()) return done();
     if (!key) {
@@ -844,6 +845,58 @@ var App = (function () {
   }
   var panTimer = null, mapMute = 0;
   function muteMap(ms) { mapMute = Date.now() + (ms || 1000); }
+
+  /* 自研手势层：盖一层透明交互板，拖动/双指缩放/点击全部自己算，
+     不依赖腾讯地图 SDK 的内部手势（部分浏览器/WebView 手势会失灵） */
+  function attachGestures(box) {
+    var wrap = box.parentNode;
+    if (!wrap || wrap.querySelector('.dragcover')) return;
+    var cover = document.createElement('div');
+    cover.className = 'dragcover';
+    wrap.appendChild(cover);
+    var pts = {};            // pointerId -> {x,y}
+    var moved = false, downT = 0, pinchD = 0;
+    var ids = function () { return Object.keys(pts); };
+
+    cover.addEventListener('pointerdown', function (e) {
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+      moved = false; downT = Date.now(); pinchD = 0;
+      try { cover.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+    });
+    cover.addEventListener('pointermove', function (e) {
+      if (!pts[e.pointerId]) return;
+      var n = ids().length;
+      if (n >= 2) {                                   // 双指捏合缩放
+        pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+        var a = pts[ids()[0]], b = pts[ids()[1]];
+        var d = Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+        if (pinchD) GMap.pickerZoomBy(Math.log2(d / pinchD));
+        pinchD = d; moved = true;
+        return;
+      }
+      var dx = e.clientX - pts[e.pointerId].x, dy = e.clientY - pts[e.pointerId].y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+      if (moved) GMap.pickerPanBy(dx, dy);            // 内容跟手；pan 回调里写坐标并反查
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+    });
+    var up = function (e) {
+      if (!pts[e.pointerId]) return;
+      delete pts[e.pointerId];
+      if (ids().length === 0) {
+        var wasTap = !moved && (Date.now() - downT) < 600;
+        pinchD = 0;
+        if (wasTap) GMap.pickerTapAt(e.clientX, e.clientY, box);   // 单击取点
+        moved = false;
+      }
+    };
+    cover.addEventListener('pointerup', up);
+    cover.addEventListener('pointercancel', up);
+    cover.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      GMap.pickerZoomBy(-e.deltaY / 600);
+    }, { passive: false });
+  }
 
   function addFormStar() {
     var v = String($('aStarNew').value || '').trim();
