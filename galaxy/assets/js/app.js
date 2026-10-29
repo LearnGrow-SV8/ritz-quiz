@@ -699,19 +699,27 @@ var App = (function () {
   function applyPoiInfo(poi, geo) {
     var d = draft;
     geo = geo || {};
+    var touched = { name: 0, address: 0, phone: 0, dist: 0 };
     if (!d.poiLocked) {
-      if (poi && poi.title) d.nameZh = poi.title;
-      if (poi && poi.address) d.address = poi.address;
-      if (poi && poi.tel) d.phone = poi.tel || d.phone;
-      if (geo.address && !d.address) d.address = geo.address;
+      if (poi && poi.title) { d.nameZh = poi.title; touched.name = 1; }
+      if (poi && poi.address) { d.address = poi.address; touched.address = 1; }
+      if (poi && poi.tel) { d.phone = poi.tel; touched.phone = 1; }
+      if (geo.address && !d.address) { d.address = geo.address; touched.address = 1; }
     }
     if (poi && poi.id) d.poiId = poi.id;
     var gid = distIdOf(geo.district);
-    if (gid) d.dist = gid;
+    if (gid) { d.dist = gid; touched.dist = 1; }
     if (geo.lat != null) { d.lat = geo.lat; d.lng = geo.lng; d.locApprox = false; }
     d.poiSyncedAt = GG.now();
-    // 记一份「地图给的快照」，提交确认时用来区分哪些是地图带的、哪些是自己改的
-    d.autoSet = { name: d.nameZh || '', address: d.address || '', phone: d.phone || '', dist: gid ? d.dist : (d.autoSet || {}).dist };
+    // 「地图给的快照」：提交确认时据此区分哪些来自地图、哪些是自己改的。
+    // 只有真正被地图覆盖过的字段才更新快照，员工手写的名字永远标记为「自己填的」
+    var prev = d.autoSet || {};
+    d.autoSet = {
+      name: touched.name ? (d.nameZh || '') : (prev.name || ''),
+      address: touched.address ? (d.address || '') : (prev.address || ''),
+      phone: touched.phone ? (d.phone || '') : (prev.phone || ''),
+      dist: touched.dist ? (d.dist || '') : (prev.dist || '')
+    };
     syncAutoInputs(); updateLocUI(); updateAutoSummary(); onChange();
   }
   function srcOf(field) {
@@ -762,7 +770,8 @@ var App = (function () {
       syncAutoInputs(); updateLocUI(); updateAutoSummary(); onChange();
     });
   }
-  // 拖动/点击后反查：自动得到名称、地址、电话、区域
+  // 拖动/点击后反查坐标 → 名称、地址、电话、区域
+  // 关键取舍：员工已经选过店时，拖动只改坐标，绝不把店名换成「最近的那家」
   function reverseFill(lat, lng) {
     var key = (S.cfg && S.cfg.mapKey) || '';
     if (!key) { setCoord(lat, lng, true); return; }
@@ -770,15 +779,22 @@ var App = (function () {
     if (st) st.innerHTML = '<span class="rkmeta">📍 ' + lat.toFixed(6) + ', ' + lng.toFixed(6) + ' · ' + esc(t('locating')) + '</span>';
     GMap.geocode(lat, lng, key).then(function (g) {
       lastPois = g.pois || []; lastPoiIdx = 0;
-      var p = null;
-      for (var i = 0; i < lastPois.length; i++) {
-        if (draft.nameZh && lastPois[i].title === draft.nameZh) { p = lastPois[i]; break; }
+      var keep = String(draft.nameZh || '').trim();
+      var hit = null, i;
+      if (draft.poiId) {                                   // ① 同一家（地图 id 命中）→ 刷新它的最新资料
+        for (i = 0; i < lastPois.length; i++) if (lastPois[i].id === draft.poiId) { hit = lastPois[i]; break; }
       }
-      if (!p) p = lastPois[0] || null;
-      applyPoiInfo(p, { address: g.address, district: g.district, lat: lat, lng: lng });
+      if (!hit && keep) {                                  // ② 同名命中
+        for (i = 0; i < lastPois.length; i++) if (lastPois[i].title === keep) { hit = lastPois[i]; break; }
+      }
+      if (!hit && !keep) hit = lastPois[0] || null;        // ③ 还没选过店 → 自动取最近的一家，省得员工手填
+      applyPoiInfo(
+        hit ? { id: hit.id, title: hit.title, address: hit.address, tel: hit.tel } : null,
+        { address: g.address, district: g.district, lat: lat, lng: lng }
+      );
       var s2 = $('aLocStat');
       if (s2) s2.innerHTML = '<span class="rkmeta">📍 ' + lat.toFixed(6) + ', ' + lng.toFixed(6) +
-        (p ? '' : ' · ' + esc(t('locNoPoi'))) + '</span>';
+        (hit || keep ? '' : ' · ' + esc(t('locNoPoi'))) + '</span>';
     }, function () {
       setCoord(lat, lng, true);
       var s2 = $('aLocStat');
@@ -808,6 +824,7 @@ var App = (function () {
       // 拖地图：松手 500ms 后自动反查地址/店名，无需再点任何按钮
       GMap.pickerOnPan(function (c) {
         if (!c) return;
+        if (Date.now() < mapMute) return;   // 代码自己移动地图（如搜索后跳过去）不算员工拖拽
         draft.lat = c.lat; draft.lng = c.lng; draft.locApprox = false;
         var st = $('aLocStat');
         if (st) st.innerHTML = '<span class="rkmeta">📍 ' + c.lat.toFixed(6) + ', ' + c.lng.toFixed(6) + ' · ' + esc(t('locating')) + '</span>';
@@ -825,7 +842,8 @@ var App = (function () {
       box.innerHTML = '<div class="mapfall">' + esc(t('mapKeyFail')) + '</div>';
     });
   }
-  var panTimer = null;
+  var panTimer = null, mapMute = 0;
+  function muteMap(ms) { mapMute = Date.now() + (ms || 1000); }
 
   function addFormStar() {
     var v = String($('aStarNew').value || '').trim();
@@ -962,7 +980,7 @@ var App = (function () {
       { id: p.id, title: p.title, address: p.address, tel: p.tel },
       { lat: p.lat, lng: p.lng, address: p.address, district: p.ad }
     );
-    if (GMap.ready()) GMap.pickerGo(p.lat, p.lng);
+    if (p.lat != null && GMap.ready()) { muteMap(1200); GMap.pickerGo(p.lat, p.lng); }
     var res = $('aRes'); if (res) res.innerHTML = '';
     var sb = $('aSearch'); if (sb) sb.value = p.title || '';
   }
@@ -975,7 +993,7 @@ var App = (function () {
       { id: p.id, title: p.title, address: p.address, tel: p.tel },
       { lat: p.lat != null ? p.lat : draft.lat, lng: p.lng != null ? p.lng : draft.lng, district: p.ad }
     );
-    if (p.lat != null && GMap.ready()) GMap.pickerGo(p.lat, p.lng);
+    if (p.lat != null && GMap.ready()) { muteMap(1200); GMap.pickerGo(p.lat, p.lng); }
   }
 
   /* ---------- 提交前确认：地图同步来的信息，让提交者最后过一眼 ---------- */
