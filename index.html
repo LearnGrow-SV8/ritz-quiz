@@ -4490,6 +4490,8 @@ var I18N = {
   race_admin_published: {cn:'已发布，学员端即刻生效', en:'Published — live on student devices now'},
   race_cloud_fail: {cn:'❌ 没有同步到云端，学员端看不到这场答题赛。请检查网络后重新点「发布」。', en:'❌ Not synced to the cloud — student devices cannot see this race. Check the network, then press Publish again.'},
   race_syncing: {cn:'正在从云端重新同步…', en:'Re-syncing from the cloud…'},
+  race_pull_fail: {cn:'暂时连不上服务器，请检查网络后点「重新同步」', en:'Cannot reach the server — check your network and tap Re-sync'},
+  race_resync: {cn:'重新同步', en:'Re-sync'},
   race_cloud_ok: {cn:'☁️ 已同步到云端，学员端可见', en:'☁️ Synced to the cloud — visible on student devices'},
   race_admin_saved: {cn:'已保存', en:'Saved'},
   race_admin_no_scores: {cn:'本期还没有成绩', en:'No scores for this round yet'},
@@ -7137,13 +7139,19 @@ function publishRaceConf(c) {
 }
 // 主动从云端拉一次配置（进答题赛页面 / 轮询用）。正常情况下 refreshRoster()
 // 已经顺带应用了；这里用于"用户刚点进来、本地还没有配置"的即时补救。
+// state.racePullFail 记录"这次到底是网络/断路器问题，还是云端确实没有赛事"——
+// 两者文案必须区分，否则一次网络抖动就被误读成"培训部没开活动"。
 var _racePullAt = 0;
 function racePullConf(force) {
-  if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbGetChannelJson !== 'function') return Promise.resolve(null);
+  if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbGetChannelJson !== 'function') {
+    state.racePullFail = true;   // 断路器断开：对用户来说同样是"没连上"
+    return Promise.resolve(null);
+  }
   var now = Date.now();
   if (!force && now - _racePullAt < 15000) return Promise.resolve(raceConfOf());
   _racePullAt = now;
   return sbGetChannelJson(ROSTER_CHANNEL).then(function (j) {
+    state.racePullFail = !(j && j.success);
     var d = (j && j.success && j.data) || null;
     if (d && d.race && d.race.id) { applyRaceConf(d.race); return raceConfOf(); }
     // 历史兼容：老版本写在独立的 'race' 通道（RLS 一直拒，实际从未读到过）
@@ -7151,7 +7159,22 @@ function racePullConf(force) {
       if (r2 && r2.success && r2.data && r2.data.id) { applyRaceConf(r2.data); return raceConfOf(); }
       return null;
     }, function () { return null; });
-  }, function () { return null; });
+  }, function () { state.racePullFail = true; return null; });
+}
+// 「重新同步」按钮：先复位断路器（否则 SB_ON=false 时请求根本不会发出去），再强制拉一次。
+function raceResyncNow() {
+  try { if (typeof sbResetBreaker === 'function') sbResetBreaker(); } catch (e) {}
+  state.racePullFail = false;
+  state.raceRetry = 0;
+  var m = document.getElementById('raceSyncMsg');
+  if (m) m.innerHTML = '<span style="color:#1a3a5c;">' + t('race_syncing') + '</span>';
+  racePullConf(true).then(function (conf) {
+    if (state.currentPage === 'race' && typeof render === 'function') render();
+    if (!conf && state.currentPage === 'race') {
+      var m2 = document.getElementById('raceSyncMsg');
+      if (m2) m2.innerHTML = '<span style="color:#b3261e;">' + t(state.racePullFail ? 'race_pull_fail' : 'race_no_conf') + '</span>';
+    }
+  });
 }
 // 板块选择方式：'choice' = 学员自选（默认），'admin' = 管理员指定统一板块。
 // 缺字段的旧配置一律按 choice 处理（学员自选是这个模块的初衷）。
@@ -7762,7 +7785,9 @@ function renderRaceHome() {
     state.racePullAskedAt = Date.now();
     var _beforeVer = (raceConfOf() || {}).ver || 0;
     racePullConf(true).then(function (conf) {
-      if (!conf || state.currentPage !== 'race') return;
+      if (state.currentPage !== 'race') return;
+      // 拉取失败也要重画：否则页面一直停在"正在同步…"，用户看不出是网络问题。
+      if (!conf) { render(); return; }
       if (((conf || {}).ver || 0) !== _beforeVer) render();
     });
   }
@@ -7770,8 +7795,14 @@ function renderRaceHome() {
   var html = renderAppHeader({ title: '⚡ ' + t('race_title'), subtitle: t('race_sub') });
   html += '<div class="page">';
   if (st === 'none') {
-    html += '<div class="q-card" style="text-align:center;color:#888;padding:24px 16px;">' + t('race_no_conf');
-    html += '<div style="font-size:12px;color:#aaa;margin-top:6px;">' + t('race_syncing') + '</div></div>';
+    // 拉不到配置有两种原因：网络/断路器，或云端确实没有发布赛事。文案分开写，
+    // 并且提供「重新同步」按钮 —— 否则用户只能干等，或者被误导成"要去找培训部"。
+    var _pullFail = !!state.racePullFail;
+    html += '<div class="q-card" style="text-align:center;padding:24px 16px;">';
+    html += '<div style="color:#888;">' + t(_pullFail ? 'race_pull_fail' : 'race_no_conf') + '</div>';
+    html += '<div id="raceSyncMsg" style="font-size:12px;color:#aaa;margin-top:8px;">' + t('race_syncing') + '</div>';
+    html += '<button class="action-btn primary" style="margin-top:14px;padding:9px 20px;" onclick="raceResyncNow()">' + t('race_resync') + '</button>';
+    html += '</div>';
     html += '</div>';
     return html;
   }
