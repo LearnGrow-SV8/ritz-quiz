@@ -198,8 +198,10 @@ var GMap = (function () {
   }
   // 地图平移 / 缩放时回调：fn({lat,lng}) 直接拿到当前中心点
   // （实测 TMap GL 的 pan/panend/zoom_changed 均可用；拖动一次会连续触发多次）
+  var panFn = null;
   function pickerOnPan(fn) {
     if (!mini || !fn) return;
+    panFn = fn;
     var last = '';
     function emit() {
       try {
@@ -212,12 +214,52 @@ var GMap = (function () {
     }
     try { mini.on('pan', emit); mini.on('panend', emit); mini.on('zoom_changed', emit); } catch (e) {}
   }
+  /* ---- 自研交互层：不依赖 TMap 内部手势（部分环境手势失灵），全部自己算 ---- */
+  function mppOf(la, z) { return 156543.03392 * Math.cos(la * Math.PI / 180) / Math.pow(2, z); } // 米/像素
+  function pickerMark(la, lo) {
+    if (miniMark) { try { miniMark.setGeometries([{ id: 'pick', styleId: 'p', position: new window.TMap.LatLng(la, lo) }]); } catch (e) {} }
+  }
+  // 拖动 dx/dy 像素（内容跟手）→ 新中心点；返回 {lat,lng}
+  function pickerPanBy(dx, dy) {
+    if (!mini) return null;
+    var c, z;
+    try { c = mini.getCenter(); z = mini.getZoom(); } catch (e) { return null; }
+    var la = c.getLat(), lo = c.getLng(), rad = la * Math.PI / 180;
+    var mpp = mppOf(la, z);
+    var nla = Math.max(-85, Math.min(85, la + (dy * mpp) / 111320));
+    var nlo = lo - (dx * mpp) / (111320 * Math.max(0.2, Math.cos(rad)));
+    try { mini.setCenter(new window.TMap.LatLng(nla, nlo)); } catch (e) { return null; }
+    pickerMark(nla, nlo);
+    if (panFn) { try { panFn({ lat: nla, lng: nlo }); } catch (e) {} }
+    return { lat: nla, lng: nlo };
+  }
+  // 点击处 → 经纬度（按中心点 + 像素偏移换算，选点场景精度足够）
+  function pickerTapAt(clientX, clientY, box) {
+    if (!mini || !box) return null;
+    var c, z;
+    try { c = mini.getCenter(); z = mini.getZoom(); } catch (e) { return null; }
+    var r = box.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    var la = c.getLat(), lo = c.getLng(), rad = la * Math.PI / 180;
+    var mpp = mppOf(la, z);
+    var nla = la + (((r.top + r.height / 2) - clientY) * mpp) / 111320;
+    var nlo = lo + ((clientX - (r.left + r.width / 2)) * mpp) / (111320 * Math.max(0.2, Math.cos(rad)));
+    try { mini.setCenter(new window.TMap.LatLng(nla, nlo)); } catch (e) {}
+    pickerMark(nla, nlo);
+    if (miniCb) { try { miniCb(nla, nlo); } catch (e) {} }
+    return { lat: nla, lng: nlo };
+  }
+  function pickerZoomBy(dz) {
+    if (!mini) return;
+    try { mini.setZoom(mini.getZoom() + dz); } catch (e) {}
+  }
   function destroyPicker() { try { if (mini) mini.destroy(); } catch (e) {} mini = null; miniMark = null; miniCb = null; }
 
   return {
     load: load, ready: ready, init: init, destroy: destroy, getMap: getMap,
     onMapClick: onMapClick, onMarkerClick: onMarkerClick,
     render: render, fit: fit, goto: goto, search: search, geocode: geocode, desat: desat, pinSvg: pinSvg,
-    initPicker: initPicker, pickerGo: pickerGo, pickerCenter: pickerCenter, pickerOnPan: pickerOnPan, destroyPicker: destroyPicker
+    initPicker: initPicker, pickerGo: pickerGo, pickerCenter: pickerCenter, pickerOnPan: pickerOnPan, destroyPicker: destroyPicker,
+    pickerPanBy: pickerPanBy, pickerTapAt: pickerTapAt, pickerZoomBy: pickerZoomBy
   };
 })();
