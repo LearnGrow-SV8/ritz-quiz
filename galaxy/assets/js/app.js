@@ -520,18 +520,21 @@ var App = (function () {
   function isAdminUnlocked() { return !!GG.adminSession(); }
 
   /* ============ 上传推荐 ============ */
-  var draft = null, PH_MAXF = 6, catSel = (S.cfg.cats[0] || {}).id || '';
+  // catSel 不能在模块初始化时取 S.cfg —— 那时 cfg 还没加载完，会让整个模块挂掉
+  var draft = null, PH_MAXF = 6, catSel = '';
   function openAdd(editP) {
+    var defCat = ((S.cfg && S.cfg.cats) || [])[0] || {};
     draft = editP ? GG.clone(editP) : {
-      id: GG.uid('p'), nameZh: '', nameEn: '', cat: (S.cfg.cats[0] || {}).id || '', dist: '',
+      id: GG.uid('p'), nameZh: '', nameEn: '', cat: defCat.id || '', dist: '',
       address: '', lat: null, lng: null, phone: '', hours: '', price: '', auds: [],
       reason: '', tips: '', tags: [], stars: [], photos: [], locApprox: false,
-      poiId: '', poiLocked: false, poiSyncedAt: 0,
+      poiId: '', poiLocked: false, poiSyncedAt: 0, nameAuto: false,
       emp: GG.normEmp(S.me.emp), empName: S.me.name || '',
       createdAt: GG.now(), status: 'pending', updatedAt: GG.now()
     };
     draft.stars = draft.stars || [];
     draft.photos = draft.photos || [];
+    catSel = draft.cat || defCat.id || '';
     renderAdd();
   }
 
