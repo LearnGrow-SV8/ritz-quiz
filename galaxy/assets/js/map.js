@@ -117,23 +117,48 @@ var GMap = (function () {
     if (zoom) map.setZoom(zoom);
   }
 
-  /* ---------- 关键字检索（WebService，JSONP 免跨域） ---------- */
+  /* ---------- JSONP 通用（WebService 免跨域） ---------- */
   var jsonpSeq = 0;
-  function search(keyword, key, city) {
+  function jsonp(baseUrl, ms) {
     return new Promise(function (res, rej) {
-      var cb = '__ggjsonp' + (++jsonpSeq);
+      var cb = '__ggcb' + (++jsonpSeq);
       var s = document.createElement('script');
-      var url = 'https://apis.map.qq.com/ws/place/v1/search?keyword=' + encodeURIComponent(keyword) +
-        '&boundary=region(' + encodeURIComponent(city || '深圳') + ',0)&page_size=10&output=jsonp&callback=' + cb + '&key=' + encodeURIComponent(key);
-      window[cb] = function (d) {
-        cleanup();
-        if (d && d.status === 0) res(d.data || []); else rej(new Error((d && d.message) || 'search failed'));
-      };
+      var done = false;
       function cleanup() { try { delete window[cb]; } catch (e) {} try { s.remove(); } catch (e) {} }
-      s.onerror = function () { cleanup(); rej(new Error('network')); };
-      s.src = url;
+      window[cb] = function (d) { if (done) return; done = true; cleanup(); res(d); };
+      s.onerror = function () { if (done) return; done = true; cleanup(); rej(new Error('network')); };
+      s.src = baseUrl + '&output=jsonp&callback=' + cb;
       document.head.appendChild(s);
-      setTimeout(function () { cleanup(); rej(new Error('timeout')); }, 9000);
+      setTimeout(function () { if (done) return; done = true; cleanup(); rej(new Error('timeout')); }, ms || 9000);
+    });
+  }
+
+  /* ---------- 关键字检索（店名 → POI 列表，自带地址/电话/坐标） ---------- */
+  function search(keyword, key, city) {
+    var url = 'https://apis.map.qq.com/ws/place/v1/search?keyword=' + encodeURIComponent(keyword) +
+      '&boundary=region(' + encodeURIComponent(city || '深圳') + ',0)&page_size=10&key=' + encodeURIComponent(key);
+    return jsonp(url).then(function (d) {
+      if (d && d.status === 0) return d.data || [];
+      throw new Error((d && d.message) || 'search failed');
+    });
+  }
+
+  /* ---------- 逆地理：坐标 → 标准地址 + 行政区 + 周边店铺 ---------- */
+  function geocode(lat, lng, key) {
+    var url = 'https://apis.map.qq.com/ws/geocoder/v1/?location=' + encodeURIComponent(lat + ',' + lng) +
+      '&get_poi=1&poi_options=radius=300;policy=2&key=' + encodeURIComponent(key);
+    return jsonp(url).then(function (d) {
+      if (!d || d.status !== 0) throw new Error((d && d.message) || 'geocode failed');
+      var r = d.result || {};
+      var fa = r.formatted_addresses || {};
+      return {
+        address: fa.recommend || fa.standard_address || r.address || '',
+        district: (r.address_component && r.address_component.district) || '',
+        city: (r.address_component && r.address_component.city) || '',
+        pois: (r.pois || []).slice(0, 8).map(function (p) {
+          return { id: p.id, title: p.title, address: p.address, tel: p.tel || '', category: p.category || '' };
+        })
+      };
     });
   }
 
@@ -171,17 +196,28 @@ var GMap = (function () {
       return { lat: c.getLat(), lng: c.getLng() };
     } catch (e) { return null; }
   }
-  // 地图平移 / 缩放时回调（用于实时显示中心点坐标）
+  // 地图平移 / 缩放时回调：fn({lat,lng}) 直接拿到当前中心点
+  // （实测 TMap GL 的 pan/panend/zoom_changed 均可用；拖动一次会连续触发多次）
   function pickerOnPan(fn) {
     if (!mini || !fn) return;
-    try { mini.on('pan', fn); mini.on('zoom_changed', fn); mini.on('center_changed', fn); } catch (e) {}
+    var last = '';
+    function emit() {
+      try {
+        var c = mini.getCenter(); if (!c) return;
+        var la = c.getLat(), lo = c.getLng();
+        var k = la.toFixed(6) + ',' + lo.toFixed(6);
+        if (k === last) return; last = k;
+        fn({ lat: la, lng: lo });
+      } catch (e) {}
+    }
+    try { mini.on('pan', emit); mini.on('panend', emit); mini.on('zoom_changed', emit); } catch (e) {}
   }
   function destroyPicker() { try { if (mini) mini.destroy(); } catch (e) {} mini = null; miniMark = null; miniCb = null; }
 
   return {
     load: load, ready: ready, init: init, destroy: destroy, getMap: getMap,
     onMapClick: onMapClick, onMarkerClick: onMarkerClick,
-    render: render, fit: fit, goto: goto, search: search, desat: desat, pinSvg: pinSvg,
+    render: render, fit: fit, goto: goto, search: search, geocode: geocode, desat: desat, pinSvg: pinSvg,
     initPicker: initPicker, pickerGo: pickerGo, pickerCenter: pickerCenter, pickerOnPan: pickerOnPan, destroyPicker: destroyPicker
   };
 })();
