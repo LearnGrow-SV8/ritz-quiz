@@ -4492,6 +4492,18 @@ var I18N = {
   race_syncing: {cn:'正在从云端重新同步…', en:'Re-syncing from the cloud…'},
   race_pull_fail: {cn:'暂时连不上服务器，请检查网络后点「重新同步」', en:'Cannot reach the server — check your network and tap Re-sync'},
   race_resync: {cn:'重新同步', en:'Re-sync'},
+  net_diag: {cn:'网络诊断', en:'Network check'},
+  net_diag_doing: {cn:'正在检测…', en:'Checking…'},
+  net_diag_domain: {cn:'云端地址', en:'Cloud endpoint'},
+  net_diag_try: {cn:'第 {n} 次', en:'Try {n}'},
+  net_diag_ok: {cn:'成功（{ms} 毫秒）', en:'OK ({ms} ms)'},
+  net_diag_timeout: {cn:'超时', en:'timed out'},
+  net_diag_blocked: {cn:'请求被拒绝', en:'request blocked'},
+  net_diag_fail: {cn:'全部失败', en:'all failed'},
+  net_diag_partial: {cn:'部分成功', en:'partly OK'},
+  net_diag_pass: {cn:'✅ 云端连通正常，请返回重试。', en:'✅ Cloud reachable — go back and retry.'},
+  net_diag_tip: {cn:'当前网络无法稳定连接云端服务器。请切换网络后重试（例如改用酒店 Wi-Fi 或手机流量）；若为公司 / 酒店网络，请将上方地址提供给网络管理员加入放行名单。', en:'This network cannot reach the cloud server reliably. Switch networks and retry (e.g. hotel Wi-Fi or mobile data); on a corporate or hotel network, ask the network administrator to allow the address above.'},
+  net_diag_offline: {cn:'设备当前处于离线状态。', en:'This device is offline.'},
   race_cloud_ok: {cn:'☁️ 已同步到云端，学员端可见', en:'☁️ Synced to the cloud — visible on student devices'},
   race_admin_saved: {cn:'已保存', en:'Saved'},
   race_admin_no_scores: {cn:'本期还没有成绩', en:'No scores for this round yet'},
@@ -7176,6 +7188,87 @@ function raceResyncNow() {
     }
   });
 }
+// 偶发抖动 / 断路器半开：失败后不要立刻重画（否则错误提示被"正在载入"盖掉），
+// 但过 20 s 静默自愈一次，网络恢复后用户不用手动点。成功就清零，最多试 6 轮。
+function raceAutoRetryLater() {
+  if ((state.raceAutoRetryN || 0) >= 6) return;
+  state.raceAutoRetryN = (state.raceAutoRetryN || 0) + 1;
+  setTimeout(function () {
+    if (state.currentPage !== 'race') return;
+    try { if (typeof sbResetBreaker === 'function') sbResetBreaker(); } catch (e) {}
+    state.racePullFail = false;
+    racePullConf(true).then(function (conf) {
+      if (state.currentPage !== 'race') return;
+      if (conf) state.raceAutoRetryN = 0;
+      if (typeof render === 'function') render();
+    });
+  }, 20000);
+}
+// ===== 网络诊断：一键判断"这台设备能不能连上云端" =====
+// 报障时最需要的一句话是"他那边到服务器通不通"。浏览器里 fetch 失败拿不到
+// 具体原因，所以这里连测 3 次、记录耗时与失败类型，并把云端地址显示出来，
+// 方便直接复制给网络管理员放行。
+function netDiagInnerHtml() {
+  var d = state.netDiag || null;
+  var h = '<button class="action-btn secondary" style="width:100%;padding:9px;" onclick="netDiagStart()">'
+    + (d && d.running ? '⏳ ' + t('net_diag_doing') : '🔍 ' + t('net_diag')) + '</button>';
+  if (d && !d.running && d.items && d.items.length) {
+    var okN = 0, i, it;
+    for (i = 0; i < d.items.length; i++) if (d.items[i].ok) okN++;
+    h += '<div style="margin-top:8px;font-size:12px;color:#555;line-height:1.8;background:#f6f7f9;border-radius:8px;padding:10px;text-align:left;">';
+    h += '<div style="color:#888;">' + t('net_diag_domain') + '：<code style="user-select:all;word-break:break-all;">' + SB_BASE + '</code></div>';
+    for (i = 0; i < d.items.length; i++) {
+      it = d.items[i];
+      h += '<div>' + t('net_diag_try').replace('{n}', i + 1) + '：'
+        + (it.ok ? '<span style="color:#1a7f37;">' + t('net_diag_ok').replace('{ms}', it.ms) + '</span>'
+                 : '<span style="color:#b3261e;">' + (it.timeout ? t('net_diag_timeout') : t('net_diag_blocked')) + '（' + it.ms + 'ms）</span>')
+        + '</div>';
+    }
+    h += '<div style="margin-top:6px;">' + (okN === d.items.length ? t('net_diag_pass')
+      : (okN > 0 ? '⚠️ ' + t('net_diag_partial') + '。' + t('net_diag_tip') : '❌ ' + t('net_diag_fail') + '。' + t('net_diag_tip'))) + '</div>';
+    if (d.offline) h += '<div style="margin-top:6px;color:#a14a00;">' + t('net_diag_offline') + '</div>';
+    h += '</div>';
+  }
+  return h;
+}
+function netDiagPanelHtml() {
+  return '<div id="netDiagBox" style="margin-top:12px;">' + netDiagInnerHtml() + '</div>';
+}
+function netDiagPaint() {
+  var box = document.getElementById('netDiagBox');
+  if (box) box.innerHTML = netDiagInnerHtml();
+}
+function netDiagStart() {
+  state.netDiag = { running: true, items: [], offline: false, ts: Date.now() };
+  netDiagPaint();
+  try { if (typeof navigator !== 'undefined' && navigator.onLine === false) state.netDiag.offline = true; } catch (e) {}
+  try { if (typeof sbResetBreaker === 'function') sbResetBreaker(); } catch (e) {}
+  var i = 0, items = [];
+  function once(cb) {
+    var t0 = Date.now();
+    return fetchWithTimeout(SB_BASE + '/rest/v1/channels?select=channel&limit=1', {
+      method: 'GET',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Cache-Control': 'no-store' }
+    }, 8000, 'net-diag').then(function (r) {
+      items.push({ ok: true, ms: Date.now() - t0, status: r && r.status });
+    }, function (e) {
+      var ms = Date.now() - t0;
+      // 0.3 s 内就失败说明请求根本没发出去（DNS 解析不了 / 被网关直接拒绝），
+      // 这和"等到 8 s 超时"是两种完全不同的故障，报给 IT 时要能分开。
+      items.push({ ok: false, ms: ms, timeout: ms >= 600 });
+    }).then(cb);
+  }
+  function step() {
+    if (i >= 3 || state.netDiag == null) { netDiagFinish(); return; }
+    i++;
+    once(step);
+  }
+  function netDiagFinish() {
+    state.netDiag = { running: false, items: items, offline: !!state.netDiag.offline, ts: Date.now() };
+    netDiagPaint();
+  }
+  step();
+}
 // 板块选择方式：'choice' = 学员自选（默认），'admin' = 管理员指定统一板块。
 // 缺字段的旧配置一律按 choice 处理（学员自选是这个模块的初衷）。
 function raceModeOf(c) { return (c && c.sectionMode === 'admin') ? 'admin' : 'choice'; }
@@ -7743,9 +7836,11 @@ function sbSnapshotRecordList(res) {
   if (Array.isArray(res.records)) return res.records;
   return [];
 }
-function raceFetchBoard(force) {
+// quiet = 静默自愈：失败时不改状态位、不显示"正在载入"，成功才落数据，
+// 这样"看不到排行榜"的错误提示不会被一次失败的重试冲掉。
+function raceFetchBoard(force, quiet) {
   if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbListSnapshots !== 'function') {
-    state.raceBoardState = 'off';
+    if (!quiet) state.raceBoardState = 'off';
     return Promise.resolve([]);
   }
   // 已拿到数据且 15 s 内 → 直接用缓存，避免切板块/切榜单时反复打云端。
@@ -7754,7 +7849,7 @@ function raceFetchBoard(force) {
   }
   if (state.raceBoardFetching) return Promise.resolve(state.raceBoard || []);
   state.raceBoardFetching = true;
-  state.raceBoardState = 'loading';
+  if (!quiet) state.raceBoardState = 'loading';
   return sbListSnapshots(0, true).then(function (res) {
     state.raceBoardFetching = false;
     var rows = sbSnapshotRecordList(res);
@@ -7764,7 +7859,7 @@ function raceFetchBoard(force) {
     return rows;
   }, function () {
     state.raceBoardFetching = false;
-    state.raceBoardState = 'error';
+    if (!quiet) state.raceBoardState = 'error';
     return [];
   });
 }
@@ -7802,8 +7897,11 @@ function renderRaceHome() {
     html += '<div style="color:#888;">' + t(_pullFail ? 'race_pull_fail' : 'race_no_conf') + '</div>';
     html += '<div id="raceSyncMsg" style="font-size:12px;color:#aaa;margin-top:8px;">' + t('race_syncing') + '</div>';
     html += '<button class="action-btn primary" style="margin-top:14px;padding:9px 20px;" onclick="raceResyncNow()">' + t('race_resync') + '</button>';
+    html += netDiagPanelHtml();
     html += '</div>';
     html += '</div>';
+    // 网络抖动 / 断路器半开恢复后自动补一次，用户不必一直守着点按钮
+    if (_pullFail) raceAutoRetryLater();
     return html;
   }
   var mode = raceModeOf(c);
@@ -8014,10 +8112,16 @@ function renderRaceBoard() {
   // 每次进页面都保证有一份数据（15 s 节流）。以前只有点「排行榜」按钮时才拉，
   // 从结果页 / 深链 / 返回键进来都是空的 → 永远停在「正在载入排行榜…」。
   var _tsBefore = state.raceBoardTs || 0;
-  // 失败 / 断网时不要自己偷偷重试，否则错误提示会被"正在载入"盖掉，用户看不出问题。
-  if (state.raceBoardState !== 'error' && state.raceBoardState !== 'off') {
-    raceFetchBoard(false).then(function () {
+  // 失败 / 断网时不要立刻重试，否则错误提示会被"正在载入"盖掉，用户看不出问题；
+  // 但隔 20 s 静默自愈一次（quiet：失败不改状态位，提示条不会被冲掉），
+  // 网络恢复后不用手动点。
+  var _quiet = (state.raceBoardState === 'error' || state.raceBoardState === 'off');
+  if (!_quiet || Date.now() - (state.raceBoardTryAt || 0) > 20000) {
+    state.raceBoardTryAt = Date.now();
+    if (_quiet) { try { if (typeof sbResetBreaker === 'function') sbResetBreaker(); } catch (e) {} }
+    raceFetchBoard(false, _quiet).then(function (rows) {
       if (state.currentPage === 'raceBoard' && (state.raceBoardTs || 0) !== _tsBefore) render();
+      else if (state.currentPage === 'raceBoard' && _quiet && rows && rows.length) render();
     });
   }
   html += '<div style="display:flex;gap:8px;margin-bottom:6px;">';
@@ -8051,9 +8155,11 @@ function renderRaceBoard() {
   if (bst === 'error') {
     html += '<div class="q-card" style="text-align:center;color:#b3261e;">' + t('race_board_fail') + '</div>';
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceBoardReload(true)">🔄 ' + t('race_board_retry') + '</button>';
+    html += netDiagPanelHtml();
   } else if (bst === 'off') {
     html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_board_off') + '</div>';
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceBoardReload(true)">🔄 ' + t('race_board_retry') + '</button>';
+    html += netDiagPanelHtml();
   } else if (bst !== 'ready') {
     html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_loading') + '</div>';
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceBoardReload(true)">🔄 ' + t('race_board_retry') + '</button>';
