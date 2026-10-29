@@ -7831,10 +7831,16 @@ function raceDeptAggRows(secFilter) {
 // 直接 Array.isArray(rows) 判断 → 永远走空分支，state.raceBoard 从头到尾没被
 // 赋过值 → 排行榜永远停在「正在载入排行榜…」。统一从这个入口归一成记录数组。
 function sbSnapshotRecordList(res) {
-  if (!res) return [];
-  if (Array.isArray(res)) return res;
-  if (Array.isArray(res.records)) return res.records;
-  return [];
+  var list = [];
+  if (!res) return list;
+  if (Array.isArray(res)) list = res;
+  else if (Array.isArray(res.records)) list = res.records;
+  // 管理员改过工号 → 旧身份键那行被打了 superseded（成绩已整体迁到新键），
+  // 这里过滤掉：否则同一个人会以两条身份同时上榜，部门人数也会重复计一次。
+  return list.filter(function (r) {
+    var s = r && r.snap;
+    return !(s && s.superseded);
+  });
 }
 // quiet = 静默自愈：失败时不改状态位、不显示"正在载入"，成功才落数据，
 // 这样"看不到排行榜"的错误提示不会被一次失败的重试冲掉。
@@ -14138,6 +14144,45 @@ function adminRenameCacheStudent(stuKey, fix) {
   adminSaveStudentCache(cache);
   return newKey;
 }
+// 把管理员的更正**直接写进云端档案**。
+// 背景：原来只发一条 pfFix 中继消息，等学员端自己应用后再重新上报快照。可中继
+// 在国内经常连不上，学员端可能永远收不到 → 云端快照一直是旧名字，而排行榜读的
+// 正是云端快照 → 表现就是"管理员改了名，排行榜还是旧名字"（Megan / Nikki 同因）。
+// 所以这里读回该学员的快照、改掉 snap 里的姓名 / 工号 / 部门，再整体写回：
+// 不依赖学员端在线，改完排行榜立即生效。
+function adminPushFixToSnapshot(stuKey, fix) {
+  if (typeof sbJson !== 'function' || typeof sbUpsertSnapshot !== 'function') return Promise.resolve(false);
+  try { if (typeof sbResetBreaker === 'function') sbResetBreaker(); } catch (e) {}
+  var path = '/rest/v1/student_snapshots?select=phone,record,ts&phone=eq.' + encodeURIComponent(stuKey) + '&limit=1';
+  return sbJson(path, null, SB_SNAPSHOT_TIMEOUT_MS, 'sb-snap-read-one').then(function (rows) {
+    if (!Array.isArray(rows) || !rows.length || !rows[0] || !rows[0].record) return false;
+    var rec = rows[0].record;
+    if (!rec.snap || typeof rec.snap !== 'object') rec.snap = {};
+    var s = rec.snap;
+    if (fix.emp) s.emp = fix.emp;
+    if (typeof fix.cn === 'string') s.cn = fix.cn;
+    if (typeof fix.en === 'string') s.en = fix.en;
+    if (fix.cn || fix.en) s.name = (fix.en || fix.cn);
+    if (fix.divCn || fix.divEn) { s.div = fix.divCn || s.div || ''; s.divEn = fix.divEn || s.divEn || ''; }
+    if (fix.deptCn || fix.deptEn) { s.dept = fix.deptCn || ''; s.deptEn = fix.deptEn || ''; }
+    var newKey = (typeof accountKeyFor === 'function' && accountKeyFor(s.cn, s.en, s.emp)) || stuKey;
+    var jobs = [];
+    if (newKey && newKey !== stuKey) {
+      // 工号被改 = 换了身份键：先把旧行打上 superseded（成绩已迁走，不再上榜），
+      // 再把完整记录写到新键下。不删数据——没有删除权限，也不该删历史。
+      s.superseded = newKey;
+      jobs.push(sbUpsertSnapshot(stuKey, rec, rows[0].ts || Date.now()));
+      var rec2 = null;
+      try { rec2 = JSON.parse(JSON.stringify(rec)); } catch (e) { rec2 = rec; }
+      if (rec2 && rec2.snap) delete rec2.snap.superseded;
+      jobs.push(sbUpsertSnapshot(newKey, rec2, Date.now()));
+    } else {
+      delete s.superseded;
+      jobs.push(sbUpsertSnapshot(stuKey, rec, rows[0].ts || Date.now()));
+    }
+    return Promise.all(jobs).then(function () { return true; }, function () { return false; });
+  }, function () { return false; });
+}
 // Save the admin-edited student info: publish a pfFix to the relay (student
 // devices apply it) and update the local cache view immediately.
 function adminSaveStudentEdit(stuKey) {
@@ -14173,16 +14218,23 @@ function adminSaveStudentEdit(stuKey) {
     keys.sort(function(a, b) { return fixes.list[a].fv - fixes.list[b].fv; });
     for (var i = 0; i < keys.length - PF_FIX_MAX; i++) delete fixes.list[keys[i]];
   }
-  publishPfFixes(fixes.list).then(function(ok) {
-    if (ok) {
-      var newKey = adminRenameCacheStudent(stuKey, fix);
-      if (adminState.studentDetail === stuKey) adminState.studentDetail = newKey;
+  // 本地缓存视图立刻更新（管理员自己马上能看到新名字）
+  var newKey = adminRenameCacheStudent(stuKey, fix);
+  if (adminState.studentDetail === stuKey) adminState.studentDetail = newKey;
+  // 同时把更正直接写进云端档案：排行榜读的是云端快照，等学员端应用中继消息
+  // 太不可靠（中继在国内常连不上），直接写才能保证"改完就生效"。
+  adminPushFixToSnapshot(stuKey, fix).then(function(cloudOk) {
+    publishPfFixes(fixes.list).then(function(ok) {
       adminState.editStudent = '';
-      alert(en ? '✅ Saved. The student device applies it within ~90 s (or on next open).' : '✅ 已保存并发布。学员端约 90 秒内（或下次打开时）自动应用。');
+      if (cloudOk) {
+        alert(en ? '✅ Saved. The cloud record is updated — the leaderboard shows the new name right away.' : '✅ 已保存。云端档案已直接更新，排行榜立即生效。');
+      } else if (ok) {
+        alert(en ? '⚠️ Saved and published, but the cloud record could not be updated directly. The student device applies it within ~90 s (or on next open).' : '⚠️ 已保存并发布更正，但云端档案未能直接更新（网络异常）。学员端约 90 秒内（或下次打开时）应用。');
+      } else {
+        alert(en ? '❌ Publish failed (network or message too large). Try again.' : '❌ 发布失败（网络异常或消息过大），请重试。');
+      }
       render();
-    } else {
-      alert(en ? '❌ Publish failed (network or message too large). Try again.' : '❌ 发布失败（网络异常或消息过大），请重试。');
-    }
+    });
   });
 }
 
