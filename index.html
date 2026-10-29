@@ -2513,13 +2513,20 @@ function adminSavePfFixes(f) {
 }
 // Publish the full fix list (full replace, newest wins on student devices).
 function publishPfFixes(list) {
-  var payload = JSON.stringify({ t: 'pfFix', ver: Date.now(), list: list });
-  if (payload.length > 3800) return Promise.resolve(false);
+  var ver = Date.now();
+  // 中继（ntfy）在国内经常连不上 → 学员端可能永远收不到这条更正，名字就一直
+  // 改不过来。admin_state 这一行是 RLS 放行的、学员端每次同步本来就会读，
+  // 所以更正同时写一份进去，下发不再只看中继的脸色。
+  var cloudJob = (typeof sbMergeAdminState === 'function')
+    ? sbMergeAdminState({ pfFix: { ver: ver, list: list } }).then(function () { return true; }, function () { return false; })
+    : Promise.resolve(false);
+  var payload = JSON.stringify({ t: 'pfFix', ver: ver, list: list });
+  if (payload.length > 3800) return cloudJob;
   return postTopicMessage('exams', EXAM_URL, payload).then(function(r) {
-    if (!r || !r.ok) return false;
-    adminSavePfFixes({ ver: Date.now(), list: list });
+    if (!r || !r.ok) return cloudJob;   // 中继没发出去也别否定云端那一份
+    adminSavePfFixes({ ver: ver, list: list });
     return true;
-  });
+  }, function () { return cloudJob; });
 }
 
 // ===== Stage 4: blacklist admin functions =====
@@ -5631,6 +5638,17 @@ function refreshRoster() {
     // （2026-10-28：答题赛配置以前写在独立的 'race' 通道，被 RLS 拒绝，
     //   学员端又没有拉取代码，导致"管理端发布了、学员端却无法答题"。）
     if (j.data.race && applyRaceConf(j.data.race)) changed = true;
+    // 管理员对姓名 / 工号 / 部门的更正也放在这一行里。原来只有中继一条路，
+    // 中继不通就永远应用不上（改名后排行榜一直是旧名字）。
+    if (j.data.pfFix && j.data.pfFix.list && typeof applyPfFixes === 'function') {
+      try {
+        var curFix = (typeof loadPfFixes === 'function') ? loadPfFixes() : null;
+        if (!curFix || (j.data.pfFix.ver || 0) > (curFix.ver || 0)) {
+          localStorage.setItem('cloudPfFixes', JSON.stringify({ ver: j.data.pfFix.ver, list: j.data.pfFix.list }));
+          if (applyPfFixes(j.data.pfFix.list)) changed = true;
+        }
+      } catch (e) {}
+    }
     return changed;
   }).catch(function () { return false; });
 }
