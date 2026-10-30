@@ -4606,7 +4606,9 @@ var I18N = {
   race_badge_grp_streak: {cn:'🔥 连续打卡', en:'🔥 Streaks'},
   race_badge_grp_period: {cn:'📅 单期打卡', en:'📅 Per round'},
   race_badge_grp_total: {cn:'👑 累计打卡', en:'👑 All-time'},
-  race_badge_mine_hint: {cn:'连续打卡徽章每一期都能重新拿一次，跨期没断的话会接着累计；累计型徽章终身只拿一次。名字旁边带 ×N 表示你在 N 个周期里都拿到了这枚。', en:'Streak badges can be earned again in every round \u2014 an unbroken streak keeps counting across rounds. All-time badges are earned once only. \u00d7N means you earned that badge in N different rounds.'},
+  race_badge_mine_hint: {cn:'连续打卡徽章每一期都能重新拿一次，跨期没断的话会接着累计；累计型徽章终身只拿一次。名字旁边带 ×N 表示你在 N 个周期里都拿到了这枚。点「设为展示徽章」可以挑选一枚挂在排行榜你的名字旁（不选则默认展示等级最高的一枚）。', en:'Streak badges can be earned again in every round \u2014 an unbroken streak keeps counting across rounds. All-time badges are earned once only. \u00d7N means you earned that badge in N different rounds. Tap "Show on leaderboard" to pin one badge next to your name on the leaderboard (defaults to your highest-level one).'},
+  race_badge_set_show: {cn:'设为展示徽章', en:'Show on leaderboard'},
+  race_badge_showing: {cn:'展示中 · 点击取消', en:'Shown \u2014 tap to unpin'},
   badge_admin_title: {cn:'徽章设置', en:'Badge settings'},
   badge_admin_desc: {cn:'用一句话描述你想要的徽章，系统会自动生成图标样式和名字；确认无误后发布，学员端即可看到。', en:'Describe the badge in one sentence \u2014 the icon style and name are generated for you. Publish to make it live for employees.'},
   badge_admin_add: {cn:'新增徽章', en:'Add badge'},
@@ -7894,6 +7896,23 @@ function raceTopBadgeOf(list) {
   }
   return best;
 }
+// 排行榜展示哪一枚：学员在「我的徽章」里自选的优先（rec.showBadge 随快照同步到云端，
+// 别人看他的榜单行时用同一份记录）；没选 / 选的已经拿不到了 → 退回「等级最高、同级取最新」。
+function raceDisplayBadgeOf(rec, list) {
+  list = list || [];
+  var want = rec && rec.showBadge;
+  if (want) {
+    for (var i = 0; i < list.length; i++) if (list[i] && list[i].id === want) return list[i];
+  }
+  return raceTopBadgeOf(list);
+}
+// 学员在「我的徽章」集锦里点「设为展示」：再点一次取消（取消后回到默认的最高等级）。
+function raceSetShowBadge(id) {
+  var rec = raceLocalRecord() || {};
+  rec.showBadge = (rec.showBadge === id) ? '' : id;
+  raceSaveLocalRecord(rec);
+  render();
+}
 function raceBadgeIcon(b) {
   var def = b && (b.def || (b.id ? raceBadgeById(b.id) : null));
   if (def) return def.icon || '🏅';
@@ -8298,13 +8317,15 @@ function raceBoardRowsFrom(list, scope, secFilter, rid) {
       // 各有一条成绩）；不切板块每人只出现一次，取他各板块里最好的那条。
       var b = raceBestEntryOf(it.race, secFilter);
       if (!b) continue;
-      rows.push({ key: it.key, name: it.name, dept: raceDeptUnitOfRow(raw, it.race), div: raceDeptOfRow(raw, it.race), section: b.section || secFilter || 'all', correct: b.correct, answered: b.answered || 0, acc: b.acc, ts: b.ts, raw: raw });
+      var blB = raceBadgeListOf(it.race, '');
+      rows.push({ key: it.key, name: it.name, dept: raceDeptUnitOfRow(raw, it.race), div: raceDeptOfRow(raw, it.race), section: b.section || secFilter || 'all', correct: b.correct, answered: b.answered || 0, acc: b.acc, ts: b.ts, raw: raw, badges: blB, show: raceDisplayBadgeOf(it.race, blB) });
     } else {
       // 总榜 = 本届（可带板块筛选）。带筛选时取**该板块**的最佳成绩，
       // 所以某人做过 A/B/C 三个板块，就会分别出现在三张板块榜上。
       var e = raceRoundEntryOf(it.race, rid, secFilter);
       if (!e) continue;
-      rows.push({ key: it.key, name: it.name, dept: raceDeptUnitOfRow(raw, it.race), div: raceDeptOfRow(raw, it.race), section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts, raw: raw });
+      var blR = raceBadgeListOf(it.race, '');
+      rows.push({ key: it.key, name: it.name, dept: raceDeptUnitOfRow(raw, it.race), div: raceDeptOfRow(raw, it.race), section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts, raw: raw, badges: blR, show: raceDisplayBadgeOf(it.race, blR) });
     }
   }
   rows.sort(function (a, b) {
@@ -8460,6 +8481,7 @@ function raceDaysRowsFrom(list, scope, rid) {
     if (!race) continue;
     var days = raceDaysCount(race, filter);
     if (!days) continue;
+    var blD = raceBadgeListOf(race, filter);
     rows.push({
       key: String((raw && (raw.akey || raw.key || raw.phone)) || ''),
       name: raceRowNameOf(raw, race),
@@ -8469,7 +8491,8 @@ function raceDaysRowsFrom(list, scope, rid) {
       runs: raceDaysRuns(race, filter),
       last: raceDaysLastTs(race, filter),
       // 打卡天数榜上带徽章：filter 为空（历史最佳榜）就是历届全部徽章
-      badges: raceBadgeListOf(race, filter)
+      badges: blD,
+      show: raceDisplayBadgeOf(race, blD)
     });
   }
   rows.sort(function (a, b) {
@@ -9252,8 +9275,9 @@ function renderRaceBoard() {
       html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#1a3a5c' : '#e2e6ea') + ';border-radius:10px;background:' + (isMe ? '#eef4fa' : '#fff') + ';">';
       html += '<div style="width:32px;text-align:center;font-weight:700;color:#1a3a5c;">' + medal + '</div>';
       html += '<div style="flex:1;min-width:0;">';
-      // 排行榜只挂一枚徽章：等级最高的那枚（同级取最近拿到的），多了会看不过来
-      var myBadge = isDays ? raceTopBadgeOf(rw.badges) : null;
+      // 排行榜（个人榜）每行挂一枚徽章：学员自选的展示徽章优先，没选就挂
+      // 等级最高的（同级取最近拿到的）；部门聚合行不是个人，不挂。
+      var myBadge = isDeptTab ? null : (rw.show || raceTopBadgeOf(rw.badges));
       var myBCount = 0;
       if (myBadge) {
         for (var bx = 0; bx < rw.badges.length; bx++) if (rw.badges[bx].id === myBadge.id) myBCount++;
@@ -10052,7 +10076,18 @@ function renderMyBadges() {
     for (i = 0; i < list.length; i++) {
       var d = list[i], got = counts[d.id];
       var pr = raceBadgeProgressOf(rec, d);
-      html += raceBadgeChipHtml(d, !!got, got ? got.last : '', pr.cur + '/' + pr.max + (en ? ' d' : ' 天'), got ? got.count : 0);
+      var cell = raceBadgeChipHtml(d, !!got, got ? got.last : '', pr.cur + '/' + pr.max + (en ? ' d' : ' 天'), got ? got.count : 0);
+      // 拿到的徽章可以设为「排行榜展示徽章」：别人在榜单上看到的就是这枚；
+      // 再点一次取消，回到默认的最高等级一枚。
+      if (got) {
+        var isShown = rec.showBadge === d.id;
+        cell += '<div onclick="raceSetShowBadge(\'' + d.id + '\')" style="margin-top:5px;text-align:center;font-size:11px;font-weight:600;'
+          + 'cursor:pointer;padding:4px 0;border-radius:6px;'
+          + (isShown
+            ? 'background:#fff8e1;color:#8a5a00;border:1px solid #f0b357;">📌 ' + t('race_badge_showing')
+            : 'background:#f4f6f8;color:#1a3a5c;border:1px dashed #d8dee4;">' + t('race_badge_set_show')) + '</div>';
+      }
+      html += '<div>' + cell + '</div>';
     }
     html += '</div>';
   }
