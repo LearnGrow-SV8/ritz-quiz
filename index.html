@@ -807,7 +807,7 @@ var SB_HALF_OPEN_MS = 20000;
 var SB_OPEN_AT = 0;
 var SB_POLL_TIMEOUT_MS = 12000;
 var SB_EDGE_TIMEOUT_MS = 15000;   // boot fallback budget (see the note above)
-var SB_SNAPSHOT_TIMEOUT_MS = 15000;
+var SB_SNAPSHOT_TIMEOUT_MS = 10000;
 // Per-topic row cap for polls. ntfy's 12 h retention used to bound these
 // implicitly; Postgres keeps everything forever, so the poll must bound itself
 // instead of streaming the whole history to every phone every 90 s.
@@ -4551,6 +4551,7 @@ var I18N = {
   race_go_pick: {cn:'去选板块参与挑战吧！', en:'Pick a section and join the challenge!'},
   // ---- 打卡日历 ----
   race_cal_open: {cn:'📅 我的打卡日历', en:'📅 My check-in calendar'},
+  race_cal_retry: {cn:'再挑战一次', en:'Challenge again'},
   race_cal_title: {cn:'打卡日历', en:'Check-in Calendar'},
   race_cal_sub: {cn:'每天完成一次挑战即视为打卡一天', en:'One completed challenge = one checked-in day'},
   race_cal_month_days: {cn:'本月打卡 {n} 天', en:'{n} days checked in this month'},
@@ -8679,7 +8680,12 @@ function raceOpenBoard() {
 }
 function raceOpenCalendar() {
   state.raceCalMonth = '';
-  state.raceCalDay = '';
+  // 进日历自动展开今天的学习记录（今天打过卡才有得展开；没打卡就保持全收起，
+  // 让用户自己挑日子看）。
+  var rec = null;
+  try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
+  var today = raceDayKey(Date.now());
+  state.raceCalDay = (rec.days && rec.days[today]) ? today : '';
   navigate('raceCalendar');
 }
 
@@ -8866,7 +8872,8 @@ function renderRaceCalendar() {
     for (var li = 0; li < log.length; li++) {
       if (log[li] && raceDayKey(log[li].ts) === day) runs2.push(log[li]);
     }
-    runs2.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+    // 最新的挑战排最前：学员打开日历最关心「我刚才那次考得怎么样」
+    runs2.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
     var dnum = parseInt(day.slice(8, 10), 10);
     html += '<h4 style="margin:6px 0 8px;">🗓 ' + mm + (en ? '/' : '月') + dnum + (en ? '' : '日') + ' · '
       + t('race_cal_day_runs').replace('{n}', runs2.length) + '</h4>';
@@ -8954,6 +8961,8 @@ function renderRaceCalendar() {
   }
   // 徽章墙放在页面最底部：日历 → 当天明细 → 我的徽章，选中的日期内容正好夹在中间
   html += raceBadgeWallHtml(rec, curRid);
+  // 看完日历顺手再来一局：一步回到挑战主页
+  html += '<button class="action-btn primary" style="width:100%;margin-top:2px;" onclick="navigate(\'race\')">⚡ ' + t('race_cal_retry') + '</button>';
   html += '</div>';
   return html;
 }
@@ -9154,17 +9163,30 @@ function renderRaceBoard() {
   // 已经有数据就当 ready（不管状态位），避免"数据都在却被状态位挡住继续转圈"。
   var hasData = Array.isArray(state.raceBoard);
   var bst = hasData ? 'ready' : (state.raceBoardState || 'loading');
+  if (bst === 'ready' && state.raceBoardRetryTimer) { clearTimeout(state.raceBoardRetryTimer); state.raceBoardRetryTimer = null; }
   if (hasData && state.raceBoardState === 'error') {
     html += '<div class="q-card" style="text-align:center;color:#a14a00;font-size:12px;">⚠️ ' + t('race_board_fail') + '</div>';
   }
   if (bst === 'error') {
     html += '<div class="q-card" style="text-align:center;color:#b3261e;">' + t('race_board_fail') + '</div>';
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceBoardReload(true)">🔄 ' + t('race_board_retry') + '</button>';
-    html += netDiagPanelHtml();
+    // 失败后每 20 s 自动静默重试一次（重渲染会走上面的 20 s 节流拉取），
+    // 网络一恢复榜单自己出来，不用有人盯着点重试。
+    if (!state.raceBoardRetryTimer) {
+      state.raceBoardRetryTimer = setTimeout(function () {
+        state.raceBoardRetryTimer = null;
+        if (state.currentPage === 'raceBoard') render();
+      }, 20000);
+    }
   } else if (bst === 'off') {
     html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_board_off') + '</div>';
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceBoardReload(true)">🔄 ' + t('race_board_retry') + '</button>';
-    html += netDiagPanelHtml();
+    if (!state.raceBoardRetryTimer) {
+      state.raceBoardRetryTimer = setTimeout(function () {
+        state.raceBoardRetryTimer = null;
+        if (state.currentPage === 'raceBoard') render();
+      }, 20000);
+    }
   } else if (bst !== 'ready') {
     html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_loading') + '</div>';
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceBoardReload(true)">🔄 ' + t('race_board_retry') + '</button>';
