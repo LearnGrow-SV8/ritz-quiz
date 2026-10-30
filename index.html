@@ -4564,6 +4564,7 @@ var I18N = {
   race_cal_show_q: {cn:'📋 查看答题清单', en:'📋 View the questions'},
   race_cal_hide_q: {cn:'收起答题清单', en:'Hide the questions'},
   race_cal_your: {cn:'你的作答', en:'Your answer'},
+  race_cal_ans_lost: {cn:'（旧版记录，原始选项已无法还原）', en:'(legacy record — original choice unavailable)'},
   race_cal_legend: {cn:'有底色 = 当天打过卡，点开可看当天的挑战与答题明细。', en:'A filled day means you checked in — tap it to review that day\u2019s challenges and answers.'},
   race_cal_week: {cn:'一二三四五六日', en:'M T W T F S S'},
   race_board_days: {cn:'📅 打卡天数', en:'📅 Check-in days'},
@@ -7482,9 +7483,25 @@ function raceDetailOfRun(r) {
   for (var i = 0; i < r.answers.length; i++) {
     var a = r.answers[i], q = r.pool[i];
     if (!a || !a.ans || !a.ans.length || !q) continue;
-    out.push([String(q.id || ''), raceGrade(q, a.ans) ? 1 : 0, a.ans.join(',')]);
+    out.push([String(q.id || ''), raceGrade(q, a.ans) ? 1 : 0, raceBankIdxStr(q, a.ans), 1]);
   }
   return out;
+}
+// 🔴 选项是**每局现洗**的：`prepareQuestions()` 会把 options 打乱，并把 correct_answer
+// 重算成"界面顺序"的下标；所以 r.answers 里存的是**界面下标**。而打卡日历展示时是按题号
+// `findByIdAllBanks()` 取**题库顺序**的原题，两边下标不是一回事。
+// 直接把界面下标落库，回看时"你的作答"就会串成别的选项 —— 第 7 题（4 个选项都显示成
+// "7 部"）和第 11 题（都显示成"错误"）就是这么来的，看起来像"同一个答案既判错又判对"。
+// 落库前一律用 `_optOrder`（界面下标 → 题库下标）换回去；明细第 4 位 = 1 标记"已换序"，
+// 老记录没有这一位，展示时据此判断该不该信。
+function raceBankIdxStr(q, ans) {
+  var ord = (q && q._optOrder) || null, out = [];
+  for (var i = 0; i < ans.length; i++) {
+    var x = ans[i];
+    if (ord && typeof ord[x] === 'number') x = ord[x];
+    out.push(x);
+  }
+  return out.join(',');
 }
 // 上报前把 name / dept 按**当前资料**重新盖一遍。成绩记录是交卷那一刻整份存进
 // localStorage 的，学员之后改名（MM → Megan）、换部门都不会触发重写，云端快照、
@@ -8347,11 +8364,15 @@ function renderRaceCalendar() {
             if (!q) continue;
             var picked = String(trip[2] || '').split(',').filter(function (x) { return x !== ''; }).map(Number);
             var good = trip[1] === 1;
+            var uTxt = raceUserText(q, picked), cTxt = raceCorrectText(q);
+            // 老记录（trip[3] 没标记）存的是本局"界面下标"，按题库顺序还原会串选项 →
+            // 症状是“判错却显示两个一模一样的答案”。无从还原就别硬显示，只留正确答案。
+            var lost = !trip[3] && !good && uTxt === cTxt;
             html += '<div style="border-left:3px solid ' + (good ? '#27ae60' : '#c0392b') + ';padding:8px 0 8px 10px;margin-bottom:8px;">';
             html += '<div style="font-size:13px;font-weight:600;">' + (qi + 1) + '. ' + escapeHtml(raceQText(q)).replace(/\n/g, '<br>') + '</div>';
             html += '<div style="font-size:12px;margin-top:4px;' + (good ? 'color:#27ae60;' : 'color:#c0392b;') + '">'
-              + (good ? '✓ ' : '✗ ') + escapeHtml(raceUserText(q, picked)) + '</div>';
-            if (!good) html += '<div style="font-size:12px;color:#27ae60;margin-top:2px;">✓ ' + escapeHtml(raceCorrectText(q)) + '</div>';
+              + (good ? '✓ ' : '✗ ') + escapeHtml(lost ? t('race_cal_ans_lost') : uTxt) + '</div>';
+            if (!good) html += '<div style="font-size:12px;color:#27ae60;margin-top:2px;">✓ ' + escapeHtml(cTxt) + '</div>';
             var exp = en ? (q.explanation_en || q.explanation || '') : (q.explanation_cn || q.explanation || '');
             if (exp) html += '<div style="font-size:11px;color:#666;margin-top:4px;line-height:1.6;">📖 ' + escapeHtml(exp).replace(/\n/g, '<br>') + '</div>';
             html += '</div>';
