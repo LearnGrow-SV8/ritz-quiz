@@ -7554,21 +7554,37 @@ function badgeDef(id, rule, n, cn, en, icon, lv, c1, c2) {
 function badgeDefaultCatalog() {
   var S = BADGE_RULE_STREAK, P = BADGE_RULE_PERIOD, T = BADGE_RULE_TOTAL;
   return {
-    ver: 1,
+    ver: 2,
     list: [
-      badgeDef('bd_s3', S, 3, '星火初燃', 'First Spark', '🔥', 1, '#ffd27f', '#ff9a3c'),
+      badgeDef('bd_s3', S, 3, '星火初燃', 'First Spark', '✨', 1, '#ffd27f', '#ff9a3c'),
       badgeDef('bd_s5', S, 5, '坚持之力', 'Steady Flame', '🔥', 2, '#ffc46b', '#ff7a00'),
-      badgeDef('bd_s7', S, 7, '一周之火', 'Week of Fire', '🔥', 3, '#ffb347', '#ff5e00'),
+      badgeDef('bd_s7', S, 7, '一周之火', 'Week of Fire', '🌋', 3, '#ffb347', '#ff5e00'),
       badgeDef('bd_s14', S, 14, '双周铁人', 'Iron Fortnight', '🏅', 4, '#ffcf6b', '#e08e00'),
       badgeDef('bd_s21', S, 21, '习惯大师', 'Habit Master', '🏆', 5, '#ffe08a', '#c99700'),
       badgeDef('bd_p10', P, 10, '月度常客', 'Monthly Regular', '📅', 2, '#a8d8ff', '#2b6cb0'),
       badgeDef('bd_p15', P, 15, '半程之星', 'Half-month Star', '🌟', 3, '#9fd0ff', '#1f5f9e'),
-      badgeDef('bd_p20', P, 20, '月度全勤王', 'Monthly Champion', '👑', 4, '#8ec4ff', '#174a7c'),
+      badgeDef('bd_p20', P, 20, '月度全勤王', 'Monthly Champion', '🥇', 4, '#8ec4ff', '#174a7c'),
       badgeDef('bd_t30', T, 30, '稳步前行', '30-day Walker', '🌿', 2, '#b7e4c7', '#2f855a'),
       badgeDef('bd_t60', T, 60, '勤学不辍', '60-day Scholar', '🌳', 3, '#9fd8b0', '#276749'),
       badgeDef('bd_t100', T, 100, '学习王者', 'Learning Champion', '👑', 5, '#ffe08a', '#b7791f')
     ]
   };
+}
+// 一次性图标迁移：v1 预设里连续 3/5/7 天共用 🔥、月度全勤王和学习王者共用 👑。
+// 已发布/已保存的目录里这五枚若**原封未动**（名字没改、图标还是旧值），就悄悄换成新图标；
+// 管理员改过名字或图标的条目一律不碰。
+var BADGE_ICON_MIGRATE = {
+  'bd_s3':  { cn: '星火初燃', en: 'First Spark',       old: '🔥', icon: '✨' },
+  'bd_s5':  { cn: '坚持之力', en: 'Steady Flame',      old: '🔥', icon: '🔥' },
+  'bd_s7':  { cn: '一周之火', en: 'Week of Fire',       old: '🔥', icon: '🌋' },
+  'bd_p20': { cn: '月度全勤王', en: 'Monthly Champion', old: '👑', icon: '🥇' }
+};
+function badgeMigrateIcons(list) {
+  for (var i = 0; i < list.length; i++) {
+    var m = BADGE_ICON_MIGRATE[list[i].id];
+    if (m && list[i].cn === m.cn && list[i].en === m.en && list[i].icon === m.old) list[i].icon = m.icon;
+  }
+  return list;
 }
 function badgeNormList(list) {
   var out = [], i, b, rule, n;
@@ -7591,7 +7607,7 @@ function badgeNormList(list) {
       on: b.on !== false
     });
   }
-  return out;
+  return badgeMigrateIcons(out);
 }
 // 学员端读到的徽章目录：优先用管理端发布的那份，没有就用内置预设。
 function raceBadgeCatalog() {
@@ -9373,11 +9389,18 @@ function badgeSuggestFromDesc(desc) {
   if (rule === BADGE_RULE_STREAK) lv = n >= 21 ? 5 : (n >= 14 ? 4 : (n >= 7 ? 3 : (n >= 5 ? 2 : 1)));
   else if (rule === BADGE_RULE_PERIOD) lv = n >= 25 ? 5 : (n >= 20 ? 4 : (n >= 15 ? 3 : (n >= 10 ? 2 : 1)));
   else lv = n >= 100 ? 5 : (n >= 60 ? 3 : (n >= 30 ? 2 : 1));
-  var c1, c2;
-  if (rule === BADGE_RULE_STREAK) { c1 = lv >= 4 ? '#ffe08a' : '#ffc46b'; c2 = lv >= 4 ? '#c99700' : (lv >= 3 ? '#ff5e00' : '#ff9a3c'); }
-  else if (rule === BADGE_RULE_PERIOD) { c1 = lv >= 4 ? '#8ec4ff' : '#a8d8ff'; c2 = lv >= 4 ? '#174a7c' : '#2b6cb0'; }
-  else { c1 = lv >= 4 ? '#ffe08a' : '#b7e4c7'; c2 = lv >= 4 ? '#b7791f' : '#2f855a'; }
-  return { rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: c1, c2: c2 };
+  var th = badgeThemeOf(rule, lv);
+  return { rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: th.c1, c2: th.c2 };
+}
+// 配色只由 规则 + 等级 决定：连续=火焰橙、单期=蓝、累计=绿，高等级转金色。
+function badgeThemeOf(rule, lv) {
+  if (rule === BADGE_RULE_STREAK) {
+    return lv >= 4 ? { c1: '#ffe08a', c2: '#c99700' } : { c1: '#ffc46b', c2: (lv >= 3 ? '#ff5e00' : '#ff9a3c') };
+  }
+  if (rule === BADGE_RULE_PERIOD) {
+    return lv >= 4 ? { c1: '#8ec4ff', c2: '#174a7c' } : { c1: '#a8d8ff', c2: '#2b6cb0' };
+  }
+  return lv >= 4 ? { c1: '#ffe08a', c2: '#b7791f' } : { c1: '#b7e4c7', c2: '#2f855a' };
 }
 var BADGE_DRAFT_KEY = 'badgeCatalogDraft';
 // 草稿要能扛住刷新：管理员可能一边配一边去别的页面看效果，不能一刷新就白配。
@@ -9447,7 +9470,7 @@ function renderAdminBadges() {
   var ed = adminState.badgeEditing || '';
   var cur = ed && ed !== 'new' ? adminBadgeById(ed) : null;
   var d = cur || { id: '', rule: BADGE_RULE_STREAK, n: 3, cn: '', en: '', icon: '🔥', lv: 1, c1: '#ffc46b', c2: '#ff9a3c', on: true };
-  html += '<div class="q-card" style="margin-top:10px;">';
+  html += '<div id="badgeFormCard" class="q-card" style="margin-top:10px;transition:box-shadow .4s;">';
   html += '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">' + (cur ? ('✏️ ' + t('badge_admin_edit')) : ('➕ ' + t('badge_admin_add'))) + '</div>';
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'Describe it in one sentence' : '一句话描述这枚徽章') + '</label>';
   html += '<textarea id="bdDesc" rows="2" class="admin-input" style="width:100%;padding:8px;margin:4px 0 6px;border:1px solid #d8dee4;border-radius:6px;box-sizing:border-box;" placeholder="' + escapeHtml(t('badge_admin_desc_ph')) + '">' + escapeHtml(adminState.badgeDescSeed || '') + '</textarea>';
@@ -9502,10 +9525,21 @@ function adminBadgeMsg(msg, color) {
   var el = document.getElementById('badgeAdminMsg');
   if (el) { el.textContent = msg || ''; if (color) el.style.color = color; }
 }
+// 编辑表单在徽章列表下方，点「编辑」后必须把用户带过去——不然看起来就像没反应。
+function adminBadgeFocusForm() {
+  setTimeout(function () {
+    var c = document.getElementById('badgeFormCard');
+    if (!c || !c.scrollIntoView) return;
+    c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    c.style.boxShadow = '0 0 0 3px #ffd591';
+    setTimeout(function () { c.style.boxShadow = 'none'; }, 900);
+  }, 40);
+}
 function adminBadgeEdit(id) {
   adminState.badgeEditing = id || 'new';
   adminState.badgeDescSeed = '';
   render();
+  adminBadgeFocusForm();
 }
 function adminBadgeCancel() {
   adminState.badgeEditing = '';
@@ -9533,12 +9567,13 @@ function adminBadgeSave() {
   var ed = adminState.badgeEditing || '';
   var b = ed && ed !== 'new' ? adminBadgeById(ed) : null;
   var sug = badgeSuggestFromDesc((document.getElementById('bdDesc') || {}).value || '');
+  var th = badgeThemeOf(rule, lv);
   if (!b) {
-    b = { id: 'bd_' + rule.charAt(0) + n + '_' + Date.now().toString(36), rule: rule, n: n, cn: cn, en: en2 || cn, icon: icon, lv: lv, c1: sug.c1, c2: sug.c2, on: true };
+    b = { id: 'bd_' + rule.charAt(0) + n + '_' + Date.now().toString(36), rule: rule, n: n, cn: cn, en: en2 || cn, icon: icon, lv: lv, c1: th.c1, c2: th.c2, on: true };
     list.push(b);
   } else {
     b.rule = rule; b.n = n; b.cn = cn; b.en = en2 || cn; b.icon = icon; b.lv = lv;
-    b.c1 = sug.c1; b.c2 = sug.c2;
+    b.c1 = th.c1; b.c2 = th.c2;
   }
   b.on = onEl ? !!onEl.checked : true;
   adminState.badgeDirty = true;
