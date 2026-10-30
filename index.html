@@ -8813,7 +8813,8 @@ function renderRaceCalendar() {
   html += '<div style="flex:1;"><div style="font-size:22px;font-weight:700;color:#1a3a5c;">' + raceDaysCount(rec, '') + '</div>'
     + '<div style="font-size:11px;color:#888;">' + lblAllDays + '</div></div>';
   html += '</div>';
-  html += raceBadgeWallHtml(rec, curRid);
+  // 「我的徽章」墙挪到日历格子 + 当天明细之后：选中的日期内容夹在日历和徽章中间，
+  // 复盘完答题清单往下顺手就是徽章，不用先滚过一长排徽章才看到日历。
 
   // 星期表头（周一起始）
   var wk = t('race_cal_week');
@@ -8895,8 +8896,12 @@ function renderRaceCalendar() {
       var it = runs2[ri];
       var ok = state.raceCalOpen || {};
       var okey = day + '|' + (it.ts || ri);
+      // 有明细的挑战，标题整行可点：展开↔收起，不用滚到卡片末尾找按钮
+      var hasQ = Array.isArray(it.q) && it.q.length;
       html += '<div class="q-card" style="margin-bottom:8px;">';
-      html += '<div style="display:flex;align-items:center;gap:8px;">';
+      html += '<div' + (hasQ
+        ? ' onclick="raceCalToggleRun(\'' + okey + '\')" style="display:flex;align-items:center;gap:8px;cursor:pointer;"'
+        : ' style="display:flex;align-items:center;gap:8px;"') + '>';
       html += '<div style="flex:1;min-width:0;">';
       html += '<div style="font-size:14px;font-weight:600;">' + raceSecIcon(it.sec || 'all') + ' '
         + escapeHtml(raceSecName(it.sec || 'all')) + '</div>';
@@ -8905,8 +8910,9 @@ function renderRaceCalendar() {
         + ' · ' + (en ? 'accuracy ' : '准确率 ') + (it.acc || 0) + '%</div>';
       html += '</div>';
       html += '<div style="font-size:18px;font-weight:700;color:#1a3a5c;">' + (it.c || 0) + '</div>';
+      if (hasQ) html += '<div style="font-size:11px;color:#8b98a3;">' + (ok[okey] ? '▲' : '▼') + '</div>';
       html += '</div>';
-      if (Array.isArray(it.q) && it.q.length) {
+      if (hasQ) {
         if (ok[okey]) {
           html += '<div style="margin-top:10px;">';
           for (var qi = 0; qi < it.q.length; qi++) {
@@ -8946,6 +8952,8 @@ function renderRaceCalendar() {
       html += '</div>';
     }
   }
+  // 徽章墙放在页面最底部：日历 → 当天明细 → 我的徽章，选中的日期内容正好夹在中间
+  html += raceBadgeWallHtml(rec, curRid);
   html += '</div>';
   return html;
 }
