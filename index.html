@@ -4063,8 +4063,11 @@ const state = {
   raceTimer: null,
   raceBoard: null,     // 排行榜原始数据（student_snapshots 行）
   raceBoardTab: 'period', // 'period' | 'dept' | 'best'
-  raceBoardSec: '',    // 排行榜板块筛选，'' = 全部板块
+  raceBoardSec: '',    // 排行榜板块筛选，'' = 全部板块（进页面默认回这个）
   raceSyncState: null, // 'pending' | 'ok' | 'fail'
+  raceCalMonth: '',    // 打卡日历当前显示的月份 'YYYY-MM'，空 = 本月
+  raceCalDay: '',      // 打卡日历里点开的某一天 'YYYY-MM-DD'
+  raceCalOpen: {},     // { 'YYYY-MM-DD|<ts>': true } 当天哪几条挑战展开了答题清单
   raceDeepLink: (function () {
     try { return /[?&]page=race\b/.test((typeof location !== 'undefined' && location.search) || ''); }
     catch (e) { return false; }
@@ -4546,6 +4549,31 @@ var I18N = {
   race_board_dept_mix_hint: {cn:'统计各部门参赛人员在全部板块的成绩合计。', en:'Combines the results of each department\u2019s members across all sections.'},
   race_my_section: {cn:'你本期所选', en:'Your section'},
   race_go_pick: {cn:'去选板块参与挑战吧！', en:'Pick a section and join the challenge!'},
+  // ---- 打卡日历 ----
+  race_cal_open: {cn:'📅 我的打卡日历', en:'📅 My check-in calendar'},
+  race_cal_title: {cn:'打卡日历', en:'Check-in Calendar'},
+  race_cal_sub: {cn:'每天完成一次挑战即视为打卡一天', en:'One completed challenge = one checked-in day'},
+  race_cal_month_days: {cn:'本月打卡 {n} 天', en:'{n} days checked in this month'},
+  race_cal_total_days: {cn:'累计打卡 {n} 天', en:'{n} days in total'},
+  race_cal_month_runs: {cn:'本月共完成 {n} 次挑战', en:'{n} challenges this month'},
+  race_cal_none_month: {cn:'这个月还没有打卡记录。', en:'No check-ins this month yet.'},
+  race_cal_none_day: {cn:'这一天没有挑战记录。', en:'No challenge recorded on this day.'},
+  race_cal_day_runs: {cn:'当天完成 {n} 次挑战', en:'{n} challenges on this day'},
+  race_cal_no_log: {cn:'更早的成绩流水已超出保存上限（仅保留最近 120 次），当天只显示打卡标记。', en:'Older attempts are beyond the storage limit (only the latest 120 are kept) — this day shows the check-in mark only.'},
+  race_cal_no_detail: {cn:'这次挑战没有保存答题明细（明细仅保留最近 30 次）。', en:'No answer detail saved for this attempt (details are kept for the latest 30 attempts only).'},
+  race_cal_show_q: {cn:'📋 查看答题清单', en:'📋 View the questions'},
+  race_cal_hide_q: {cn:'收起答题清单', en:'Hide the questions'},
+  race_cal_your: {cn:'你的作答', en:'Your answer'},
+  race_cal_legend: {cn:'有底色 = 当天打过卡，点开可看当天的挑战与答题明细。', en:'A filled day means you checked in — tap it to review that day\u2019s challenges and answers.'},
+  race_cal_week: {cn:'一二三四五六日', en:'M T W T F S S'},
+  race_board_days: {cn:'📅 打卡天数', en:'📅 Check-in days'},
+  race_board_days_hint_period: {cn:'统计范围：本届赛事期间，全酒店参赛绅士淑女的打卡天数。同一天完成多次挑战只计一天，按天数排名；天数相同则比较总挑战次数。', en:'Scope: check-in days of all ladies and gentlemen taking part in this round. Multiple challenges on the same day count as one day; ties are broken by total number of challenges.'},
+  race_board_days_hint_dept: {cn:'统计范围：本届赛事期间各部门参赛人员的打卡天数合计。同一天完成多次挑战只计一天。', en:'Scope: the sum of check-in days of each department\u2019s participants in this round. Multiple challenges on the same day count as one day.'},
+  race_board_days_hint_dept_avg: {cn:'统计范围：本届赛事期间各部门参赛人员的打卡天数，按部门人均天数排名（部门总打卡天数 ÷ 参赛人数）。同一天完成多次挑战只计一天。', en:'Scope: check-in days per department, ranked by average per participant (total check-in days ÷ participants). Multiple challenges on the same day count as one day.'},
+  race_board_days_hint_best: {cn:'统计范围：全酒店所有绅士淑女的历届累计打卡天数，同一天只计一天，发布新一届赛事后不清空。', en:'Scope: all-time check-in days of every lady and gentleman, one day counted once, never reset when a new round is published.'},
+  race_dept_days_mode: {cn:'部门打卡天数统计口径', en:'Department check-in ranking'},
+  race_dept_days_sum: {cn:'部门总打卡天数（鼓励更多人参与）', en:'Total days (rewards headcount)'},
+  race_dept_days_avg: {cn:'部门人均打卡天数（大小部门更公平）', en:'Average per person (fairer across sizes)'},
   nav_back: {cn:'返回', en:'Back'},
   nav_home: {cn:'首页', en:'Home'},
   nav_home_hint: {cn:'回到首页', en:'Go to home'},
@@ -7379,9 +7407,85 @@ function raceLocalRecord() {
     if (pick0) o.best.section = pick0.section || pickSec;
   }
   if (!Array.isArray(o.log)) o.log = [];
+  // 打卡日历上线前只有 log、没有 days —— 用流水回填一次，否则老学员的日历
+  // 会整片空白（尤其 log 被裁掉的日子确实补不回来，但至少近期的能补上）。
+  if (!o.days || typeof o.days !== 'object') {
+    o.days = {};
+    for (var li2 = 0; li2 < o.log.length; li2++) {
+      if (o.log[li2] && o.log[li2].ts) raceMarkDay(o, o.log[li2].ts, o.log[li2].id);
+    }
+  }
   return o;
 }
 function raceSaveLocalRecord(rec) { try { localStorage.setItem('raceRecord', JSON.stringify(rec)); } catch (e) {} }
+
+// ===== 打卡（check-in）=====
+// 打卡按**本地日期**算：跨时区 / 晚上 11 点交卷都不会错位到前一天。
+function raceDayKey(ts) {
+  var d = new Date(ts || Date.now());
+  var m = d.getMonth() + 1, dd = d.getDate();
+  return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd;
+}
+// days['YYYY-MM-DD'] = [当天挑战次数, 最近一次所属赛事 id]
+function raceMarkDay(rec, ts, rid) {
+  if (!rec) return '';
+  if (!rec.days || typeof rec.days !== 'object') rec.days = {};
+  var k = raceDayKey(ts);
+  var cur = rec.days[k];
+  rec.days[k] = [((cur && cur[0]) || 0) + 1, rid || ((cur && cur[1]) || '')];
+  var keys = Object.keys(rec.days);
+  if (keys.length > RACE_DAYS_MAX) {
+    keys.sort();
+    for (var i = 0; i < keys.length - RACE_DAYS_MAX; i++) delete rec.days[keys[i]];
+  }
+  return k;
+}
+// 打卡天数（去重）：rid 为空 = 历届累计；给了 rid 就只算那一届。
+function raceDaysCount(rec, rid) {
+  if (!rec || !rec.days) return 0;
+  var n = 0;
+  for (var k in rec.days) {
+    if (!Object.prototype.hasOwnProperty.call(rec.days, k)) continue;
+    if (rid && (!rec.days[k] || rec.days[k][1] !== rid)) continue;
+    n++;
+  }
+  return n;
+}
+// 打卡总次数（不去重），同口径筛选。用于并列时比较"谁跑得更勤"。
+function raceDaysRuns(rec, rid) {
+  if (!rec || !rec.days) return 0;
+  var n = 0;
+  for (var k in rec.days) {
+    if (!Object.prototype.hasOwnProperty.call(rec.days, k)) continue;
+    if (rid && (!rec.days[k] || rec.days[k][1] !== rid)) continue;
+    n += (rec.days[k] && rec.days[k][0]) || 0;
+  }
+  return n;
+}
+// 最近一次打卡的时间戳（并列时先让"还在坚持"的人靠前）
+function raceDaysLastTs(rec, rid) {
+  if (!rec || !rec.days) return 0;
+  var last = 0;
+  for (var k in rec.days) {
+    if (!Object.prototype.hasOwnProperty.call(rec.days, k)) continue;
+    if (rid && (!rec.days[k] || rec.days[k][1] !== rid)) continue;
+    var t = new Date(k + 'T00:00:00').getTime();
+    if (t > last) last = t;
+  }
+  return last;
+}
+// 本次挑战的答题明细：[[题号, 对错, 学员选的下标]]
+// 题干 / 选项 / 解析都不存，展示时按题号从题库现取，档案体积才不会失控。
+function raceDetailOfRun(r) {
+  var out = [];
+  if (!r || !Array.isArray(r.pool) || !Array.isArray(r.answers)) return out;
+  for (var i = 0; i < r.answers.length; i++) {
+    var a = r.answers[i], q = r.pool[i];
+    if (!a || !a.ans || !a.ans.length || !q) continue;
+    out.push([String(q.id || ''), raceGrade(q, a.ans) ? 1 : 0, a.ans.join(',')]);
+  }
+  return out;
+}
 // 上报前把 name / dept 按**当前资料**重新盖一遍。成绩记录是交卷那一刻整份存进
 // localStorage 的，学员之后改名（MM → Megan）、换部门都不会触发重写，云端快照、
 // 管理端导出、排行榜就会一直挂着旧名字。只在真的打过卡（有成绩）时才盖，
@@ -7628,8 +7732,18 @@ function raceSubmitScore() {
   // 挑战流水：每次交卷都记一条，供管理端按天 / 任意时间段统计。
   // 只保留最近 RACE_LOG_MAX 条，避免快照无限膨胀。
   rec.log = Array.isArray(rec.log) ? rec.log : [];
-  rec.log.push({ ts: entry.ts, sec: entry.section, c: entry.correct, a: entry.answered, acc: entry.acc, id: entry.raceId });
+  rec.log.push({
+    ts: entry.ts, sec: entry.section, c: entry.correct, a: entry.answered, acc: entry.acc, id: entry.raceId,
+    // 答题明细（紧凑三元组：题号 / 对错 / 学员选的下标）——打卡日历点开某天要
+    // 能复盘"当时答了什么、错在哪"。题干与解析不存，按题号从题库现取。
+    q: raceDetailOfRun(r)
+  });
   if (rec.log.length > RACE_LOG_MAX) rec.log = rec.log.slice(rec.log.length - RACE_LOG_MAX);
+  // 只让最近 RACE_LOG_DETAIL_MAX 条带明细，更早的把 q 抹掉，控制档案体积。
+  for (var li = 0; li < rec.log.length - RACE_LOG_DETAIL_MAX; li++) {
+    if (rec.log[li] && rec.log[li].q) delete rec.log[li].q;
+  }
+  raceMarkDay(rec, entry.ts, entry.raceId);
   rec.name = raceDisplayName();
   rec.dept = raceDeptName();
   raceSaveLocalRecord(rec);
@@ -7849,6 +7963,85 @@ function raceDeptAggRows(secFilter) {
   var c = raceConfOf();
   return raceDeptAggRowsFrom(state.raceBoard || [], secFilter, c && c.id);
 }
+
+// ===== 打卡天数榜 =====
+// 与板块榜平行的一张榜：不看分数，只看"这个月来了几天"。月度赛事战线长，
+// 分数榜对进度落后的人没有激励，打卡天数能让"每天都来"这件事被看见。
+// 'period'/'dept' 口径 = 本届；'best' = 历届累计（与历史最佳榜的跨届口径一致）。
+var RACE_DAYS_KEY = '__days__';
+function raceDaysRowsFrom(list, scope, rid) {
+  list = list || [];
+  var filter = (scope === 'best') ? '' : (rid || '');
+  var rows = [];
+  for (var i = 0; i < list.length; i++) {
+    var raw = list[i];
+    var race = raceRecordOf(raw);
+    if (!race) continue;
+    var days = raceDaysCount(race, filter);
+    if (!days) continue;
+    rows.push({
+      key: String((raw && (raw.akey || raw.key || raw.phone)) || ''),
+      name: raceRowNameOf(raw, race),
+      dept: raceDeptUnitOfRow(raw, race),
+      div: raceDeptOfRow(raw, race),
+      days: days,
+      runs: raceDaysRuns(race, filter),
+      last: raceDaysLastTs(race, filter)
+    });
+  }
+  rows.sort(function (a, b) {
+    if (b.days !== a.days) return b.days - a.days;
+    if (b.runs !== a.runs) return b.runs - a.runs;
+    return (b.last || 0) - (a.last || 0);
+  });
+  return rows;
+}
+function raceDaysRows(scope) {
+  var c = raceConfOf();
+  return raceDaysRowsFrom(state.raceBoard || [], scope, c && c.id);
+}
+// 部门打卡天数：mode='avg' 按人均天数排名，其余按部门总天数。
+// 参与面铺开之前用总天数（鼓励各部门拉更多人来），铺开之后切成人均更公平。
+function raceDeptDaysRowsFrom(list, rid, mode) {
+  list = list || [];
+  var map = {}, order = [];
+  for (var i = 0; i < list.length; i++) {
+    var raw = list[i];
+    var race = raceRecordOf(raw);
+    if (!race) continue;
+    var d = raceDaysCount(race, rid || '');
+    if (!d) continue;
+    var dept = raceDeptUnitOfRow(raw, race);
+    var row = map[dept];
+    if (!row) { row = map[dept] = { dept: dept, n: 0, days: 0, runs: 0, avg: 0 }; order.push(dept); }
+    row.n++;
+    row.days += d;
+    row.runs += raceDaysRuns(race, rid || '');
+  }
+  var rows = [];
+  for (var k = 0; k < order.length; k++) {
+    var r = map[order[k]];
+    r.avg = r.n ? Math.round(r.days / r.n * 10) / 10 : 0;
+    r.value = (mode === 'avg') ? r.avg : r.days;
+    rows.push(r);
+  }
+  rows.sort(function (a, b) {
+    if (b.value !== a.value) return b.value - a.value;
+    if (b.runs !== a.runs) return b.runs - a.runs;
+    if (b.n !== a.n) return b.n - a.n;
+    return String(a.dept) < String(b.dept) ? -1 : 1;
+  });
+  return rows;
+}
+function raceDeptDaysRows(mode) {
+  var c = raceConfOf();
+  return raceDeptDaysRowsFrom(state.raceBoard || [], c && c.id, mode);
+}
+// 部门打卡天数用什么口径由**赛事配置**决定（管理端发布时可选），默认总天数。
+function raceDeptDaysMode() {
+  var c = raceConfOf();
+  return (c && c.deptDaysMode === 'avg') ? 'avg' : 'sum';
+}
 // sbListSnapshots 解析后给的是 {success,count,records,ts}，不是数组。以前这里
 // 直接 Array.isArray(rows) 判断 → 永远走空分支，state.raceBoard 从头到尾没被
 // 赋过值 → 排行榜永远停在「正在载入排行榜…」。统一从这个入口归一成记录数组。
@@ -7927,6 +8120,8 @@ function renderRaceHome() {
     html += '<button class="action-btn primary" style="margin-top:14px;padding:9px 20px;" onclick="raceResyncNow()">' + t('race_resync') + '</button>';
     html += netDiagPanelHtml();
     html += '</div>';
+    // 打卡日历是看自己的历史记录，不依赖当前有没有赛事 —— 换届期间也要能翻。
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenCalendar()">' + t('race_cal_open') + '</button>';
     html += '</div>';
     // 网络抖动 / 断路器半开恢复后自动补一次，用户不必一直守着点按钮
     if (_pullFail) raceAutoRetryLater();
@@ -7979,7 +8174,10 @@ function renderRaceHome() {
       html += '<button class="action-btn primary" style="width:100%;margin-top:6px;" onclick="raceStart()">⚡ ' + t('race_start') + '</button>';
     }
   }
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenBoard()">🏆 ' + t('race_board') + '</button>';
+  html += '<div style="display:flex;gap:8px;margin-top:10px;">';
+  html += '<button class="action-btn secondary" style="flex:1;" onclick="raceOpenBoard()">🏆 ' + t('race_board') + '</button>';
+  html += '<button class="action-btn secondary" style="flex:1;" onclick="raceOpenCalendar()">' + t('race_cal_open') + '</button>';
+  html += '</div>';
   html += '</div>';
   return html;
 }
@@ -7998,9 +8196,179 @@ function raceSpareHintOf(key) {
   return raceSpareSizeOf(key) ? t('race_spare_hint') : '';
 }
 function raceOpenBoard() {
+  // 每次进排行榜都停在「全部板块总榜」：打卡天数榜只是并排放在它左边、位置显眼，
+  // 但不抢主榜的位置（点开才看）。
+  state.raceBoardSec = '';
   navigate('raceBoard');
   // 刚交完卷就点排行榜的话，缓存里没有自己这次的成绩 → 强制拉一次新的。
   raceFetchBoard(true).then(function () { if (state.currentPage === 'raceBoard') render(); });
+}
+function raceOpenCalendar() {
+  state.raceCalMonth = '';
+  state.raceCalDay = '';
+  navigate('raceCalendar');
+}
+
+// ================= 打卡日历 =================
+// 月度赛事战线长，光看排行榜没有"我今天打了没有"的反馈。这里给学员一张月历：
+// 打过卡的日子有底色，点开能看到当天每次挑战的成绩，还能展开答题清单复盘错题。
+// 数据全部来自本机 race 记录（交卷就落盘），退出页面也不会丢。
+function raceCalMonthOf() {
+  var m = state.raceCalMonth;
+  if (typeof m === 'string' && /^\d{4}-\d{2}$/.test(m)) return m;
+  return raceDayKey(Date.now()).slice(0, 7);
+}
+function raceCalShiftMonth(delta) {
+  var m = raceCalMonthOf();
+  var d = new Date(parseInt(m.slice(0, 4), 10), parseInt(m.slice(5, 7), 10) - 1 + delta, 1);
+  var mm = d.getMonth() + 1;
+  state.raceCalMonth = d.getFullYear() + '-' + (mm < 10 ? '0' : '') + mm;
+  state.raceCalDay = '';
+  render();
+}
+function raceCalPickDay(k) {
+  state.raceCalDay = (state.raceCalDay === k) ? '' : k;
+  render();
+}
+function raceCalToggleRun(k) {
+  if (!state.raceCalOpen) state.raceCalOpen = {};
+  if (state.raceCalOpen[k]) delete state.raceCalOpen[k];
+  else state.raceCalOpen[k] = true;
+  render();
+}
+function renderRaceCalendar() {
+  var en = state.lang === 'en';
+  var rec = raceLocalRecord() || {};
+  var days = rec.days || {};
+  var month = raceCalMonthOf();
+  var yy = parseInt(month.slice(0, 4), 10), mm = parseInt(month.slice(5, 7), 10);
+  var todayKey = raceDayKey(Date.now());
+  var monthDays = 0, monthRuns = 0;
+  for (var dk in days) {
+    if (!Object.prototype.hasOwnProperty.call(days, dk)) continue;
+    if (dk.slice(0, 7) === month) { monthDays++; monthRuns += (days[dk] && days[dk][0]) || 0; }
+  }
+  var html = renderAppHeader({ title: '📅 ' + t('race_cal_title'), subtitle: t('race_cal_sub') });
+  html += '<div class="page">';
+
+  // 月份导航 + 统计
+  html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">';
+  html += '<button class="admin-mini-btn" onclick="raceCalShiftMonth(-1)">‹</button>';
+  html += '<div style="flex:1;text-align:center;font-size:17px;font-weight:700;">'
+    + yy + (en ? ' / ' : ' 年 ') + mm + (en ? '' : ' 月') + '</div>';
+  html += '<button class="admin-mini-btn" onclick="raceCalShiftMonth(1)">›</button>';
+  html += '</div>';
+  var lblMonthDays = en ? 'days this month' : '本月打卡天数';
+  var lblMonthRuns = en ? 'challenges' : '本月挑战次数';
+  var lblAllDays = en ? 'all-time days' : '累计打卡天数';
+  html += '<div class="q-card" style="display:flex;gap:8px;text-align:center;padding:12px 8px;">';
+  html += '<div style="flex:1;"><div style="font-size:22px;font-weight:700;color:#1a3a5c;">' + monthDays + '</div>'
+    + '<div style="font-size:11px;color:#888;">' + lblMonthDays + '</div></div>';
+  html += '<div style="flex:1;"><div style="font-size:22px;font-weight:700;color:#1a3a5c;">' + monthRuns + '</div>'
+    + '<div style="font-size:11px;color:#888;">' + lblMonthRuns + '</div></div>';
+  html += '<div style="flex:1;"><div style="font-size:22px;font-weight:700;color:#1a3a5c;">' + raceDaysCount(rec, '') + '</div>'
+    + '<div style="font-size:11px;color:#888;">' + lblAllDays + '</div></div>';
+  html += '</div>';
+
+  // 星期表头（周一起始）
+  var wk = t('race_cal_week');
+  // minmax(0,1fr)：1fr 默认 min-width:auto，格子里有「✓2」这种内容时会把整行撑破，
+  // 右边几列被裁掉（320~430px 手机上特别明显）。
+  html += '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin:10px 0 4px;">';
+  for (var w = 0; w < 7; w++) {
+    html += '<div style="text-align:center;font-size:11px;color:#999;font-weight:600;">' + escapeHtml(wk.charAt(w) || '') + '</div>';
+  }
+  html += '</div>';
+
+  // 日期格子
+  var firstDow = (new Date(yy, mm - 1, 1).getDay() + 6) % 7;   // 0 = 周一
+  var daysInMonth = new Date(yy, mm, 0).getDate();
+  html += '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;">';
+  for (var b = 0; b < firstDow; b++) html += '<div></div>';
+  for (var dd = 1; dd <= daysInMonth; dd++) {
+    var key = month + '-' + (dd < 10 ? '0' : '') + dd;
+    var hit = !!days[key];
+    var runs = hit ? ((days[key] && days[key][0]) || 0) : 0;
+    var isToday = key === todayKey;
+    var isSel = state.raceCalDay === key;
+    var bg = hit ? '#e8f5e9' : '#fff';
+    var bd = isSel ? '#1a3a5c' : (isToday ? '#f0b357' : (hit ? '#a5d6a7' : '#eceff1'));
+    var fg = hit ? '#1b5e20' : '#9aa3ad';
+    html += '<div onclick="' + (hit ? 'raceCalPickDay(\'' + key + '\')' : '') + '"'
+      + ' style="box-sizing:border-box;min-width:0;aspect-ratio:1/1;display:flex;flex-direction:column;'
+      + 'align-items:center;justify-content:center;overflow:hidden;'
+      + 'border-radius:8px;background:' + bg + ';border:1.5px solid ' + bd + ';'
+      + (hit ? 'cursor:pointer;' : '')
+      + 'font-size:13px;font-weight:' + (hit ? '700' : '400') + ';color:' + fg + ';">'
+      + '<div style="line-height:1.1;">' + dd + '</div>'
+      + (hit ? '<div style="font-size:10px;line-height:1;color:#2e7d32;">✓' + (runs > 1 ? runs : '') + '</div>' : '<div style="height:10px;"></div>')
+      + '</div>';
+  }
+  html += '</div>';
+  html += '<div style="font-size:11px;color:#999;line-height:1.6;margin:8px 0 12px;">' + t('race_cal_legend') + '</div>';
+
+  // 选中某天 → 当天的挑战流水
+  if (state.raceCalDay) {
+    var day = state.raceCalDay;
+    var runs2 = [];
+    var log = Array.isArray(rec.log) ? rec.log : [];
+    for (var li = 0; li < log.length; li++) {
+      if (log[li] && raceDayKey(log[li].ts) === day) runs2.push(log[li]);
+    }
+    runs2.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+    var dnum = parseInt(day.slice(8, 10), 10);
+    html += '<h4 style="margin:6px 0 8px;">🗓 ' + mm + (en ? '/' : '月') + dnum + (en ? '' : '日') + ' · '
+      + t('race_cal_day_runs').replace('{n}', runs2.length) + '</h4>';
+    if (!runs2.length) {
+      html += '<div class="q-card" style="text-align:center;color:#888;">'
+        + (days[day] ? t('race_cal_no_log') : t('race_cal_none_day')) + '</div>';
+    }
+    for (var ri = 0; ri < runs2.length; ri++) {
+      var it = runs2[ri];
+      var ok = state.raceCalOpen || {};
+      var okey = day + '|' + (it.ts || ri);
+      html += '<div class="q-card" style="margin-bottom:8px;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;">';
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="font-size:14px;font-weight:600;">' + raceSecIcon(it.sec || 'all') + ' '
+        + escapeHtml(raceSecName(it.sec || 'all')) + '</div>';
+      html += '<div style="font-size:12px;color:#888;">🕐 ' + fmtSyncTime(it.ts)
+        + ' · ' + (en ? 'correct ' : '答对 ') + (it.c || 0) + '/' + (it.a || 0)
+        + ' · ' + (en ? 'accuracy ' : '准确率 ') + (it.acc || 0) + '%</div>';
+      html += '</div>';
+      html += '<div style="font-size:18px;font-weight:700;color:#1a3a5c;">' + (it.c || 0) + '</div>';
+      html += '</div>';
+      if (Array.isArray(it.q) && it.q.length) {
+        if (ok[okey]) {
+          html += '<div style="margin-top:10px;">';
+          for (var qi = 0; qi < it.q.length; qi++) {
+            var trip = it.q[qi];
+            var q = findByIdAllBanks(trip[0]);
+            if (!q) continue;
+            var picked = String(trip[2] || '').split(',').filter(function (x) { return x !== ''; }).map(Number);
+            var good = trip[1] === 1;
+            html += '<div style="border-left:3px solid ' + (good ? '#27ae60' : '#c0392b') + ';padding:8px 0 8px 10px;margin-bottom:8px;">';
+            html += '<div style="font-size:13px;font-weight:600;">' + (qi + 1) + '. ' + escapeHtml(raceQText(q)).replace(/\n/g, '<br>') + '</div>';
+            html += '<div style="font-size:12px;margin-top:4px;' + (good ? 'color:#27ae60;' : 'color:#c0392b;') + '">'
+              + (good ? '✓ ' : '✗ ') + escapeHtml(raceUserText(q, picked)) + '</div>';
+            if (!good) html += '<div style="font-size:12px;color:#27ae60;margin-top:2px;">✓ ' + escapeHtml(raceCorrectText(q)) + '</div>';
+            var exp = en ? (q.explanation_en || q.explanation || '') : (q.explanation_cn || q.explanation || '');
+            if (exp) html += '<div style="font-size:11px;color:#666;margin-top:4px;line-height:1.6;">📖 ' + escapeHtml(exp).replace(/\n/g, '<br>') + '</div>';
+            html += '</div>';
+          }
+          html += '</div>';
+          html += '<button class="action-btn secondary" style="width:100%;margin-top:4px;" onclick="raceCalToggleRun(\'' + okey + '\')">' + t('race_cal_hide_q') + '</button>';
+        } else {
+          html += '<button class="action-btn secondary" style="width:100%;margin-top:8px;" onclick="raceCalToggleRun(\'' + okey + '\')">' + t('race_cal_show_q') + '</button>';
+        }
+      } else {
+        html += '<div style="font-size:11px;color:#999;margin-top:6px;">' + t('race_cal_no_detail') + '</div>';
+      }
+      html += '</div>';
+    }
+  }
+  html += '</div>';
+  return html;
 }
 // 答题界面沿用**正常刷题**的题干 / 选项 / 按钮结构（.q-card → .q-header → .q-text →
 // .options/.option/.option-letter + .option-text，按钮用 .q-nav > .nav-btn），
@@ -8090,6 +8458,8 @@ function renderRaceResult() {
   if (raceStateOf(raceConfOf()) === 'open') {
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceAgain()">⚡ ' + t('race_again') + '</button>';
   }
+  // 本次回顾只在结果页这一次可见，关掉就没了 → 给个入口去打卡日历长期留存的版本。
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenCalendar()">' + t('race_cal_open') + '</button>';
   html += '<div style="margin-top:16px;font-size:13px;font-weight:600;">📖 ' + t('race_review') + '</div>';
   for (var i = 0; i < r.answers.length; i++) {
     var a = r.answers[i];
@@ -8159,7 +8529,11 @@ function renderRaceBoard() {
   html += '</div>';
   html += '<div style="font-size:12px;color:#999;line-height:1.5;margin:0 0 10px;">' + raceBoardScopeHint(tab) + '</div>';
   var sec = state.raceBoardSec || '';
+  // 打卡天数榜与板块榜平行，放在「全部板块总榜」左边 —— 位置显眼，但默认选中的
+  // 仍是全部板块总榜（raceOpenBoard 里重置），不喧宾夺主。
+  var isDays = sec === RACE_DAYS_KEY;
   html += '<div style="display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch;">';
+  html += raceBoardChip(RACE_DAYS_KEY, t('race_board_days'), isDays);
   html += raceBoardChip('', '\ud83d\udcca ' + t('race_filter_all'), !sec);
   for (var s = 0; s < RACE_SECTIONS.length; s++) {
     var sk = RACE_SECTIONS[s].key;
@@ -8167,13 +8541,17 @@ function renderRaceBoard() {
   }
   html += '</div>';
   html += '<div style="font-size:12px;color:#888;margin:2px 0 10px;">'
-    + (sec ? (raceSecIcon(sec) + ' ' + escapeHtml(raceSecName(sec)) + ' \u00b7 '
-              + t(tab === 'dept' ? 'race_board_dept_sec_hint' : (tab === 'best' ? 'race_board_best_sec_hint' : 'race_board_sec_hint')))
-           : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 '
-              + t(tab === 'dept' ? 'race_board_dept_mix_hint' : (tab === 'best' ? 'race_board_best_mix_hint' : 'race_board_mix_hint'))))
+    + (isDays ? t(tab === 'dept' ? (raceDeptDaysMode() === 'avg' ? 'race_board_days_hint_dept_avg' : 'race_board_days_hint_dept')
+                                 : (tab === 'best' ? 'race_board_days_hint_best' : 'race_board_days_hint_period'))
+       : (sec ? (raceSecIcon(sec) + ' ' + escapeHtml(raceSecName(sec)) + ' \u00b7 '
+                 + t(tab === 'dept' ? 'race_board_dept_sec_hint' : (tab === 'best' ? 'race_board_best_sec_hint' : 'race_board_sec_hint')))
+              : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 '
+                 + t(tab === 'dept' ? 'race_board_dept_mix_hint' : (tab === 'best' ? 'race_board_best_mix_hint' : 'race_board_mix_hint')))))
     + '</div>';
   var isDeptTab = tab === 'dept';
-  var rows = isDeptTab ? raceDeptAggRows(sec) : raceBoardRows(tab);
+  var rows = isDays
+    ? (isDeptTab ? raceDeptDaysRows(raceDeptDaysMode()) : raceDaysRows(tab))
+    : (isDeptTab ? raceDeptAggRows(sec) : raceBoardRows(tab));
   // 已经有数据就当 ready（不管状态位），避免"数据都在却被状态位挡住继续转圈"。
   var hasData = Array.isArray(state.raceBoard);
   var bst = hasData ? 'ready' : (state.raceBoardState || 'loading');
@@ -8209,12 +8587,21 @@ function renderRaceBoard() {
       html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(deptDisplayName(dr.dept) || t('race_dept_unknown'))
         + (isMine ? '<span style="color:#1a3a5c;font-size:12px;">' + t('race_you') + '</span>' : '') + '</div>';
       html += '<div style="font-size:12px;color:#888;">'
-        + dr.n + ' ' + t('race_dept_people') + ' \u00b7 ' + t('race_dept_answered') + ' ' + dr.answered
-        + ' \u00b7 ' + t('race_dept_avg') + ' ' + per + '</div>';
+        + (isDays
+          ? (dr.n + ' ' + t('race_dept_people') + ' \u00b7 ' + (state.lang === 'en' ? 'runs ' : '挑战 ') + dr.runs
+             + ' \u00b7 ' + (state.lang === 'en' ? 'avg ' : '人均 ') + dr.avg)
+          : (dr.n + ' ' + t('race_dept_people') + ' \u00b7 ' + t('race_dept_answered') + ' ' + dr.answered
+             + ' \u00b7 ' + t('race_dept_avg') + ' ' + per))
+        + '</div>';
       html += '</div>';
       html += '<div style="text-align:right;">';
-      html += '<div style="font-size:16px;font-weight:700;color:#1a3a5c;">' + dr.correct + '</div>';
-      html += '<div style="font-size:12px;color:#888;">' + dr.acc + '%</div>';
+      if (isDays) {
+        html += '<div style="font-size:16px;font-weight:700;color:#1a3a5c;">' + dr.value + '</div>';
+        html += '<div style="font-size:12px;color:#888;">' + (state.lang === 'en' ? 'days' : '天') + '</div>';
+      } else {
+        html += '<div style="font-size:16px;font-weight:700;color:#1a3a5c;">' + dr.correct + '</div>';
+        html += '<div style="font-size:12px;color:#888;">' + dr.acc + '%</div>';
+      }
       html += '</div></div>';
     }
   } else {
@@ -8237,11 +8624,20 @@ function renderRaceBoard() {
       html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#1a3a5c;font-size:12px;">' + t('race_you') + '</span>' : '') + '</div>';
       // 下沉过的部门显示「大部门 · 小部门」（房务部 · 客房部），一眼看出他属于哪个大部门；
       // 没下沉的（人力资源部等）只显示大部门，不重复同一个词。
-      html += '<div style="font-size:12px;color:#888;">' + escapeHtml(deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept))) + (rw.section && !sec ? ' \u00b7 ' + raceSecIcon(rw.section) + ' ' + raceSecName(rw.section) : '') + '</div>';
+      html += '<div style="font-size:12px;color:#888;">' + escapeHtml(deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept)))
+        + (isDays
+          ? (' \u00b7 ' + (state.lang === 'en' ? 'runs ' : '挑战 ') + rw.runs)
+          : (rw.section && !sec ? ' \u00b7 ' + raceSecIcon(rw.section) + ' ' + raceSecName(rw.section) : ''))
+        + '</div>';
       html += '</div>';
       html += '<div style="text-align:right;">';
-      html += '<div style="font-size:16px;font-weight:700;color:#1a3a5c;">' + rw.correct + '</div>';
-      html += '<div style="font-size:12px;color:#888;">' + rw.acc + '%</div>';
+      if (isDays) {
+        html += '<div style="font-size:16px;font-weight:700;color:#1a3a5c;">' + rw.days + '</div>';
+        html += '<div style="font-size:12px;color:#888;">' + (state.lang === 'en' ? 'days' : '天') + '</div>';
+      } else {
+        html += '<div style="font-size:16px;font-weight:700;color:#1a3a5c;">' + rw.correct + '</div>';
+        html += '<div style="font-size:12px;color:#888;">' + rw.acc + '%</div>';
+      }
       html += '</div></div>';
     }
   }
@@ -8316,6 +8712,14 @@ function renderAdminRace() {
   html += '<input id="raceEnd" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((c.endTime ? raceInputDate(c.endTime) : '') || defaultEndInput(DEFAULT_WINDOW_MIN)) + '">';
   // 答题赛按小时开（1 小时 / 24 小时 / 自定义小时），考试的分钟档位不改。
   html += adminWindowQuickHoursHtml('adminFillRaceWindow', '', 'raceQuickHour');
+  // 部门打卡天数的统计口径：参与面铺开前用总天数（鼓励各部门拉更多人来），
+  // 铺开之后切成人均更公平。改这里即刻生效，学员端按赛事配置读。
+  var dmode = (c.deptDaysMode === 'avg') ? 'avg' : 'sum';
+  html += '<label style="font-size:12px;color:#666;">' + t('race_dept_days_mode') + '</label>';
+  html += '<select id="raceDeptDaysMode" class="admin-input" style="width:100%;padding:8px;margin:4px 0 4px;border:1px solid #d8dee4;border-radius:6px;">';
+  html += '<option value="sum"' + (dmode === 'sum' ? ' selected' : '') + '>' + t('race_dept_days_sum') + '</option>';
+  html += '<option value="avg"' + (dmode === 'avg' ? ' selected' : '') + '>' + t('race_dept_days_avg') + '</option>';
+  html += '</select>';
   html += '</div>';
   html += '<button class="action-btn primary" style="width:100%;" onclick="adminRacePublish()">📣 ' + t('race_admin_publish') + '</button>';
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="adminRaceClose()">⛔ ' + t('race_admin_close') + '</button>';
@@ -8370,6 +8774,7 @@ function adminRacePublish() {
     c.allow = [c.section];
   }
   c.limitSec = parseInt((el('raceLimit') && el('raceLimit').value), 10) || 60;
+  c.deptDaysMode = ((el('raceDeptDaysMode') && el('raceDeptDaysMode').value) === 'avg') ? 'avg' : 'sum';
   var sv = el('raceStart') && el('raceStart').value, ev = el('raceEnd') && el('raceEnd').value;
   c.startTime = sv ? new Date(sv).toISOString() : '';
   c.endTime = ev ? new Date(ev).toISOString() : '';
@@ -11832,7 +12237,12 @@ function adminOpenExamFromStudent(key, eid) {
 // 管理端第 5 张 hub 卡：按大部门聚合参与度与成绩；可按场次切换；
 // 点部门展开员工列表，点员工开右侧抽屉看明细并可跳回放。
 var DASH_RACE_KEY = '__race__';
-var RACE_LOG_MAX = 50;          // 每人保留的最近挑战条数
+var RACE_LOG_MAX = 120;         // 每人保留的最近挑战条数（月度赛事一天可能打好几次）
+// 只有最近这么多条保留「答题明细」（每题对错），更早的只留分数流水。
+// 明细是给打卡日历做复习回顾用的，全留会让云端档案持续膨胀。
+var RACE_LOG_DETAIL_MAX = 30;
+// 打卡日期集合的上限（跨月累计），超出后删最早的日期。
+var RACE_DAYS_MAX = 800;
 var DASH_RANGE_KEYS = ['today', '7d', '30d', 'month', 'all', 'custom'];
 
 // ---- 时间范围 ----
@@ -16691,6 +17101,7 @@ function render() {
     case 'racePlay': app.innerHTML = renderRacePlay(); break;
     case 'raceResult': app.innerHTML = renderRaceResult(); break;
     case 'raceBoard': app.innerHTML = renderRaceBoard(); break;
+    case 'raceCalendar': app.innerHTML = renderRaceCalendar(); break;
     default: app.innerHTML = renderHome();
   }
   maybeExamDeepLink(); // ?exam=<key> 扫码直达：在首页就绪后自动开考
