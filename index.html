@@ -4564,7 +4564,7 @@ var I18N = {
   race_cal_show_q: {cn:'📋 查看答题清单', en:'📋 View the questions'},
   race_cal_hide_q: {cn:'收起答题清单', en:'Hide the questions'},
   race_cal_your: {cn:'你的作答', en:'Your answer'},
-  race_cal_ans_lost: {cn:'（旧版记录，原始选项已无法还原）', en:'(legacy record — original choice unavailable)'},
+  race_cal_ans_lost: {cn:'（旧版记录，未保存你当时的选项）', en:'(legacy record — your choice was not saved)'},
   race_cal_legend: {cn:'有底色 = 当天打过卡，点开可看当天的挑战与答题明细。', en:'A filled day means you checked in — tap it to review that day\u2019s challenges and answers.'},
   race_cal_week: {cn:'一二三四五六日', en:'M T W T F S S'},
   race_board_days: {cn:'📅 打卡天数', en:'📅 Check-in days'},
@@ -8365,14 +8365,21 @@ function renderRaceCalendar() {
             var picked = String(trip[2] || '').split(',').filter(function (x) { return x !== ''; }).map(Number);
             var good = trip[1] === 1;
             var uTxt = raceUserText(q, picked), cTxt = raceCorrectText(q);
-            // 老记录（trip[3] 没标记）存的是本局"界面下标"，按题库顺序还原会串选项 →
-            // 症状是“判错却显示两个一模一样的答案”。无从还原就别硬显示，只留正确答案。
-            var lost = !trip[3] && !good && uTxt === cTxt;
+            // 老记录（trip[3] 没标记）存的是本局"界面下标"，与题库顺序无关，按题库还原必然
+            // 串成别的选项（偶尔碰巧对也是运气）。既然无从还原，就一律不显示"你的作答"，
+            // 只给判定 + 正确答案，免得学员以为自己选了另一个选项。
+            var lost = !trip[3];
             html += '<div style="border-left:3px solid ' + (good ? '#27ae60' : '#c0392b') + ';padding:8px 0 8px 10px;margin-bottom:8px;">';
             html += '<div style="font-size:13px;font-weight:600;">' + (qi + 1) + '. ' + escapeHtml(raceQText(q)).replace(/\n/g, '<br>') + '</div>';
-            html += '<div style="font-size:12px;margin-top:4px;' + (good ? 'color:#27ae60;' : 'color:#c0392b;') + '">'
-              + (good ? '✓ ' : '✗ ') + escapeHtml(lost ? t('race_cal_ans_lost') : uTxt) + '</div>';
-            if (!good) html += '<div style="font-size:12px;color:#27ae60;margin-top:2px;">✓ ' + escapeHtml(cTxt) + '</div>';
+            if (lost) {
+              html += '<div style="font-size:12px;margin-top:4px;' + (good ? 'color:#27ae60;' : 'color:#c0392b;') + '">'
+                + (good ? '✓ ' : '✗ ') + escapeHtml(t('race_cal_ans_lost')) + '</div>';
+              html += '<div style="font-size:12px;color:#27ae60;margin-top:2px;">✓ ' + escapeHtml(cTxt) + '</div>';
+            } else {
+              html += '<div style="font-size:12px;margin-top:4px;' + (good ? 'color:#27ae60;' : 'color:#c0392b;') + '">'
+                + (good ? '✓ ' : '✗ ') + escapeHtml(uTxt) + '</div>';
+              if (!good) html += '<div style="font-size:12px;color:#27ae60;margin-top:2px;">✓ ' + escapeHtml(cTxt) + '</div>';
+            }
             var exp = en ? (q.explanation_en || q.explanation || '') : (q.explanation_cn || q.explanation || '');
             if (exp) html += '<div style="font-size:11px;color:#666;margin-top:4px;line-height:1.6;">📖 ' + escapeHtml(exp).replace(/\n/g, '<br>') + '</div>';
             html += '</div>';
