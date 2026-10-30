@@ -141,6 +141,14 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 @keyframes timerBlink { 50% { opacity: 0.3; } }
 .exam-score { font-size:14px; color:var(--text-light); }
 
+/* ===== 板块选择指引：金线小节标。金色竖条缓慢呼吸（2.4s 一循环），
+   醒目但不刺眼；整行是「竖条 + 标题 + 淡出细线」，与页面的卡片语言一致 ===== */
+@keyframes raceHintBreath { 0%,100% { opacity:1; transform:scaleY(1); } 50% { opacity:.45; transform:scaleY(.72); } }
+.race-sec-hint-bar { width:4px; height:18px; border-radius:2px; flex:0 0 auto;
+  background:linear-gradient(180deg,#f0b357,#d99a00);
+  animation:raceHintBreath 2.4s ease-in-out infinite; transform-origin:center; }
+.race-sec-hint-line { flex:1; height:1px; background:linear-gradient(90deg,#dfe4e9,rgba(223,228,233,0)); }
+
 /* ===== 答题赛倒计时：贴在「⏱ 60s ｜ 已答 N」矩形下沿的色块，随时间从满格缩到空 ===== */
 .exam-info.race-timer-box { display:block; padding:12px 16px 0; overflow:hidden; }
 .race-timer-line { display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; }
@@ -8623,14 +8631,16 @@ function renderRaceHome() {
   if (st === 'ended') html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_ended') + '</div>';
   if (st === 'closed') html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_closed') + '</div>';
   if (st === 'open') {
-    if (mode === 'choice') {
-      var allow = raceAllowedList(c);
-      // 以前只是一行 13px 的小灰字，学员经常没看见 → 改成醒目的提示条。
-      html += '<div style="display:flex;align-items:center;justify-content:center;gap:6px;'
-        + 'margin:12px 0;padding:13px 10px;border-radius:10px;text-align:center;'
-        + 'background:linear-gradient(90deg,#fff4e0,#ffe9cc);border:1px solid #f0b357;'
-        + 'color:#8a4b00;font-size:16px;font-weight:700;letter-spacing:.5px;'
-        + 'box-shadow:0 2px 6px rgba(240,179,87,.25);">👇 ' + t('race_choose_hint') + ' 👇</div>';
+      if (mode === 'choice') {
+        var allow = raceAllowedList(c);
+        // 以前是一块橙色渐变大横幅（👇 …… 👇），像报警条，跟整页卡片风格不搭。
+        // 现在改成「金线小节标」：金色竖条（缓慢呼吸动画保持醒目）+ 深蓝标题 + 向右淡出的细线，
+        // 紧贴板块列表上方 —— 靠位置和动画引导视线，不靠大色块。
+        html += '<div style="display:flex;align-items:center;gap:9px;margin:16px 2px 10px;">';
+        html += '<div class="race-sec-hint-bar"></div>';
+        html += '<div style="flex:0 0 auto;font-size:14.5px;font-weight:700;color:#1a3a5c;letter-spacing:.5px;">' + t('race_choose_hint') + '</div>';
+        html += '<div class="race-sec-hint-line"></div>';
+        html += '</div>';
       for (var k = 0; k < allow.length; k++) {
         var sk = allow[k];
         html += '<div onclick="raceBegin(\'' + sk + '\')" style="display:flex;align-items:center;gap:10px;padding:12px;margin-bottom:8px;border:1px solid #d8dee4;border-radius:10px;background:#fff;cursor:pointer;">';
