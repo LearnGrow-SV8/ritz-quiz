@@ -4436,6 +4436,8 @@ var I18N = {
   race_time_up: {cn:'时间到', en:'Time is up'},
   race_result_lock: {cn:'✅ 成绩已保存', en:'✅ Score saved'},
   race_result_lock_hint: {cn:'马上开放下方操作按钮（{n} 秒），先看看成绩单，不用急着点任何地方', en:'Action buttons unlock in {n}s — take a moment with your score sheet, no rush'},
+  race_review_wait: {cn:'查看答案解析（{n}）', en:'Review answers ({n})'},
+  race_lock_done: {cn:'交卷成功', en:'Submitted'},
   race_pool_done: {cn:'题目已答完', en:'All questions answered'},
   race_exit_confirm: {cn:'现在退出本次成绩将不计入，确定退出吗？', en:'Leaving now will discard this attempt. Continue?'},
   race_loading: {cn:'正在载入排行榜…', en:'Loading leaderboard…'},
@@ -8218,17 +8220,27 @@ function raceEnd(reason) {
 var RACE_RESULT_LOCK_MS = 3000;
 function raceArmResultLock() {
   state.raceLockUntil = Date.now() + RACE_RESULT_LOCK_MS;
+  state.raceResultRevealed = false;
   if (state.raceLockTick) { clearInterval(state.raceLockTick); state.raceLockTick = null; }
   state.raceLockTick = setInterval(function () {
     var leftMs = (state.raceLockUntil || 0) - Date.now();
     var el = document.getElementById('raceLockMsg');
     if (leftMs > 0) {
-      if (el) el.textContent = t('race_result_lock_hint').replace('{n}', String(Math.ceil(leftMs / 1000)));
+      // 倒计时写在灰色按钮的文字里（查看答案解析（3）→（2）→（1））
+      if (el) el.textContent = t('race_review_wait').replace('{n}', String(Math.ceil(leftMs / 1000)));
       return;
     }
     clearInterval(state.raceLockTick); state.raceLockTick = null;
+    // 到点：按钮从灰变亮（整页重画，滚动位置不变），学员点了才展开解析
     if (state.currentPage === 'raceResult' && typeof render === 'function') render();
   }, 250);
+}
+// 保护期到点后点「查看答案解析」→ 展开操作按钮 + 逐题回顾
+function raceRevealResult() {
+  state.raceLockUntil = 0;
+  state.raceResultRevealed = true;
+  if (state.raceLockTick) { clearInterval(state.raceLockTick); state.raceLockTick = null; }
+  if (typeof render === 'function') render();
 }
 function raceSubmitScore() {
   var r = state.race; if (!r || !r.conf) return Promise.resolve(false);
@@ -9160,8 +9172,65 @@ function renderRaceResult() {
   var r = state.race;
   if (!r) return '<div class="page"></div>';
   var acc = r.answered ? Math.round(r.correct / r.answered * 1000) / 10 : 0;
-  var html = renderAppHeader({ title: '🏁 ' + t('race_title'), subtitle: raceSecIcon(r.section || 'all') + ' ' + raceSecName(r.section || 'all') + ' · ' + (r.endReason === 'timeout' ? t('race_time_up') : t('race_pool_done')), showBack: false });
+  // 锁定中大横幅会写「时间到」，页头小字就不重复了，只留板块名
+  var lockNow = ((state.raceLockUntil || 0) - Date.now() > 0 || !state.raceResultRevealed);
+  var html = renderAppHeader({ title: '🏁 ' + t('race_title'), subtitle: raceSecIcon(r.section || 'all') + ' ' + raceSecName(r.section || 'all') + (lockNow ? '' : ' · ' + (r.endReason === 'timeout' ? t('race_time_up') : t('race_pool_done'))), showBack: false });
   html += '<div class="page">';
+  // 成绩保护期（2026-11-02 改版）：交卷后先给一张**大成绩单**（时间到横幅 + 姓名 /
+  // 板块 / 答题·答对·准确率 三格数据），页面上只有一颗「查看答案解析」按钮 ——
+  // 前 3 秒它是灰色不可点的（超时收卷时手指还悬在选项上，误触直接退出成绩页），
+  // 到点点亮，**点了才**展开操作按钮 + 逐题回顾。锁定分支必须放在旧分数卡之前
+  // 提前 return，否则旧版白卡 + 徽章会重复出现在大成绩单上面（截图实测踩过）。
+  var lockLeft = (state.raceLockUntil || 0) - Date.now();
+  if (lockLeft > 0 || !state.raceResultRevealed) {
+    var enL = state.lang === 'en';
+    var isTO = r.endReason === 'timeout';
+    // ① 大横幅：超时 = ⏰ 时间到；做完全部题 / 手动交卷 = 🎉 交卷成功
+    html += '<div style="text-align:center;padding:16px 0 2px;">';
+    html += '<div style="font-size:46px;line-height:1.1;">' + (isTO ? '⏰' : '🎉') + '</div>';
+    html += '<div style="font-size:26px;font-weight:800;letter-spacing:2px;color:' + (isTO ? '#c0392b' : '#27ae60') + ';margin-top:4px;">'
+      + (isTO ? t('race_time_up') : t('race_lock_done')) + '</div>';
+    html += '</div>';
+    // ② 大成绩单：深蓝底烫金字，铺满一整块
+    var myName = raceDisplayName();
+    var myDept = raceDeptName();
+    html += '<div class="q-card" style="text-align:center;padding:20px 14px 16px;margin-top:8px;background:linear-gradient(160deg,#16324f,#2f6797);border:none;">';
+    html += '<div style="font-size:12px;color:#a9c4dd;">' + escapeHtml((r.conf && r.conf.title) || t('race_title')) + '</div>';
+    html += '<div style="font-size:15px;font-weight:700;color:#fff;margin-top:2px;">' + raceSecIcon(r.section || 'all') + ' ' + escapeHtml(raceSecName(r.section || 'all')) + '</div>';
+    if (myName) html += '<div style="margin-top:12px;font-size:14px;color:#fff;">' + (enL ? 'Name' : '姓名') + ' · <b>' + escapeHtml(myName) + '</b></div>';
+    if (myDept) html += '<div style="font-size:12px;color:#a9c4dd;margin-top:2px;">' + escapeHtml(myDept) + '</div>';
+    html += '<div style="font-size:58px;font-weight:800;color:#ffd75e;line-height:1.2;margin-top:6px;text-shadow:0 2px 8px rgba(0,0,0,.25);">' + r.correct + '</div>';
+    html += '<div style="font-size:12px;color:#a9c4dd;">' + t('race_correct') + '</div>';
+    html += '<div style="display:flex;margin-top:14px;border-top:1px solid rgba(255,255,255,.18);padding-top:12px;">';
+    html += '<div style="flex:1;"><div style="font-size:20px;font-weight:700;color:#fff;">' + r.answered + '</div><div style="font-size:11px;color:#a9c4dd;margin-top:2px;">' + t('race_answered') + '</div></div>';
+    html += '<div style="flex:1;border-left:1px solid rgba(255,255,255,.18);"><div style="font-size:20px;font-weight:700;color:#fff;">' + r.correct + '</div><div style="font-size:11px;color:#a9c4dd;margin-top:2px;">' + t('race_correct') + '</div></div>';
+    html += '<div style="flex:1;border-left:1px solid rgba(255,255,255,.18);"><div style="font-size:20px;font-weight:700;color:#ffd75e;">' + acc + '%</div><div style="font-size:11px;color:#a9c4dd;margin-top:2px;">' + t('race_accuracy') + '</div></div>';
+    html += '</div>';
+    if (state.raceSyncState === 'fail') html += '<div style="color:#ffd0a0;font-size:12px;margin-top:10px;">⚠️ ' + t('race_submit_fail') + '</div>';
+    html += '</div>';
+    // ③ 徽章照样当场点亮
+    if (state.raceNewBadges && state.raceNewBadges.length) {
+      html += '<div class="q-card" style="text-align:center;background:#fff8e1;border:1px solid #f0b357;">';
+      html += '<div style="font-size:13px;font-weight:700;color:#8a5a00;">🏅 ' + t('race_badge_new') + '</div>';
+      for (var nb = 0; nb < state.raceNewBadges.length; nb++) {
+        var nb2 = state.raceNewBadges[nb];
+        html += '<div style="font-size:22px;margin-top:6px;">' + raceBadgeIcon(nb2) + '</div>';
+        html += '<div style="font-size:14px;font-weight:600;color:#8a5a00;">' + escapeHtml(raceBadgeName(nb2)) + '</div>';
+        html += '<div style="font-size:11px;color:#9a7b4f;margin-top:1px;">' + escapeHtml(raceBadgeDesc(nb2)) + '</div>';
+      }
+      html += '</div>';
+    }
+    // ④ 唯一的按钮：保护期内灰色禁用（倒计时写在按钮里），到点点亮，点击展开解析
+    if (lockLeft > 0) {
+      html += '<button id="raceLockBtn" disabled style="display:block;width:100%;margin-top:14px;padding:13px;border:none;border-radius:12px;'
+        + 'background:#c7d0d9;color:#828e99;font-size:15px;font-weight:600;cursor:default;">📖 '
+        + '<span id="raceLockMsg">' + t('race_review_wait').replace('{n}', String(Math.ceil(lockLeft / 1000))) + '</span></button>';
+    } else {
+      html += '<button class="action-btn primary" style="display:block;width:100%;margin-top:14px;" onclick="raceRevealResult()">📖 ' + t('race_review') + '</button>';
+    }
+    html += '</div>';
+    return html;
+  }
   html += '<div class="q-card" style="text-align:center;">';
   html += '<div style="font-size:40px;font-weight:700;color:#1a3a5c;">' + r.correct + '</div>';
   html += '<div style="color:#666;font-size:13px;">' + t('race_correct') + ' · ' + t('race_answered') + ' ' + r.answered + ' · ' + t('race_accuracy') + ' ' + acc + '%</div>';
@@ -9178,18 +9247,6 @@ function renderRaceResult() {
       html += '<div style="font-size:11px;color:#9a7b4f;margin-top:1px;">' + escapeHtml(raceBadgeDesc(nb2)) + '</div>';
     }
     html += '</div>';
-  }
-  // 成绩保护期：交卷瞬间（尤其超时自动收卷时学员手指还悬在选项上）不渲染任何
-  // 按钮，只给成绩单 + 一条"成绩已保存"的倒计时提示，到点整页重画补上按钮。
-  // 这 3 秒里页面没有任何可点的东西，误触从根上被挡掉。
-  if ((state.raceLockUntil || 0) > Date.now()) {
-    html += '<div class="q-card" style="text-align:center;background:#eef4fa;border:1px solid #c9d9ea;">';
-    html += '<div style="font-size:14px;font-weight:700;color:#1a3a5c;">' + t('race_result_lock') + '</div>';
-    html += '<div id="raceLockMsg" style="font-size:12px;color:#667;margin-top:4px;line-height:1.5;">'
-      + t('race_result_lock_hint').replace('{n}', String(Math.ceil((state.raceLockUntil - Date.now()) / 1000))) + '</div>';
-    html += '</div>';
-    html += '</div>';
-    return html;
   }
   html += '<button class="action-btn primary" style="width:100%;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
   if (raceStateOf(raceConfOf()) === 'open') {
