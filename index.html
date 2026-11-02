@@ -9191,20 +9191,20 @@ function renderRaceResult() {
     html += '<div style="font-size:26px;font-weight:800;letter-spacing:2px;color:' + (isTO ? '#c0392b' : '#27ae60') + ';margin-top:4px;">'
       + (isTO ? t('race_time_up') : t('race_lock_done')) + '</div>';
     html += '</div>';
-    // ② 大成绩单：深蓝底烫金字，铺满一整块
+    // ② 大成绩单：丽思蓝渐变（同管理端云按钮 #1f3a5f→#2e5984）+ 品牌金细边/金色数字
     var myName = raceDisplayName();
     var myDept = raceDeptName();
-    html += '<div class="q-card" style="text-align:center;padding:20px 14px 16px;margin-top:8px;background:linear-gradient(160deg,#16324f,#2f6797);border:none;">';
-    html += '<div style="font-size:12px;color:#a9c4dd;">' + escapeHtml((r.conf && r.conf.title) || t('race_title')) + '</div>';
+    html += '<div class="q-card" style="text-align:center;padding:20px 14px 16px;margin-top:8px;background:linear-gradient(160deg,#1f3a5f 0%,#2e5984 100%);border:1px solid rgba(195,165,94,.42);box-shadow:0 6px 18px rgba(14,37,69,.18);">';
+    html += '<div style="font-size:12px;color:#c2d5e8;">' + escapeHtml((r.conf && r.conf.title) || t('race_title')) + '</div>';
     html += '<div style="font-size:15px;font-weight:700;color:#fff;margin-top:2px;">' + raceSecIcon(r.section || 'all') + ' ' + escapeHtml(raceSecName(r.section || 'all')) + '</div>';
     if (myName) html += '<div style="margin-top:12px;font-size:14px;color:#fff;">' + (enL ? 'Name' : '姓名') + ' · <b>' + escapeHtml(myName) + '</b></div>';
-    if (myDept) html += '<div style="font-size:12px;color:#a9c4dd;margin-top:2px;">' + escapeHtml(myDept) + '</div>';
-    html += '<div style="font-size:58px;font-weight:800;color:#ffd75e;line-height:1.2;margin-top:6px;text-shadow:0 2px 8px rgba(0,0,0,.25);">' + r.correct + '</div>';
-    html += '<div style="font-size:12px;color:#a9c4dd;">' + t('race_correct') + '</div>';
-    html += '<div style="display:flex;margin-top:14px;border-top:1px solid rgba(255,255,255,.18);padding-top:12px;">';
-    html += '<div style="flex:1;"><div style="font-size:20px;font-weight:700;color:#fff;">' + r.answered + '</div><div style="font-size:11px;color:#a9c4dd;margin-top:2px;">' + t('race_answered') + '</div></div>';
-    html += '<div style="flex:1;border-left:1px solid rgba(255,255,255,.18);"><div style="font-size:20px;font-weight:700;color:#fff;">' + r.correct + '</div><div style="font-size:11px;color:#a9c4dd;margin-top:2px;">' + t('race_correct') + '</div></div>';
-    html += '<div style="flex:1;border-left:1px solid rgba(255,255,255,.18);"><div style="font-size:20px;font-weight:700;color:#ffd75e;">' + acc + '%</div><div style="font-size:11px;color:#a9c4dd;margin-top:2px;">' + t('race_accuracy') + '</div></div>';
+    if (myDept) html += '<div style="font-size:12px;color:#c2d5e8;margin-top:2px;">' + escapeHtml(myDept) + '</div>';
+    html += '<div style="font-size:58px;font-weight:800;color:#e2c68b;line-height:1.2;margin-top:6px;text-shadow:0 2px 8px rgba(0,0,0,.25);">' + r.correct + '</div>';
+    html += '<div style="font-size:12px;color:#c2d5e8;">' + t('race_correct') + '</div>';
+    html += '<div style="display:flex;margin-top:14px;border-top:1px solid rgba(195,165,94,.35);padding-top:12px;">';
+    html += '<div style="flex:1;"><div style="font-size:20px;font-weight:700;color:#fff;">' + r.answered + '</div><div style="font-size:11px;color:#c2d5e8;margin-top:2px;">' + t('race_answered') + '</div></div>';
+    html += '<div style="flex:1;border-left:1px solid rgba(195,165,94,.28);"><div style="font-size:20px;font-weight:700;color:#fff;">' + r.correct + '</div><div style="font-size:11px;color:#c2d5e8;margin-top:2px;">' + t('race_correct') + '</div></div>';
+    html += '<div style="flex:1;border-left:1px solid rgba(195,165,94,.28);"><div style="font-size:20px;font-weight:700;color:#e2c68b;">' + acc + '%</div><div style="font-size:11px;color:#c2d5e8;margin-top:2px;">' + t('race_accuracy') + '</div></div>';
     html += '</div>';
     if (state.raceSyncState === 'fail') html += '<div style="color:#ffd0a0;font-size:12px;margin-top:10px;">⚠️ ' + t('race_submit_fail') + '</div>';
     html += '</div>';
