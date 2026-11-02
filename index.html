@@ -4382,6 +4382,12 @@ var I18N = {
   wrong_empty: {cn:'暂无错题，继续保持！', en:'No wrong answers. Great job!'},
   wrong_clear_confirm: {cn:'确定要清空所有错题吗？此操作不可恢复。', en:'Clear all wrong answers? This cannot be undone.'},
   wrong_none_alert: {cn:'暂无错题！', en:'No wrong answers!'},
+  // Home stat cards → wrong-all / collected list
+  collected_title: {cn:'我的收藏', en:'Saved Questions'},
+  collected_empty: {cn:'暂无收藏题目。练习时点击 ☆ 即可收藏本题。', en:'No saved questions yet. Tap ☆ while practicing.'},
+  remove_one: {cn:'移除', en:'Remove'},
+  wrong_remove_confirm: {cn:'确定要将该题从错题本移除吗？', en:'Remove this question from your wrong-answer list?'},
+  fav_remove_confirm: {cn:'确定要将该题从收藏中移除吗？', en:'Remove this question from your saved list?'},
   // Exam result
   result_title: {cn:'考试成绩', en:'Exam Result'},
   result_pass: {cn:'恭喜通过！', en:'Passed!'},
@@ -4427,6 +4433,10 @@ var I18N = {
   race_dept_avg: {cn:'人均答对', en:'avg correct'},
   race_dept_unknown: {cn:'未填写部门', en:'No department'},
   race_again: {cn:'再挑战一次', en:'Try again'},
+  // 三处「去酒店产品知识刷题」入口（排行榜/挑战主页/打卡日历），按语境各起一个名
+  race_study_board: {cn:'偷偷刷题，卷死他们', en:'Quiet grinding, big comeback'},
+  race_study_home: {cn:'热身完毕就开赛', en:'Warm up, then race!'},
+  race_study_cal: {cn:'复习完再战一场', en:'Brush up, then battle again'},
   race_confirm: {cn:'确认作答', en:'Confirm'},
   race_confirm_hint: {cn:'选好后点下方「确认作答」，确认后不能修改', en:'Tap Confirm below once you choose - it cannot be changed'},
   race_need_pick: {cn:'请先选择一个答案再确认', en:'Please choose an answer first'},
@@ -6974,8 +6984,8 @@ function renderHome() {
   
   html += '<div class="stats-summary">';
   html += '<div class="stat-card"><div class="num">'+totalQ+'</div><div class="label">'+t('home_total')+'</div></div>';
-  html += '<div class="stat-card"><div class="num" style="color:var(--danger)">'+totalWrong+'</div><div class="label">'+t('home_wrong')+'</div></div>';
-  html += '<div class="stat-card"><div class="num">'+state.collectedQuestions.length+'</div><div class="label">'+t('home_collected')+'</div></div>';
+  html += '<div class="stat-card" style="cursor:pointer;" onclick="navigate(\'wrongAll\')"><div class="num" style="color:var(--danger)">'+totalWrong+'</div><div class="label">'+t('home_wrong')+'</div></div>';
+  html += '<div class="stat-card" style="cursor:pointer;" onclick="navigate(\'collectedList\')"><div class="num">'+state.collectedQuestions.length+'</div><div class="label">'+t('home_collected')+'</div></div>';
   html += '</div>';
   
   for (var i=0; i<banks.length; i++) {
@@ -8757,6 +8767,8 @@ function renderRaceHome() {
   html += '<button class="action-btn secondary" style="flex:1;" onclick="raceOpenBoard()">🏆 ' + t('race_board') + '</button>';
   html += '<button class="action-btn secondary" style="flex:1;" onclick="raceOpenCalendar()">' + t('race_cal_open') + '</button>';
   html += '</div>';
+  // 页面最底部：参赛语境的考前热身入口，直达产品知识题库
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">📖 ' + t('race_study_home') + '</button>';
   html += '</div>';
   return html;
 }
@@ -9093,6 +9105,8 @@ function renderRaceCalendar() {
   html += raceBadgeWallHtml(rec, curRid);
   // 看完日历顺手再来一局：一步回到挑战主页
   html += '<button class="action-btn primary" style="width:100%;margin-top:2px;" onclick="navigate(\'race\')">⚡ ' + t('race_cal_retry') + '</button>';
+  // 复盘语境：温故知新后再刷一遍产品知识题库
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">🔁 ' + t('race_study_cal') + '</button>';
   html += '</div>';
   return html;
 }
@@ -9484,6 +9498,8 @@ function renderRaceBoard() {
     var lbl = raceModeOf(raceConfOf()) === 'choice' ? t('race_go_pick') : t('race_start');
     html += '<button class="action-btn primary" style="width:100%;margin-top:12px;" onclick="raceAgain()">⚡ ' + lbl + '</button>';
   }
+  // 看完榜单顺手去产品知识题库刷题（榜单语境：想上榜就先刷题）
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">📚 ' + t('race_study_board') + '</button>';
   html += '</div>';
   return html;
 }
@@ -10866,12 +10882,149 @@ function renderWrongList() {
       var sectionDisplay = state.lang === 'en' ? (w.section_en || w.section || bankName) : (w.section || bankName);
       html += '<span>'+sectionDisplay+' · '+getTypeShort(w.type)+'</span>';
       html += '<span>'+new Date(w.timestamp).toLocaleDateString()+'</span>';
-      html += '</div></div>';
+      html += '</div>';
+      html += '<div style="text-align:right;margin-top:8px;"><button class="nav-btn secondary" style="font-size:12px;padding:4px 12px;" onclick="event.stopPropagation();removeFromWrong(\''+bankStateKey(bank)+'\',\''+id+'\')">🗑 '+t('remove_one')+'</button></div>';
+      html += '</div>';
     }
     html += '</div>';
   }
   html += '</div>';
   return html;
+}
+
+// ============ 错题汇总（跨题库）与收藏列表 (2026-11-02) ============
+// 首页「错题数 / 收藏数」统计卡点击进入；每条可点开该题练习，也可单独移除。
+function wrongBankOfKey(skey) {
+  return skey.indexOf('_kitchen') > 0 ? skey.replace('_kitchen', '') : skey;
+}
+function wrongBankLabel(skey) {
+  var bank = wrongBankOfKey(skey);
+  var name = getBankName(bank) || bank;
+  if (skey.indexOf('_kitchen') > 0) name += ' · ' + t('paper_kitchen_tag');
+  return name;
+}
+function openWrongFromKey(skey, qid) {
+  var bank = wrongBankOfKey(skey);
+  if (bank !== 'day21' && bank !== 'tsos' && bank !== 'manual') return;
+  state.currentBank = bank;
+  state.currentPaper = skey.indexOf('_kitchen') > 0 ? 'kitchen' : 'all';
+  var allQuestions = getBankQuestions(bank, 'all');
+  var idx = -1;
+  for (var i = 0; i < allQuestions.length; i++) { if (allQuestions[i].id === qid) { idx = i; break; } }
+  if (idx < 0) {
+    // 兜底：换另一个试卷版本找，再不行直接在全量题库数组里找
+    state.currentPaper = skey.indexOf('_kitchen') > 0 ? 'all' : 'kitchen';
+    allQuestions = getBankQuestions(bank, 'all');
+    for (var j = 0; j < allQuestions.length; j++) { if (allQuestions[j].id === qid) { idx = j; break; } }
+    if (idx < 0) {
+      state.currentPaper = 'all';
+      allQuestions = QUESTION_DATA[bank] || [];
+      for (var k = 0; k < allQuestions.length; k++) { if (allQuestions[k].id === qid) { idx = k; break; } }
+    }
+  }
+  if (idx < 0) return;
+  state.currentMode = 'practice';
+  state.questions = prepareQuestions(allQuestions);
+  state.currentIndex = idx;
+  state.selectedAnswers = {};
+  state.showAnswer = false;
+  navigate('question');
+}
+function removeFromWrong(skey, qid) {
+  if (!confirm(t('wrong_remove_confirm'))) return;
+  if (state.wrongAnswers[skey]) delete state.wrongAnswers[skey][qid];
+  saveState();
+  render();
+}
+function renderWrongAll() {
+  var rows = [];
+  var keys = Object.keys(state.wrongAnswers || {});
+  for (var ki = 0; ki < keys.length; ki++) {
+    var data = state.wrongAnswers[keys[ki]] || {};
+    var ids = Object.keys(data);
+    for (var ii = 0; ii < ids.length; ii++) {
+      rows.push({ skey: keys[ki], id: ids[ii], w: data[ids[ii]] });
+    }
+  }
+  rows.sort(function (a, b) { return (b.w.timestamp || 0) - (a.w.timestamp || 0); });
+  var html = renderAppHeader({ title: '❌ ' + t('wrong_title'), subtitle: rows.length + t('questions_unit') });
+  html += '<div class="page">';
+  if (rows.length === 0) {
+    html += '<div class="empty-state"><div class="icon">🎉</div><p>' + t('wrong_empty') + '</p></div>';
+  } else {
+    html += '<div class="wrong-list">';
+    for (var r = 0; r < rows.length; r++) {
+      var row = rows[r];
+      var q = findByIdAllBanks(row.id);
+      var preview = q ? qTextOf(q) : (row.w.question || '');
+      var sectionDisplay = state.lang === 'en' ? (row.w.section_en || row.w.section || '') : (row.w.section || '');
+      html += '<div class="wrong-item" onclick="openWrongFromKey(\'' + row.skey + '\',\'' + row.id + '\')">';
+      html += '<div class="q-preview">' + escapeHtml(preview ? preview.substring(0, 100) : '') + '</div>';
+      html += '<div class="q-meta">';
+      html += '<span>' + escapeHtml(wrongBankLabel(row.skey)) + (sectionDisplay ? ' · ' + escapeHtml(sectionDisplay) : '') + ' · ' + getTypeShort(row.w.type) + '</span>';
+      html += '<span>' + (row.w.timestamp ? new Date(row.w.timestamp).toLocaleDateString() : '') + '</span>';
+      html += '</div>';
+      html += '<div style="text-align:right;margin-top:8px;"><button class="nav-btn secondary" style="font-size:12px;padding:4px 12px;" onclick="event.stopPropagation();removeFromWrong(\'' + row.skey + '\',\'' + row.id + '\')">🗑 ' + t('remove_one') + '</button></div>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+function collectedBankOf(qid) {
+  var order = ['day21', 'tsos', 'manual'];
+  for (var i = 0; i < order.length; i++) {
+    var arr = QUESTION_DATA[order[i]] || [];
+    for (var j = 0; j < arr.length; j++) { if (arr[j].id === qid) return order[i]; }
+  }
+  return 'manual';
+}
+function removeFromCollected(qid) {
+  if (!confirm(t('fav_remove_confirm'))) return;
+  var pos = state.collectedQuestions.indexOf(qid);
+  if (pos >= 0) state.collectedQuestions.splice(pos, 1);
+  saveState();
+  render();
+}
+function renderCollectedList() {
+  var ids = state.collectedQuestions || [];
+  var html = renderAppHeader({ title: '⭐ ' + t('collected_title'), subtitle: ids.length + t('questions_unit') });
+  html += '<div class="page">';
+  if (ids.length === 0) {
+    html += '<div class="empty-state"><div class="icon">⭐</div><p>' + t('collected_empty') + '</p></div>';
+  } else {
+    html += '<div class="wrong-list">';
+    for (var i = 0; i < ids.length; i++) {
+      var qid = ids[i];
+      var q = findByIdAllBanks(qid);
+      html += '<div class="wrong-item" style="border-left-color:#e8b339;" onclick="openCollectedQuestion(\'' + qid + '\')">';
+      html += '<div class="q-preview">' + escapeHtml(q ? qTextOf(q).substring(0, 100) : qid) + '</div>';
+      html += '<div class="q-meta">';
+      html += '<span>' + escapeHtml(getBankName(collectedBankOf(qid)) || '') + (q ? ' · ' + getTypeShort(q.type) : '') + '</span>';
+      html += '</div>';
+      html += '<div style="text-align:right;margin-top:8px;"><button class="nav-btn secondary" style="font-size:12px;padding:4px 12px;" onclick="event.stopPropagation();removeFromCollected(\'' + qid + '\')">🗑 ' + t('remove_one') + '</button></div>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+function openCollectedQuestion(qid) {
+  var bank = collectedBankOf(qid);
+  var allQuestions = QUESTION_DATA[bank] || [];
+  var idx = -1;
+  for (var i = 0; i < allQuestions.length; i++) { if (allQuestions[i].id === qid) { idx = i; break; } }
+  if (idx < 0) return;
+  state.currentBank = bank;
+  state.currentPaper = 'all';
+  state.currentMode = 'practice';
+  state.questions = prepareQuestions(allQuestions);
+  state.currentIndex = idx;
+  state.selectedAnswers = {};
+  state.showAnswer = false;
+  navigate('question');
 }
 
 function renderExamResult() {
@@ -18381,6 +18534,8 @@ function render() {
     case 'question': app.innerHTML = renderQuestion(); break;
     case 'search': app.innerHTML = renderSearch(); break;
     case 'wrongList': app.innerHTML = renderWrongList(); break;
+    case 'wrongAll': app.innerHTML = renderWrongAll(); break;
+    case 'collectedList': app.innerHTML = renderCollectedList(); break;
     case 'examResult': app.innerHTML = renderExamResult(); break;
     case 'examReplay': app.innerHTML = renderExamReplay(); break;
     case 'examHistory': app.innerHTML = renderExamHistory(); break;
