@@ -41,8 +41,9 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .app-header .header-logo { height:22px; width:auto; display:block; margin:0 auto 6px; opacity:0.9; }
 .back-btn { position:absolute; left:12px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.5); border:1px solid rgba(0,0,0,0.08); color:var(--primary); width:36px; height:36px; border-radius:50%; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 
-/* 统一学员端顶栏：左侧「← 返回上一层」，右侧 语言切换 + 🏠 一键回首页 */
-.app-header .header-right { position:absolute; right:12px; top:50%; transform:translateY(-50%); display:flex; align-items:center; gap:8px; }
+/* 统一学员端顶栏：左侧「← 返回上一层」，右侧 语言切换 + 🏠 一键回首页。
+   Batch-4d：改为上下堆叠、右对齐——横向平铺太宽，会压住 banner 居中标题。 */
+.app-header .header-right { position:absolute; right:12px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
 .back-btn.wide { width:auto; height:34px; padding:0 12px 0 8px; border-radius:17px; gap:3px; font-size:16px; }
 .back-btn.wide .back-label, .home-btn .back-label { font-size:13px; font-weight:600; letter-spacing:0; margin-left:3px; }
 .home-btn { background:rgba(255,255,255,0.5); border:1px solid rgba(0,0,0,0.08); color:var(--primary); height:34px; min-width:34px; padding:0 10px; border-radius:17px; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
