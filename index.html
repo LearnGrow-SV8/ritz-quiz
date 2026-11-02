@@ -9191,11 +9191,11 @@ function renderRaceResult() {
     html += '<div style="font-size:26px;font-weight:800;letter-spacing:2px;color:' + (isTO ? '#c62828' : '#2e7d32') + ';margin-top:4px;">'
       + (isTO ? t('race_time_up') : t('race_lock_done')) + '</div>';
     html += '</div>';
-    // ② 大成绩单：丽思蓝 RGB(195,215,238)=#C3D6EE 渐变 + 纯黑文字（集团配色规范：
-    // 品牌蓝只搭纯黑/纯白，不用金色）。浅蓝底 + 黑字，在白色页面上才协调。
+    // ② 大成绩单：回忆蓝 RGB(195,214,238)=--primary-light 渐变 + 纯黑文字。
+    // 集团规范：品牌蓝只搭纯黑/纯白，不用金色。颜色一律走 CSS 变量，别再写死色值。
     var myName = raceDisplayName();
     var myDept = raceDeptName();
-    html += '<div class="q-card" style="text-align:center;padding:20px 14px 16px;margin-top:8px;background:linear-gradient(160deg,#dce8f6 0%,#c3d6ee 100%);border:1px solid rgba(0,0,0,.06);box-shadow:0 6px 18px rgba(14,37,69,.10);">';
+    html += '<div class="q-card" style="text-align:center;padding:20px 14px 16px;margin-top:8px;background:linear-gradient(160deg,var(--primary-soft) 0%,var(--primary-light) 100%);border:1px solid rgba(0,0,0,.06);box-shadow:0 6px 18px rgba(14,37,69,.10);">';
     html += '<div style="font-size:12px;color:rgba(0,0,0,.6);">' + escapeHtml((r.conf && r.conf.title) || t('race_title')) + '</div>';
     html += '<div style="font-size:15px;font-weight:700;color:#000;margin-top:2px;">' + raceSecIcon(r.section || 'all') + ' ' + escapeHtml(raceSecName(r.section || 'all')) + '</div>';
     if (myName) html += '<div style="margin-top:12px;font-size:14px;color:#000;">' + (enL ? 'Name' : '姓名') + ' · <b>' + escapeHtml(myName) + '</b></div>';
