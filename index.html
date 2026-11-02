@@ -16620,8 +16620,7 @@ function renderAdminPaper() {
     html += '</div>';
   }
   html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">';
-  html += '<button type="button" class="admin-cloud-btn" style="background:var(--bg-secondary);color:var(--text);" onclick="adminExportPaperJSON(\'' + escapeHtml(paperKey) + '\')">\ud83d\udce5 ' +
-    (state.lang === 'en' ? 'Export this paper as JSON' : '\u5bfc\u51fa\u6b64\u8bd5\u5377\u4e3a JSON') + '</button>';
+  // Batch-4c: JSON 导出按钮已按用户要求移除（用不上跨设备导入场景），只留 Word 导出。
   // Batch-4: Word 版试卷导出——题干/选项/答案/解析全量可读，用于打印和审校。
   html += '<button type="button" class="admin-cloud-btn" style="background:var(--primary);color:#fff;" onclick="adminExportPaperWord(\'' + escapeHtml(paperKey) + '\')">\ud83d\udcc4 ' +
     (state.lang === 'en' ? 'Export as Word' : '\u5bfc\u51fa Word \u8bd5\u5377') + '</button>';
@@ -16825,67 +16824,6 @@ function adminPaperStats(paperKey) {
   return { total: refs.length, byType: byType, byDept: byDept, pointsByType: pointsByType, totalPts: totalPts };
 }
 
-// ===== Stage 14 / Batch 5 — per-paper JSON export ==========================
-// Downloads just this paper's full question set + the rest of the bank so
-// another trainer can re-import the same paper on their own device without
-// needing to clone the whole question bank. Format mirrors adminGetData() so
-// adminImportPaperJSON() (future) can ingest it directly.
-function adminExportPaperJSON(paperKey) {
-  paperKey = paperKey || adminState.paper;
-  if (!paperKey) return adminAlert(
-    state.lang === 'en' ? 'No paper selected' : '未选择试卷',
-    state.lang === 'en' ? 'Open a paper first, then export.' : '请先打开一个试卷，再导出。'
-  );
-  var refs = ((QUESTION_DATA.papers || {})[paperKey]) || [];
-  if (!refs.length) return adminAlert(
-    state.lang === 'en' ? 'Paper is empty' : '试卷为空',
-    state.lang === 'en' ? 'There are no questions to export.' : '此试卷没有题目可导出。'
-  );
-  var gradingKey = gradingKeyOf(paperKey);
-  var g = paperGradingSnapshot(gradingKey);
-  // Walk the refs and emit full question objects, falling back to a deleted-
-  // marker for missing ones so the export is self-describing.
-  var outQs = [];
-  var seenIds = {};
-  for (var i = 0; i < refs.length; i++) {
-    var q = adminPaperRefQuestion(refs[i]);
-    var qid = refs[i].ref || refs[i].id || '';
-    if (q) {
-      // Clone + strip any non-serialisable fields (defensive — none today,
-      // but if Vue-style reactivity proxies slip in we want a clean JSON).
-      var clone = JSON.parse(JSON.stringify(q));
-      clone._paperPoints = gradePointsForQ(q, g);
-      outQs.push(clone);
-    } else {
-      outQs.push({ id: qid, _deleted: true, _paperPoints: (g.qov && g.qov[qid]) || 0 });
-    }
-    seenIds[qid] = true;
-  }
-  var payload = {
-    t: 'paper-export',
-    paperKey: paperKey,
-    gradingKey: gradingKey,
-    exportedAt: new Date().toISOString(),
-    exportedBy: 'admin',
-    grading: { ppq: g.ppq, ppBlank: g.ppBlank, pass: g.pass },
-    questions: outQs
-  };
-  var json = JSON.stringify(payload, null, 2);
-  var blob = new Blob([json], { type: 'application/json' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  var stamp = new Date().toISOString().slice(0, 10);
-  a.download = 'paper_' + paperKey + '_' + stamp + '.json';
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(function () {
-    if (a.parentNode) a.parentNode.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 100);
-  return Promise.resolve();  // kept async to match adminAlert signature for call-site symmetry
-}
 
 // ===== Batch-4: Word 试卷导出 (.doc，HTML 载荷，Word / WPS 均可直接打开) =====
 // 按卷面顺序输出：题号、题型、题干（中英）、全部选项（正确项 ✓ 红色标注）、
