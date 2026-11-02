@@ -4514,6 +4514,9 @@ var I18N = {
   race_new_season_hint: {cn:'勾选后发布 = 开新一季：个人总榜、板块榜、部门榜、打卡天数榜全部从零开始，历史最佳榜保留。只调整本期设置（时间/板块/时长等）则不要勾选，榜单不受影响。', en:'Tick to start a new season: the overall / section / department / check-in-days boards reset to zero, while the all-time best board is kept. Leave unticked to only update this round\'s settings — the board stays as is.'},
   race_new_season_confirm: {cn:'确认开启新一季赛事？\n\n本届榜单（个人总榜 / 板块榜 / 部门榜 / 打卡天数榜）将清空重新开始；历史最佳榜保留。', en:'Start a new season?\n\nThe current boards (overall / section / department / check-in days) will reset and start from zero; the all-time best board is kept.'},
   race_season_id_label: {cn:'本届 ID', en:'Season ID'},
+  race_badge_tap_hint: {cn:'👆 点名字旁的徽章可以查看它的含义', en:'Tap a badge to see what it means'},
+  race_badge_promo: {cn:'在限时答题赛里坚持打卡就能拿到，快来挑战！', en:'Keep checking in during the Speed Quiz to earn it — give it a go!'},
+  race_badge_ok: {cn:'知道了', en:'Got it'},
   race_cloud_fail: {cn:'❌ 没有同步到云端，学员端看不到这场答题赛。请检查网络后重新点「发布」。', en:'❌ Not synced to the cloud — student devices cannot see this race. Check the network, then press Publish again.'},
   race_syncing: {cn:'正在从云端重新同步…', en:'Re-syncing from the cloud…'},
   race_pull_fail: {cn:'暂时连不上服务器，请检查网络后点「重新同步」', en:'Cannot reach the server — check your network and tap Re-sync'},
@@ -8567,6 +8570,30 @@ function sbSnapshotRecordList(res) {
     return !(s && s.superseded);
   });
 }
+// 排行榜只保留在职员工（2026-11-02）：有效工号名单已启用（非空）时，名单外的
+// 快照一律不上榜；黑名单里的也永远不上榜。名单为空 = 管理端还没启用名单，
+// 按 fail-open 放行 —— 与登录门禁 isEmpBlocked 的口径一致，避免名单没配就把榜清空。
+// 工号取快照 snap.emp（dashEmpNoOf 统一入口），取不到再从行键 'e123456' 剥出数字；
+// 两者都没有的行（极老数据）放行，不误伤。
+function raceBoardRosterOk(raw) {
+  var snap = (raw && raw.snap) || {};
+  var key = String((raw && (raw.akey || raw.key || raw.phone)) || '');
+  var emp = normEmpNo(dashEmpNoOf(snap, key));
+  if (!emp && /^e\d+$/i.test(key)) emp = normEmpNo(key.slice(1));
+  if (!emp) return true;
+  if (typeof isEmpBlacklisted === 'function' && isEmpBlacklisted(emp)) return false;
+  if (typeof isEmpNotInRoster === 'function' && isEmpNotInRoster(emp)) return false;
+  return true;
+}
+function raceBoardRosterFilter(list) {
+  list = list || [];
+  var out = [];
+  for (var i = 0; i < list.length; i++) {
+    if (!raceBoardRosterOk(list[i])) continue;
+    out.push(list[i]);
+  }
+  return out;
+}
 // quiet = 静默自愈：失败时不改状态位、不显示"正在载入"，成功才落数据，
 // 这样"看不到排行榜"的错误提示不会被一次失败的重试冲掉。
 function raceFetchBoard(force, quiet) {
@@ -8583,7 +8610,10 @@ function raceFetchBoard(force, quiet) {
   if (!quiet) state.raceBoardState = 'loading';
   return sbListSnapshots(0, true).then(function (res) {
     state.raceBoardFetching = false;
-    var rows = sbSnapshotRecordList(res);
+    // 在 supabased/黑名单过滤之后再过一道「在职员工」过滤：从有效工号清除的
+    // 账号、名单外的工号都不再上榜（2026-11-02）。四张榜都从 state.raceBoard
+    // 取数，在这里过滤一次全部生效。
+    var rows = raceBoardRosterFilter(sbSnapshotRecordList(res));
     state.raceBoard = rows;
     state.raceBoardTs = Date.now();
     state.raceBoardState = 'ready';
@@ -8766,8 +8796,34 @@ function raceMonthDaysOf(rec, rid, month) {
   return n;
 }
 // 一枚徽章的展示卡片：解锁了金色渐变 + 达成日 + 「×几期」，没解锁灰色 + 进度
-function raceBadgeChipHtml(def, got, date, prog, count) {
-  if (def && !def.rule && def.id) def = raceBadgeById(def.id) || def;
+// 排行榜点徽章 → 弹出这枚徽章的含义（图标 / 名字 / 达成条件），起宣传作用。
+// 纯展示、不写任何状态：点「知道了」或遮罩即关。复用 confirm-overlay 的样式，
+// 不走 render()，避免弹窗把榜单滚动位置顶回去。
+function raceBadgeInfoShow(rawId) {
+  var id = '';
+  try { id = decodeURIComponent(String(rawId == null ? '' : rawId)); } catch (e) { id = String(rawId || ''); }
+  var def = raceBadgeById(id);
+  if (!def || typeof document === 'undefined' || !document.body || !document.body.appendChild) return;
+  var en = state.lang === 'en';
+  var c1 = def.c1 || '#ffcf6b', c2 = def.c2 || '#d99a00';
+  var overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML =
+    '<div class="confirm-box" style="max-width:320px;text-align:center;">' +
+      '<div style="width:64px;height:64px;margin:4px auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;line-height:1;background:linear-gradient(135deg,' + c1 + ',' + c2 + ');box-shadow:0 2px 8px rgba(200,140,0,.35);">' + raceBadgeIcon(def) + '</div>' +
+      '<div class="confirm-title" style="margin-bottom:4px;">' + escapeHtml(raceBadgeName(def)) + '</div>' +
+      '<div class="confirm-body" style="text-align:center;">' + escapeHtml(raceBadgeDesc(def)) + '</div>' +
+      '<div style="font-size:11.5px;color:#1a3a5c;background:#eef4fa;border-radius:8px;padding:7px 10px;margin-top:10px;line-height:1.5;">' + t('race_badge_promo') + '</div>' +
+      '<div class="confirm-actions"><button class="confirm-btn primary" data-act="ok">' + t('race_badge_ok') + '</button></div>' +
+    '</div>';
+  function close() {
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  }
+  overlay.querySelector('[data-act="ok"]').onclick = close;
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+  document.body.appendChild(overlay);
+}
+function raceBadgeChipHtml(def, got, date, prog, count) {  if (def && !def.rule && def.id) def = raceBadgeById(def.id) || def;
   var d = def || {};
   var c1 = got ? (d.c1 || '#ffcf6b') : '#eef1f3';
   var c2 = got ? (d.c2 || '#d99a00') : '#d5dbe0';
@@ -9150,6 +9206,19 @@ function raceBoardScopeHint(tab) {
 }
 function renderRaceBoard() {
   var tab = state.raceBoardTab || 'period';
+  // 名单新鲜度：管理员刚把某人移出有效工号，这台设备的排行榜要尽快跟上。
+  // 60 s 节流拉一次名单；名单真的变了就清榜单缓存重拉重画。
+  if (Date.now() - (state.raceRosterAskedAt || 0) > 60000) {
+    state.raceRosterAskedAt = Date.now();
+    try {
+      refreshRoster().then(function (changed) {
+        if (changed && state.currentPage === 'raceBoard' && typeof render === 'function') {
+          state.raceBoardTs = 0;
+          render();
+        }
+      });
+    } catch (eR) {}
+  }
   var html = renderAppHeader({ title: '🏆 ' + t('race_board'), subtitle: raceConfOf() ? (raceConfOf().title || '') : '' });
   html += '<div class="page">';
   // 每次进页面都保证有一份数据（15 s 节流）。以前只有点「排行榜」按钮时才拉，
@@ -9172,7 +9241,8 @@ function renderRaceBoard() {
   html += '<button class="action-btn ' + (tab === 'dept' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'dept\';render()">' + t('race_board_dept') + '</button>';
   html += '<button class="action-btn ' + (tab === 'best' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'best\';render()">' + t('race_board_best') + '</button>';
   html += '</div>';
-  html += '<div style="font-size:12px;color:#999;line-height:1.5;margin:0 0 10px;">' + raceBoardScopeHint(tab) + '</div>';
+  html += '<div style="font-size:12px;color:#999;line-height:1.5;margin:0 0 10px;">' + raceBoardScopeHint(tab)
+    + (isDeptTab ? '' : '<br><span style="color:#b7791f;">' + t('race_badge_tap_hint') + '</span>') + '</div>';
   var sec = state.raceBoardSec || '';
   // 打卡天数榜与板块榜平行，放在「全部板块总榜」左边 —— 位置显眼，但默认选中的
   // 仍是全部板块总榜（raceOpenBoard 里重置），不喧宾夺主。
@@ -9287,7 +9357,8 @@ function renderRaceBoard() {
         for (var bx = 0; bx < rw.badges.length; bx++) if (rw.badges[bx].id === myBadge.id) myBCount++;
       }
       var bdgTag = myBadge
-        ? ' <span style="display:inline-block;vertical-align:1px;margin-left:5px;padding:1px 7px;border-radius:9px;'
+        ? ' <span onclick="raceBadgeInfoShow(\'' + encodeURIComponent(myBadge.id) + '\')" title="' + escapeHtml(raceBadgeName(myBadge)) + '"'
+          + ' style="display:inline-block;vertical-align:1px;margin-left:5px;padding:1px 7px;border-radius:9px;cursor:pointer;'
           + 'background:linear-gradient(135deg,' + (myBadge.def.c1 || '#ffcf6b') + ',' + (myBadge.def.c2 || '#d99a00') + ');'
           + 'color:#fff;font-size:10.5px;font-weight:700;text-shadow:0 1px 1px rgba(0,0,0,.18);">'
           + raceBadgeIcon(myBadge) + ' ' + escapeHtml(raceBadgeName(myBadge))
@@ -9797,6 +9868,8 @@ function adminRaceExport() {
   sbListSnapshots(0, true).then(function (res) {
     // sbListSnapshots 返回 {records:[…]}，不是数组 —— 直接当数组遍历会永远导出 0 条。
     var rows = (typeof sbSnapshotRecordList === 'function') ? sbSnapshotRecordList(res) : [];
+    // 与学员端排行榜同口径：名单外 / 黑名单的工号不导出（raceBoardRosterFilter）。
+    rows = raceBoardRosterFilter(rows);
     if (!rows.length) { alert(t('race_admin_no_scores')); return; }
     var rid = c.id;
     var isEn = state.lang === 'en';
