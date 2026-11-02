@@ -16568,26 +16568,14 @@ function renderAdminPaper() {
   html += '</div>';
 
 
-  // ===== Stage 14 / Batch 5 — paper statistics + continuity card ===========
-  // Sits next to paperGradingCard so the admin sees question mix + dept mix
-  // before scrolling the long list. Cheap to recompute (refs < 100).
+  // ===== Stage 14 / Batch 5 — paper statistics card ========================
+  // Batch-4 修订：「题号缺口」警告已移除——它检查的是题库全局序号（产品知识题
+  // 是 200~505 这类编号），而学员看到的是卷面顺序 1..N，永远连续，该警告对试卷
+  // 纯属误报（优质服务厨房卷报 289 处缺口即此误报）。「按部门」同步改为「按板块」。
   var stats = adminPaperStats(paperKey);
-  var continuity = adminCheckPaperContinuity(paperKey);
   html += '<div class="admin-bank-card" id="paperStatsCard" data-paper-key="' + escapeHtml(paperKey) + '">';
   html += '<h3 style="display:flex;align-items:center;justify-content:space-between;">';
   html += '<span>\ud83d\udcca ' + (state.lang === 'en' ? 'Paper statistics' : '\u8bd5\u5377\u7edf\u8ba1') + '</span>';
-  if (!continuity.ok) {
-    html += '<span style="font-size:11px;font-weight:500;color:var(--danger-deep, #b3261e);background:var(--danger-soft, #fdecea);padding:2px 10px;border-radius:10px;">\u26a0\ufe0f ' +
-      (state.lang === 'en'
-        ? ('Numbering: ' + continuity.gaps.length + ' gap' + (continuity.gaps.length === 1 ? '' : 's') + (continuity.duplicates.length ? ', ' + continuity.duplicates.length + ' dup' : ''))
-        : ('\u9898\u53f7\uff1a' + continuity.gaps.length + ' \u5904\u7f3a\u53e3' + (continuity.duplicates.length ? '\uff0c' + continuity.duplicates.length + ' \u5904\u91cd\u590d' : ''))) +
-      '</span>';
-  } else if (continuity.missingNumber > 0) {
-    html += '<span style="font-size:11px;font-weight:500;color:#92400e;background:#fef3c7;padding:2px 10px;border-radius:10px;">' +
-      (state.lang === 'en'
-        ? ('Numbering uses index fallback for ' + continuity.missingNumber + ' legacy question' + (continuity.missingNumber === 1 ? '' : 's'))
-        : ('\u9898\u53f7\u7f3a\u5931 ' + continuity.missingNumber + ' \u9053\uff0c\u5df2\u6309\u4f4d\u7f6e\u514c\u5e95\u663e\u793a')) + '</span>';
-  }
   html += '</h3>';
   var typeOrder = ['single', 'multiple', 'judge', 'fill', 'essay'];
   var typeLabels = state.lang === 'en'
@@ -16613,7 +16601,7 @@ function renderAdminPaper() {
   var deptKeys = Object.keys(stats.byDept).sort(function (a, b) { return stats.byDept[b] - stats.byDept[a]; });
   if (deptKeys.length) {
     html += '<div style="margin-top:10px;font-size:12px;color:var(--text-light);">' +
-      (state.lang === 'en' ? 'By department:' : '\u6309\u90e8\u95e8\uff1a') + '</div>';
+      (state.lang === 'en' ? 'By section:' : '\u6309\u677f\u5757\uff1a') + '</div>';
     html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">';
     var shownDepts = deptKeys.slice(0, 6);
     for (var di = 0; di < shownDepts.length; di++) {
@@ -16630,18 +16618,6 @@ function renderAdminPaper() {
         (state.lang === 'en' ? '+' + (deptKeys.length - 6) + ' more' : '\u5176\u4f59 ' + (deptKeys.length - 6) + ' \u4e2a') + '</span>';
     }
     html += '</div>';
-  }
-  if (!continuity.ok) {
-    var bits = [];
-    if (continuity.gaps.length) {
-      bits.push((state.lang === 'en' ? 'Issue: ' : '\u7f3a\u5931 ') + continuity.gaps.slice(0, 6).join(', ') + (continuity.gaps.length > 6 ? (state.lang === 'en' ? ' \u2026' : ' \u2026') : ''));
-    }
-    if (continuity.duplicates.length) {
-      bits.push((state.lang === 'en' ? 'Duplicates: ' : '\u91cd\u590d ') + continuity.duplicates.slice(0, 6).join(', ') + (continuity.duplicates.length > 6 ? (state.lang === 'en' ? ' \u2026' : ' \u2026') : ''));
-    }
-    if (bits.length) {
-      html += '<div style="margin-top:10px;font-size:11px;color:var(--danger-deep, #b3261e);line-height:1.5;">' + escapeHtml(bits.join(' \u00b7 ')) + '</div>';
-    }
   }
   html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">';
   html += '<button type="button" class="admin-cloud-btn" style="background:var(--bg-secondary);color:var(--text);" onclick="adminExportPaperJSON(\'' + escapeHtml(paperKey) + '\')">\ud83d\udce5 ' +
@@ -16823,52 +16799,11 @@ function adminAlert(title, body, opts) {
   });
 }
 
-// ===== Stage 14 / Batch 5 — paper continuity check =========================
-// Stage 14: validate that the current paper's question numbers form a clean
-// 1..N sequence with no gaps and no duplicates. Old questions (added before
-// the number field existed) fall back to their list index so we don't false-
-// positive every legacy paper. Result shape:
-//   { ok: boolean, total: number, expected: number, gaps: number[],
-//     duplicates: number[], missingNumber: number[] }
-function adminCheckPaperContinuity(paperKey) {
-  var refs = ((QUESTION_DATA.papers || {})[paperKey]) || [];
-  var nums = [];
-  var missingNumber = 0;
-  for (var i = 0; i < refs.length; i++) {
-    var q = adminPaperRefQuestion(refs[i]);
-    var n = (q && typeof q.number === 'number' && q.number > 0) ? q.number : (i + 1);
-    nums.push(n);
-    if (!(q && typeof q.number === 'number' && q.number > 0)) missingNumber++;
-  }
-  // Sort copy so we can detect duplicates + gap ranges regardless of order.
-  var sorted = nums.slice().sort(function (a, b) { return a - b; });
-  var seen = {};
-  var duplicates = [];
-  for (var k = 0; k < sorted.length; k++) {
-    if (seen[sorted[k]]) duplicates.push(sorted[k]);
-    else seen[sorted[k]] = true;
-  }
-  var gaps = [];
-  for (var g = 1; g < sorted.length; g++) {
-    if (sorted[g] - sorted[g - 1] > 1) {
-      for (var m = sorted[g - 1] + 1; m < sorted[g]; m++) gaps.push(m);
-    }
-  }
-  return {
-    ok: gaps.length === 0 && duplicates.length === 0,
-    total: nums.length,
-    expected: nums.length,
-    nums: nums,
-    gaps: gaps,
-    duplicates: duplicates,
-    missingNumber: missingNumber
-  };
-}
 
 // ===== Stage 14 / Batch 5 — paper statistics ===============================
 // Aggregates the current paper by:
 //   • question type (single / multiple / fill / judge / essay …)
-//   • department (top-level q.department_big; "未分类" fallback)
+//   • section / 板块 (q.section, fallback q.department_big; "未分类" fallback)
 //   • score by type (using the same gradePointsForQ shared with student-side)
 // Returns { total, byType: {type:count}, byDept: {dept:count}, pointsByType }.
 function adminPaperStats(paperKey) {
@@ -16881,7 +16816,7 @@ function adminPaperStats(paperKey) {
     if (!q) continue;
     var type = (q.type || 'unknown').toLowerCase();
     byType[type] = (byType[type] || 0) + 1;
-    var dept = (q.department_big || '').trim() || '_uncategorized';
+    var dept = ((q.section || '').trim() || (q.department_big || '').trim() || '_uncategorized');  // Batch-4: 按板块分组，department_big 兜底
     byDept[dept] = (byDept[dept] || 0) + 1;
     var pts = gradePointsForQ(q, g);
     totalPts += pts;
@@ -17901,6 +17836,7 @@ function renderAdminEdit() {
       correct_answer: [],
       explanation: '',
       section: (bank === 'manual' ? (adminState.section !== 'all' ? adminState.section : '') : ''),
+      section_en: (bank === 'manual' && adminState.section !== 'all') ? adminSectionEnOf(adminState.section) : '',  // Batch-4: 英文名自动按板块填入
       section_en: ''
     };
   } else {
@@ -17961,54 +17897,18 @@ function renderAdminEdit() {
 
   // Section (only for manual) — two-tier picker driven by DEPARTMENTS,
   // CN/EN auto-populate each other; advanced users can still free-edit.
+  // Section (only for manual) — Batch-4 简化：
+  //   · 删除「部门大类/子类」两级下拉框（用不上，反而添乱）；
+  //   · 在某个板块筛选下点「新增题目」时，部门中文/英文按该板块自动填入，
+  //     英文名从题库现有同板块题目或 DEPARTMENTS 目录里查，无需手填；
+  //   · 两个输入框保留（id 仍是 qSection / qSectionEn，下游保存逻辑不动），
+  //     自动填错时可手改。
   if (bank === 'manual') {
-    // Detect current selection in DEPARTMENTS so the picker opens at the
-    // right row (handles existing questions saved before this picker existed).
-    var deptIdx = -1, subIdx = -1;
-    for (var di = 0; di < DEPARTMENTS.length; di++) {
-      if (q.section_en === DEPARTMENTS[di].en) { deptIdx = di; break; }
-      if (q.section === DEPARTMENTS[di].cn)    { deptIdx = di; break; }
-    }
-    if (deptIdx >= 0 && DEPARTMENTS[deptIdx].subs) {
-      for (var si2 = 0; si2 < DEPARTMENTS[deptIdx].subs.length; si2++) {
-        if (q.section_en === DEPARTMENTS[deptIdx].subs[si2].en) { subIdx = si2; break; }
-        if (q.section    === DEPARTMENTS[deptIdx].subs[si2].cn) { subIdx = si2; break; }
-      }
-    }
-    // Sub not matched under the matched big dept? search across all subs (legacy data).
-    if (deptIdx >= 0 && subIdx < 0) {
-      for (var di2 = 0; di2 < DEPARTMENTS.length && subIdx < 0; di2++) {
-        for (var si3 = 0; si3 < (DEPARTMENTS[di2].subs||[]).length; si3++) {
-          if (q.section_en === DEPARTMENTS[di2].subs[si3].en) { deptIdx = di2; subIdx = si3; break; }
-          if (q.section    === DEPARTMENTS[di2].subs[si3].cn) { deptIdx = di2; subIdx = si3; break; }
-        }
-      }
-    }
-    html += '<label>' + (state.lang === 'en' ? 'Department (Big)' : '\u90e8\u95e8\uff08\u5927\u7c7b\uff09') + '</label>';
-    html += '<select id="qDeptBig" onchange="adminOnDeptChange()">';
-    html += '<option value="__custom__">' + (state.lang === 'en' ? '— Custom (type below) —' : '— 自定义（在下方输入）—') + '</option>';
-    for (var di3 = 0; di3 < DEPARTMENTS.length; di3++) {
-      html += '<option value="' + di3 + '"' + (di3 === deptIdx ? ' selected' : '') + '>' + escapeHtml(DEPARTMENTS[di3].cn + ' / ' + DEPARTMENTS[di3].en) + '</option>';
-    }
-    html += '</select>';
-    html += '<label>' + (state.lang === 'en' ? 'Department (Sub)' : '\u90e8\u95e8\uff08\u5b50\u7c7b\uff09') + '</label>';
-    html += '<select id="qDeptSub" onchange="adminOnDeptChange()">';
-    if (deptIdx < 0) {
-      html += '<option value="">' + (state.lang === 'en' ? '— pick a big department first —' : '— 请先选择大部门 —') + '</option>';
-    } else {
-      var subs = DEPARTMENTS[deptIdx].subs || [];
-      for (var si4 = 0; si4 < subs.length; si4++) {
-        html += '<option value="' + si4 + '"' + (si4 === subIdx ? ' selected' : '') + '>' + escapeHtml(subs[si4].cn + ' / ' + subs[si4].en) + '</option>';
-      }
-    }
-    html += '</select>';
-    // Always-present hidden/manual fields that adminSaveQuestion() and the
-    // publish pipeline read. id stays qSection / qSectionEn so downstream
-    // code is untouched. Values are kept in sync by adminOnDeptChange().
-    html += '<label>' + (state.lang === 'en' ? 'Section CN (final)' : '\u90e8\u95e8\u4e2d\u6587\uff08\u6700\u7ec8\u5b58\u5165\uff09') + '</label>';
+    var _autoEn = q.section_en || adminSectionEnOf(q.section);  // 老题缺英文名时一并补上
+    html += '<label>' + (state.lang === 'en' ? 'Section CN' : '\u90e8\u95e8\u4e2d\u6587') + '</label>';
     html += '<input type="text" id="qSection" value="' + escapeHtml(q.section || '') + '" placeholder="' + (state.lang === 'en' ? 'Department name' : '\u90e8\u95e8\u540d\u79f0') + '">';
-    html += '<label>' + (state.lang === 'en' ? 'Section EN (final)' : '\u90e8\u95e8\u82f1\u6587\uff08\u6700\u7ec8\u5b58\u5165\uff09') + '</label>';
-    html += '<input type="text" id="qSectionEn" value="' + escapeHtml(q.section_en || '') + '" placeholder="Department name (English)">';
+    html += '<label>' + (state.lang === 'en' ? 'Section EN' : '\u90e8\u95e8\u82f1\u6587') + '</label>';
+    html += '<input type="text" id="qSectionEn" value="' + escapeHtml(_autoEn || '') + '" placeholder="Department name (English)">';
   }
 
   // Question text — CN / EN split input (fill questions show both languages to students,
@@ -18228,40 +18128,20 @@ function adminOnTypeChange() {
   adminAutoGrowAll(area);
 }
 
-// Cascade the two-tier department picker (qDeptBig → qDeptSub) and sync the
-// qSection / qSectionEn inputs (which downstream code reads verbatim).
-function adminOnDeptChange() {
-  var bigSel = document.getElementById('qDeptBig');
-  var subSel = document.getElementById('qDeptSub');
-  var secCn  = document.getElementById('qSection');
-  var secEn  = document.getElementById('qSectionEn');
-  if (!bigSel || !subSel || !secCn || !secEn) return;
-
-  var bigIdx = bigSel.value;
-  if (bigIdx === '__custom__') {
-    // User wants to free-edit: blank the sub picker; keep whatever they typed.
-    subSel.innerHTML = '<option value="">' + (state.lang === 'en' ? '— (custom) —' : '— 自定义 —') + '</option>';
-    return;
+// Batch-4: 板块英文名自动查询——先看题库里同板块题目已存的英文名，
+// 再退回 DEPARTMENTS 目录（大部门/子部门都查）。查不到返回空串，管理员可手填。
+function adminSectionEnOf(sectionCn) {
+  if (!sectionCn) return '';
+  var list = QUESTION_DATA.manual || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].section === sectionCn && list[i].section_en) return list[i].section_en;
   }
-  var d = DEPARTMENTS[parseInt(bigIdx, 10)];
-  if (!d) return;
-  var subs = d.subs || [];
-  var html = '';
-  for (var i = 0; i < subs.length; i++) {
-    html += '<option value="' + i + '">' + escapeHtml(subs[i].cn + ' / ' + subs[i].en) + '</option>';
+  for (var d = 0; d < DEPARTMENTS.length; d++) {
+    if (DEPARTMENTS[d].cn === sectionCn) return DEPARTMENTS[d].en || '';
+    var subs = DEPARTMENTS[d].subs || [];
+    for (var s = 0; s < subs.length; s++) if (subs[s].cn === sectionCn) return subs[s].en || '';
   }
-  subSel.innerHTML = html;
-  // default to first sub, sync the qSection/qSectionEn inputs
-  subSel.selectedIndex = 0;
-  if (subs[0]) {
-    secCn.value = subs[0].cn;
-    secEn.value = subs[0].en;
-  }
-  // Selection in the sub picker updates the visible text fields.
-  subSel.onchange = function () {
-    var s = d.subs[parseInt(subSel.value, 10)];
-    if (s) { secCn.value = s.cn; secEn.value = s.en; }
-  };
+  return '';
 }
 
 function adminAddOption() {
