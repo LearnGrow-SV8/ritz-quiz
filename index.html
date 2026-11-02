@@ -9191,13 +9191,13 @@ function renderRaceResult() {
     html += '<div style="font-size:26px;font-weight:800;letter-spacing:2px;color:' + (isTO ? '#c62828' : '#2e7d32') + ';margin-top:4px;">'
       + (isTO ? t('race_time_up') : t('race_lock_done')) + '</div>';
     html += '</div>';
-    // ② 大成绩单：明亮天蓝渐变 —— 在品牌回忆蓝基础上提饱和提亮度，
-    // 自上而下 #DDF0FF → #93BEEC，像晴天午后的天空；纯黑文字保持集团规范。
+    // ② 大成绩单：和页头 banner 完全同款（linear-gradient(135deg, --primary-soft,
+    // --primary-light) + var(--shadow)），品牌一致性由"直接复用"保证，不再自调色值。
     var myName = raceDisplayName();
     var myDept = raceDeptName();
     html += '<div class="q-card" style="text-align:center;padding:20px 14px 16px;margin-top:8px;'
-      + 'background:linear-gradient(168deg,#DDF0FF 0%,#B4D6F7 42%,#93BEEC 100%);'
-      + 'border:1px solid rgba(255,255,255,.9);box-shadow:0 8px 22px rgba(74,124,178,.22);">';
+      + 'background:linear-gradient(135deg,var(--primary-soft) 0%,var(--primary-light) 100%);'
+      + 'border:1px solid rgba(0,0,0,.06);box-shadow:var(--shadow);">';
     html += '<div style="font-size:12px;color:rgba(0,0,0,.6);">' + escapeHtml((r.conf && r.conf.title) || t('race_title')) + '</div>';
     html += '<div style="font-size:15px;font-weight:700;color:#000;margin-top:2px;">' + raceSecIcon(r.section || 'all') + ' ' + escapeHtml(raceSecName(r.section || 'all')) + '</div>';
     if (myName) html += '<div style="margin-top:12px;font-size:14px;color:#000;">' + (enL ? 'Name' : '姓名') + ' · <b>' + escapeHtml(myName) + '</b></div>';
