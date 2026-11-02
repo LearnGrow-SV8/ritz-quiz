@@ -4076,6 +4076,8 @@ const state = {
   raceCalMonth: '',    // 打卡日历当前显示的月份 'YYYY-MM'，空 = 本月
   raceCalDay: '',      // 打卡日历里点开的某一天 'YYYY-MM-DD'
   raceCalOpen: {},     // { 'YYYY-MM-DD|<ts>': true } 当天哪几条挑战展开了答题清单
+  raceLockUntil: 0,    // 结果页"成绩保护期"截止时刻：期间只给成绩单、不渲染任何按钮
+  raceLockTick: null,  // 保护期倒计时的定时器（到点自动重画结果页）
   raceDeepLink: (function () {
     try { return /[?&]page=race\b/.test((typeof location !== 'undefined' && location.search) || ''); }
     catch (e) { return false; }
@@ -4432,6 +4434,8 @@ var I18N = {
   race_submit_ok: {cn:'成绩已提交', en:'Score submitted'},
   race_submit_fail: {cn:'成绩上传失败，将自动重试', en:'Upload failed, will retry automatically'},
   race_time_up: {cn:'时间到', en:'Time is up'},
+  race_result_lock: {cn:'✅ 成绩已保存', en:'✅ Score saved'},
+  race_result_lock_hint: {cn:'马上开放下方操作按钮（{n} 秒），先看看成绩单，不用急着点任何地方', en:'Action buttons unlock in {n}s — take a moment with your score sheet, no rush'},
   race_pool_done: {cn:'题目已答完', en:'All questions answered'},
   race_exit_confirm: {cn:'现在退出本次成绩将不计入，确定退出吗？', en:'Leaving now will discard this attempt. Continue?'},
   race_loading: {cn:'正在载入排行榜…', en:'Loading leaderboard…'},
@@ -8204,7 +8208,27 @@ function raceEnd(reason) {
   }
   r.correct = correct; r.answered = answered;
   raceSubmitScore();
+  raceArmResultLock();
   navigate('raceResult');
+}
+// 结果页「成绩保护期」（2026-11-02）：超时自动交卷常常发生在学员正伸手选选项 /
+// 点确认的那一刻，结果页一出来，手指落点正好压在「再来一次」这类按钮上 —— 误触
+// 直接退出成绩页。保护期内结果页**只渲染成绩单、不渲染任何可点的东西**，倒计时
+// 结束再补上按钮。倒计时用定时器只改文字、到点才整页重画，滚动位置不被打断。
+var RACE_RESULT_LOCK_MS = 3000;
+function raceArmResultLock() {
+  state.raceLockUntil = Date.now() + RACE_RESULT_LOCK_MS;
+  if (state.raceLockTick) { clearInterval(state.raceLockTick); state.raceLockTick = null; }
+  state.raceLockTick = setInterval(function () {
+    var leftMs = (state.raceLockUntil || 0) - Date.now();
+    var el = document.getElementById('raceLockMsg');
+    if (leftMs > 0) {
+      if (el) el.textContent = t('race_result_lock_hint').replace('{n}', String(Math.ceil(leftMs / 1000)));
+      return;
+    }
+    clearInterval(state.raceLockTick); state.raceLockTick = null;
+    if (state.currentPage === 'raceResult' && typeof render === 'function') render();
+  }, 250);
 }
 function raceSubmitScore() {
   var r = state.race; if (!r || !r.conf) return Promise.resolve(false);
@@ -9154,6 +9178,18 @@ function renderRaceResult() {
       html += '<div style="font-size:11px;color:#9a7b4f;margin-top:1px;">' + escapeHtml(raceBadgeDesc(nb2)) + '</div>';
     }
     html += '</div>';
+  }
+  // 成绩保护期：交卷瞬间（尤其超时自动收卷时学员手指还悬在选项上）不渲染任何
+  // 按钮，只给成绩单 + 一条"成绩已保存"的倒计时提示，到点整页重画补上按钮。
+  // 这 3 秒里页面没有任何可点的东西，误触从根上被挡掉。
+  if ((state.raceLockUntil || 0) > Date.now()) {
+    html += '<div class="q-card" style="text-align:center;background:#eef4fa;border:1px solid #c9d9ea;">';
+    html += '<div style="font-size:14px;font-weight:700;color:#1a3a5c;">' + t('race_result_lock') + '</div>';
+    html += '<div id="raceLockMsg" style="font-size:12px;color:#667;margin-top:4px;line-height:1.5;">'
+      + t('race_result_lock_hint').replace('{n}', String(Math.ceil((state.raceLockUntil - Date.now()) / 1000))) + '</div>';
+    html += '</div>';
+    html += '</div>';
+    return html;
   }
   html += '<button class="action-btn primary" style="width:100%;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
   if (raceStateOf(raceConfOf()) === 'open') {
