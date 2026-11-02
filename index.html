@@ -4510,6 +4510,10 @@ var I18N = {
   race_admin_export: {cn:'导出 CSV', en:'Export CSV'},
   race_admin_title_ph: {cn:'如：十月限时答题赛', en:'e.g. October Speed Quiz'},
   race_admin_published: {cn:'已发布，学员端即刻生效', en:'Published — live on student devices now'},
+  race_new_season: {cn:'这是新一季赛事（清空榜单重新开始）', en:'New season (reset the board and start fresh)'},
+  race_new_season_hint: {cn:'勾选后发布 = 开新一季：个人总榜、板块榜、部门榜、打卡天数榜全部从零开始，历史最佳榜保留。只调整本期设置（时间/板块/时长等）则不要勾选，榜单不受影响。', en:'Tick to start a new season: the overall / section / department / check-in-days boards reset to zero, while the all-time best board is kept. Leave unticked to only update this round\'s settings — the board stays as is.'},
+  race_new_season_confirm: {cn:'确认开启新一季赛事？\n\n本届榜单（个人总榜 / 板块榜 / 部门榜 / 打卡天数榜）将清空重新开始；历史最佳榜保留。', en:'Start a new season?\n\nThe current boards (overall / section / department / check-in days) will reset and start from zero; the all-time best board is kept.'},
+  race_season_id_label: {cn:'本届 ID', en:'Season ID'},
   race_cloud_fail: {cn:'❌ 没有同步到云端，学员端看不到这场答题赛。请检查网络后重新点「发布」。', en:'❌ Not synced to the cloud — student devices cannot see this race. Check the network, then press Publish again.'},
   race_syncing: {cn:'正在从云端重新同步…', en:'Re-syncing from the cloud…'},
   race_pull_fail: {cn:'暂时连不上服务器，请检查网络后点「重新同步」', en:'Cannot reach the server — check your network and tap Re-sync'},
@@ -9387,6 +9391,14 @@ function renderAdminRace() {
   html += '<option value="sum"' + (dmode === 'sum' ? ' selected' : '') + '>' + t('race_dept_days_sum') + '</option>';
   html += '<option value="avg"' + (dmode === 'avg' ? ' selected' : '') + '>' + t('race_dept_days_avg') + '</option>';
   html += '</select>';
+  // 新一季开关：勾选 = 发布时换一个全新届次 id，本届榜单自动清零（历史最佳榜
+  // 跨届累计，不受影响）；不勾 = 沿用本届 id，只更新设置。榜单按届次 id 过滤，
+  // 所以"清空榜单"不需要删任何数据，换 id 即可。
+  html += '<div style="border-top:1px solid #eef1f4;margin-top:12px;padding-top:10px;">';
+  html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;font-weight:600;padding:2px 0;cursor:pointer;">'
+    + '<input type="checkbox" id="raceNewSeason" style="margin-top:2px;"> <span>' + t('race_new_season') + '</span></label>';
+  html += '<div style="font-size:11px;color:#888;margin:4px 0 2px;line-height:1.5;">' + t('race_new_season_hint') + '</div>';
+  html += '</div>';
   // 徽章改成独立目录（管理端可增删改、自动生成样式），这里只留入口。
   // 旧版这里是一个「月度达标天数」输入框；为了不让已发布赛事里的 badgeDays 变成死配置，
   // 发布时仍会写一个兼容值，但真正的判定一律读徽章目录。
@@ -9411,6 +9423,7 @@ function renderAdminRace() {
   if (c.id) {
     html += '<div style="margin-top:16px;font-size:12px;color:#888;">' + (en ? 'Current status' : '当前状态') + '：' + raceStateOf(c) + ' · ' + raceFmtWindow(c) + '</div>';
     html += '<div style="margin-top:4px;font-size:12px;color:#888;">' + t('race_mode') + '：' + (raceModeOf(c) === 'choice' ? t('race_mode_choice') : t('race_mode_admin') + '（' + raceSecIcon(c.section || 'all') + ' ' + raceSecName(c.section || 'all') + '）') + '</div>';
+    html += '<div style="margin-top:4px;font-size:12px;color:#888;">' + t('race_season_id_label') + '：<code style="user-select:all;">' + escapeHtml(String(c.id)) + '</code>' + (c.seasonStart ? ' · ' + (en ? 'since ' : '开启于 ') + raceInputDate(c.seasonStart).replace('T', ' ') : '') + '</div>';
   }
   html += '</div>';
   return html;
@@ -9721,6 +9734,14 @@ function adminRaceModeToggle() {
 function adminRacePublish() {
   var el = function (id) { return document.getElementById(id); };
   var c = raceConfOf() || {};
+  // 新一季开关：勾选并确认后才换届次 id —— 榜单按届次 id 过滤，换 id 即"清空
+  // 本届榜单重新开始"，历史最佳榜保留。误勾可以直接取消弹窗，不会动任何数据。
+  var newSeason = !!(el('raceNewSeason') && el('raceNewSeason').checked);
+  if (newSeason) {
+    if (!confirm(t('race_new_season_confirm'))) return;
+    c.id = 'r' + Date.now();
+    c.seasonStart = new Date().toISOString();
+  }
   c.id = c.id || ('r' + Date.now());
   c.title = (el('raceTitle') && el('raceTitle').value || '').trim();
   c.sectionMode = (el('raceMode') && el('raceMode').value) || 'choice';
