@@ -4718,10 +4718,11 @@ var I18N = {
   race_tier_maxed: {cn:'已是最高段位', en:'Highest tier reached'},
   race_tier_tap_hint: {cn:'点段位可看升级规则', en:'Tap a tier to see how it works'},
   race_tier_info_title: {cn:'段位说明', en:'Tiers'},
-  race_tier_info_body: {cn:'段位按「累计打卡天数」升级；连续 30 天以上没有打卡，段位会临时下降。', en:'Tiers rise with all-time check-in days; 30+ days without a check-in temporarily lowers your tier.'},
+  race_tier_info_body: {cn:'段位按「累计打卡天数」升级；连续 30 天以上没有打卡会掉级。', en:'Tiers rise with all-time check-in days; 30+ days without a check-in lowers your tier.'},
   race_tier_rule_up: {cn:'① 升级：累计打卡天数到门槛就升级，漏打一天不清零，只是当天不计入。', en:'① Up: reach a day-count threshold and you level up. A missed day never resets your total \u2014 it just doesn\u2019t count.'},
-  race_tier_rule_down: {cn:'② 掉级：连续 30 天没打卡降 1 级，60 天降 2 级，90 天及以上降 3 级（最低青铜）。再打卡任意一天立即恢复，累计天数一分不扣。', en:'② Down: 30 idle days drops 1 tier, 60 drops 2, 90+ drops 3 (never below Bronze). One check-in restores it instantly \u2014 your total days are never deducted.'},
-  race_tier_drop: {cn:'已 {n} 天没打卡，段位暂降 {d} 级（原 {tier}）· 打一次卡即恢复', en:'{n} days idle \u2014 temporarily down {d} tier(s) (was {tier}). One check-in restores it.'},
+  race_tier_rule_down: {cn:'② 掉级：连续 30 天没打卡降 1 级，60 天降 2 级，90 天及以上降 3 级（最低青铜）。', en:'② Down: 30 idle days drops 1 tier, 60 drops 2, 90+ drops 3 (never below Bronze).'},
+  race_tier_drop: {cn:'已 {n} 天没打卡，段位暂降 {d} 级（原 {tier}）', en:'{n} days idle \u2014 temporarily down {d} tier(s) (was {tier})'},
+  race_tier_reacc: {cn:'重新累计', en:'Re-earned days'},
   race_tier_progress: {cn:'累计打卡 {d} 天 · 再 {n} 天到 {tier}', en:'{d} all-time days \u00b7 {n} more to {tier}'},
   race_tier_progress_max: {cn:'累计打卡 {d} 天 · 已是最高段位', en:'{d} all-time days \u00b7 highest tier reached'},
   race_tier_up: {cn:'段位晋升', en:'Tier promoted'},
@@ -4766,6 +4767,9 @@ var I18N = {
   badge_admin_cancel: {cn:'取消', en:'Cancel'},
   badge_admin_publish: {cn:'📣 发布徽章', en:'📣 Publish badges'},
   badge_admin_published: {cn:'徽章已发布，学员端会同步更新。', en:'Badges published \u2014 employees will sync automatically.'},
+  admin_toast_draft_saved: {cn:'已保存到列表。点「📣 发布徽章」后才会同步到学员端。', en:'Saved to the list. Press "📣 Publish badges" to sync to employees.'},
+  admin_toast_deleted: {cn:'已删除。', en:'Deleted.'},
+  race_admin_closed: {cn:'赛事已结束，学员端即刻生效。', en:'Race closed — live on student devices now.'},
   badge_admin_dirty: {cn:'有未发布的修改', en:'Unpublished changes'},
   badge_admin_empty: {cn:'还没有徽章，点下面新增一枚。', en:'No badges yet \u2014 add one below.'},
   badge_admin_confirm_del: {cn:'确定删除这枚徽章？已获得的记录会保留，但学员端不再显示。', en:'Delete this badge? Earned records are kept but will no longer be shown.'},
@@ -6492,12 +6496,14 @@ function adminRosterConfirmImport() {
   adminPublishNameRoster(p.rows).then(function (ok) {
     if (!ok) {
       adminRosterMsg(en ? '⚠️ Publish failed — check the network and try again.' : '⚠️ 发布失败，请检查网络后重试。', true);
+      adminToast(en ? '⚠️ Publish failed — check the network and try again.' : '⚠️ 发布失败，请检查网络后重试。', false);
       render();
       return;
     }
     adminState.rosterPending = null;
     adminState.rosterPage = 0;
     adminRosterMsg(en ? '✅ Roster published — every device picks it up within ~90 s.' : '✅ 名册已发布，所有设备约 90 秒内生效。');
+    adminToast(en ? '✅ Roster published — every device picks it up within ~90 s.' : '✅ 名册已发布，所有设备约 90 秒内生效。', true);
     render();
   });
 }
@@ -8518,6 +8524,8 @@ function raceDayKey(ts) {
 // days['YYYY-MM-DD'] = [当天挑战次数, 最近一次所属赛事 id]
 function raceMarkDay(rec, ts, rid) {
   if (!rec) return '';
+  // 降级锁定要在 days 更新**之前**算 idle（加了今天 last 就变成今天了）
+  raceTierLockIfNeeded(rec, ts);
   if (!rec.days || typeof rec.days !== 'object') rec.days = {};
   var k = raceDayKey(ts);
   var cur = rec.days[k];
@@ -10264,17 +10272,52 @@ function raceTierDropOf(idleDays) {
   }
   return drop;
 }
-// 段位的唯一出口：base = 靠累计天数应得的段位，tier = 现在实际显示的段位。
+// 掉级锁定（v3）：掉级不是"打一天卡就弹回原级"，而是**从掉到的那级重新往上爬**。
+//   · 一直没回来的人：只在榜上临时显示降级，档案不动；
+//   · 真的回来打卡那天：把降级锁进档案 rec.tierReset = {min: 掉到那级的门槛天数, d: 锁定日}，
+//     之后段位 = 门槛天数 + 锁定日起新打卡的天数。钻石(50)掉到铂金(35)，回来再爬 15 天才回钻石。
+// 只认"今天"的打卡，raceEnsureDays 回填历史流水不会误触发；同一天重复打卡只锁一次。
+function raceTierLockIfNeeded(rec, ts) {
+  if (!rec) return;
+  var k = raceDayKey(ts);
+  var today = raceDayKey(Date.now());
+  if (k !== today) return;                                   // 历史 / 补签不触发
+  if (rec.tierReset && rec.tierReset.d === today) return;    // 今天已锁过
+  var idle = raceTierIdleDays(raceDaysLastTs(rec, ''));      // 加今天之前的最后打卡日
+  var drop = raceTierDropOf(idle);
+  if (drop <= 0) return;
+  var t = raceTierOf(raceTierEffDays(rec));
+  var idx = raceTierIndexOf(t.key) - drop;
+  if (idx < 0) idx = 0;                                      // 最低掉到青铜
+  rec.tierReset = { min: RACE_TIERS[idx].min, d: today, from: t.key, at: Date.now() };
+  // 本机"已见最高段位"也压到锁定级：重新爬回去的路上每一级晋升照常有彩带。
+  try { localStorage.setItem('raceTierSeen', String(idx)); } catch (eL) {}
+}
+// 掉级锁定后的"重算天数"：没掉过 = 累计打卡天数；掉过 = 锁定门槛 + 锁定日起新打卡的天数。
+// YYYY-MM-DD 字符串可以直接比大小，锁定当天就算第 1 天。
+function raceTierEffDays(rec) {
+  var rz = rec && rec.tierReset;
+  if (!rz || !(rz.min >= 0) || !rz.d) return raceDaysCount(rec, '');
+  var n = rz.min, days = rec.days || {};
+  for (var k in days) {
+    if (!Object.prototype.hasOwnProperty.call(days, k)) continue;
+    if (k >= rz.d) n++;
+  }
+  return n;
+}
+// 段位的唯一出口：base = 不掉级时应得的段位，tier = 现在实际显示的段位。
 // 个人主页 / 排行榜 / 说明弹窗全走这里，避免哪天三处各算一遍算出不同结果。
 function raceTierStateOf(rec) {
-  var days = 0, last = 0;
+  var days = 0, last = 0, eff = 0;
   try { days = raceDaysCount(rec, ''); last = raceDaysLastTs(rec, ''); } catch (e) { days = 0; last = 0; }
-  var base = raceTierOf(days);
-  var baseIdx = raceTierIndexOf(base.key);
+  try { eff = raceTierEffDays(rec); } catch (e2) { eff = days; }
   var idle = raceTierIdleDays(last);
   var drop = raceTierDropOf(idle);
-  if (drop > baseIdx) drop = baseIdx;   // 最低掉到青铜，不会掉成负数
-  return { days: days, last: last, idle: idle, base: base, drop: drop, tier: RACE_TIERS[baseIdx - drop] };
+  var base = raceTierOf(eff);
+  var idx = raceTierIndexOf(base.key) - drop;
+  if (idx < 0) idx = 0;
+  return { days: days, eff: eff, last: last, idle: idle, drop: drop, base: base,
+    locked: !!(rec && rec.tierReset && rec.tierReset.d), tier: RACE_TIERS[idx] };
 }
 // 个人主页顶部的段位条：当前段位 + 距下一级还差几天
 // 集齐某个系列徽章 → 这里套上该系列的头像框（平台内生效的荣誉展示）。
@@ -10283,7 +10326,8 @@ function raceTierStripHtml() {
   var rec = {};
   try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
   var st = raceTierStateOf(rec);
-  var days = st.days, tier = st.tier, nx = raceTierNext(days);
+  var shown = st.locked ? st.eff : st.days;   // 掉级锁定后展示"重新累计"的天数，跟升级口径一致
+  var tier = st.tier, nx = raceTierNext(shown);
   var frame = null;
   try { frame = raceTopFrame(rec); } catch (e2) { frame = null; }
   var html = '<div class="q-card" style="margin-bottom:10px;display:flex;align-items:center;gap:10px;padding:12px;">';
@@ -10291,8 +10335,9 @@ function raceTierStripHtml() {
   html += '<div style="flex:1;min-width:0;" onclick="raceTierInfoShow()">';
   html += '<div style="font-size:14px;font-weight:700;">' + tier.icon + ' ' + (en ? tier.en : tier.cn)
     + (frame ? ' <span style="font-size:10.5px;color:#b7791f;">🖼 ' + t('race_frame_on') + '</span>' : '') + '</div>';
-  html += '<div style="font-size:11px;color:#888;margin-top:1px;">' + t('race_tier_strip') + ' · '
-    + (en ? 'all-time days ' : '累计打卡 ') + days + (en ? '' : ' 天')
+  html += '<div style="font-size:11px;color:#888;margin-top:1px;">'
+    + (st.locked ? t('race_tier_reacc') : t('race_tier_strip')) + ' · '
+    + (en ? (st.locked ? 're-earned days ' : 'all-time days ') : (st.locked ? '重新累计 ' : '累计打卡 ')) + shown + (en ? '' : ' 天')
     + ' <span style="color:#b7791f;">›</span></div>';
   // 被降级时把话说清楚：为什么低了一级、怎么回去。不写这句就会变成"段位莫名其妙掉了"。
   if (st.drop > 0) {
@@ -10309,16 +10354,11 @@ function raceTierStripHtml() {
 }
 // 点段位 → 弹出段位说明（宣传用：让人知道往上还有什么）。
 // 跟徽章说明卡同一套样式，纯展示、不写状态。
-function raceTierInfoShow() {
-  if (typeof document === 'undefined' || !document.body || !document.body.appendChild) return;
-  var en = state.lang === 'en';
-  var rec = {};
-  try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
-  var st = raceTierStateOf(rec);
-  var days = st.days, cur = st.tier, nx = raceTierNext(days);
+// 段位行列表（倒序：传奇在上、青铜在下）—— 越往上爬视觉位置越高，段位变化有"上升感"。
+function raceTierRowsHtml(en, curKey) {
   var rows = '';
-  for (var i = 0; i < RACE_TIERS.length; i++) {
-    var t2 = RACE_TIERS[i], on = t2.key === cur.key;
+  for (var i = RACE_TIERS.length - 1; i >= 0; i--) {
+    var t2 = RACE_TIERS[i], on = t2.key === curKey;
     rows += '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;margin-bottom:4px;'
       + 'background:' + (on ? '#fff8e1' : '#fafbfc') + ';border:1px solid ' + (on ? '#f0b357' : '#eef1f4') + ';">'
       + '<div style="width:24px;text-align:center;font-size:15px;">' + t2.icon + '</div>'
@@ -10328,16 +10368,28 @@ function raceTierInfoShow() {
       + (on ? '<div style="font-size:10px;color:#b7791f;font-weight:700;">' + t('race_tier_you') + '</div>' : '')
       + '</div>';
   }
+  return rows;
+}
+function raceTierInfoShow() {
+  if (typeof document === 'undefined' || !document.body || !document.body.appendChild) return;
+  var en = state.lang === 'en';
+  var rec = {};
+  try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
+  var st = raceTierStateOf(rec);
+  var shown = st.locked ? st.eff : st.days;   // 掉级锁定后，进度按"重算天数"走
+  var nx = raceTierNext(shown);
+  var rows = raceTierRowsHtml(en, st.tier.key);
   // 升级进度条：比干看门槛表更有推力 —— 差 3 天的人会想现在就去打一次。
+  // 用"重算天数"（掉级锁定后从新门槛起算），跟上面列表里高亮的段位保持同一口径。
   var baseIdx = raceTierIndexOf(st.base.key);
   var fromMin = RACE_TIERS[baseIdx].min;
   var toMin = nx ? nx.min : fromMin;
-  var pct = nx ? Math.round((days - fromMin) / Math.max(1, toMin - fromMin) * 100) : 100;
+  var pct = nx ? Math.round((shown - fromMin) / Math.max(1, toMin - fromMin) * 100) : 100;
   if (pct < 0) pct = 0;
   if (pct > 100) pct = 100;
   var progTxt = nx
-    ? t('race_tier_progress').replace('{d}', String(days)).replace('{n}', String(Math.max(0, toMin - days))).replace('{tier}', en ? nx.en : nx.cn)
-    : t('race_tier_progress_max').replace('{d}', String(days));
+    ? t('race_tier_progress').replace('{d}', String(shown)).replace('{n}', String(Math.max(0, toMin - shown))).replace('{tier}', en ? nx.en : nx.cn)
+    : t('race_tier_progress_max').replace('{d}', String(shown));
   var progHtml = '<div style="margin:2px 0 10px;">'
     + '<div style="font-size:11px;color:#8a5a00;font-weight:600;margin-bottom:4px;">' + progTxt + '</div>'
     + '<div style="height:6px;border-radius:3px;background:#eef1f4;overflow:hidden;">'
@@ -12188,6 +12240,34 @@ function renderAdminBadges() {
   html += '</div>';
   return html;
 }
+// ===== 管理端全局浮动提示（toast）=====
+// 页内消息条（#badgeAdminMsg / #raceAdminMsg / rosterMsg）都在页面深处，
+// 点完按钮 render() 重绘后要么滚出视野要么根本看不见 —— "点了没反应"就是这么来的。
+// 这个 toast 固定在屏幕顶部居中、不随滚动、约 2.6 秒自动消失；成功绿、失败红。
+// ok 缺省 = 成功；显式传 false 才显示红色失败样式。
+function adminToast(msg, ok) {
+  try {
+    var bad = (ok === false);
+    var old = document.getElementById('adminToast');
+    if (old && old.parentNode && old.parentNode.removeChild) old.parentNode.removeChild(old);
+    var d = document.createElement('div');
+    d.id = 'adminToast';
+    d.style.cssText = 'position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:99999;'
+      + 'max-width:86%;padding:12px 22px;border-radius:10px;font-size:14px;font-weight:600;text-align:center;'
+      + 'box-shadow:0 6px 24px rgba(0,0,0,.18);'
+      + 'color:' + (bad ? '#b3261e' : '#1e7a3c') + ';background:' + (bad ? '#fdecea' : '#e8f5e9') + ';'
+      + 'border:1.5px solid ' + (bad ? '#f2b8b5' : '#a5d6a7') + ';opacity:0;transition:opacity .25s;';
+    d.textContent = msg || '';
+    document.body.appendChild(d);
+    setTimeout(function () { d.style.opacity = '1'; }, 30);
+    setTimeout(function () {
+      d.style.opacity = '0';
+      setTimeout(function () {
+        try { if (d.parentNode && d.parentNode.removeChild) d.parentNode.removeChild(d); } catch (e2) {}
+      }, 320);
+    }, 2600);
+  } catch (e) {}
+}
 function adminBadgeMsg(msg, color) {
   var el = document.getElementById('badgeAdminMsg');
   if (el) { el.textContent = msg || ''; if (color) el.style.color = color; }
@@ -12264,6 +12344,7 @@ function adminBadgeSave() {
   adminState.badgeEditing = '';
   adminState.badgeDescSeed = '';
   adminBadgePersistDraft();
+  adminToast(t('admin_toast_draft_saved'), true);
   render();
 }
 function adminBadgeDel(id) {
@@ -12275,6 +12356,7 @@ function adminBadgeDel(id) {
   adminState.badgeDirty = true;
   if (adminState.badgeEditing === id) adminState.badgeEditing = '';
   adminBadgePersistDraft();
+  adminToast(t('admin_toast_deleted'), true);
   render();
 }
 function adminBadgeToggle(id) {
@@ -12311,15 +12393,17 @@ function adminBadgePublish() {
   adminState.badgeVer = cat.ver;
   adminState.badgeDirty = false;
   adminBadgePersistDraft();
-  if (typeof SB_ON !== 'undefined' && !SB_ON) { adminState.badgeCloud = 'off'; adminBadgeMsg(t('race_cloud_fail'), '#b3261e'); render(); return; }
-  if (typeof sbMergeAdminState !== 'function') { adminState.badgeCloud = 'off'; adminBadgeMsg(t('race_cloud_fail'), '#b3261e'); render(); return; }
+  if (typeof SB_ON !== 'undefined' && !SB_ON) { adminState.badgeCloud = 'off'; adminBadgeMsg(t('race_cloud_fail'), '#b3261e'); adminToast(t('race_cloud_fail'), false); render(); return; }
+  if (typeof sbMergeAdminState !== 'function') { adminState.badgeCloud = 'off'; adminBadgeMsg(t('race_cloud_fail'), '#b3261e'); adminToast(t('race_cloud_fail'), false); render(); return; }
   sbMergeAdminState({ badges: cat }).then(function () {
     adminState.badgeCloud = 'ok';
     adminBadgeMsg(t('badge_admin_published'), '#1e7a3c');
+    adminToast(t('badge_admin_published'), true);
     render();
   }, function () {
     adminState.badgeCloud = 'fail';
     adminBadgeMsg(t('race_cloud_fail'), '#b3261e');
+    adminToast(t('race_cloud_fail'), false);
     render();
   });
 }
@@ -12375,8 +12459,8 @@ function adminRacePublish() {
   c.ver = Date.now();
   raceSaveConf(c);
   publishRaceConf(c).then(function (ok) {
-    if (ok) { adminRaceMsg(t('race_admin_published')); if (typeof render === 'function') render(); }
-    else adminRaceMsg(t('race_cloud_fail'));
+    if (ok) { adminRaceMsg(t('race_admin_published')); adminToast(t('race_admin_published'), true); if (typeof render === 'function') render(); }
+    else { adminRaceMsg(t('race_cloud_fail')); adminToast(t('race_cloud_fail'), false); }
   });
 }
 function adminRaceClose() {
@@ -12386,6 +12470,7 @@ function adminRaceClose() {
   raceSaveConf(c);
   publishRaceConf(c).then(function (ok) {
     adminRaceMsg(ok ? t('race_admin_published') : t('race_cloud_fail'));
+    adminToast(ok ? t('race_admin_closed') : t('race_cloud_fail'), ok);
     if (typeof render === 'function') render();
   });
 }
@@ -15856,8 +15941,8 @@ function adminRosterMsg(msg, bad) {
 // 每次改动都立即发布到云端（与黑名单一致：所见即所发）。
 function adminRosterPublish(ids) {
   return publishRoster(ids).then(function (ok) {
-    if (ok) adminRosterMsg(t('roster_published'));
-    else adminRosterMsg(t('roster_publish_fail'), true);
+    if (ok) { adminRosterMsg(t('roster_published')); adminToast(t('roster_published'), true); }
+    else { adminRosterMsg(t('roster_publish_fail'), true); adminToast(t('roster_publish_fail'), false); }
     render();
     return ok;
   });
