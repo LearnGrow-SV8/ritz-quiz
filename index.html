@@ -1123,8 +1123,9 @@ function sbGetAccountJson(rowKey) {
   if (!SB_ON || !rowKey) return Promise.reject(new Error('sb off'));
   return sbJson('/rest/v1/accounts?select=record&phone=eq.' + encodeURIComponent(rowKey) + '&limit=1', null, SB_SNAPSHOT_TIMEOUT_MS, 'sb-account-get')
     .then(function(rows) {
-      if (!Array.isArray(rows)) throw new Error('sb acct shape');
-      if (!rows.length || !rows[0] || !rows[0].record) return { success: true, hit: false };
+      // 非数组响应（畸形 200 / 代理插页）按「无此行」处理，与 rows.length===0
+      // 同口径 —— 抛错会让 adminFixAccountRow 的重试队列永远卡在一行上。
+      if (!Array.isArray(rows) || !rows.length || !rows[0] || rows[0].record == null) return { success: true, hit: false };
       var rec = rows[0].record || {};
       sbMarkOk();
       return {
@@ -2477,6 +2478,8 @@ function applyPfFixEntry(oldKey, fix) {
   // Stage 9: clear the now-unusable hash so the employee goes through the claim
   // flow once (and sets a fresh PIN) instead of being stuck on a mismatch.
   if (normEmpNo(p.empNo) && prevEmp && normEmpNo(p.empNo) !== prevEmp) { p.pinHash = ''; p.pinSetAt = 0; }
+  // Stage 10: 管理员的任何更正都视为已核实 —— 清掉注册待核查标记。
+  if (fix.clearNv) { delete p.needsVerify; }
   var newKey = accountKeyFor(p.cnName, p.enName, p.empNo) || oldKey;
   try { localStorage.setItem(oldKey + '_profile', JSON.stringify(p)); } catch (e) {}
   if (newKey !== oldKey) migrateAccountKey(oldKey, newKey);
@@ -4125,7 +4128,15 @@ function adminAuthRestore() {
   try {
     var s = JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY) || 'null');
     if (s && typeof s.exp === 'number') {
-      if (s.exp > Date.now()) return true;
+      if (s.exp > Date.now()) {
+        // Stage 10b: 会话仍然有效 → 恢复时把重试队列和对账也续跑起来
+        //（上次页面关闭时可能还有没同步完的修正）。
+        setTimeout(function () {
+          try { adminFixReconcile(); } catch (e) {}
+          try { adminFixFlush(); } catch (e) {}
+        }, 8000); // 等 Supabase 相关初始化完成
+        return true;
+      }
       localStorage.removeItem(ADMIN_SESSION_KEY); // expired — clean up
     }
   } catch (e) {}
@@ -4276,6 +4287,10 @@ var I18N = {
   login_register_title: {cn:'首次使用，完善资料', en:'First time here — set up your profile'},
   login_register_sub: {cn:'这个工号还没有账号，填写后即完成注册', en:'No account exists for this employee ID yet — fill this in to register'},
   login_register_btn: {cn:'注册并进入', en:'Register & enter'},
+  // Stage 10: 注册姓名核验（员工名册）
+  reg_verify_exact: {cn:'核验未通过：该工号在员工名册中登记的中文名与你填写的不一致，请核对后重试。', en:'Name check failed: the Chinese name on file for this employee ID does not match what you typed. Please check and try again.'},
+  reg_verify_fuzzy: {cn:'核验未通过：该工号在员工名册中登记的英文名与你填写的不匹配，请核对后重试。', en:'Name check failed: the English name on file for this employee ID does not match what you typed. Please check and try again.'},
+  reg_verify_need_cn: {cn:'该工号在员工名册中登记了中文名，请填写与名册一致的中文姓名（英文名可另行填写）。', en:'This employee ID is registered with a Chinese name on file — please enter the matching Chinese name (the English name is optional).'},
   login_claim_title: {cn:'找到您的历史账号', en:'Your existing account was found'},
   login_claim_sub: {cn:'该工号在本平台已有学习记录，点击「✓ 是我」并设置密码即可进入（历史成绩全部保留）', en:'This employee ID already has learning records. Tap "✓ That\'s me" and choose a password — your history comes with you.'},
   login_claim_name_ph: {cn:'请输入您的姓名（中文或英文名）', en:'Enter your name (Chinese or English)'},
@@ -4643,12 +4658,35 @@ var I18N = {
   race_badge_grp_period: {cn:'📅 单期打卡', en:'📅 Per round'},
   race_badge_grp_total: {cn:'👑 累计打卡', en:'👑 All-time'},
   race_badge_grp_special: {cn:'🎖 挑战彩蛋', en:'🎖 Special'},
-  // 挑战彩蛋（2026-11-03）：夜猫子 / 周末战士 / 神射手 / 闪电快手 / 初出茅庐
+  // 五大类（2026-11-04）：打卡系列 / 竞速闯关 / 学习沉淀 / 挑战彩蛋 / 限定月度主题
+  race_badge_cat_checkin: {cn:'📅 打卡系列', en:'📅 Check-in'},
+  race_badge_cat_speed: {cn:'⚡ 竞速闯关', en:'⚡ Speed'},
+  race_badge_cat_study: {cn:'📚 学习沉淀', en:'📚 Learning'},
+  race_badge_cat_special: {cn:'🎖 挑战彩蛋', en:'🎖 Easter Eggs'},
+  race_badge_cat_theme: {cn:'🦁 限定月度主题', en:'🦁 Monthly Theme'},
+  race_badge_cat_theme_hint: {cn:'每期一换，只在当期发放，过期不再补发。', en:'A new one every round \u2014 only issued in that round, never re-issued.'},
+  // 挑战彩蛋（2026-11-03）：夜猫子 / 周末战士 / 答题能手 / 闪电快手 / 初出茅庐
   badge_admin_rule_night: {cn:'夜猫子（22:00 后打卡，每期一枚）', en:'Night owl (check in after 10 PM, once per round)'},
   badge_admin_rule_weekend: {cn:'累计周末打卡 N 天（终身一次）', en:'N weekend days all-time (one-off)'},
-  badge_admin_rule_perfect: {cn:'单期全对 N 题及以上（每期一枚）', en:'N+ correct in one run, all correct (per round)'},
+  badge_admin_rule_perfect: {cn:'单次答对 N 题以上（每期一枚）', en:'N+ correct answers in one run (per round)'},
   badge_admin_rule_fast: {cn:'单期平均每题不超过 N 秒（每期一枚）', en:'Avg under N sec per question (per round)'},
   badge_admin_rule_newbie: {cn:'首周打卡 N 天（终身一次）', en:'N days in first week (one-off)'},
+  // 竞速闯关 / 学习沉淀 / 限定主题（2026-11-04）
+  badge_admin_rule_dept_top: {cn:'任意单一板块速答榜当期前 N 名（每期一枚）', en:'Top N on any single-section board this round'},
+  badge_admin_rule_all_top: {cn:'全题库速答榜当期前 N 名（每期一枚）', en:'Top N on the all-question board this round'},
+  badge_admin_rule_wrong: {cn:'累计重做错题 N 道（终身一次）', en:'N wrong answers redone all-time (one-off)'},
+  badge_admin_rule_fav: {cn:'累计收藏题目 N 道（终身一次）', en:'N questions saved all-time (one-off)'},
+  badge_admin_rule_practice: {cn:'练习模式累计答题 N 道（终身一次）', en:'N practice answers all-time (one-off)'},
+  badge_admin_rule_theme: {cn:'限定主题：绑定届次内打卡 N 天（终身一次）', en:'Monthly theme: N check-ins in the bound round (one-off)'},
+  badge_admin_rid: {cn:'限定届次（仅主题徽章用，留空 = 当前届）', en:'Bound round (theme badges only, blank = current)'},
+  badge_admin_rid_cur: {cn:'当前届', en:'Current round'},
+  race_badge_theme_ended: {cn:'本期已结束', en:'Round closed'},
+  // 专属头像框（集齐同一系列全套解锁，纯荣誉）
+  race_frame_title: {cn:'专属头像框', en:'Avatar frames'},
+  race_frame_hint: {cn:'集齐同一系列的全部徽章，解锁该系列的专属头像框；头像框只在本平台内展示。', en:'Collect every badge of a series to unlock its avatar frame. Frames are purely cosmetic inside this app.'},
+  race_frame_locked: {cn:'还差 {n} 枚', en:'{n} to go'},
+  race_frame_unlocked: {cn:'已解锁', en:'Unlocked'},
+  race_frame_on: {cn:'头像框已生效', en:'Frame active'},
   // C1 参与保底（2026-11-03）
   race_part_n_label: {cn:'参与奖达标次数', en:'Participation target'},
   race_part_n_hint: {cn:'本届打卡次数达到该值的学员名单会出现在导出 CSV 的「参与保底达标名单」表里（发参与奖用）。', en:'Employees who checked in at least this many times this round appear in the "Participation" sheet of the exported CSV (for participation rewards).'},
@@ -4660,7 +4698,7 @@ var I18N = {
   race_admin_report_copied: {cn:'已复制，去粘贴吧。', en:'Copied \u2014 paste it into your group chat.'},
   race_admin_report_empty: {cn:'本期还没有成绩，先让学员答一轮。', en:'No scores this round yet.'},
   // A2 进步之星（2026-11-03）
-  race_board_mover: {cn:'📈 进步之星', en:'📈 Movers'},
+  race_board_mover: {cn:'进步之星', en:'Movers'},
   race_board_hint_mover: {cn:'📈 本届比历届最好成绩多答对的人数排的榜 —— 比"昨天"的自己更值得被看见。没有历届成绩的新学员不参与这张榜。', en:'📈 Ranked by answers gained over your own all-time best this round. First-timers without a previous best are not listed.'},
   race_mover_gain: {cn:'进步', en:'gain'},
   // B2 名人堂（2026-11-03）
@@ -4673,6 +4711,10 @@ var I18N = {
   race_tier_strip: {cn:'当前段位', en:'Current tier'},
   race_tier_next: {cn:'再打卡 {n} 天升级 {tier}', en:'{n} more days to {tier}'},
   race_tier_maxed: {cn:'已是最高段位', en:'Highest tier reached'},
+  race_tier_tap_hint: {cn:'点段位可看升级规则', en:'Tap a tier to see how it works'},
+  race_tier_info_title: {cn:'段位说明', en:'Tiers'},
+  race_tier_info_body: {cn:'段位按「累计打卡天数」升级（漏打一天不清零，只是当天不计入）。连续打卡另有连续型徽章负责。', en:'Tiers go up with all-time check-in days. Missing a day never resets your total \u2014 it just doesn\u2019t count. Streak badges handle consecutive days separately.'},
+  race_tier_you: {cn:'你现在', en:'You are here'},
   // A4 庆祝动画（2026-11-03）
   // B3 补签卡（2026-11-03）
   race_makeup_card_title: {cn:'✍ 连击告急 · 昨天漏打卡了？', en:'✍ Streak at risk \u2014 missed yesterday?'},
@@ -4924,6 +4966,9 @@ function collectSyncSnapshot() {
     // so the admin panel can flag "no PIN" (and offer a reset) without reading
     // the directory row for every student in the list.
     pinSetAt: (p.pinSetAt || 0),
+    // Stage 10: 注册待核查标记（'reserved' = 预留工号注册，'off-roster' = 工号
+    // 不在员工名册）。管理员核实后通过 pfFix 清除。
+    needsVerify: (p.needsVerify && p.needsVerify.reason) || '',
     ts: Date.now(),
     prog: state.practiceProgress || {},
     wrong: wrongCounts,
@@ -5818,6 +5863,8 @@ function refreshRoster() {
     // 徽章目录也放在这一行里（admin_state.badges）：学员只要拉到配置就能拿到最新的
     // 徽章名字 / 图标 / 达标线，不必等下次打开答题赛页面。
     if (j.data.badges && applyBadgeCatalog(j.data.badges)) changed = true;
+    // Stage 10: 员工名册（工号+姓名）也搭这一班车 —— 注册核验要用。
+    if (j.data.nameRoster && applyNameRoster(j.data.nameRoster)) changed = true;
     // 管理员对姓名 / 工号 / 部门的更正也放在这一行里。原来只有中继一条路，
     // 中继不通就永远应用不上（改名后排行榜一直是旧名字）。
     if (j.data.pfFix && j.data.pfFix.list && typeof applyPfFixes === 'function') {
@@ -5914,6 +5961,11 @@ function adminFetchRoster() {
     if (j.data.ver && j.data.ver <= cur.ver) return false;
     adminSaveRoster({ ver: j.data.ver, ids: j.data.ids || [], ts: j.data.ts || 0 });
     saveRoster({ ver: j.data.ver, ids: j.data.ids || [], ts: j.data.ts || 0 });
+    // Stage 10: 顺手把员工名册（姓名核验）也拉下来，管理端自查口径一致。
+    if (j.data.nameRoster) {
+      var nr = j.data.nameRoster, curNr = loadNameRoster();
+      if ((nr.ver || 0) > (curNr.ver || 0)) saveNameRoster(nr);
+    }
     return true;
   }).catch(function () { return false; });
 }
@@ -5934,6 +5986,370 @@ function adminRosterMissing() {
   out.sort(function (a, b) { return a.emp < b.emp ? -1 : (a.emp > b.emp ? 1 : 0); });
   return out;
 }
+
+// ===== Stage 10: 员工名册（工号 + 姓名）与注册核验 ==========================
+// 背景：有员工拿别人的工号注册，真正的主人反而无法注册。之前的有效工号名单
+// （admin_state.ids）只存工号不存姓名，无法判断"这个工号是不是你的"。
+// 现在增加一份带姓名的名册（admin_state.nameRoster = {ver, rows:{工号:{cn,en}}})：
+//   · 名册里登记了中文名  → 注册时中文名必须与名册完全一致；
+//   · 只有英文名（外国人）→ 英文分词模糊匹配，任一节相同即可（长名容错前后缀）；
+//   · 名册里只有工号没姓名 = 预留给新员工 → 正常放行，但账号打上 needsVerify
+//     标记随快照上报，管理员登录后台时会收到核查提醒。
+// 名册为空 / 未发布 → 一切照旧（fail-open，不拦截任何人）。
+var NAME_ROSTER_CACHE_KEY = 'empNameRoster';
+function loadNameRoster() {
+  try {
+    var s = JSON.parse(localStorage.getItem(NAME_ROSTER_CACHE_KEY) || 'null');
+    if (s && s.rows && typeof s.rows === 'object') return s;
+  } catch (e) {}
+  return { ver: 0, rows: {} };
+}
+function saveNameRoster(r) {
+  try { localStorage.setItem(NAME_ROSTER_CACHE_KEY, JSON.stringify(r || { ver: 0, rows: {} })); } catch (e) {}
+}
+// 云端消息只有在 ver 更大时才覆盖本地缓存（与 applyRosterMessage 同口径）。
+function applyNameRoster(m) {
+  if (!m || typeof m !== 'object' || !m.rows || typeof m.rows !== 'object') return false;
+  var cur = loadNameRoster();
+  if ((m.ver || 0) <= (cur.ver || 0)) return false;
+  saveNameRoster({ ver: m.ver || 0, rows: m.rows });
+  return true;
+}
+function nameRosterTokens(s) {
+  var out = [], parts = String(s || '').toLowerCase().split(/[^a-z]+/);
+  for (var i = 0; i < parts.length; i++) if (parts[i]) out.push(parts[i]);
+  return out;
+}
+// 注册姓名核验（纯函数，__test_roster_verify.js 覆盖）。返回：
+//   'no-roster'   名册未启用 → 放行（不打标记）
+//   'ok-exact'    中文名精确匹配
+//   'ok-fuzzy'    英文模糊匹配（任一节相同）
+//   'ok-reserved' 预留工号（名册里没有姓名）→ 放行，但需管理员核查
+//   'ok-off'      工号不在名册 → 放行（白名单语义不变），但需管理员核查
+//   'fail-exact' / 'fail-fuzzy' / 'fail-need-cn'  → 拦下
+function nameRosterCheck(emp, typedCn, typedEn, roster) {
+  var r = roster || loadNameRoster();
+  var rows = (r && r.rows) || {};
+  var hasAny = false;
+  for (var k in rows) { hasAny = true; break; }
+  if (!r || !r.ver || !hasAny) return 'no-roster';
+  var e = normEmpNo(emp);
+  var row = rows[e];
+  if (!row) return 'ok-off';
+  var cn = String(typedCn || '').trim();
+  var enn = String(typedEn || '').trim();
+  if (row.cn) {
+    if (!cn) return 'fail-need-cn';
+    return cn === String(row.cn).trim() ? 'ok-exact' : 'fail-exact';
+  }
+  if (row.en) {
+    var a = nameRosterTokens(enn), b = nameRosterTokens(row.en);
+    for (var i = 0; i < a.length; i++) {
+      var x = a[i];
+      if (!x || x.length < 2) continue;
+      for (var j = 0; j < b.length; j++) {
+        var y = b[j];
+        if (!y) continue;
+        if (x === y) return 'ok-fuzzy';
+        // 长名前后缀容错：Mohammad ↔ Mohammed、Faizal ↔ Faizalbin（双方 >=3 才算）
+        if (x.length >= 3 && y.length >= 3 && (y.indexOf(x) === 0 || x.indexOf(y) === 0)) return 'ok-fuzzy';
+      }
+    }
+    return 'fail-fuzzy';
+  }
+  return 'ok-reserved'; // 名册里只有工号没姓名 = 预留给新入职员工
+}
+// 该注册结果是否需要打「待核查」标记（随快照上报 admin 端）。
+function nameRosterNeedsVerify(verdict) {
+  return verdict === 'ok-reserved' || verdict === 'ok-off';
+}
+
+// ===== Stage 10b: 管理端修正的可靠下发（重试队列 + 账户目录 + 启动对账）=====
+// 根因复盘（2026-11-03"改了没生效"事故）：
+//   ① adminPushFixToSnapshot 只写 student_snapshots，从不写 accounts 目录表。
+//      目录表是"这个工号能不能注册"的权威数据源（登录时 resolveEmpAccount →
+//      fetchCloudAccountByEmp 先查它）—— 改工号后旧工号的目录行一直占坑，
+//      被占用工号的真正主人永远无法注册。
+//   ② 云端写失败（断路器断开 / 单次请求失败）只弹个警告，更正一次性丢失，
+//      本地缓存下次被云端旧数据盖回来，表现就是"前面改的都没成功"。
+// 治本三件套：
+//   A. adminFixAccountRow —— 改工号时同步改目录：旧行 neutralize（清 key，
+//      工号随之释放）+ 新键写完整档案（PIN 清空走"✓ 是我"认领流程）。
+//   B. adminPendingFixes 队列 —— 所有云端写进队列，30 秒一轮自动重试，
+//      直到云端确认；后台首页常驻显示待同步条数。
+//   C. adminFixReconcile —— 管理端登录时对账：pfFix 名单里每个人的云端
+//      快照必须与更正一致，不一致的（历史改失败的）自动补推。
+var ADMIN_FIX_RETRY_MS = 30000;
+var adminFixTimer = null;
+var adminFixFlushing = false;
+function adminLoadPendingFixes() {
+  try {
+    var s = JSON.parse(localStorage.getItem('adminPendingFixes') || 'null');
+    if (s && s.list && typeof s.list === 'object') return s;
+  } catch (e) {}
+  return { list: {} };
+}
+function adminSavePendingFixes(q) {
+  try { localStorage.setItem('adminPendingFixes', JSON.stringify(q || { list: {} })); } catch (e) {}
+}
+function adminPendingFixCount() {
+  var q = adminLoadPendingFixes(), n = 0;
+  for (var k in q.list) n++;
+  return n;
+}
+function adminEnqueueFix(stuKey, fix) {
+  if (!stuKey || !fix) return;
+  var q = adminLoadPendingFixes();
+  q.list[stuKey] = { fix: fix, ts: Date.now(), tries: (q.list[stuKey] && q.list[stuKey].tries) || 0 };
+  adminSavePendingFixes(q);
+}
+// A. 改名 / 更正时把账户目录（accounts 表）一起改掉。
+function adminFixAccountRow(oldKey, newKey, fix) {
+  if (typeof sbGetAccountJson !== 'function' || typeof sbUpsertAccount !== 'function') return Promise.resolve(false);
+  if (!SB_ON) return Promise.resolve(true); // SB 断开 → 目录侧放行（同 adminPushFixToSnapshot）
+  if (!oldKey) return Promise.resolve(false);
+  fix = fix || {};
+  return sbGetAccountJson(oldKey).then(function (j) {
+    if (!j || !j.hit) return true; // 目录里没有这一行 → 没什么可改，视为成功
+    var target = newKey || oldKey;
+    var rec = {
+      key: target,
+      // 改工号 = PIN 哈希的盐变了（pinHash(emp, pin)），旧哈希必然对不上，
+      // 清空让学员走"✓ 是我"认领流程重设 —— 与设备端 applyPfFixEntry 同口径。
+      pin: (target !== oldKey) ? '' : (j.pin || ''),
+      pinSetAt: (target !== oldKey) ? 0 : (j.pinSetAt || 0),
+      snap: j.snap || {}, events: j.events || [], details: j.details || {}, fa: j.fa || {}
+    };
+    var s = rec.snap;
+    if (fix.emp) s.emp = fix.emp;
+    if (typeof fix.cn === 'string') s.cn = fix.cn;
+    if (typeof fix.en === 'string') s.en = fix.en;
+    if (fix.cn || fix.en) s.name = (fix.en || fix.cn);
+    if (fix.divCn || fix.divEn) { s.div = fix.divCn || ''; s.divEn = fix.divEn || ''; }
+    if (fix.deptCn || fix.deptEn) { s.dept = fix.deptCn || ''; s.deptEn = fix.deptEn || ''; }
+    if (fix.clearNv) delete s.needsVerify;
+    var jobs = [];
+    if (target !== oldKey) {
+      // 旧行 neutralize：清掉 key，目录查询（fetchKvAccountByRowKey 要求
+      // j.key 非空）就不再命中 —— 旧工号随之释放，真正的主人可以注册了。
+      // 无删除权限，行本身保留；snap.emp 一并清掉防 ntfy 匹配误命中。
+      var oldRec = null;
+      try { oldRec = JSON.parse(JSON.stringify(rec)); } catch (e) { oldRec = null; }
+      if (oldRec) {
+        oldRec.key = ''; oldRec.pin = ''; oldRec.pinSetAt = 0;
+        oldRec.snap.superseded = target;
+        if (fix.emp) delete oldRec.snap.emp;
+        jobs.push(sbUpsertAccount(oldKey, oldRec, Date.now()));
+      }
+      delete rec.snap.superseded;
+      jobs.push(sbUpsertAccount(target, rec, Date.now()));
+    } else {
+      jobs.push(sbUpsertAccount(oldKey, rec, Date.now()));
+    }
+    return Promise.all(jobs).then(function () { return true; }, function () { return false; });
+  }, function () { return false; });
+}
+// 单个 fix 的一轮云端写：快照 → 目录。任一失败都算这轮失败。
+// SB 关闭（配置/断路器断开且未恢复）→ 两条云路都跳过，交由 publishPfFixes
+// 走中继老路 —— 不能调用 sbResetBreaker 强行重开 SB，否则配置关闭会被无视。
+function adminFixFlushOne(stuKey, entry) {
+  if (!SB_ON) return Promise.resolve(true);
+  var fix = (entry && entry.fix) || {};
+  return adminPushFixToSnapshot(stuKey, fix).then(function (snapOk) {
+    if (!snapOk) return false;
+    var newKey = (fix.emp && typeof accountKeyFor === 'function') ? (accountKeyFor(fix.cn, fix.en, fix.emp) || stuKey) : stuKey;
+    return adminFixAccountRow(stuKey, newKey, fix);
+  }, function () { return false; });
+}
+// B. 队列主循环：一轮把队列里所有 fix 顺序写云端，全成功后再把 pfFix 名单
+// 合并进 admin_state（学员端下拉生效）。任何失败 → 30 秒后自动再来。
+function adminFixFlush() {
+  if (adminFixFlushing) return Promise.resolve(false);
+  var q = adminLoadPendingFixes();
+  var keys = Object.keys(q.list);
+  if (!keys.length) return Promise.resolve(true);
+  adminFixFlushing = true;
+  if (SB_ON) { try { if (typeof sbResetBreaker === 'function') sbResetBreaker(); } catch (e) {} }
+  var remaining = null;
+  try { remaining = JSON.parse(JSON.stringify(q.list)); } catch (e) { remaining = q.list; }
+  var seq = Promise.resolve(true);
+  for (var i = 0; i < keys.length; i++) {
+    (function (k) {
+      seq = seq.then(function (ok) {
+        if (!ok) return false; // 前一个失败 → 本轮断路，等下一轮重试
+        return adminFixFlushOne(k, remaining[k]).then(function (one) {
+          if (one) delete remaining[k];
+          else remaining[k].tries = (remaining[k].tries || 0) + 1;
+          return one;
+        }, function () { return false; });
+      });
+    })(keys[i]);
+  }
+  function finish(allOk) {
+    adminFixFlushing = false;
+    q.list = allOk ? {} : remaining;
+    adminSavePendingFixes(q);
+    if (!allOk) adminFixScheduleRetry();
+    return allOk;
+  }
+  return seq.then(function (lastOk) {
+    if (!lastOk) return finish(false);
+    // 云端档案全部写成功 → 同步 pfFix 名单（中继失败不影响云端那一份的判定）
+    var fl = adminLoadPfFixes();
+    return publishPfFixes(fl.list).then(function (ok) {
+      return finish(!!ok);
+    }, function () { return finish(false); });
+  }, function () { return finish(false); });
+}
+function adminFixScheduleRetry() {
+  if (adminFixTimer) return;
+  adminFixTimer = setTimeout(function () {
+    adminFixTimer = null;
+    adminFixFlush();
+  }, ADMIN_FIX_RETRY_MS);
+}
+// C. 管理端登录对账：pfFix 名单里每个人，云端快照的实际姓名/工号必须与
+// 更正一致；不一致 = 历史上某次更正没写进云端 → 现在补推（含目录行）。
+function adminFixReconcile() {
+  var fl = adminLoadPfFixes();
+  var keys = Object.keys(fl.list || {});
+  if (!keys.length) return Promise.resolve(0);
+  if (typeof sbJson !== 'function' || typeof normEmpNo !== 'function') return Promise.resolve(0);
+  var path = '/rest/v1/student_snapshots?select=phone,record&phone=in.(' + keys.map(encodeURIComponent).join(',') + ')';
+  return sbJson(path, null, SB_SNAPSHOT_TIMEOUT_MS, 'sb-fix-reconcile').then(function (rows) {
+    var byKey = {};
+    if (Array.isArray(rows)) {
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i] && rows[i].phone) byKey[rows[i].phone] = rows[i].record;
+      }
+    }
+    var n = 0;
+    for (var k = 0; k < keys.length; k++) {
+      var key = keys[k], fix = fl.list[key];
+      if (!fix) continue;
+      var rec = byKey[key];
+      var s = (rec && rec.snap) || null;
+      var stale = false;
+      if (!s) stale = true;
+      else {
+        if (fix.emp && normEmpNo(s.emp || '') !== normEmpNo(fix.emp)) stale = true;
+        if (typeof fix.cn === 'string' && fix.cn && (s.cn || '') !== fix.cn) stale = true;
+        if (typeof fix.en === 'string' && fix.en && (s.en || '') !== fix.en) stale = true;
+        if (fix.clearNv && s.needsVerify) stale = true;
+      }
+      if (stale) { adminEnqueueFix(key, fix); n++; }
+    }
+    if (n) adminFixFlush();
+    return n;
+  }, function () { return 0; });
+}
+// ===== Stage 10c: 注册待核查（管理员侧）=====================================
+// 预留工号注册 / 不在名册的工号注册 → 学员快照带 needsVerify 字段，这里汇总。
+function adminPendingVerifyStudents() {
+  var recs = adminStudentRecords();
+  var out = [];
+  for (var i = 0; i < recs.length; i++) {
+    var s = recs[i].snap || {};
+    if (!s.needsVerify || s.superseded) continue;
+    out.push({
+      key: recs[i].key,
+      emp: adminStudentEmp(recs[i]),
+      name: ((s.cn || '') + ((s.cn && s.en) ? ' / ' : '') + (s.en || s.name || '')) || recs[i].key,
+      reason: String(s.needsVerify)
+    });
+  }
+  return out;
+}
+// 「标记已核实」：发一条只清 needsVerify 的更正（走同一条可靠下发链路）。
+function adminClearNeedsVerify(stuKey) {
+  var fix = { clearNv: 1, fv: Date.now() };
+  var fixes = adminLoadPfFixes();
+  fixes.list[stuKey] = fix;
+  var keys = Object.keys(fixes.list);
+  if (keys.length > PF_FIX_MAX) {
+    keys.sort(function (a, b) { return fixes.list[a].fv - fixes.list[b].fv; });
+    for (var i = 0; i < keys.length - PF_FIX_MAX; i++) delete fixes.list[keys[i]];
+  }
+  adminSavePfFixes(fixes); // 立刻落本地（对账依据，见 adminSaveStudentEdit 同注）
+  adminRenameCacheStudent(stuKey, fix);   // 本地缓存同步清标记
+  adminEnqueueFix(stuKey, fix);
+  render();
+  adminFixFlush();
+}
+// ===== Stage 10d: 员工名册导入（管理端）=====================================
+// 解析 CSV / 粘贴文本。列序容错：按单元格特征识别 —— 含数字的短串=工号，
+// 纯汉字=中文名，纯字母（可带空格/间隔号）=英文名；首行是表头则跳过。
+function parseNameRosterCsv(raw) {
+  var rows = {};
+  var lines = String(raw == null ? '' : raw).replace(/^\uFEFF/, '').split(/\r?\n/);
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (!line) continue;
+    var cells = line.split(/[\t,，;]/);
+    for (var c0 = 0; c0 < cells.length; c0++) cells[c0] = cells[c0].trim();
+    var nonEmpty = [];
+    for (var c1 = 0; c1 < cells.length; c1++) if (cells[c1]) nonEmpty.push(cells[c1]);
+    if (!nonEmpty.length) continue;
+    // 表头行：含「工号 / 中文名 / 英文名 / emp / name」等字样且不含数字
+    var joined = nonEmpty.join(' ').toLowerCase();
+    var hasDigit = false;
+    for (var c2 = 0; c2 < nonEmpty.length; c2++) if (/\d/.test(nonEmpty[c2])) { hasDigit = true; break; }
+    if (!hasDigit && /工号|中文名|英文名|姓名|emp|name/i.test(joined)) continue;
+    var emp = '', cn = '', en = '';
+    for (var c3 = 0; c3 < nonEmpty.length; c3++) {
+      var v = nonEmpty[c3];
+      if (isCnNameValid(v)) { if (!cn) cn = v; continue; }
+      if (/\d/.test(v) && /^[0-9A-Za-z][0-9A-Za-z-]{0,15}$/.test(v)) { if (!emp) emp = normEmpNo(v); continue; }
+      if (!en && /^[A-Za-z][A-Za-z .'\-]{1,39}$/.test(v)) { en = v; continue; }
+    }
+    if (!emp) continue; // 没有工号的行丢弃
+    rows[emp] = { cn: cn, en: en };
+  }
+  var count = 0;
+  for (var k in rows) count++;
+  return { count: count, rows: rows };
+}
+var NAME_ROSTER_MAX = 3000;
+function adminNameRosterPublish(rows) {
+  var payload = { ver: Date.now(), rows: rows || {} };
+  if (!SB_ON) return Promise.resolve(false);
+  return sbMergeAdminState({ nameRoster: payload }).then(function () {
+    saveNameRoster(payload);
+    try { localStorage.setItem('adminNameRoster', JSON.stringify(payload)); } catch (e) {}
+    return true;
+  }).catch(function () { return false; });
+}
+function adminNameRosterImport() {
+  var en = state.lang === 'en';
+  var el = document.getElementById('nameRosterBulk');
+  var parsed = parseNameRosterCsv(el ? el.value : '');
+  if (!parsed.count) {
+    adminRosterMsg(en ? 'No valid rows found — each row needs an employee ID.' : '没有解析到有效行：每行至少要有一个工号。', true);
+    return;
+  }
+  var withName = 0, reserved = 0;
+  for (var k in parsed.rows) { if (parsed.rows[k].cn || parsed.rows[k].en) withName++; else reserved++; }
+  var msg = en
+    ? 'Parsed ' + parsed.count + ' rows: ' + withName + ' with names, ' + reserved + ' reserved (blank name). Publish and enforce name checks?'
+    : '解析到 ' + parsed.count + ' 行：' + withName + ' 行有姓名，' + reserved + ' 行为预留工号（无姓名，注册后需核查）。确认发布并启用姓名核验？';
+  if (!confirm(msg)) return;
+  if (el) el.value = '';
+  adminNameRosterPublish(parsed.rows).then(function (ok) {
+    adminRosterMsg(ok
+      ? ('✅ ' + (en ? 'Name roster published: ' : '员工名册已发布，注册核验已启用：') + parsed.count)
+      : (en ? '⚠️ Publish failed — check the network and try again.' : '⚠️ 发布失败，请检查网络后重试。'), !ok);
+    render();
+  });
+}
+function adminNameRosterClear() {
+  var en = state.lang === 'en';
+  if (!confirm(en ? 'Clear the name roster? Registration name checks will be disabled.' : '确认清空员工名册？注册时将不再核验姓名。')) return;
+  adminNameRosterPublish({}).then(function (ok) {
+    if (ok) adminRosterMsg(en ? 'Name roster cleared.' : '员工名册已清空。');
+    render();
+  });
+}
+
 
 // Record one finished exam as a sync event — called exactly once from
 // submitExam() / endExamAutomatically() before navigating to the result page.
@@ -6342,6 +6758,14 @@ function loginRegisterSubmit() {
   if (d.pin !== d.pin2) { loginErr(t('login_pin_mismatch')); return; }
   var emp = normEmpNo(state.loginEmp);
   if (isEmpBlocked(emp)) { loginErr(empBlockMsg(emp)); return; }
+  // Stage 10: 注册姓名核验 —— 工号必须和名册里的姓名对得上（详见 nameRosterCheck）。
+  var verdict = nameRosterCheck(emp, d.cn, d.en);
+  if (verdict === 'fail-exact') { loginErr(t('reg_verify_exact')); return; }
+  if (verdict === 'fail-fuzzy') { loginErr(t('reg_verify_fuzzy')); return; }
+  if (verdict === 'fail-need-cn') { loginErr(t('reg_verify_need_cn')); return; }
+  d.needsVerify = nameRosterNeedsVerify(verdict)
+    ? { reason: (verdict === 'ok-reserved' ? 'reserved' : 'off-roster'), ts: Date.now() }
+    : null;
   state.loginBusy = true;
   render();
   // Guardrail: re-check the directory before creating anything. If the ID was
@@ -6373,6 +6797,7 @@ function loginRegisterSubmit() {
       division: divObj, dept: deptObj,
       pinHash: pinHash(emp, d.pin), pinSetAt: Date.now()
     };
+    if (d.needsVerify) p.needsVerify = d.needsVerify; // 预留/不在名册 → 随快照上报待核查
     finishEmpLogin(akey, p);
   }).catch(function() {
     // The re-check could not reach the directory. Creating the account is the
@@ -6385,6 +6810,7 @@ function loginRegisterSubmit() {
     p0.cnName = d.cn; p0.enName = d.en; p0.foreignNoCn = !!d.foreign;
     p0.pinHash = pinHash(emp, d.pin);
     p0.pinSetAt = Date.now();
+    if (d.needsVerify) p0.needsVerify = d.needsVerify;
     finishEmpLogin(akey, p0);
   });
 }
@@ -7245,6 +7671,87 @@ function adminWindowQuickHtml(fnName, pk, inputId) {
 // 限时答题赛专用：赛事通常按「小时」开（半天 / 一天），分钟档位不好用。
 // 档位是小时，回填函数仍然收分钟（×60），复用同一套窗口逻辑。
 var RACE_WINDOW_HOURS = [1, 24];
+// 限时答题赛专用：赛事通常按「小时 / 天 / 整月」开。2026-11-04 起档位改成
+// 现在起 24 小时 / 3 天 / 7 天 / 任意 X 天 / 某月全月（1 号 0:00 → 当月最后一天 23:59）。
+// 注意：不能复用 adminWindowQuickHoursHtml —— 那条链把时长卡在 1440 分钟（24 小时）。
+var RACE_WINDOW_DAY_PRESETS = [1, 3, 7];
+var RACE_WINDOW_MAX_DAYS = 120;
+function adminFillRaceDays(days) {
+  var d = parseInt(days, 10);
+  if (!(d > 0)) d = 1;
+  if (d > RACE_WINDOW_MAX_DAYS) d = RACE_WINDOW_MAX_DAYS;
+  var s = document.getElementById('raceStart'), e = document.getElementById('raceEnd');
+  var now = new Date();
+  now.setSeconds(0, 0);
+  if (s) s.value = localInputFromDate(now);
+  if (e) {
+    var end = new Date(now.getTime() + d * 86400000);
+    end.setSeconds(0, 0);
+    e.value = localInputFromDate(end);
+  }
+}
+function adminQuickApplyRaceDays() {
+  var el = document.getElementById('raceQuickDays');
+  var raw = el ? String(el.value == null ? '' : el.value).trim() : '';
+  var d = parseInt(raw, 10);
+  if (!isFinite(d) || d < 1) { alert(t('win_custom_bad')); if (el) { try { el.focus(); } catch (e) {} } return; }
+  adminFillRaceDays(d);
+}
+// 某月全月：1 号 00:00 → 当月最后一天 23:59（自然日口径）
+function adminFillRaceMonth(ym) {
+  var v = String(ym || '');
+  var m = v.match(/^(\d{4})-(\d{2})$/);
+  var now = new Date();
+  var yy = m ? parseInt(m[1], 10) : now.getFullYear();
+  var mm = m ? parseInt(m[2], 10) : (now.getMonth() + 1);
+  if (!(mm >= 1 && mm <= 12)) mm = now.getMonth() + 1;
+  var start = new Date(yy, mm - 1, 1, 0, 0, 0, 0);
+  var end = new Date(yy, mm, 0, 23, 59, 0, 0);   // 下个月第 0 天 = 本月最后一天
+  var s = document.getElementById('raceStart'), e = document.getElementById('raceEnd');
+  if (s) s.value = localInputFromDate(start);
+  if (e) e.value = localInputFromDate(end);
+}
+function adminQuickApplyRaceMonth() {
+  var sel = document.getElementById('raceQuickMonth');
+  adminFillRaceMonth(sel ? sel.value : '');
+}
+// 月份下拉：本月 + 后两个月（管理员最常开的就是"这个月整月"）
+function raceMonthOptionsHtml() {
+  var en = state.lang === 'en';
+  var now = new Date(), out = '', i;
+  for (i = 0; i < 3; i++) {
+    var d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    var ym = d.getFullYear() + '-' + __pad2(d.getMonth() + 1);
+    var label = d.getFullYear() + (en ? '/' : ' 年 ') + (d.getMonth() + 1) + (en ? '' : ' 月');
+    out += '<option value="' + ym + '">' + label + (i === 0 ? (en ? ' (this month)' : '（本月）') : '') + '</option>';
+  }
+  return out;
+}
+function adminRaceWindowQuickHtml() {
+  var en = state.lang === 'en';
+  var h = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px;">';
+  h += '<span style="font-size:11px;color:var(--text-light);">' + t('win_quick') + '</span>';
+  for (var i = 0; i < RACE_WINDOW_DAY_PRESETS.length; i++) {
+    var d = RACE_WINDOW_DAY_PRESETS[i];
+    var label = d === 1 ? (en ? 'now + 24 hr' : '现在起 24 小时')
+      : (en ? ('now + ' + d + ' days') : ('现在起 ' + d + ' 天'));
+    h += '<button type="button" class="nav-btn secondary" style="flex:0 0 auto;padding:5px 9px;font-size:12px;" onclick="adminFillRaceDays(' + d + ')">' + label + '</button>';
+  }
+  h += '</div>';
+  // 自定义天数 + 整月：同一行放不下就自动换行
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">';
+  h += '<span style="font-size:11px;color:var(--text-light);">' + (en ? 'now +' : '现在起') + '</span>';
+  h += '<input id="raceQuickDays" type="number" inputmode="numeric" min="1" max="' + RACE_WINDOW_MAX_DAYS + '" step="1" placeholder="' + (en ? 'days' : '天') + '" style="width:66px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();adminQuickApplyRaceDays()}">';
+  h += '<span style="font-size:11px;color:var(--text-light);">' + (en ? 'days' : '天') + '</span>';
+  h += '<button type="button" class="nav-btn secondary" style="flex:0 0 auto;padding:5px 9px;font-size:12px;" onclick="adminQuickApplyRaceDays()">' + t('win_apply') + '</button>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">';
+  h += '<select id="raceQuickMonth" style="padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;">' + raceMonthOptionsHtml() + '</select>';
+  h += '<button type="button" class="nav-btn secondary" style="flex:0 0 auto;padding:5px 9px;font-size:12px;" onclick="adminQuickApplyRaceMonth()">' + (en ? 'Whole month' : '整月全开') + '</button>';
+  h += '<span style="font-size:11px;color:var(--text-light);">' + (en ? '1st 00:00 \u2192 last day 23:59' : '1 号 0:00 → 月末 23:59') + '</span>';
+  h += '</div>';
+  return h;
+}
 function adminWindowQuickHoursHtml(fnName, pk, inputId) {
   var en = state.lang === 'en';
   var arg = pk ? "'" + pk + "'," : '';
@@ -7640,67 +8147,138 @@ var BADGE_RULE_TOTAL = 'total';
 // 让"怎么答的 / 什么时候来的"也能变成荣誉：
 //   night   夜猫子 —— 22:00 后（凌晨 5 点前）打卡，每期一枚（按流水 ts 判断）
 //   weekend 周末战士 —— 累计周末打卡 N 天，终身一次
-//   perfect 神射手 —— 单期答对 N 题且全对，每期一枚（读各届最佳成绩，不需要新数据）
+//   perfect 答题能手 —— 单次答对 N 题以上（原「神射手」，2026-11-04 改为按答对题数判）
 //   fast    闪电快手 —— 单期平均每题不超过 N 秒（至少答 5 题），每期一枚（读成绩里的 secs）
 //   newbie  初出茅庐 —— 首次打卡起 7 天内打卡满 N 天，终身一次（新手任务）
-// 彩蛋不再往「天数」三组里挤：徽章墙 / 集锦里单独一组「挑战彩蛋」展示。
+// 2026-11-04 扩到五大类：
+//   竞速闯关 dept_top 任意单一板块速答榜当期 TOP N / all_top 全题库榜当期 TOP N
+//             —— 要跟别人比，只能在**拿到榜单数据**时结算（raceAwardRankBadges）
+//   学习沉淀 wrong 累计重做错题 N 道 / fav 累计收藏 N 道 / practice 练习模式答题 N 道
+//             —— 读本机学习统计（studyStats），终身一次
+//   限定月度  theme 绑定某一届、该届打卡 N 天，终身一次（换名字就是新的一期主题）
 var BADGE_RULE_NIGHT = 'night';
 var BADGE_RULE_WEEKEND = 'weekend';
 var BADGE_RULE_PERFECT = 'perfect';
 var BADGE_RULE_FAST = 'fast';
 var BADGE_RULE_NEWBIE = 'newbie';
+var BADGE_RULE_DEPT_TOP = 'dept_top';
+var BADGE_RULE_ALL_TOP = 'all_top';
+var BADGE_RULE_WRONG = 'wrong';
+var BADGE_RULE_FAV = 'fav';
+var BADGE_RULE_PRACTICE = 'practice';
+var BADGE_RULE_THEME = 'theme';
 var BADGE_SPECIAL_RULES = [BADGE_RULE_NIGHT, BADGE_RULE_WEEKEND, BADGE_RULE_PERFECT, BADGE_RULE_FAST, BADGE_RULE_NEWBIE];
+// 规则白名单（老目录里出现别的值一律退回连续型）
+var BADGE_ALL_RULES = [BADGE_RULE_STREAK, BADGE_RULE_PERIOD, BADGE_RULE_TOTAL]
+  .concat(BADGE_SPECIAL_RULES)
+  .concat([BADGE_RULE_DEPT_TOP, BADGE_RULE_ALL_TOP, BADGE_RULE_WRONG, BADGE_RULE_FAV, BADGE_RULE_PRACTICE, BADGE_RULE_THEME]);
 function badgeIsSpecialRule(rule) { return BADGE_SPECIAL_RULES.indexOf(rule) >= 0; }
-// 展示归属：weekend / newbie 是"攒出来的"→ 归累计型（'t'，终身一次，存 '_'）；
-// night / perfect / fast 是"这一期打出来的"→ 归单期型（'m'，每期可再拿）。
+// ---- 五大类 ----
+var BADGE_CAT_CHECKIN = 'checkin';
+var BADGE_CAT_SPEED = 'speed';
+var BADGE_CAT_STUDY = 'study';
+var BADGE_CAT_SPECIAL = 'special';
+var BADGE_CAT_THEME = 'theme';
+var BADGE_CATS = [
+  { key: BADGE_CAT_CHECKIN, icon: '📅', labelKey: 'race_badge_cat_checkin' },
+  { key: BADGE_CAT_SPEED,   icon: '⚡', labelKey: 'race_badge_cat_speed' },
+  { key: BADGE_CAT_STUDY,   icon: '📚', labelKey: 'race_badge_cat_study' },
+  { key: BADGE_CAT_SPECIAL, icon: '🎖', labelKey: 'race_badge_cat_special' },
+  { key: BADGE_CAT_THEME,   icon: '🦁', labelKey: 'race_badge_cat_theme' }
+];
+// 规则 → 大类。UI 分组、头像框解锁、排序都只看这一个函数，避免多处口径漂移。
+function badgeCatOf(rule) {
+  if (rule === BADGE_RULE_STREAK || rule === BADGE_RULE_PERIOD || rule === BADGE_RULE_TOTAL) return BADGE_CAT_CHECKIN;
+  if (rule === BADGE_RULE_DEPT_TOP || rule === BADGE_RULE_ALL_TOP) return BADGE_CAT_SPEED;
+  if (rule === BADGE_RULE_WRONG || rule === BADGE_RULE_FAV || rule === BADGE_RULE_PRACTICE) return BADGE_CAT_STUDY;
+  if (rule === BADGE_RULE_THEME) return BADGE_CAT_THEME;
+  return BADGE_CAT_SPECIAL;
+}
+function badgeCatIndexOf(rule) {
+  var k = badgeCatOf(rule);
+  for (var i = 0; i < BADGE_CATS.length; i++) if (BADGE_CATS[i].key === k) return i;
+  return 0;
+}
+function badgeCatMeta(key) {
+  for (var i = 0; i < BADGE_CATS.length; i++) if (BADGE_CATS[i].key === key) return BADGE_CATS[i];
+  return BADGE_CATS[0];
+}
+function badgeCatLabel(key, lang) {
+  var m = badgeCatMeta(key), e = I18N[m.labelKey];
+  var L = lang || state.lang;
+  return e ? (e[L] || e.cn) : key;
+}
+// 展示归属：weekend / newbie / 学习沉淀 是"攒出来的"→ 归累计型（'t'，终身一次，存 '_'）；
+// night / perfect / fast / 竞速 / 主题 是"这一期打出来的"→ 归单期型（'m'，每期可再拿）。
 function badgeRuleKind(rule) {
-  return (rule === BADGE_RULE_WEEKEND || rule === BADGE_RULE_NEWBIE) ? 't' : 'm';
+  if (rule === BADGE_RULE_WEEKEND || rule === BADGE_RULE_NEWBIE
+    || rule === BADGE_RULE_WRONG || rule === BADGE_RULE_FAV || rule === BADGE_RULE_PRACTICE) return 't';
+  return 'm';
 }
 var BADGE_CATALOG_KEY = 'badgeCatalog';
 
-function badgeDef(id, rule, n, cn, en, icon, lv, c1, c2) {
-  return { id: id, rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: c1, c2: c2, on: true };
+function badgeDef(id, rule, n, cn, en, icon, lv, c1, c2, rid) {
+  return { id: id, rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: c1, c2: c2, on: true, rid: rid || '' };
 }
 // 预设徽章：先用一套合理的，管理端随时可改（改完发布即生效）。
 // 命名走「主题名 + 规则说明」：名号给人身份感（学习王者），副标题说清怎么拿到。
 function badgeDefaultCatalog() {
   var S = BADGE_RULE_STREAK, P = BADGE_RULE_PERIOD, T = BADGE_RULE_TOTAL;
   var N = BADGE_RULE_NIGHT, W = BADGE_RULE_WEEKEND, PF = BADGE_RULE_PERFECT, F = BADGE_RULE_FAST, NB = BADGE_RULE_NEWBIE;
+  var DT = BADGE_RULE_DEPT_TOP, AT = BADGE_RULE_ALL_TOP;
+  var WG = BADGE_RULE_WRONG, FV = BADGE_RULE_FAV, PR = BADGE_RULE_PRACTICE, TH = BADGE_RULE_THEME;
   return {
-    ver: 3,
+    ver: 4,
     list: [
       badgeDef('bd_s3', S, 3, '星火初燃', 'First Spark', '✨', 1, '#ffd27f', '#ff9a3c'),
       badgeDef('bd_s5', S, 5, '坚持之力', 'Steady Flame', '🔥', 2, '#ffc46b', '#ff7a00'),
       badgeDef('bd_s7', S, 7, '一周之火', 'Week of Fire', '🌋', 3, '#ffb347', '#ff5e00'),
-      badgeDef('bd_s14', S, 14, '双周铁人', 'Iron Fortnight', '🏅', 4, '#ffcf6b', '#e08e00'),
+      badgeDef('bd_s14', S, 14, '双周达人', 'Fortnight Pro', '🏅', 4, '#ffcf6b', '#e08e00'),
       badgeDef('bd_s21', S, 21, '习惯大师', 'Habit Master', '🏆', 5, '#ffe08a', '#c99700'),
       badgeDef('bd_p10', P, 10, '月度常客', 'Monthly Regular', '📅', 2, '#a8d8ff', '#2b6cb0'),
       badgeDef('bd_p15', P, 15, '半程之星', 'Half-month Star', '🌟', 3, '#9fd0ff', '#1f5f9e'),
-      badgeDef('bd_p20', P, 20, '月度全勤王', 'Monthly Champion', '🥇', 4, '#8ec4ff', '#174a7c'),
+      badgeDef('bd_p20', P, 20, '月度全勤狮', 'Monthly Lion', '🦁', 4, '#8ec4ff', '#174a7c'),
       badgeDef('bd_t30', T, 30, '稳步前行', '30-day Walker', '🌿', 2, '#b7e4c7', '#2f855a'),
       badgeDef('bd_t60', T, 60, '勤学不辍', '60-day Scholar', '🌳', 3, '#9fd8b0', '#276749'),
       badgeDef('bd_t100', T, 100, '学习王者', 'Learning Champion', '👑', 5, '#ffe08a', '#b7791f'),
+      badgeDef('bd_depttop', DT, 10, '题库征服者', 'Section Conqueror', '🎯', 3, '#ffd08a', '#e06c00'),
+      badgeDef('bd_alltop', AT, 10, '全题库大师', 'All-Bank Master', '🥇', 5, '#ffe08a', '#b7791f'),
+      badgeDef('bd_wrong', WG, 50, '错题猎手', 'Mistake Hunter', '🏹', 3, '#d7c4f5', '#6b46c1'),
+      badgeDef('bd_fav', FV, 20, '考点收藏家', 'Key Point Collector', '⭐', 3, '#ffe9a8', '#c08a00'),
+      badgeDef('bd_prac', PR, 100, '温故知新', 'Review Master', '📖', 3, '#bfe3ff', '#1a5c96'),
       badgeDef('bd_newb', NB, 3, '初出茅庐', 'First Steps', '🌱', 1, '#c8e6c9', '#388e3c'),
       badgeDef('bd_night', N, 1, '夜猫子', 'Night Owl', '🦉', 2, '#c5cae9', '#303f9f'),
       badgeDef('bd_wkend', W, 3, '周末战士', 'Weekend Warrior', '⚔️', 2, '#b2dfdb', '#00695c'),
-      badgeDef('bd_perf', PF, 5, '神射手', 'Sharp Shooter', '💯', 3, '#f8bbd0', '#ad1457'),
-      badgeDef('bd_fast', F, 15, '闪电快手', 'Lightning Fast', '⚡', 3, '#ffe08a', '#ef6c00')
+      badgeDef('bd_perf', PF, 10, '答题能手', 'Run Sharpshooter', '💯', 3, '#f8bbd0', '#ad1457'),
+      badgeDef('bd_fast', F, 5, '闪电快手', 'Lightning Fast', '⚡', 3, '#ffe08a', '#ef6c00'),
+      badgeDef('bd_theme1', TH, 1, '产品知识启航狮', 'Product Launch Lion', '⛵', 3, '#ffd7a8', '#c2410c')
     ]
   };
 }
-// 一次性图标迁移：v1 预设里连续 3/5/7 天共用 🔥、月度全勤王和学习王者共用 👑。
-// 已发布/已保存的目录里这五枚若**原封未动**（名字没改、图标还是旧值），就悄悄换成新图标；
-// 管理员改过名字或图标的条目一律不碰。
-var BADGE_ICON_MIGRATE = {
-  'bd_s3':  { cn: '星火初燃', en: 'First Spark',       old: '🔥', icon: '✨' },
-  'bd_s5':  { cn: '坚持之力', en: 'Steady Flame',      old: '🔥', icon: '🔥' },
-  'bd_s7':  { cn: '一周之火', en: 'Week of Fire',       old: '🔥', icon: '🌋' },
-  'bd_p20': { cn: '月度全勤王', en: 'Monthly Champion', old: '👑', icon: '🥇' }
+// 一次性迁移（v1 → 当前）：旧预设里图标 / 名字被“原封未动”的条目才改，
+// 管理员自己改过名字或图标的一律不碰（尊重手动配置）。
+//   - 图标：连续 3/5/7 天曾共用 🔥、月度全勤与学习王者曾共用 👑
+//   - 命名（2026-11-04）：双周铁人→双周达人、月度全勤王→月度全勤狮（🦁）、神射手→答题能手（改按答对题数）
+//   - 门槛：答题能手 5→10 题、闪电快手 15→5 秒
+var BADGE_LEGACY_MIGRATE = {
+  'bd_s3':  { cn: '星火初燃', en: 'First Spark',       fromIcons: ['🔥'], icon: '✨' },
+  'bd_s5':  { cn: '坚持之力', en: 'Steady Flame',      fromIcons: ['🔥'], icon: '🔥' },
+  'bd_s7':  { cn: '一周之火', en: 'Week of Fire',       fromIcons: ['🔥'], icon: '🌋' },
+  'bd_s14': { fromCn: '双周铁人', cn: '双周达人', en: 'Fortnight Pro' },
+  'bd_p20': { fromCn: '月度全勤王', cn: '月度全勤狮', en: 'Monthly Lion', fromIcons: ['👑', '🥇'], icon: '🦁' },
+  'bd_perf': { fromCn: '神射手', cn: '答题能手', en: 'Run Sharpshooter', n: 10 },
+  'bd_fast': { fromCn: '闪电快手', fromEn: 'Lightning Fast', cn: '闪电快手', en: 'Lightning Fast', n: 5 }
 };
 function badgeMigrateIcons(list) {
   for (var i = 0; i < list.length; i++) {
-    var m = BADGE_ICON_MIGRATE[list[i].id];
-    if (m && list[i].cn === m.cn && list[i].en === m.en && list[i].icon === m.old) list[i].icon = m.icon;
+    var b = list[i], m = BADGE_LEGACY_MIGRATE[b.id];
+    if (!m || !b) continue;
+    // 图标迁移：老图标 + 老名字都还对得上才算"没动过"
+    if (m.fromCn ? (b.cn === m.fromCn) : (b.cn === m.cn && b.en === m.en)) {
+      if (m.icon && m.fromIcons && m.fromIcons.indexOf(b.icon) >= 0) b.icon = m.icon;
+      if (typeof m.n === 'number') b.n = m.n;
+      if (m.fromCn) { b.cn = m.cn; b.en = m.en; }
+    }
   }
   return list;
 }
@@ -7709,9 +8287,8 @@ function badgeNormList(list) {
   list = Array.isArray(list) ? list : [];
   for (i = 0; i < list.length; i++) {
     b = list[i] || {};
-    // 规则白名单：三种天数规则 + 五种挑战彩蛋，别的值一律退回连续型（老目录兼容）。
-    rule = (b.rule === BADGE_RULE_STREAK || b.rule === BADGE_RULE_PERIOD || b.rule === BADGE_RULE_TOTAL
-      || badgeIsSpecialRule(b.rule)) ? b.rule : BADGE_RULE_STREAK;
+    // 规则白名单：三大类天数规则 + 五种挑战彩蛋 + 竞速/学习/限定主题，别的值一律退回连续型。
+    rule = BADGE_ALL_RULES.indexOf(b.rule) >= 0 ? b.rule : BADGE_RULE_STREAK;
     n = parseInt(b.n, 10);
     if (!(n > 0)) continue;
     out.push({
@@ -7724,22 +8301,27 @@ function badgeNormList(list) {
       lv: Math.max(1, Math.min(9, parseInt(b.lv, 10) || 1)),
       c1: String(b.c1 || '#ffcf6b'),
       c2: String(b.c2 || '#d99a00'),
-      on: b.on !== false
+      on: b.on !== false,
+      // 限定主题徽章绑定哪一届（空 = 当前届）
+      rid: String(b.rid || '')
     });
   }
   return badgeMigrateIcons(out);
 }
 // 学员端读到的徽章目录：优先用管理端发布的那份，没有就用内置预设。
-// 版本迁移（2026-11-03）：v2 及更早的目录里没有挑战彩蛋（夜猫子那五枚），
-// 补进缺失的默认彩蛋并把版本推到 3 —— 否则云端旧目录永远盖住新徽章。
-// 只在 ver < 3 时合并一次：之后管理员删掉某枚彩蛋再发布（ver ≥ 4）不会被强行加回。
-function badgeMergeDefaultSpecials(list) {
+// 版本迁移（2026-11-04）：v3 及更早的目录里没有竞速 / 学习 / 限定主题这 6 枚，
+// 补进去并把版本推到 4 —— 否则云端旧目录永远盖住新徽章。
+// 只在 ver < 4 时合并一次：v2/v3 的老目录既缺挑战彩蛋、也缺这 6 枚新徽章；
+// 之后管理员删掉某枚再发布（ver ≥ 5）不会被强行加回。
+var BADGE_NEW_DEFAULT_IDS = ['bd_depttop', 'bd_alltop', 'bd_wrong', 'bd_fav', 'bd_prac', 'bd_theme1',
+  'bd_newb', 'bd_night', 'bd_wkend', 'bd_perf', 'bd_fast'];
+function badgeMergeNewDefaults(list) {
   var have = {}, i, added = false;
   for (i = 0; i < list.length; i++) have[list[i].id] = 1;
   var defs = badgeDefaultCatalog().list;
   for (i = 0; i < defs.length; i++) {
     var d = defs[i];
-    if (!badgeIsSpecialRule(d.rule) || have[d.id]) continue;
+    if (BADGE_NEW_DEFAULT_IDS.indexOf(d.id) < 0 || have[d.id]) continue;
     list.push(Object.assign({}, d));
     added = true;
   }
@@ -7751,7 +8333,7 @@ function raceBadgeCatalog() {
   if (!raw || !Array.isArray(raw.list) || !raw.list.length) return badgeDefaultCatalog();
   var ver = parseInt(raw.ver, 10) || 1;
   var list = badgeNormList(raw.list);
-  if (ver < 3 && badgeMergeDefaultSpecials(list)) ver = 3;
+  if (ver < 4 && badgeMergeNewDefaults(list)) ver = 4;
   return { ver: ver, list: list };
 }
 // 云端目录 → 本机。版本更新才覆盖，避免把管理端刚改、还没发布的草稿冲掉。
@@ -7771,9 +8353,17 @@ function raceBadgeDefs(includeOff) {
     if (!includeOff && !cat.list[i].on) continue;
     out.push(cat.list[i]);
   }
-  function order(r) { return r === BADGE_RULE_STREAK ? 0 : (r === BADGE_RULE_PERIOD ? 1 : (r === BADGE_RULE_TOTAL ? 2 : 3)); }
+  // 排序：大类顺序 → 大类内规则顺序（连续/单期/累计…）→ 门槛 → 等级
+  function ruleOrder(r) {
+    if (r === BADGE_RULE_STREAK) return 0;
+    if (r === BADGE_RULE_PERIOD) return 1;
+    if (r === BADGE_RULE_TOTAL) return 2;
+    return 3;
+  }
   out.sort(function (a, b) {
-    if (a.rule !== b.rule) return order(a.rule) - order(b.rule);
+    var ca = badgeCatIndexOf(a.rule), cb = badgeCatIndexOf(b.rule);
+    if (ca !== cb) return ca - cb;
+    if (a.rule !== b.rule) return ruleOrder(a.rule) - ruleOrder(b.rule);
     if (a.n !== b.n) return a.n - b.n;
     return a.lv - b.lv;
   });
@@ -7902,6 +8492,45 @@ function raceRoundEntriesOf(rec) {
   }
   return out;
 }
+// ===== 学习沉淀统计（2026-11-04）=====
+// 「错题猎手 / 考点收藏家 / 温故知新」靠的是**平时学习**的数据，不是答题赛成绩：
+//   practice 练习模式累计答题数 · wrong 错题重做累计答题数（只增不减）
+// 存在本机（跟随账户键），不进云端快照 —— 徽章本身会随快照同步。
+function studyStatsKey() {
+  var uk = '';
+  try { uk = userKey() || ''; } catch (e) { uk = ''; }
+  return uk + 'raceStudy';
+}
+function studyStats() {
+  var o = null;
+  try { o = JSON.parse(localStorage.getItem(studyStatsKey()) || 'null'); } catch (e) { o = null; }
+  o = (o && typeof o === 'object') ? o : {};
+  return { practice: parseInt(o.practice, 10) || 0, wrong: parseInt(o.wrong, 10) || 0 };
+}
+function studyBump(field) {
+  if (field !== 'practice' && field !== 'wrong') return;
+  var st = studyStats();
+  st[field] = (st[field] || 0) + 1;
+  try { localStorage.setItem(studyStatsKey(), JSON.stringify(st)); } catch (e) { return; }
+  // 达标即刻点亮：顺手对齐一次徽章（只加不减，不动其它字段）
+  try {
+    var rec = raceLocalRecord();
+    if (rec) { raceSyncBadges(rec); raceSaveLocalRecord(rec); }
+  } catch (e2) {}
+}
+// 徽章结算用的三个计数（收藏数直接读当前收藏列表）
+function raceStudyCounters() {
+  var st = { practice: 0, wrong: 0 };
+  try { st = studyStats(); } catch (e) {}
+  var fav = 0;
+  try { fav = (state.collectedQuestions || []).length; } catch (e2) { fav = 0; }
+  return { practice: st.practice || 0, wrong: st.wrong || 0, fav: fav };
+}
+// 统计变了才需要重算（否则每次读记录都全量算一遍太亏）
+function raceStudySig() {
+  var s = raceStudyCounters();
+  return s.practice + ':' + s.wrong + ':' + s.fav;
+}
 function raceComputeAwards(rec) {
   var out = {};
   if (!rec || !rec.days) return out;
@@ -7970,8 +8599,8 @@ function raceComputeAwards(rec) {
       if (!out[nKey][d.id]) out[nKey][d.id] = nightDay;
     }
   }
-  // 神射手 / 闪电快手：读各届最佳成绩。神射手 = 答对 ≥N 题且全对；
-  // 快手 = 至少答 5 题、平均每题 ≤N 秒（secs 是新字段，老成绩没有就自然不参与）。
+  // 答题能手 / 闪电快手：读各届最佳成绩。答题能手 = 单次答对 ≥N 题（2026-11-04 改，
+  // 不再要求全对）；快手 = 至少答 5 题、平均每题 ≤N 秒（secs 是新字段，老成绩没有就自然不参与）。
   var runs = raceRoundEntriesOf(rec);
   for (i = 0; i < runs.length; i++) {
     var re = runs[i], e = re.entry;
@@ -7981,7 +8610,7 @@ function raceComputeAwards(rec) {
       d = defs[k];
       var okHit = false;
       if (d.rule === BADGE_RULE_PERFECT) {
-        okHit = (e.correct || 0) >= d.n && (e.answered || 0) > 0 && e.correct === e.answered;
+        okHit = (e.correct || 0) >= d.n && (e.answered || 0) > 0;
       } else if (d.rule === BADGE_RULE_FAST) {
         okHit = (e.answered || 0) >= 5 && typeof e.secs === 'number' && e.secs > 0
           && (e.secs / e.answered) <= d.n;
@@ -7991,7 +8620,105 @@ function raceComputeAwards(rec) {
       if (!out[rid][d.id]) out[rid][d.id] = raceDayKey(e.ts || Date.now());
     }
   }
+  // ---- 学习沉淀（2026-11-04）----
+  // 练习 / 错题重做 / 收藏都是**本机学习统计**，跟答题赛数据无关：达标即终身一枚。
+  // 历史无法回溯，所以达成日记成"算出来的那天"，不假装知道真实日期。
+  var sc = raceStudyCounters(), todayKey = raceDayKey(Date.now());
+  for (k = 0; k < defs.length; k++) {
+    d = defs[k];
+    var cnt = 0;
+    if (d.rule === BADGE_RULE_WRONG) cnt = sc.wrong;
+    else if (d.rule === BADGE_RULE_FAV) cnt = sc.fav;
+    else if (d.rule === BADGE_RULE_PRACTICE) cnt = sc.practice;
+    else continue;
+    if (cnt < d.n) continue;
+    if (!out['_']) out['_'] = {};
+    if (!out['_'][d.id]) out['_'][d.id] = todayKey;
+  }
+  // ---- 限定月度主题（2026-11-04）----
+  // 只在**绑定的那一届**算（没绑 = 当前届）；终身只拿一次 —— 所以换届 / 改设置
+  // 都不会让同一枚主题徽章被重发，过期就真的拿不到了（稀缺感靠 id 换新来制造）。
+  var _conf = raceConfOf(), _curRid = (_conf && _conf.id) || '';
+  for (k = 0; k < defs.length; k++) {
+    d = defs[k];
+    if (d.rule !== BADGE_RULE_THEME) continue;
+    var trid = d.rid || _curRid;
+    if (!trid) continue;
+    if (raceBadgeEarnedAnywhere(rec, d.id)) continue;
+    var tdays = raceDayList(rec, trid);
+    if (tdays.length < (d.n || 1)) continue;
+    if (!out[trid]) out[trid] = {};
+    if (!out[trid][d.id]) out[trid][d.id] = tdays[(d.n || 1) - 1];
+  }
   return out;
+}
+// 这枚徽章在任何一届 / 任何桶里拿过没有（限定主题"终身一次"要用）
+function raceBadgeEarnedAnywhere(rec, id) {
+  if (!rec || !rec.badges || !id) return false;
+  for (var pk in rec.badges) {
+    if (!Object.prototype.hasOwnProperty.call(rec.badges, pk)) continue;
+    var box = rec.badges[pk];
+    if (box && typeof box === 'object' && box[id]) return true;
+  }
+  return false;
+}
+// ===== 竞速闯关 · 当期 TOP N（2026-11-04）=====
+// 「当期 TOP10」必须跟别人比，本机算不出来，只能等**榜单数据**到手时结算一次
+// （跟着 raceFetchBoard 走）。只写当期桶，每期可再拿；没有榜单数据就永远不发。
+var RACE_TOP_BADGE_RANK = 10;
+function raceBadgeMyRowKey() {
+  try {
+    return (typeof accountRowKeyForUser === 'function')
+      ? accountRowKeyForUser(String(state.currentUser || ''), state.profile || {})
+      : String(state.currentUser || '');
+  } catch (e) { return String(state.currentUser || ''); }
+}
+function raceAwardRankBadges(rows, rid) {
+  if (!rows || !rows.length || !rid) return 0;
+  var defs = raceBadgeDefs(false), i;
+  var want = {};
+  for (i = 0; i < defs.length; i++) {
+    if (defs[i].rule === BADGE_RULE_DEPT_TOP || defs[i].rule === BADGE_RULE_ALL_TOP) want[defs[i].rule] = true;
+  }
+  if (!want[BADGE_RULE_DEPT_TOP] && !want[BADGE_RULE_ALL_TOP]) return 0;
+  var myKey = raceBadgeMyRowKey();
+  if (!myKey) return 0;
+  function inTop(list) {
+    for (var j = 0; j < list.length && j < RACE_TOP_BADGE_RANK; j++) {
+      if (list[j] && list[j].key === myKey) return true;
+    }
+    return false;
+  }
+  var hitAll = want[BADGE_RULE_ALL_TOP] ? inTop(raceBoardRowsFrom(rows, 'period', '', rid)) : false;
+  var hitSec = false;
+  if (want[BADGE_RULE_DEPT_TOP]) {
+    for (var s = 0; s < RACE_SECTIONS.length; s++) {
+      var sk = RACE_SECTIONS[s].key;
+      if (sk === 'all') continue;
+      if (inTop(raceBoardRowsFrom(rows, 'period', sk, rid))) { hitSec = true; break; }
+    }
+  }
+  var rec = null;
+  try { rec = raceLocalRecord(); } catch (e) { rec = null; }
+  if (!rec) return 0;
+  if (!rec.badges || typeof rec.badges !== 'object') rec.badges = {};
+  var box = rec.badges[rid];
+  if (!box || typeof box !== 'object' || box.s || box.m) box = rec.badges[rid] = {};
+  var today = raceDayKey(Date.now()), added = 0;
+  for (i = 0; i < defs.length; i++) {
+    var d = defs[i], ok = false;
+    if (d.rule === BADGE_RULE_ALL_TOP) ok = hitAll;
+    else if (d.rule === BADGE_RULE_DEPT_TOP) ok = hitSec;
+    else continue;
+    if (!ok || box[d.id]) continue;
+    box[d.id] = today;
+    added++;
+  }
+  if (!added) return 0;
+  rec.badgesVer = raceBadgeCatalog().ver;
+  try { raceSaveLocalRecord(rec); } catch (e2) {}
+  if (typeof pushStudentSnapshotToKv === 'function') { try { pushStudentSnapshotToKv(); } catch (e3) {} }
+  return added;
 }
 // 结算并写回：只补没拿到的，已拿到的不动（改达标线也不会把旧徽章收回去）。
 // 返回本次新增的徽章；给了 rid 就只返回这一期的（结果页当场点亮用）。
@@ -8048,7 +8775,12 @@ function raceSyncBadges(rec) {
     return rec;
   }
   if (legacy) { raceRebuildBadges(rec); return rec; }
-  if (rec.badgesVer !== raceBadgeCatalog().ver) raceAwardBadges(rec, '');
+  // 学习沉淀是"边学边攒"的：计数一变就得重算一次，否则徽章要等下次交卷才出现。
+  var sig = raceStudySig();
+  if (rec.badgesVer !== raceBadgeCatalog().ver || rec.studySig !== sig) {
+    raceAwardBadges(rec, '');
+    rec.studySig = sig;
+  }
   return rec;
 }
 // 云端快照可能是打卡功能上线前推上来的：只有 log，没有 days / badges。
@@ -8173,17 +8905,29 @@ function raceBadgeDesc(b, lang) {
   if (L === 'en') {
     if (rule === BADGE_RULE_NIGHT) return 'Check in after 10 PM';
     if (rule === BADGE_RULE_WEEKEND) return n + ' weekend days all-time';
-    if (rule === BADGE_RULE_PERFECT) return 'All correct in a ' + n + '+ question run';
+    if (rule === BADGE_RULE_PERFECT) return n + '+ correct answers in one run';
     if (rule === BADGE_RULE_FAST) return 'Avg \u2264 ' + n + ' sec per question';
     if (rule === BADGE_RULE_NEWBIE) return n + ' days in your first week';
+    if (rule === BADGE_RULE_DEPT_TOP) return 'Top ' + n + ' on any single-section board this round';
+    if (rule === BADGE_RULE_ALL_TOP) return 'Top ' + n + ' on the all-question board this round';
+    if (rule === BADGE_RULE_WRONG) return n + ' wrong answers redone';
+    if (rule === BADGE_RULE_FAV) return n + ' questions saved';
+    if (rule === BADGE_RULE_PRACTICE) return n + ' practice answers';
+    if (rule === BADGE_RULE_THEME) return 'Check in ' + n + ' day(s) this round only';
     return rule === BADGE_RULE_STREAK ? (n + ' days in a row')
       : rule === BADGE_RULE_PERIOD ? (n + ' days in one round') : (n + ' days all-time');
   }
   if (rule === BADGE_RULE_NIGHT) return '22:00 后打卡（凌晨 5 点前也算）';
   if (rule === BADGE_RULE_WEEKEND) return '累计周末打卡 ' + n + ' 天';
-  if (rule === BADGE_RULE_PERFECT) return '单期一次答对 ' + n + ' 题及以上且全对';
+  if (rule === BADGE_RULE_PERFECT) return '单次答对 ' + n + ' 题以上';
   if (rule === BADGE_RULE_FAST) return '单期平均每题不超过 ' + n + ' 秒（至少答 5 题）';
   if (rule === BADGE_RULE_NEWBIE) return '首次打卡 7 天内打卡满 ' + n + ' 天';
+  if (rule === BADGE_RULE_DEPT_TOP) return '任一板块速答榜当期前 ' + n + ' 名';
+  if (rule === BADGE_RULE_ALL_TOP) return '全题库速答榜当期前 ' + n + ' 名';
+  if (rule === BADGE_RULE_WRONG) return '累计重做错题 ' + n + ' 道';
+  if (rule === BADGE_RULE_FAV) return '累计收藏题目 ' + n + ' 道';
+  if (rule === BADGE_RULE_PRACTICE) return '练习模式累计答题 ' + n + ' 道';
+  if (rule === BADGE_RULE_THEME) return '仅在当期打卡 ' + n + ' 天可得，过期不补';
   return rule === BADGE_RULE_STREAK ? ('连续打卡 ' + n + ' 天')
     : rule === BADGE_RULE_PERIOD ? ('单期累计打卡 ' + n + ' 天') : ('累计打卡 ' + n + ' 天');
 }
@@ -8219,13 +8963,89 @@ function raceBadgeProgressOf(rec, def) {
       var e = runs[r].entry;
       if (!e) continue;
       if (def.rule === BADGE_RULE_PERFECT) {
-        if ((e.correct || 0) >= def.n && (e.answered || 0) > 0 && e.correct === e.answered) { hitP = true; break; }
+        if ((e.correct || 0) >= def.n && (e.answered || 0) > 0) { hitP = true; break; }
       } else if ((e.answered || 0) >= 5 && typeof e.secs === 'number' && e.secs > 0 && (e.secs / e.answered) <= def.n) { hitP = true; break; }
     }
     return { cur: hitP ? 1 : 0, max: def.n };
   }
+  // 学习沉淀：真实进度（练习答题数 / 错题重做数 / 收藏数），看得见才追得动
+  if (def.rule === BADGE_RULE_WRONG || def.rule === BADGE_RULE_FAV || def.rule === BADGE_RULE_PRACTICE) {
+    var sc = raceStudyCounters();
+    var c0 = def.rule === BADGE_RULE_WRONG ? sc.wrong : (def.rule === BADGE_RULE_FAV ? sc.fav : sc.practice);
+    return { cur: Math.min(c0, def.n), max: def.n };
+  }
+  // 竞速闯关 / 限定主题：只有"达成 / 没达成"，没有中间进度可报
+  if (def.rule === BADGE_RULE_DEPT_TOP || def.rule === BADGE_RULE_ALL_TOP) return { cur: 0, max: 1 };
+  if (def.rule === BADGE_RULE_THEME) {
+    var trid = def.rid || (raceConfOf() || {}).id || '';
+    var td = trid ? raceDayList(rec, trid).length : 0;
+    return { cur: Math.min(td, def.n), max: def.n };
+  }
   var c = raceConfOf();
   return { cur: Math.min(raceDaysCount(rec, c && c.id), def.n), max: def.n };
+}
+
+// ===== 专属头像框（2026-11-04）=====
+// 集齐同一系列（同一大类）的全部徽章 → 解锁该系列的专属头像框。
+// 纯荣誉、只在本平台内展示（个人主页段位圆圈 + 徽章页预览），不产生任何费用。
+var RACE_FRAME_STYLE = {
+  checkin: { ring: 'linear-gradient(135deg,#ffd27f,#ff7a00,#ffe08a)', bg: '#fff8e1' },
+  speed:   { ring: 'linear-gradient(135deg,#ffe08a,#e06c00,#ffd27f)', bg: '#fff5e6' },
+  study:   { ring: 'linear-gradient(135deg,#bfe3ff,#6b46c1,#a8d8ff)', bg: '#f2f6ff' },
+  special: { ring: 'linear-gradient(135deg,#b2dfdb,#303f9f,#c5cae9)', bg: '#eef2ff' },
+  theme:   { ring: 'linear-gradient(135deg,#ffb347,#c2410c,#ffd7a8)', bg: '#fff3e6' }
+};
+function raceFrameRows(counts) {
+  var defs = raceBadgeDefs(false), rows = [], i, j;
+  for (i = 0; i < BADGE_CATS.length; i++) {
+    var cat = BADGE_CATS[i].key, total = 0, got = 0;
+    for (j = 0; j < defs.length; j++) {
+      if (badgeCatOf(defs[j].rule) !== cat) continue;
+      total++;
+      if (counts && counts[defs[j].id]) got++;
+    }
+    if (!total) continue;
+    rows.push({ cat: cat, got: got, total: total, unlocked: got >= total, style: RACE_FRAME_STYLE[cat] || RACE_FRAME_STYLE.checkin });
+  }
+  return rows;
+}
+function raceTopFrame(rec) {
+  var rows = raceFrameRows(raceBadgeCounts(rec || {}, ''));
+  for (var i = 0; i < rows.length; i++) if (rows[i].unlocked) return rows[i];
+  return null;
+}
+// 头像框预览：外圈渐变环 + 内圈底 + 内容（图标 / 首字母）
+function raceFrameCircleHtml(inner, frame, size) {
+  var sz = size || 40, pad = Math.max(2, Math.round(sz / 13));
+  var ring = frame ? frame.style.ring : 'linear-gradient(135deg,#eceff1,#dfe3e6)';
+  return '<div style="flex:0 0 auto;width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;padding:' + pad + 'px;'
+    + 'box-sizing:border-box;background:' + ring + ';' + (frame ? 'box-shadow:0 2px 8px rgba(200,140,0,.32);' : '') + '">'
+    + '<div style="width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;'
+    + 'font-size:' + Math.round(sz * 0.45) + 'px;line-height:1;background:' + (frame ? frame.style.bg : '#fff') + ';">'
+    + inner + '</div></div>';
+}
+function raceFrameSectionHtml(counts) {
+  var en = state.lang === 'en';
+  var rows = raceFrameRows(counts);
+  if (!rows.length) return '';
+  var html = '<h4 style="margin:16px 2px 8px;">🖼 ' + t('race_frame_title') + '</h4>';
+  html += '<div class="q-card" style="padding:12px;">';
+  html += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">';
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i], meta = badgeCatMeta(r.cat);
+    var label = badgeCatLabel(r.cat).replace(/^\S+\s/, '');   // 去掉分类 emoji，避免和图标重复
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:10px;'
+      + 'border:1px solid ' + (r.unlocked ? '#f0b357' : '#e2e6ea') + ';background:' + (r.unlocked ? '#fffdf5' : '#fafbfc') + ';">'
+      + raceFrameCircleHtml('<span style="font-weight:700;color:' + (r.unlocked ? '#b7791f' : '#b0b8bf') + ';">' + meta.icon + '</span>', r.unlocked ? r : null, 34)
+      + '<div style="min-width:0;"><div style="font-size:12px;font-weight:700;color:' + (r.unlocked ? '#8a5a00' : '#8b98a3') + ';">'
+      + escapeHtml(label) + '</div><div style="font-size:10.5px;color:#9aa3ad;">'
+      + (r.unlocked ? ('✓ ' + t('race_frame_unlocked')) : t('race_frame_locked').replace('{n}', String(r.total - r.got)))
+      + ' · ' + r.got + '/' + r.total + '</div></div></div>';
+  }
+  html += '</div>';
+  html += '<div style="font-size:10.5px;color:#9aa3ad;line-height:1.6;margin-top:8px;">' + t('race_frame_hint') + '</div>';
+  html += '</div>';
+  return html;
 }
 
 // 本次挑战的答题明细：[[题号, 对错, 学员选的下标]]
@@ -8886,25 +9706,64 @@ function raceTierNext(totalDays) {
   return (cur + 1 < RACE_TIERS.length) ? RACE_TIERS[cur + 1] : null;
 }
 // 个人主页顶部的段位条：当前段位 + 距下一级还差几天
+// 集齐某个系列徽章 → 这里套上该系列的头像框（平台内生效的荣誉展示）。
 function raceTierStripHtml() {
   var en = state.lang === 'en';
   var rec = {};
   try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
   var days = raceDaysCount(rec, '');
   var tier = raceTierOf(days), nx = raceTierNext(days);
+  var frame = null;
+  try { frame = raceTopFrame(rec); } catch (e2) { frame = null; }
   var html = '<div class="q-card" style="margin-bottom:10px;display:flex;align-items:center;gap:10px;padding:12px;">';
-  html += '<div style="flex:0 0 auto;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
-    + 'font-size:20px;background:linear-gradient(135deg,#ffe08a,#b7791f);box-shadow:0 2px 6px rgba(200,140,0,.3);">' + tier.icon + '</div>';
-  html += '<div style="flex:1;min-width:0;">';
-  html += '<div style="font-size:14px;font-weight:700;">' + tier.icon + ' ' + (en ? tier.en : tier.cn) + '</div>';
+  html += raceFrameCircleHtml('<span style="font-size:20px;line-height:1;">' + tier.icon + '</span>', frame, 44);
+  html += '<div style="flex:1;min-width:0;" onclick="raceTierInfoShow()">';
+  html += '<div style="font-size:14px;font-weight:700;">' + tier.icon + ' ' + (en ? tier.en : tier.cn)
+    + (frame ? ' <span style="font-size:10.5px;color:#b7791f;">🖼 ' + t('race_frame_on') + '</span>' : '') + '</div>';
   html += '<div style="font-size:11px;color:#888;margin-top:1px;">' + t('race_tier_strip') + ' · '
-    + (en ? 'all-time days ' : '累计打卡 ') + days + (en ? '' : ' 天') + '</div>';
+    + (en ? 'all-time days ' : '累计打卡 ') + days + (en ? '' : ' 天')
+    + ' <span style="color:#b7791f;">›</span></div>';
   html += '</div>';
-  html += '<div style="flex:0 0 auto;font-size:11px;color:#b7791f;font-weight:600;text-align:right;">';
+  html += '<div style="flex:0 0 auto;font-size:11px;color:#b7791f;font-weight:600;text-align:right;" onclick="raceTierInfoShow()">';
   if (nx) html += t('race_tier_next').replace('{n}', String(nx.min - days)).replace('{tier}', en ? nx.en : nx.cn);
   else html += t('race_tier_maxed');
   html += '</div></div>';
   return html;
+}
+// 点段位 → 弹出段位说明（宣传用：让人知道往上还有什么）。
+// 跟徽章说明卡同一套样式，纯展示、不写状态。
+function raceTierInfoShow() {
+  if (typeof document === 'undefined' || !document.body || !document.body.appendChild) return;
+  var en = state.lang === 'en';
+  var rec = {};
+  try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
+  var days = raceDaysCount(rec, '');
+  var cur = raceTierOf(days);
+  var rows = '';
+  for (var i = 0; i < RACE_TIERS.length; i++) {
+    var t2 = RACE_TIERS[i], on = t2.key === cur.key;
+    rows += '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;margin-bottom:4px;'
+      + 'background:' + (on ? '#fff8e1' : '#fafbfc') + ';border:1px solid ' + (on ? '#f0b357' : '#eef1f4') + ';">'
+      + '<div style="width:24px;text-align:center;font-size:15px;">' + t2.icon + '</div>'
+      + '<div style="flex:1;font-size:12.5px;font-weight:' + (on ? '700' : '600') + ';color:' + (on ? '#8a5a00' : '#3b4652') + ';">'
+      + (en ? t2.en : t2.cn) + '</div>'
+      + '<div style="font-size:11px;color:#8b98a3;">' + t2.min + (en ? '+ days' : ' 天起') + '</div>'
+      + (on ? '<div style="font-size:10px;color:#b7791f;font-weight:700;">' + t('race_tier_you') + '</div>' : '')
+      + '</div>';
+  }
+  var overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML =
+    '<div class="confirm-box" style="max-width:320px;">' +
+      '<div class="confirm-title" style="margin-bottom:6px;text-align:center;">🎖 ' + t('race_tier_info_title') + '</div>' +
+      '<div style="margin:6px 0 10px;">' + rows + '</div>' +
+      '<div class="confirm-body" style="font-size:11.5px;color:#5b6672;line-height:1.6;">' + t('race_tier_info_body') + '</div>' +
+      '<div class="confirm-actions"><button class="confirm-btn primary" data-act="ok">' + t('race_badge_ok') + '</button></div>' +
+    '</div>';
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  overlay.querySelector('[data-act="ok"]').onclick = close;
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+  document.body.appendChild(overlay);
 }
 
 // ===== C1 参与保底（2026-11-03）=====
@@ -9157,6 +10016,12 @@ function raceFetchBoard(force, quiet) {
     // 取数，在这里过滤一次全部生效。
     var rows = raceBoardRosterFilter(sbSnapshotRecordList(res));
     state.raceBoard = rows;
+    // 竞速闯关徽章（2026-11-04）：TOP N 只能跟别人比才知道，拿到榜单顺手结算一次。
+    // 这里不抛错：徽章是锦上添花，不能影响榜单显示。
+    try {
+      var _rid = (raceConfOf() || {}).id;
+      if (_rid && rows && rows.length) raceAwardRankBadges(rows, _rid);
+    } catch (eRank) {}
     state.raceBoardTs = Date.now();
     state.raceBoardState = 'ready';
     return rows;
@@ -9273,7 +10138,7 @@ function renderRaceHome() {
   html += '<button class="action-btn secondary" style="flex:1;" onclick="raceOpenBoard()">🏆 ' + t('race_board') + '</button>';
   html += '<button class="action-btn secondary" style="flex:1;" onclick="raceOpenCalendar()">' + t('race_cal_open') + '</button>';
   html += '</div>';
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceHall\')">🏛 ' + t('race_hall') + '</button>';
+  // 名人堂暂时下架（2026-11-04）：入口收起，页面与数据保留
   // 页面最底部：参赛语境的考前热身入口，直达产品知识题库
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">📖 ' + t('race_study_home') + '</button>';
   html += '</div>';
@@ -9368,6 +10233,7 @@ function raceBadgeInfoShow(rawId) {
     '<div class="confirm-box" style="max-width:320px;text-align:center;">' +
       '<div style="width:64px;height:64px;margin:4px auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;line-height:1;background:linear-gradient(135deg,' + c1 + ',' + c2 + ');box-shadow:0 2px 8px rgba(200,140,0,.35);">' + raceBadgeIcon(def) + '</div>' +
       '<div class="confirm-title" style="margin-bottom:4px;">' + escapeHtml(raceBadgeName(def)) + '</div>' +
+      '<div style="font-size:11px;color:#b7791f;font-weight:600;margin-bottom:4px;">' + badgeCatLabel(badgeCatOf(def.rule)) + '</div>' +
       '<div class="confirm-body" style="text-align:center;">' + escapeHtml(raceBadgeDesc(def)) + '</div>' +
       '<div style="font-size:11.5px;color:#1a3a5c;background:#eef4fa;border-radius:8px;padding:7px 10px;margin-top:10px;line-height:1.5;">' + t('race_badge_promo') + '</div>' +
       '<div class="confirm-actions"><button class="confirm-btn primary" data-act="ok">' + t('race_badge_ok') + '</button></div>' +
@@ -9398,6 +10264,18 @@ function raceBadgeChipHtml(def, got, date, prog, count) {  if (def && !def.rule 
   s += '</div></div>';
   return s;
 }
+// 进度文案：单位跟着规则走（天 / 题 / 道 / 名次 / 秒）
+function raceBadgeProgText(def, prg, en) {
+  if (!def || !prg) return '';
+  var r = def.rule, cur = prg.cur || 0, max = prg.max || 1;
+  if (r === BADGE_RULE_DEPT_TOP || r === BADGE_RULE_ALL_TOP) return en ? ('top ' + max) : ('前 ' + max + ' 名');
+  if (r === BADGE_RULE_WRONG || r === BADGE_RULE_FAV) return cur + '/' + max + (en ? ' q' : ' 道');
+  if (r === BADGE_RULE_PRACTICE) return cur + '/' + max + (en ? ' q' : ' 题');
+  if (r === BADGE_RULE_FAST) return (en ? '\u2264' : '≤') + max + (en ? ' s/q' : ' 秒/题');
+  if (r === BADGE_RULE_PERFECT) return (en ? '\u2265' : '≥') + max + (en ? ' correct' : ' 题');
+  if (r === BADGE_RULE_NIGHT) return en ? '1 run' : '1 次';
+  return cur + '/' + max + (en ? ' d' : ' 天');
+}
 // 徽章墙：一眼看到拿到了什么、下一枚还差多少。进度用**历史最长连续**算 ——
 // 「你做到过的最好成绩」比「这几天断了没有」更能说明离目标多远。
 function raceBadgeWallHtml(rec, rid) {
@@ -9413,21 +10291,30 @@ function raceBadgeWallHtml(rec, rid) {
   html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">';
   html += '<div style="font-size:14px;font-weight:700;">🏅 ' + t('race_badge_wall') + '</div>';
   html += '<div style="flex:1;"></div>';
+  // 主页这面墙每个大类只露「1 枚已拿到 + 1 枚最近的未解锁」：五类都看得见，
+  // 又始终有"下一枚还差多少"可追。完整 22 枚去「我的徽章」看。
+  var wall = [];
+  for (var ci2 = 0; ci2 < BADGE_CATS.length; ci2++) {
+    var earned = [], todo = [], wi;
+    for (wi = 0; wi < defs.length; wi++) {
+      if (badgeCatOf(defs[wi].rule) !== BADGE_CATS[ci2].key) continue;
+      if (counts[defs[wi].id]) earned.push(defs[wi]); else todo.push(defs[wi]);
+    }
+    earned.sort(function (a, b) {
+      return String(counts[b.id].last) < String(counts[a.id].last) ? -1 : 1;
+    });
+    if (earned.length) wall.push(earned[0]);
+    if (todo.length) wall.push(todo[0]);
+  }
   html += '<div style="font-size:11px;color:#888;">' + t('race_badge_cur') + ' ' + st.cur + unit
     + ' · ' + t('race_badge_max') + ' ' + st.max + unit + '</div>';
   html += '</div>';
   html += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">';
-  for (var i = 0; i < defs.length; i++) {
-    var d = defs[i], got = counts[d.id];
-    // 彩蛋规则的进度口径不同（周末天数 / 首周天数 / 做到即达成），统一走 raceBadgeProgressOf
-    var prg = badgeIsSpecialRule(d.rule) ? raceBadgeProgressOf(rec, d) : null;
-    var cur = prg ? prg.cur : (d.rule === BADGE_RULE_STREAK ? st.max : (d.rule === BADGE_RULE_PERIOD ? periodDays : totalDays));
-    var maxN = prg ? prg.max : d.n;
-    var shown = Math.min(cur, maxN);
-    var unit2 = (d.rule === BADGE_RULE_PERFECT || d.rule === BADGE_RULE_FAST) ? (en ? ' q' : ' 题')
-      : (d.rule === BADGE_RULE_NIGHT ? (en ? ' run' : ' 次') : (' ' + unit));
+  for (var i = 0; i < wall.length; i++) {
+    var d = wall[i], got = counts[d.id];
+    var prg = raceBadgeProgressOf(rec, d);
     html += raceBadgeChipHtml(d, !!got, got ? got.last : '',
-      shown + '/' + maxN + unit2, got ? got.count : 0);
+      raceBadgeProgText(d, prg, en), got ? got.count : 0);
   }
   html += '</div>';
   if (!defs.length) {
@@ -9879,13 +10766,13 @@ function renderRaceBoard() {
     });
   }
   html += '<div style="display:flex;gap:8px;margin-bottom:6px;">';
-  html += '<button class="action-btn ' + (tab === 'period' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'period\';render()">' + t('race_board_all') + '</button>';
-  html += '<button class="action-btn ' + (tab === 'dept' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'dept\';render()">' + t('race_board_dept') + '</button>';
-  html += '<button class="action-btn ' + (tab === 'best' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'best\';render()">' + t('race_board_best') + '</button>';
-  html += '<button class="action-btn ' + (tab === 'mover' ? 'primary' : 'secondary') + '" style="flex:1;" onclick="state.raceBoardTab=\'mover\';render()">' + t('race_board_mover') + '</button>';
+  html += '<button class="action-btn ' + (tab === 'period' ? 'primary' : 'secondary') + '" style="flex:1;min-width:0;white-space:nowrap;font-size:13px;" onclick="state.raceBoardTab=\'period\';render()">' + t('race_board_all') + '</button>';
+  html += '<button class="action-btn ' + (tab === 'dept' ? 'primary' : 'secondary') + '" style="flex:1;min-width:0;white-space:nowrap;font-size:13px;" onclick="state.raceBoardTab=\'dept\';render()">' + t('race_board_dept') + '</button>';
+  html += '<button class="action-btn ' + (tab === 'best' ? 'primary' : 'secondary') + '" style="flex:1;min-width:0;white-space:nowrap;font-size:13px;" onclick="state.raceBoardTab=\'best\';render()">' + t('race_board_best') + '</button>';
+  html += '<button class="action-btn ' + (tab === 'mover' ? 'primary' : 'secondary') + '" style="flex:1;min-width:0;white-space:nowrap;font-size:13px;" onclick="state.raceBoardTab=\'mover\';render()">' + t('race_board_mover') + '</button>';
   html += '</div>';
-  html += '<div style="font-size:12px;color:#999;line-height:1.5;margin:0 0 10px;">' + raceBoardScopeHint(tab)
-    + (isDeptTab ? '' : '<br><span style="color:#b7791f;">' + t('race_badge_tap_hint') + '</span>') + '</div>';
+  // 说明文字只留"统计范围"：徽章 / 段位能点这件事不另写提示，让大家自己发现。
+  html += '<div style="font-size:12px;color:#999;line-height:1.5;margin:0 0 10px;">' + raceBoardScopeHint(tab) + '</div>';
   var sec = state.raceBoardSec || '';
   // 进步之星跟板块无关（比的是自己的历届最佳），不显示板块切换条
   var isMoverTab = tab === 'mover';
@@ -10020,7 +10907,8 @@ function renderRaceBoard() {
         + (isDays
           ? (' \u00b7 ' + (state.lang === 'en' ? 'runs ' : '挑战 ') + rw.runs)
           : (rw.section && !sec && !isMoverTab ? ' \u00b7 ' + raceSecIcon(rw.section) + ' ' + raceSecName(rw.section) : ''))
-        + (rw.tier ? ' \u00b7 ' + rw.tier.icon + ' ' + (state.lang === 'en' ? rw.tier.en : rw.tier.cn) : '')
+        + (rw.tier ? ' \u00b7 <span onclick="raceTierInfoShow()" style="cursor:pointer;color:#8a5a00;font-weight:600;border-bottom:1px dashed #d9b26a;">'
+            + rw.tier.icon + ' ' + (state.lang === 'en' ? rw.tier.en : rw.tier.cn) + '</span>' : '')
         + '</div>';
       html += '</div>';
       html += '<div style="text-align:right;">';
@@ -10042,8 +10930,7 @@ function renderRaceBoard() {
     var lbl = raceModeOf(raceConfOf()) === 'choice' ? t('race_go_pick') : t('race_start');
     html += '<button class="action-btn primary" style="width:100%;margin-top:12px;" onclick="raceAgain()">⚡ ' + lbl + '</button>';
   }
-  // 名人堂：历届冠军都在这里（新一季清榜清不掉）
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceHall\')">🏛 ' + t('race_hall') + '</button>';
+  // 名人堂暂时下架（2026-11-04）：入口先收起来，页面与数据都保留，随时能再开。
   // 看完榜单顺手去产品知识题库刷题（榜单语境：想上榜就先刷题）
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">📚 ' + t('race_study_board') + '</button>';
   html += '</div>';
@@ -10278,9 +11165,9 @@ function renderAdminRace() {
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'Start (optional)' : '开始时间（可留空）') + '</label>';
   html += '<input id="raceStart" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((c.startTime ? raceInputDate(c.startTime) : '') || defaultStartInput(0)) + '">';
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'End (optional)' : '结束时间（可留空）') + '</label>';
-  html += '<input id="raceEnd" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((c.endTime ? raceInputDate(c.endTime) : '') || defaultEndInput(DEFAULT_WINDOW_MIN)) + '">';
-  // 答题赛按小时开（1 小时 / 24 小时 / 自定义小时），考试的分钟档位不改。
-  html += adminWindowQuickHoursHtml('adminFillRaceWindow', '', 'raceQuickHour');
+  html += '<input id="raceEnd" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((c.endTime ? raceInputDate(c.endTime) : '') || defaultEndInput(60 * 24)) + '">';
+  // 答题赛按「24 小时 / 3 天 / 7 天 / X 天 / 整月」开，考试的分钟档位不动。
+  html += adminRaceWindowQuickHtml();
   // 部门打卡天数的统计口径：参与面铺开前用总天数（鼓励各部门拉更多人来），
   // 铺开之后切成人均更公平。改这里即刻生效，学员端按赛事配置读。
   var dmode = (c.deptDaysMode === 'avg') ? 'avg' : 'sum';
@@ -10335,37 +11222,59 @@ function renderAdminRace() {
 // ===== 管理端：徽章设置 =====
 // 三件事：增删改、按描述自动出图标与名字、发布到云端（写 admin_state.badges）。
 var BADGE_NAME_SEEDS = {
-  streak: [[3, '星火初燃', 'First Spark'], [5, '坚持之力', 'Steady Flame'], [7, '一周之火', 'Week of Fire'], [14, '双周铁人', 'Iron Fortnight'], [21, '习惯大师', 'Habit Master'], [30, '月度传奇', 'Monthly Legend']],
-  period: [[5, '初来乍到', 'Getting Started'], [10, '月度常客', 'Monthly Regular'], [15, '半程之星', 'Half-month Star'], [20, '月度全勤王', 'Monthly Champion'], [25, '满勤上将', 'Attendance General'], [31, '月度满贯', 'Perfect Month']],
-  total: [[15, '起步者', 'First Steps'], [30, '稳步前行', '30-day Walker'], [60, '勤学不辍', '60-day Scholar'], [100, '学习王者', 'Learning Champion'], [200, '殿堂学者', 'Hall of Fame']]
+  streak: [[3, '星火初燃', 'First Spark'], [5, '坚持之力', 'Steady Flame'], [7, '一周之火', 'Week of Fire'], [14, '双周达人', 'Fortnight Pro'], [21, '习惯大师', 'Habit Master'], [30, '月度传奇', 'Monthly Legend']],
+  period: [[5, '初来乍到', 'Getting Started'], [10, '月度常客', 'Monthly Regular'], [15, '半程之星', 'Half-month Star'], [20, '月度全勤狮', 'Monthly Lion'], [25, '满勤上将', 'Attendance General'], [31, '月度满贯', 'Perfect Month']],
+  total: [[15, '起步者', 'First Steps'], [30, '稳步前行', '30-day Walker'], [60, '勤学不辍', '60-day Scholar'], [100, '学习王者', 'Learning Champion'], [200, '殿堂学者', 'Hall of Fame']],
+  dept_top: [[10, '题库征服者', 'Section Conqueror'], [3, '板块新星', 'Section Star'], [1, '板块霸主', 'Section Champion']],
+  all_top: [[10, '全题库大师', 'All-Bank Master'], [3, '全库好手', 'All-Bank Ace'], [1, '全库霸主', 'All-Bank Champion']],
+  wrong: [[50, '错题猎手', 'Mistake Hunter'], [100, '错题终结者', 'Mistake Slayer']],
+  fav: [[20, '考点收藏家', 'Key Point Collector'], [50, '考点博物馆', 'Key Point Museum']],
+  practice: [[100, '温故知新', 'Review Master'], [300, '刷题狂人', 'Practice Machine']]
 };
 // 描述 → 徽章建议。管理端不需要懂规则术语，写一句"连续打卡 5 天"就够了。
 function badgeSuggestFromDesc(desc) {
   var raw = String(desc || ''), low = raw.toLowerCase();
   var rule = BADGE_RULE_STREAK;
-  // 挑战彩蛋关键词优先（2026-11-03）：描述里出现"夜/周末/全对/快/新手"就按彩蛋出。
-  // 数量单位比天数规则宽：题（神射手）、秒（快手）也能识别。
-  if (/夜|晚上|深夜|owl|night/.test(low)) rule = BADGE_RULE_NIGHT;
+  // 关键词优先级：越具体的越靠前（"错题"不能被"累计"抢走）
+  if (/主题|限定|本期专属|theme/.test(low)) rule = BADGE_RULE_THEME;
+  else if (/错题|redo|wrong/.test(low)) rule = BADGE_RULE_WRONG;
+  else if (/收藏|考点|collection|save[d]?/.test(low)) rule = BADGE_RULE_FAV;
+  else if (/练习|刷题|practice/.test(low)) rule = BADGE_RULE_PRACTICE;
+  else if (/全题库|总榜|all[-\s]?bank|overall/.test(low)) rule = BADGE_RULE_ALL_TOP;
+  else if (/前十|top\s*10|top10|板块榜|部门榜|板块|排行榜/.test(low)) rule = BADGE_RULE_DEPT_TOP;
+  // 挑战彩蛋关键词（2026-11-03）：描述里出现"夜/周末/全对/快/新手"就按彩蛋出。
+  // 数量单位比天数规则宽：题（答题能手）、秒（快手）也能识别。
+  else if (/夜|晚上|深夜|owl|night/.test(low)) rule = BADGE_RULE_NIGHT;
   else if (/周末|weekend/.test(low)) rule = BADGE_RULE_WEEKEND;
-  else if (/全对|满分|完美|perfect/.test(low)) rule = BADGE_RULE_PERFECT;
+  else if (/答对|全对|满分|完美|perfect/.test(low)) rule = BADGE_RULE_PERFECT;
   else if (/快|速度|秒|闪电|fast|speed|lightning/.test(low)) rule = BADGE_RULE_FAST;
   else if (/新手|新秀|初出|首周|rookie|newbie|first week/.test(low)) rule = BADGE_RULE_NEWBIE;
   else if (/累计|总共|总计|终身|all[-\s]?time|total/.test(low)) rule = BADGE_RULE_TOTAL;
   else if (/单期|本期|周期|月度|每月|月内|round|month|period/.test(low)) rule = BADGE_RULE_PERIOD;
   else if (/连续|一连|连打卡|streak|in a row|consecutive/.test(low)) rule = BADGE_RULE_STREAK;
-  var m = low.match(/(\d+)\s*(天|日|day|days|题|道|秒|sec|question|questions)/);
-  var nDef = rule === BADGE_RULE_NIGHT ? 1 : rule === BADGE_RULE_WEEKEND ? 3 : rule === BADGE_RULE_PERFECT ? 5
-    : rule === BADGE_RULE_FAST ? 15 : rule === BADGE_RULE_NEWBIE ? 3 : 0;
+  var m = low.match(/(\d+)\s*(天|日|day|days|题|道|秒|sec|question|questions|名)/);
+  var nDef = rule === BADGE_RULE_NIGHT ? 1 : rule === BADGE_RULE_WEEKEND ? 3
+    : rule === BADGE_RULE_PERFECT ? 10 : rule === BADGE_RULE_FAST ? 5
+    : rule === BADGE_RULE_NEWBIE ? 3
+    : rule === BADGE_RULE_DEPT_TOP || rule === BADGE_RULE_ALL_TOP ? 10
+    : rule === BADGE_RULE_WRONG ? 50 : rule === BADGE_RULE_FAV ? 20 : rule === BADGE_RULE_PRACTICE ? 100
+    : rule === BADGE_RULE_THEME ? 1 : 0;
   var n = m ? parseInt(m[1], 10) : (nDef || (rule === BADGE_RULE_STREAK ? 3 : (rule === BADGE_RULE_PERIOD ? 15 : 30)));
   if (!(n > 0)) n = 3;
   if (n > 365) n = 365;
   var icon = rule === BADGE_RULE_STREAK ? '🔥' : (rule === BADGE_RULE_PERIOD ? '📅' : '🌿');
   if (/王者|冠军|第一|king|champion/.test(low)) icon = '👑';
+  else if (/全题库|master/.test(low)) icon = '🥇';
+  else if (/前十|top|板块榜|部门榜/.test(low)) icon = '🎯';
+  else if (/错题/.test(low)) icon = '🏹';
+  else if (/收藏|考点/.test(low)) icon = '⭐';
+  else if (/练习|刷题/.test(low)) icon = '📖';
   else if (/满分|全对|perfect score/.test(low)) icon = '💯';
   else if (/速度|神速|快|speed|fast/.test(low)) icon = '⚡';
   else if (/团队|部门|team/.test(low)) icon = '🛡️';
   else if (/学习|知识|study|learn/.test(low)) icon = '📚';
   else if (/全勤|满勤|attendance/.test(low)) icon = '🗓️';
+  else if (/狮|lion/.test(low)) icon = '🦁';
   else if (/星|star/.test(low)) icon = '🌟';
   else if (/火|flame|fire/.test(low)) icon = '🔥';
   // 名字：先按规则取"达到的最高一档"，描述里点名了主题就用主题名
@@ -10376,28 +11285,45 @@ function badgeSuggestFromDesc(desc) {
   if (badgeIsSpecialRule(rule)) {
     if (rule === BADGE_RULE_NIGHT) { cn = '夜猫子'; en = 'Night Owl'; }
     else if (rule === BADGE_RULE_WEEKEND) { cn = '周末战士'; en = 'Weekend Warrior'; }
-    else if (rule === BADGE_RULE_PERFECT) { cn = '神射手'; en = 'Sharp Shooter'; }
+    else if (rule === BADGE_RULE_PERFECT) { cn = '答题能手'; en = 'Run Sharpshooter'; }
     else if (rule === BADGE_RULE_FAST) { cn = '闪电快手'; en = 'Lightning Fast'; }
     else { cn = '初出茅庐'; en = 'First Steps'; }
   }
+  // 描述里自己写了名字（"叫 XXX" / "叫做 XXX"）就以描述为准
+  var named = raw.match(/(?:叫做?|名为|名称是|named|called)\s*[「“"']?([^」”"'，,。;；\s]{2,10})/);
+  if (named && named[1]) { cn = named[1]; }
   if (/王者|king|champion/i.test(low)) { cn = '学习王者'; en = 'Learning Champion'; }
   else if (/全勤|满勤|attendance/i.test(low)) { cn = (rule === BADGE_RULE_PERIOD ? '全勤之星' : '全勤达人'); en = 'Perfect Attendance'; }
   else if (/冠军|第一/.test(low)) { cn = '挑战冠军'; en = 'Challenge Champion'; }
   var lv = 1;
   if (badgeIsSpecialRule(rule)) lv = rule === BADGE_RULE_PERFECT || rule === BADGE_RULE_FAST ? 3 : (rule === BADGE_RULE_NEWBIE ? 1 : 2);
+  else if (rule === BADGE_RULE_DEPT_TOP) lv = n <= 3 ? 4 : 3;
+  else if (rule === BADGE_RULE_ALL_TOP) lv = n <= 3 ? 5 : 4;
+  else if (rule === BADGE_RULE_WRONG || rule === BADGE_RULE_FAV || rule === BADGE_RULE_PRACTICE) lv = n >= 100 ? 4 : 3;
+  else if (rule === BADGE_RULE_THEME) lv = 3;
   else if (rule === BADGE_RULE_STREAK) lv = n >= 21 ? 5 : (n >= 14 ? 4 : (n >= 7 ? 3 : (n >= 5 ? 2 : 1)));
   else if (rule === BADGE_RULE_PERIOD) lv = n >= 25 ? 5 : (n >= 20 ? 4 : (n >= 15 ? 3 : (n >= 10 ? 2 : 1)));
   else lv = n >= 100 ? 5 : (n >= 60 ? 3 : (n >= 30 ? 2 : 1));
   var th = badgeThemeOf(rule, lv);
   return { rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: th.c1, c2: th.c2 };
 }
-// 配色只由 规则 + 等级 决定：连续=火焰橙、单期=蓝、累计=绿，高等级转金色。
+// 配色只由 规则 + 等级 决定：连续=火焰橙、单期=蓝、累计=绿，竞速=金橙、学习=紫蓝、
+// 主题=琥珀；高等级一律转金色。
 function badgeThemeOf(rule, lv) {
   if (rule === BADGE_RULE_STREAK) {
     return lv >= 4 ? { c1: '#ffe08a', c2: '#c99700' } : { c1: '#ffc46b', c2: (lv >= 3 ? '#ff5e00' : '#ff9a3c') };
   }
   if (rule === BADGE_RULE_PERIOD) {
     return lv >= 4 ? { c1: '#8ec4ff', c2: '#174a7c' } : { c1: '#a8d8ff', c2: '#2b6cb0' };
+  }
+  if (rule === BADGE_RULE_DEPT_TOP || rule === BADGE_RULE_ALL_TOP) {
+    return lv >= 4 ? { c1: '#ffe08a', c2: '#b7791f' } : { c1: '#ffd08a', c2: '#e06c00' };
+  }
+  if (rule === BADGE_RULE_WRONG || rule === BADGE_RULE_FAV || rule === BADGE_RULE_PRACTICE) {
+    return lv >= 4 ? { c1: '#d7c4f5', c2: '#4c1d95' } : { c1: '#e3d7fb', c2: '#6b46c1' };
+  }
+  if (rule === BADGE_RULE_THEME) {
+    return lv >= 4 ? { c1: '#ffd7a8', c2: '#9a3412' } : { c1: '#ffd7a8', c2: '#c2410c' };
   }
   return lv >= 4 ? { c1: '#ffe08a', c2: '#b7791f' } : { c1: '#b7e4c7', c2: '#2f855a' };
 }
@@ -10426,9 +11352,15 @@ function adminBadgeRuleText(b, en) {
   if (!b) return '';
   if (b.rule === BADGE_RULE_NIGHT) return en ? 'night owl' : '夜猫子';
   if (b.rule === BADGE_RULE_WEEKEND) return en ? ('weekend ' + b.n + 'd') : ('周末 ' + b.n + ' 天');
-  if (b.rule === BADGE_RULE_PERFECT) return en ? ('perfect ' + b.n + '+') : ('全对 ' + b.n + ' 题');
+  if (b.rule === BADGE_RULE_PERFECT) return en ? (b.n + '+ correct in a run') : ('单次答对 ' + b.n + ' 题');
   if (b.rule === BADGE_RULE_FAST) return en ? ('\u2264' + b.n + 's/q') : ('每题\u2264' + b.n + ' 秒');
   if (b.rule === BADGE_RULE_NEWBIE) return en ? ('first week ' + b.n + 'd') : ('首周 ' + b.n + ' 天');
+  if (b.rule === BADGE_RULE_DEPT_TOP) return en ? ('section top ' + b.n) : ('板块前 ' + b.n + ' 名');
+  if (b.rule === BADGE_RULE_ALL_TOP) return en ? ('overall top ' + b.n) : ('全题库前 ' + b.n + ' 名');
+  if (b.rule === BADGE_RULE_WRONG) return en ? ('redo ' + b.n + ' wrong') : ('重做错题 ' + b.n + ' 道');
+  if (b.rule === BADGE_RULE_FAV) return en ? ('save ' + b.n + ' questions') : ('收藏 ' + b.n + ' 道');
+  if (b.rule === BADGE_RULE_PRACTICE) return en ? ('practice ' + b.n + ' q') : ('练习 ' + b.n + ' 道');
+  if (b.rule === BADGE_RULE_THEME) return en ? ('theme ' + b.n + 'd' + (b.rid ? ' @' + b.rid : '')) : ('主题 ' + b.n + ' 天' + (b.rid ? ' @' + b.rid : ''));
   if (b.rule === BADGE_RULE_STREAK) return en ? ('streak ' + b.n + 'd') : ('连续 ' + b.n + ' 天');
   if (b.rule === BADGE_RULE_PERIOD) return en ? ('round ' + b.n + 'd') : ('单期 ' + b.n + ' 天');
   return en ? ('total ' + b.n + 'd') : ('累计 ' + b.n + ' 天');
@@ -10447,33 +11379,40 @@ function renderAdminBadges() {
     html += '<div style="margin-bottom:10px;padding:8px 12px;border-radius:8px;background:#fff7e6;border:1px solid #ffd591;'
       + 'font-size:12px;color:#a14a00;">● ' + t('badge_admin_dirty') + '</div>';
   }
-  // 列表
+  // 列表（按五大类分组展示，和学员端一致）
   html += '<div class="q-card">';
   if (!list.length) html += '<div style="font-size:13px;color:#888;">' + t('badge_admin_empty') + '</div>';
-  for (var i = 0; i < list.length; i++) {
-    var b = list[i];
-    html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;' + (i ? 'border-top:1px solid #f0f2f4;' : '') + (b.on ? '' : 'opacity:.5;') + '">';
-    html += '<div style="flex:0 0 auto;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
-      + 'font-size:18px;background:linear-gradient(135deg,' + b.c1 + ',' + b.c2 + ');">' + b.icon + '</div>';
-    html += '<div style="flex:1;min-width:0;">';
-    html += '<div style="font-size:13.5px;font-weight:700;color:#1a3a5c;">' + escapeHtml(en ? (b.en || b.cn) : (b.cn || b.en))
-      + ' <span style="font-size:10.5px;font-weight:600;color:#b7791f;">Lv.' + b.lv + '</span></div>';
-    html += '<div style="font-size:11px;color:#8b98a3;">' + escapeHtml(adminBadgeRuleText(b, en)) + ' · ' + escapeHtml(en ? b.cn : b.en) + '</div>';
-    html += '</div>';
-    html += '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">';
-    html += '<button class="admin-mini-btn" onclick="adminBadgeMove(\'' + b.id + '\',-1)">↑</button>';
-    html += '<button class="admin-mini-btn" onclick="adminBadgeMove(\'' + b.id + '\',1)">↓</button>';
-    html += '<button class="admin-mini-btn" onclick="adminBadgeToggle(\'' + b.id + '\')">' + (b.on ? '👁' : '🚫') + '</button>';
-    html += '<button class="admin-mini-btn" onclick="adminBadgeEdit(\'' + b.id + '\')">' + t('badge_admin_edit') + '</button>';
-    html += '<button class="admin-mini-btn" style="color:#b3261e;" onclick="adminBadgeDel(\'' + b.id + '\')">' + t('badge_admin_del') + '</button>';
-    html += '</div></div>';
+  for (var ci = 0; ci < BADGE_CATS.length; ci++) {
+    var catKey = BADGE_CATS[ci].key, catList = [], i;
+    for (i = 0; i < list.length; i++) if (badgeCatOf(list[i].rule) === catKey) catList.push(list[i]);
+    if (!catList.length) continue;
+    html += '<div style="font-size:12px;font-weight:700;color:#1a3a5c;padding:' + (ci ? '12px' : '2px') + ' 0 4px;'
+      + (ci ? 'border-top:1px solid #f0f2f4;margin-top:8px;' : '') + '">' + badgeCatLabel(catKey) + '</div>';
+    for (var li = 0; li < catList.length; li++) {
+      var b = catList[li];
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;' + (li ? 'border-top:1px solid #f7f8fa;' : '') + (b.on ? '' : 'opacity:.5;') + '">';
+      html += '<div style="flex:0 0 auto;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
+        + 'font-size:18px;background:linear-gradient(135deg,' + b.c1 + ',' + b.c2 + ');">' + b.icon + '</div>';
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="font-size:13.5px;font-weight:700;color:#1a3a5c;">' + escapeHtml(en ? (b.en || b.cn) : (b.cn || b.en))
+        + ' <span style="font-size:10.5px;font-weight:600;color:#b7791f;">Lv.' + b.lv + '</span></div>';
+      html += '<div style="font-size:11px;color:#8b98a3;">' + escapeHtml(adminBadgeRuleText(b, en)) + ' · ' + escapeHtml(en ? b.cn : b.en) + '</div>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">';
+      html += '<button class="admin-mini-btn" onclick="adminBadgeMove(\'' + b.id + '\',-1)">↑</button>';
+      html += '<button class="admin-mini-btn" onclick="adminBadgeMove(\'' + b.id + '\',1)">↓</button>';
+      html += '<button class="admin-mini-btn" onclick="adminBadgeToggle(\'' + b.id + '\')">' + (b.on ? '👁' : '🚫') + '</button>';
+      html += '<button class="admin-mini-btn" onclick="adminBadgeEdit(\'' + b.id + '\')">' + t('badge_admin_edit') + '</button>';
+      html += '<button class="admin-mini-btn" style="color:#b3261e;" onclick="adminBadgeDel(\'' + b.id + '\')">' + t('badge_admin_del') + '</button>';
+      html += '</div></div>';
+    }
   }
   html += '</div>';
 
   // 新增 / 编辑表单
   var ed = adminState.badgeEditing || '';
   var cur = ed && ed !== 'new' ? adminBadgeById(ed) : null;
-  var d = cur || { id: '', rule: BADGE_RULE_STREAK, n: 3, cn: '', en: '', icon: '🔥', lv: 1, c1: '#ffc46b', c2: '#ff9a3c', on: true };
+  var d = cur || { id: '', rule: BADGE_RULE_STREAK, n: 3, cn: '', en: '', icon: '🔥', lv: 1, c1: '#ffc46b', c2: '#ff9a3c', on: true, rid: '' };
   html += '<div id="badgeFormCard" class="q-card" style="margin-top:10px;transition:box-shadow .4s;">';
   html += '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">' + (cur ? ('✏️ ' + t('badge_admin_edit')) : ('➕ ' + t('badge_admin_add'))) + '</div>';
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'Describe it in one sentence' : '一句话描述这枚徽章') + '</label>';
@@ -10498,8 +11437,21 @@ function renderAdminBadges() {
     + '<option value="perfect"' + (d.rule === BADGE_RULE_PERFECT ? ' selected' : '') + '>' + t('badge_admin_rule_perfect') + '</option>'
     + '<option value="fast"' + (d.rule === BADGE_RULE_FAST ? ' selected' : '') + '>' + t('badge_admin_rule_fast') + '</option>'
     + '<option value="newbie"' + (d.rule === BADGE_RULE_NEWBIE ? ' selected' : '') + '>' + t('badge_admin_rule_newbie') + '</option>'
+    + '<option value="dept_top"' + (d.rule === BADGE_RULE_DEPT_TOP ? ' selected' : '') + '>' + t('badge_admin_rule_dept_top') + '</option>'
+    + '<option value="all_top"' + (d.rule === BADGE_RULE_ALL_TOP ? ' selected' : '') + '>' + t('badge_admin_rule_all_top') + '</option>'
+    + '<option value="wrong"' + (d.rule === BADGE_RULE_WRONG ? ' selected' : '') + '>' + t('badge_admin_rule_wrong') + '</option>'
+    + '<option value="fav"' + (d.rule === BADGE_RULE_FAV ? ' selected' : '') + '>' + t('badge_admin_rule_fav') + '</option>'
+    + '<option value="practice"' + (d.rule === BADGE_RULE_PRACTICE ? ' selected' : '') + '>' + t('badge_admin_rule_practice') + '</option>'
+    + '<option value="theme"' + (d.rule === BADGE_RULE_THEME ? ' selected' : '') + '>' + t('badge_admin_rule_theme') + '</option>'
     + '</select></div>';
   html += '</div>';
+  // 限定主题徽章要绑定"哪一届"：留空 = 当前届（发布时才知道 id，所以留空最省心）；
+  // 想把它钉死在某一届就填进去（新一季换了 id 之后，旧主题自动变成"已结束、不再发放"）。
+  html += '<div style="margin-top:8px;"><label style="font-size:12px;color:#666;">' + t('badge_admin_rid') + '</label>'
+    + '<div style="display:flex;gap:6px;">'
+    + '<input id="bdRid" class="admin-input" style="flex:1;min-width:0;padding:8px;border:1px solid #d8dee4;border-radius:6px;box-sizing:border-box;" value="' + escapeHtml(d.rid || '') + '" placeholder="' + (en ? 'blank = current round' : '留空 = 当前届') + '">'
+    + '<button type="button" class="admin-mini-btn" style="white-space:nowrap;" onclick="adminBadgeUseCurRid()">' + t('badge_admin_rid_cur') + '</button>'
+    + '</div></div>';
   html += '<div style="display:flex;gap:8px;margin-top:8px;">';
   html += '<div style="flex:1;"><label style="font-size:12px;color:#666;">' + t('badge_admin_n') + '</label>'
     + '<input id="bdN" type="number" min="1" max="365" class="admin-input" style="width:100%;padding:8px;border:1px solid #d8dee4;border-radius:6px;box-sizing:border-box;" value="' + d.n + '"></div>';
@@ -10563,6 +11515,11 @@ function adminBadgeGen() {
   var prev = document.getElementById('bdPreview');
   if (prev) prev.innerHTML = raceBadgeChipHtml({ id: 'preview', rule: s.rule, n: s.n, cn: s.cn, en: s.en, icon: s.icon, lv: s.lv, c1: s.c1, c2: s.c2 }, true, '2026-10-30', '', 2);
 }
+function adminBadgeUseCurRid() {
+  var e = document.getElementById('bdRid');
+  var c = raceConfOf() || {};
+  if (e) e.value = c.id || '';
+}
 function adminBadgeSave() {
   var g = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
   var cn = String(g('bdCn') || '').trim(), en2 = String(g('bdEn') || '').trim();
@@ -10570,6 +11527,7 @@ function adminBadgeSave() {
   var n = parseInt(g('bdN'), 10) || 0;
   var lv = parseInt(g('bdLv'), 10) || 1;
   var icon = String(g('bdIcon') || '🏅').trim() || '🏅';
+  var rid = String(g('bdRid') || '').trim();
   var onEl = document.getElementById('bdOn');
   if (!cn || !(n > 0)) { adminBadgeMsg(t('badge_admin_invalid'), '#b3261e'); return; }
   var list = adminBadgeDraft();
@@ -10578,11 +11536,11 @@ function adminBadgeSave() {
   var sug = badgeSuggestFromDesc((document.getElementById('bdDesc') || {}).value || '');
   var th = badgeThemeOf(rule, lv);
   if (!b) {
-    b = { id: 'bd_' + rule.charAt(0) + n + '_' + Date.now().toString(36), rule: rule, n: n, cn: cn, en: en2 || cn, icon: icon, lv: lv, c1: th.c1, c2: th.c2, on: true };
+    b = { id: 'bd_' + rule.charAt(0) + n + '_' + Date.now().toString(36), rule: rule, n: n, cn: cn, en: en2 || cn, icon: icon, lv: lv, c1: th.c1, c2: th.c2, on: true, rid: rid };
     list.push(b);
   } else {
     b.rule = rule; b.n = n; b.cn = cn; b.en = en2 || cn; b.icon = icon; b.lv = lv;
-    b.c1 = th.c1; b.c2 = th.c2;
+    b.c1 = th.c1; b.c2 = th.c2; b.rid = rid;
   }
   b.on = onEl ? !!onEl.checked : true;
   adminState.badgeDirty = true;
@@ -11128,40 +12086,56 @@ function renderMyBadges() {
   if (!mine.length) {
     html += '<div class="q-card" style="text-align:center;color:#888;font-size:13px;line-height:1.7;">' + t('race_badge_none') + '</div>';
   }
-  // 按规则分组：连续 / 单期 / 累计 / 挑战彩蛋
-  var groups = [
-    { rule: BADGE_RULE_STREAK, label: t('race_badge_grp_streak') },
-    { rule: BADGE_RULE_PERIOD, label: t('race_badge_grp_period') },
-    { rule: BADGE_RULE_TOTAL, label: t('race_badge_grp_total') },
-    { rule: '__special__', label: t('race_badge_grp_special') }
-  ];
-  for (var g = 0; g < groups.length; g++) {
-    var list = [], i;
-    for (i = 0; i < defs.length; i++) {
-      if (groups[g].rule === '__special__') { if (badgeIsSpecialRule(defs[i].rule)) list.push(defs[i]); }
-      else if (defs[i].rule === groups[g].rule) list.push(defs[i]);
+  // 五大类分组：打卡系列（内含连续 / 单期 / 累计三小区）· 竞速闯关 · 学习沉淀 ·
+  // 挑战彩蛋 · 限定月度主题。管理端用的是同一份 badgeCatOf，两边分类永远一致。
+  var badgeCellHtml = function (d) {
+    var got = counts[d.id], pr = raceBadgeProgressOf(rec, d);
+    var cell = raceBadgeChipHtml(d, !!got, got ? got.last : '', raceBadgeProgText(d, pr, en), got ? got.count : 0);
+    // 拿到的徽章可以设为「排行榜展示徽章」：别人在榜单上看到的就是这枚；
+    // 再点一次取消，回到默认的最高等级一枚。
+    if (got) {
+      var isShown = rec.showBadge === d.id;
+      cell += '<div onclick="raceSetShowBadge(\'' + d.id + '\')" style="margin-top:5px;text-align:center;font-size:11px;font-weight:600;'
+        + 'cursor:pointer;padding:4px 0;border-radius:6px;'
+        + (isShown
+          ? 'background:#fff8e1;color:#8a5a00;border:1px solid #f0b357;">📌 ' + t('race_badge_showing')
+          : 'background:#f4f6f8;color:#1a3a5c;border:1px dashed #d8dee4;">' + t('race_badge_set_show')) + '</div>';
     }
-    if (!list.length) continue;
-    html += '<h4 style="margin:14px 2px 8px;">' + groups[g].label + '</h4>';
-    html += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">';
-    for (i = 0; i < list.length; i++) {
-      var d = list[i], got = counts[d.id];
-      var pr = raceBadgeProgressOf(rec, d);
-      var cell = raceBadgeChipHtml(d, !!got, got ? got.last : '', pr.cur + '/' + pr.max + (en ? ' d' : ' 天'), got ? got.count : 0);
-      // 拿到的徽章可以设为「排行榜展示徽章」：别人在榜单上看到的就是这枚；
-      // 再点一次取消，回到默认的最高等级一枚。
-      if (got) {
-        var isShown = rec.showBadge === d.id;
-        cell += '<div onclick="raceSetShowBadge(\'' + d.id + '\')" style="margin-top:5px;text-align:center;font-size:11px;font-weight:600;'
-          + 'cursor:pointer;padding:4px 0;border-radius:6px;'
-          + (isShown
-            ? 'background:#fff8e1;color:#8a5a00;border:1px solid #f0b357;">📌 ' + t('race_badge_showing')
-            : 'background:#f4f6f8;color:#1a3a5c;border:1px dashed #d8dee4;">' + t('race_badge_set_show')) + '</div>';
+    return '<div>' + cell + '</div>';
+  };
+  var gridOpen = '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">';
+  for (var g = 0; g < BADGE_CATS.length; g++) {
+    var catKey = BADGE_CATS[g].key, catDefs = [], i;
+    for (i = 0; i < defs.length; i++) if (badgeCatOf(defs[i].rule) === catKey) catDefs.push(defs[i]);
+    if (!catDefs.length) continue;
+    html += '<h4 style="margin:16px 2px 4px;">' + badgeCatLabel(catKey) + '</h4>';
+    if (catKey === BADGE_CAT_THEME) {
+      html += '<div style="font-size:11px;color:#9aa3ad;margin:0 2px 8px;">' + t('race_badge_cat_theme_hint') + '</div>';
+    }
+    if (catKey === BADGE_CAT_CHECKIN) {
+      // 打卡系列保留原来的三个小区：连续 / 单期 / 累计 —— 三种口径混在一起容易看晕
+      var subs = [
+        { rule: BADGE_RULE_STREAK, label: t('race_badge_grp_streak') },
+        { rule: BADGE_RULE_PERIOD, label: t('race_badge_grp_period') },
+        { rule: BADGE_RULE_TOTAL, label: t('race_badge_grp_total') }
+      ];
+      for (var s2 = 0; s2 < subs.length; s2++) {
+        var subDefs = [], j;
+        for (j = 0; j < catDefs.length; j++) if (catDefs[j].rule === subs[s2].rule) subDefs.push(catDefs[j]);
+        if (!subDefs.length) continue;
+        html += '<div style="font-size:11.5px;font-weight:600;color:#8b98a3;margin:8px 2px 6px;">' + subs[s2].label + '</div>';
+        html += gridOpen;
+        for (j = 0; j < subDefs.length; j++) html += badgeCellHtml(subDefs[j]);
+        html += '</div>';
       }
-      html += '<div>' + cell + '</div>';
+    } else {
+      html += gridOpen;
+      for (i = 0; i < catDefs.length; i++) html += badgeCellHtml(catDefs[i]);
+      html += '</div>';
     }
-    html += '</div>';
   }
+  // 集齐一个系列 → 专属头像框（纯荣誉，平台内生效）
+  html += raceFrameSectionHtml(counts);
   html += '<div style="font-size:11px;color:#999;line-height:1.7;margin:12px 2px;">' + t('race_badge_mine_hint') + '</div>';
   html += '</div>';
   return html;
@@ -12473,6 +13447,10 @@ function submitAnswer() {
   var ans = state.selectedAnswers[state.currentIndex];
   if (!ans || (Array.isArray(ans) && ans.length === 0)) { alert(t('no_answer_alert')); return; }
   state.showAnswer = true;
+  // 学习沉淀徽章（2026-11-04）：练习模式每答一题记一笔，错题重做也记一笔 ——
+  // 「温故知新 / 错题猎手」靠的就是这两个数，够数即刻点亮，不用等下次答题赛。
+  if (state.currentMode === 'wrong') studyBump('wrong');
+  else if (state.currentMode === 'practice') studyBump('practice');
   
   if (state.currentMode === 'practice' && state.currentSection === 'all') {
     var sk = bankStateKey();
@@ -13293,6 +14271,17 @@ function adminLoginAttempt() {
     adminState.authenticated = true;
     adminAuthPersist(); // Stage-5: survive refresh for ADMIN_SESSION_HOURS
     navigate('adminDashboard');
+    // Stage 10b/10c: 登录即对账 + 续跑重试队列；有注册待核查就当场提醒。
+    try { adminFixReconcile(); } catch (e) {}
+    try { adminFixFlush(); } catch (e) {}
+    try {
+      var pv0 = adminPendingVerifyStudents();
+      if (pv0.length) {
+        alert(state.lang === 'en'
+          ? '\u23f3 ' + pv0.length + ' registration(s) need verification (reserved / unlisted IDs). Open "Registrations to Verify" on the admin home.'
+          : '\u23f3 有 ' + pv0.length + ' 位新注册学员待核查（预留工号注册或不在员工名册）。请在后台首页点击「注册待核查」逐个核实。');
+      }
+    } catch (e) {}
   } else {
     errEl.textContent = state.lang === 'en' ? 'Wrong password' : '\u5bc6\u7801\u9519\u8bef';
   }
@@ -13759,6 +14748,30 @@ function renderAdminDashboard() {
       renderAdminDashboard._repTimer = null;
       if (state.currentPage === 'adminDash') render();
     }, 3000);
+  }
+
+  // ===== Stage 10b/10c: 云端待同步修正 + 注册待核查 ——— 进管理端第一眼就能看到
+  var _pendN = adminPendingFixCount();
+  if (_pendN > 0) {
+    html += '<div class="admin-hub-card" style="border:1.5px solid #f2dcb0;background:#fdf8ee;margin-bottom:10px;" onclick="adminFixFlush()">';
+    html += '<div class="admin-hub-icon">\u23f7</div>';
+    html += '<div class="admin-hub-body"><div class="admin-hub-title" style="color:#9a6b00;">' +
+      (state.lang === 'en' ? (_pendN + ' profile fix(es) waiting to reach the cloud') : (_pendN + ' 条员工信息修正待同步到云端')) + '</div>';
+    html += '<div class="admin-hub-desc">' + (state.lang === 'en'
+      ? 'Retrying automatically every 30 s — tap to retry now'
+      : '每 30 秒自动重试，点击立即重试') + '</div></div>';
+    html += '<div class="admin-hub-arrow">\u203a</div></div>';
+  }
+  var _pvList = adminPendingVerifyStudents();
+  if (_pvList.length > 0) {
+    html += '<div class="admin-hub-card" style="border:1.5px solid #f2b8b5;background:#fdf3f2;margin-bottom:10px;" onclick="navigate(\'adminVerify\')">';
+    html += '<div class="admin-hub-icon">\u23f3</div>';
+    html += '<div class="admin-hub-body"><div class="admin-hub-title" style="color:var(--danger-deep, #b3261e);">' +
+      (state.lang === 'en' ? (_pvList.length + ' registration(s) to verify') : (_pvList.length + ' 位新注册学员待核查')) + '</div>';
+    html += '<div class="admin-hub-desc">' + (state.lang === 'en'
+      ? 'Reserved IDs (no name on the roster) or IDs not on the roster — tap to review'
+      : '预留工号注册 / 工号不在员工名册 —— 点击逐个核实') + '</div></div>';
+    html += '<div class="admin-hub-arrow">\u203a</div></div>';
   }
 
   // ===== Three workspace entries (question / student / exam management) =====
@@ -14334,6 +15347,28 @@ function adminRosterPanelHtml() {
   html += '</div>';
   html += '</div></div>';
 
+  // ---- Stage 10: 员工名册（工号 + 姓名，注册核验用）----
+  var nr = loadNameRoster();
+  var nrCount = 0;
+  for (var nrK in nr.rows) nrCount++;
+  html += '<div class="q-card" style="margin-top:12px;"><div class="profile-form">';
+  html += '<h4 style="margin:0 0 6px;">📑 ' + (en ? 'Name Roster (registration check)' : '员工名册（注册姓名核验）') + '</h4>';
+  html += '<div class="sync-note" style="font-size:12px;">' + (en
+    ? 'Paste CSV rows (ID, Chinese name, English name — column order does not matter). With a roster published: an ID registered with a Chinese name must match it exactly; an English-only name needs just one matching segment; blank-name IDs are reserved for new hires — those registrations are flagged for your review.'
+    : '把名册粘贴进来（每行：工号、中文名、英文名 —— 列顺序不限）。发布后：名册里登记了中文名的工号，注册时中文名必须完全一致；只有英文名的外国同事，英文名任一节相同即可；只填工号不留姓名的行视为新员工预留工号 —— 这类注册会打上待核查标记，提醒你人工确认。') + '</div>';
+  html += '<div class="sync-note" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:8px;">';
+  html += '<span>📑 ' + (en ? 'Roster' : '名册') + '：<b>' + nrCount + '</b> ' + (en ? 'IDs' : '个工号') + '</span>';
+  html += '<span>' + (en ? 'Updated' : '更新于') + '：' + (nr.ver ? fmtSyncTime(nr.ver) : '—') + '</span>';
+  html += '</div>';
+  html += '<textarea id="nameRosterBulk" rows="6" style="width:100%;font-family:monospace;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:8px;" placeholder="' + (en
+    ? 'e.g.\n5914,李心怡,Elowen Li\n6001,,Mohamed Faizal\n6002,,'
+    : '例如：\n5914,李心怡,Elowen Li\n6001,,Mohamed Faizal\n6002,,（预留工号，姓名留空）') + '"></textarea>';
+  html += '<div class="action-row" style="margin-top:8px;">';
+  html += '<button class="action-btn nav-btn primary" style="flex:1;" onclick="adminNameRosterImport()">' + (en ? 'Parse & publish' : '解析并发布') + '</button>';
+  html += '<button class="action-btn nav-btn danger" style="flex:1;" onclick="adminNameRosterClear()">' + (en ? 'Clear roster' : '清空名册') + '</button>';
+  html += '</div>';
+  html += '</div></div>';
+
   // ---- 已注册但不在名单内（这些人会被拦在门外）----
   var missing = adminRosterMissing();
   html += '<h4 style="margin:16px 0 8px;">⚠️ ' + t('roster_missing_title') + (missing.length ? ' (' + missing.length + ')' : '') + '</h4>';
@@ -14377,6 +15412,41 @@ function adminRosterPanelHtml() {
       }
     }
   }
+  return html;
+}
+
+// ===== Stage 10c: 注册待核查页（预留工号 / 不在名册的注册逐个人工核实）=====
+function renderAdminVerify() {
+  if (!adminState.authenticated) return renderAdminLogin();
+  var en = state.lang === 'en';
+  var list = adminPendingVerifyStudents();
+  var html = '<div class="app-header">';
+  html += '<button class="back-btn" onclick="navigate(\'adminDashboard\')">\u2190</button>';
+  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
+  html += '<h1>\u23f3 ' + (en ? 'Registrations to Verify' : '注册待核查') + '</h1>';
+  html += '<div class="subtitle">' + (en ? 'Reserved IDs / IDs not on the name roster' : '预留工号注册 · 工号不在员工名册') + '</div>';
+  html += '</div><div class="page">';
+  // 打开页面时补拉一次云端学员数据，待核查名单以云端为准。
+  if (SERVER_AVAILABLE && !adminCloudFetching && Date.now() - (renderAdminVerify._lastKick || 0) > 60000) {
+    renderAdminVerify._lastKick = Date.now();
+    adminFetchCloudStudents();
+  }
+  if (!list.length) {
+    html += '<div class="save-status synced">\u2705 ' + (en ? 'Nothing pending — every registration matches the name roster (or was already verified).' : '没有待核查的注册。') + '</div>';
+  }
+  for (var i = 0; i < list.length; i++) {
+    var it = list[i];
+    var why = it.reason === 'reserved'
+      ? (en ? 'Reserved ID — no name on the roster' : '预留工号注册（名册中无姓名）')
+      : (en ? 'ID not on the name roster' : '工号不在员工名册中');
+    html += '<div class="stu-row" data-stu-key="' + escapeHtml(it.key) + '">';
+    html += '<div class="stu-name">\u23f3 <b>' + escapeHtml(it.name) + '</b> <span style="font-weight:400;font-size:13px;color:#8a8f96;">\u00b7 ' + escapeHtml(it.emp || '\u2014') + ' \u00b7 ' + why + '</span></div>';
+    html += '<div class="action-row" style="margin-top:8px;">';
+    html += '<button class="action-btn nav-btn secondary" style="flex:1;" onclick="adminOpenStudentDetail(\'' + jsKey(it.key) + '\')">' + (en ? 'Open profile' : '查看并编辑') + '</button>';
+    html += '<button class="action-btn nav-btn primary" style="flex:1;" onclick="adminClearNeedsVerify(\'' + jsKey(it.key) + '\')">' + (en ? 'Mark verified' : '标记已核实') + '</button>';
+    html += '</div></div>';
+  }
+  html += '</div>';
   return html;
 }
 
@@ -16983,6 +18053,8 @@ function adminRenameCacheStudent(stuKey, fix) {
     if (fix.cn || fix.en) s.name = (fix.en || fix.cn);
     if (fix.divEn || fix.divCn) { s.divEn = fix.divEn || ''; s.div = fix.divCn || ''; }
     if (fix.deptEn || fix.deptCn) { s.deptEn = fix.deptEn || ''; s.dept = fix.deptCn || ''; }
+    // Stage 10: 管理员更正/核实 → 本地缓存同步清掉注册待核查标记。
+    if (fix.clearNv) delete s.needsVerify;
   }
   // 工号一变身份键就变：详情视图和「返回列表要定位到哪一行」都得跟着换，
   // 否则返回后既找不到人，淡底色标记也留在了一个已不存在的键上。
@@ -16999,10 +18071,16 @@ function adminRenameCacheStudent(stuKey, fix) {
 // 不依赖学员端在线，改完排行榜立即生效。
 function adminPushFixToSnapshot(stuKey, fix) {
   if (typeof sbJson !== 'function' || typeof sbUpsertSnapshot !== 'function') return Promise.resolve(false);
+  // SB 断开（断路器/配置）→ 快照侧无事可做，放行走 pfFix 中继的老路。
+  // 返回 true 让重试队列不要死循环重试一个注定失败的通道。
+  if (!SB_ON) return Promise.resolve(true);
   try { if (typeof sbResetBreaker === 'function') sbResetBreaker(); } catch (e) {}
   var path = '/rest/v1/student_snapshots?select=phone,record,ts&phone=eq.' + encodeURIComponent(stuKey) + '&limit=1';
   return sbJson(path, null, SB_SNAPSHOT_TIMEOUT_MS, 'sb-snap-read-one').then(function (rows) {
-    if (!Array.isArray(rows) || !rows.length || !rows[0] || !rows[0].record) return false;
+    // 没有快照行 = 学员端从未上报过 —— 快照侧无事可做，返回成功；目录行
+    // （accounts）由 adminFixAccountRow 单独处理。返回 false 会让重试队列
+    // 永远重试一个永远不存在的行。
+    if (!Array.isArray(rows) || !rows.length || !rows[0] || !rows[0].record) return true;
     var rec = rows[0].record;
     if (!rec.snap || typeof rec.snap !== 'object') rec.snap = {};
     var s = rec.snap;
@@ -17012,6 +18090,7 @@ function adminPushFixToSnapshot(stuKey, fix) {
     if (fix.cn || fix.en) s.name = (fix.en || fix.cn);
     if (fix.divCn || fix.divEn) { s.div = fix.divCn || s.div || ''; s.divEn = fix.divEn || s.divEn || ''; }
     if (fix.deptCn || fix.deptEn) { s.dept = fix.deptCn || ''; s.deptEn = fix.deptEn || ''; }
+    if (fix.clearNv) delete s.needsVerify;
     var newKey = (typeof accountKeyFor === 'function' && accountKeyFor(s.cn, s.en, s.emp)) || stuKey;
     var jobs = [];
     if (newKey && newKey !== stuKey) {
@@ -17045,7 +18124,7 @@ function adminSaveStudentEdit(stuKey) {
   if (!cn && !enName) return err(en ? 'At least one name (Chinese or English) is required.' : '中文名 / 英文名至少填一个。');
   if (cn && !isCnNameValid(cn)) return err(en ? 'The Chinese name may contain Chinese characters only.' : '中文名只能输入中文汉字。');
   if (enName && !isEnNameValid(enName)) return err(en ? 'The English name may contain English letters only.' : '英文名只能输入英文字母。');
-  var fix = { emp: emp, cn: cn, en: enName, fv: Date.now() };
+  var fix = { emp: emp, cn: cn, en: enName, fv: Date.now(), clearNv: 1 };
   if (divV !== '') {
     var d = DEPARTMENTS[parseInt(divV, 10)];
     if (d) {
@@ -17065,24 +18144,27 @@ function adminSaveStudentEdit(stuKey) {
     keys.sort(function(a, b) { return fixes.list[a].fv - fixes.list[b].fv; });
     for (var i = 0; i < keys.length - PF_FIX_MAX; i++) delete fixes.list[keys[i]];
   }
+  // Stage 10b: 名单立刻落本地 —— 以前只有中继发布成功才存，中继一挂本地
+  // 就"忘了"这条更正，登录对账（adminFixReconcile）会漏掉它。
+  adminSavePfFixes(fixes);
   // 本地缓存视图立刻更新（管理员自己马上能看到新名字）
   var newKey = adminRenameCacheStudent(stuKey, fix);
   // （身份键变化后 studentDetail / studentListLastKey 的跟随在
   //   adminRenameCacheStudent 里统一处理，那里才知道新键是什么。）
-  // 同时把更正直接写进云端档案：排行榜读的是云端快照，等学员端应用中继消息
-  // 太不可靠（中继在国内常连不上），直接写才能保证"改完就生效"。
-  adminPushFixToSnapshot(stuKey, fix).then(function(cloudOk) {
-    publishPfFixes(fixes.list).then(function(ok) {
-      adminState.editStudent = '';
-      if (cloudOk) {
-        alert(en ? '✅ Saved. The cloud record is updated — the leaderboard shows the new name right away.' : '✅ 已保存。云端档案已直接更新，排行榜立即生效。');
-      } else if (ok) {
-        alert(en ? '⚠️ Saved and published, but the cloud record could not be updated directly. The student device applies it within ~90 s (or on next open).' : '⚠️ 已保存并发布更正，但云端档案未能直接更新（网络异常）。学员端约 90 秒内（或下次打开时）应用。');
-      } else {
-        alert(en ? '❌ Publish failed (network or message too large). Try again.' : '❌ 发布失败（网络异常或消息过大），请重试。');
-      }
-      render();
-    });
+  // Stage 10b: 云端写（快照 + 账户目录 + pfFix 下发）全部进重试队列。
+  // 根因教训：以前云端写失败就只弹个警告，更正从此丢失 —— 本地看着改好了，
+  // 下次拉取云端又被旧数据盖回来（"改了没生效"就是这么来的）。现在失败会
+  // 每 30 秒自动重试直到云端确认，后台首页常驻显示待同步条数。
+  adminEnqueueFix(stuKey, fix);
+  adminState.editStudent = '';
+  render();
+  adminFixFlush().then(function (allOk) {
+    if (allOk) {
+      alert(en ? '✅ Saved. Cloud records (snapshot + account directory) are updated — the leaderboard shows the new info right away.' : '✅ 已保存。云端档案（快照 + 账户目录）已同步更新，排行榜立即生效。');
+    } else {
+      alert(en ? '⚠️ Saved locally. Cloud sync failed this round — it retries automatically every 30 s until it succeeds. The admin home shows the pending count.' : '⚠️ 已保存到本机。这一轮云端写入失败，系统每 30 秒自动重试直到成功；后台首页会显示待同步条数。');
+    }
+    render();
   });
 }
 
@@ -19348,6 +20430,7 @@ function render() {
       case 'adminPaper': app.innerHTML = renderAdminPaper(); adminAttachPaperHeaderInputs(document.getElementById('paperGradingCard'), document.getElementById('adminPaperList')); return;
       case 'adminPaperPicker': app.innerHTML = renderAdminPaperPicker(); return;
       case 'adminStudents': app.innerHTML = renderAdminStudents(); return;
+      case 'adminVerify': app.innerHTML = renderAdminVerify(); return;
       case 'adminExams': app.innerHTML = renderAdminExams(); return;
       case 'adminReports': app.innerHTML = renderAdminReports(); return;
       case 'adminGrading': app.innerHTML = renderAdminGrading(); return;
