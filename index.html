@@ -4677,8 +4677,13 @@ var I18N = {
   badge_admin_rule_wrong: {cn:'累计重做错题 N 道（终身一次）', en:'N wrong answers redone all-time (one-off)'},
   badge_admin_rule_fav: {cn:'累计收藏题目 N 道（终身一次）', en:'N questions saved all-time (one-off)'},
   badge_admin_rule_practice: {cn:'练习模式累计答题 N 道（终身一次）', en:'N practice answers all-time (one-off)'},
-  badge_admin_rule_theme: {cn:'限定主题：绑定届次内打卡 N 天（终身一次）', en:'Monthly theme: N check-ins in the bound round (one-off)'},
+  badge_admin_rule_theme: {cn:'限定主题：当期打卡 N 天 + 答对 M 题（过期不补）', en:'Monthly theme: N check-ins + M correct in this round (no make-ups)'},
   badge_admin_rid: {cn:'限定届次（仅主题徽章用，留空 = 当前届）', en:'Bound round (theme badges only, blank = current)'},
+  badge_admin_mc: {cn:'另需当期答对多少题（仅主题徽章用，0 = 只看打卡）', en:'Also require N correct answers this round (theme only, 0 = check-ins only)'},
+  badge_admin_mc_hint: {cn:'打卡管「来过」，答对管「学过」，两个一起才配得上主题徽章。整月赛事建议 8 天 + 30 题。', en:'Check-ins prove showing up, correct answers prove learning. For a full month, 8 days + 30 correct is a good balance.'},
+  race_theme_kicker: {cn:'本期限定徽章', en:'This round only'},
+  race_theme_got: {cn:'已获得', en:'earned'},
+  race_theme_expire: {cn:'仅本期可拿，换届后不再补发', en:'Only this round — no make-ups after the season changes'},
   badge_admin_rid_cur: {cn:'当前届', en:'Current round'},
   race_badge_theme_ended: {cn:'本期已结束', en:'Round closed'},
   // 专属头像框（集齐同一系列全套解锁，纯荣誉）
@@ -8217,8 +8222,10 @@ function badgeRuleKind(rule) {
 }
 var BADGE_CATALOG_KEY = 'badgeCatalog';
 
-function badgeDef(id, rule, n, cn, en, icon, lv, c1, c2, rid) {
-  return { id: id, rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: c1, c2: c2, on: true, rid: rid || '' };
+// mc = 限定主题徽章的「第二道门槛」：当期还要答对多少题（0/空 = 只看打卡天数）。
+// 打卡管「来过」，答对管「学过」——两个一起才对得上「主题徽章绑定当期学习重点」的定位。
+function badgeDef(id, rule, n, cn, en, icon, lv, c1, c2, rid, mc) {
+  return { id: id, rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: c1, c2: c2, on: true, rid: rid || '', mc: mc || 0 };
 }
 // 预设徽章：先用一套合理的，管理端随时可改（改完发布即生效）。
 // 命名走「主题名 + 规则说明」：名号给人身份感（学习王者），副标题说清怎么拿到。
@@ -8228,7 +8235,7 @@ function badgeDefaultCatalog() {
   var DT = BADGE_RULE_DEPT_TOP, AT = BADGE_RULE_ALL_TOP;
   var WG = BADGE_RULE_WRONG, FV = BADGE_RULE_FAV, PR = BADGE_RULE_PRACTICE, TH = BADGE_RULE_THEME;
   return {
-    ver: 4,
+    ver: 5,
     list: [
       badgeDef('bd_s3', S, 3, '星火初燃', 'First Spark', '✨', 1, '#ffd27f', '#ff9a3c'),
       badgeDef('bd_s5', S, 5, '坚持之力', 'Steady Flame', '🔥', 2, '#ffc46b', '#ff7a00'),
@@ -8251,7 +8258,9 @@ function badgeDefaultCatalog() {
       badgeDef('bd_wkend', W, 3, '周末战士', 'Weekend Warrior', '⚔️', 2, '#b2dfdb', '#00695c'),
       badgeDef('bd_perf', PF, 10, '答题能手', 'Run Sharpshooter', '💯', 3, '#f8bbd0', '#ad1457'),
       badgeDef('bd_fast', F, 5, '闪电快手', 'Lightning Fast', '⚡', 3, '#ffe08a', '#ef6c00'),
-      badgeDef('bd_theme1', TH, 1, '产品知识启航狮', 'Product Launch Lion', '⛵', 3, '#ffd7a8', '#c2410c')
+      // 限定主题第一期：整月赛事 = 打卡 8 天 + 当期答对 30 题（约 8~10 局）。
+      // 第一期刻意偏松（开门红，先让多数人拿到），第二期起建议收到 10 天 / 40 题。
+      badgeDef('bd_theme1', TH, 8, '产品知识启航狮', 'Product Launch Lion', '⛵', 3, '#ffd7a8', '#c2410c', '', 30)
     ]
   };
 }
@@ -8303,7 +8312,9 @@ function badgeNormList(list) {
       c2: String(b.c2 || '#d99a00'),
       on: b.on !== false,
       // 限定主题徽章绑定哪一届（空 = 当前届）
-      rid: String(b.rid || '')
+      rid: String(b.rid || ''),
+      // 限定主题的第二道门槛：当期答对题数（0 = 不限）
+      mc: Math.max(0, Math.min(2000, parseInt(b.mc, 10) || 0))
     });
   }
   return badgeMigrateIcons(out);
@@ -8327,6 +8338,22 @@ function badgeMergeNewDefaults(list) {
   }
   return added;
 }
+// v4 → v5（2026-11-04）：主题徽章原来只卡「当期打卡 1 天」，等于参与即得，
+// 稀缺感为零。这里把"原封未动"的第一期主题徽章抬到 8 天 + 答对 30 题；
+// 管理员已经自己调过 n 或填了 mc 的一律不动（尊重手动配置）。
+function badgeMigrationV5(list) {
+  var changed = false;
+  for (var i = 0; i < list.length; i++) {
+    var b = list[i];
+    if (!b || b.rule !== BADGE_RULE_THEME) continue;
+    if (b.id !== 'bd_theme1') continue;
+    if (b.n !== 1 || (b.mc || 0) > 0) continue;   // 动过就不碰
+    b.n = 8;
+    b.mc = 30;
+    changed = true;
+  }
+  return changed;
+}
 function raceBadgeCatalog() {
   var raw = null;
   try { raw = JSON.parse(localStorage.getItem(BADGE_CATALOG_KEY) || 'null'); } catch (e) { raw = null; }
@@ -8334,6 +8361,8 @@ function raceBadgeCatalog() {
   var ver = parseInt(raw.ver, 10) || 1;
   var list = badgeNormList(raw.list);
   if (ver < 4 && badgeMergeNewDefaults(list)) ver = 4;
+  // 迁移只跑一次（跑完无条件推到 5）：之后管理员再把门槛改回 1 是人家的自由，不再插手。
+  if (ver < 5) { badgeMigrationV5(list); ver = 5; }
   return { ver: ver, list: list };
 }
 // 云端目录 → 本机。版本更新才覆盖，避免把管理端刚改、还没发布的草稿冲掉。
@@ -8636,19 +8665,36 @@ function raceComputeAwards(rec) {
     if (!out['_'][d.id]) out['_'][d.id] = todayKey;
   }
   // ---- 限定月度主题（2026-11-04）----
-  // 只在**绑定的那一届**算（没绑 = 当前届）；终身只拿一次 —— 所以换届 / 改设置
-  // 都不会让同一枚主题徽章被重发，过期就真的拿不到了（稀缺感靠 id 换新来制造）。
+  // 只在**当前届**算：只要换届了，上一期的主题徽章就不再结算 —— 这才是真正的「过期不补」。
+  // （此前只按 d.rid 查打卡记录，换届后才打开 App 的人照样能补到，稀缺感是假的。）
+  // 门槛双条件：当期打卡 ≥ n 天，且当期答对 ≥ mc 题（mc=0 只看打卡）。
+  //   ⚠️ 答对题数按 rec.log 累加，log 只留最近 RACE_LOG_MAX=120 条；一期正常打不满，
+  //   真出现超长流水（一天刷十几次那种）可能少算，属已知可接受误差。
   var _conf = raceConfOf(), _curRid = (_conf && _conf.id) || '';
   for (k = 0; k < defs.length; k++) {
     d = defs[k];
     if (d.rule !== BADGE_RULE_THEME) continue;
     var trid = d.rid || _curRid;
     if (!trid) continue;
+    if (_curRid && trid !== _curRid) continue;        // 已换届 → 过期不补
     if (raceBadgeEarnedAnywhere(rec, d.id)) continue;
     var tdays = raceDayList(rec, trid);
     if (tdays.length < (d.n || 1)) continue;
+    var hitDay = tdays[(d.n || 1) - 1];               // 打卡达标那天
+    var needC = parseInt(d.mc, 10) || 0;
+    if (needC > 0) {
+      var sumC = 0, cDay = '';
+      for (var i2 = 0; i2 < log.length; i2++) {
+        var l2 = log[i2];
+        if (!l2 || l2.id !== trid) continue;
+        sumC += (l2.c || 0);
+        if (sumC >= needC) { cDay = raceDayKey(l2.ts || Date.now()); break; }
+      }
+      if (!cDay) continue;                            // 答对题数没到
+      if (cDay > hitDay) hitDay = cDay;               // 两个条件都满足的那天（日期串可直接比大小）
+    }
     if (!out[trid]) out[trid] = {};
-    if (!out[trid][d.id]) out[trid][d.id] = tdays[(d.n || 1) - 1];
+    if (!out[trid][d.id]) out[trid][d.id] = hitDay;
   }
   return out;
 }
@@ -8913,7 +8959,12 @@ function raceBadgeDesc(b, lang) {
     if (rule === BADGE_RULE_WRONG) return n + ' wrong answers redone';
     if (rule === BADGE_RULE_FAV) return n + ' questions saved';
     if (rule === BADGE_RULE_PRACTICE) return n + ' practice answers';
-    if (rule === BADGE_RULE_THEME) return 'Check in ' + n + ' day(s) this round only';
+    if (rule === BADGE_RULE_THEME) {
+      var mc1 = parseInt((def && def.mc) || (b && b.mc), 10) || 0;
+      return mc1 > 0
+        ? (n + ' check-ins + ' + mc1 + ' correct answers, this round only')
+        : ('Check in ' + n + ' day(s) this round only');
+    }
     return rule === BADGE_RULE_STREAK ? (n + ' days in a row')
       : rule === BADGE_RULE_PERIOD ? (n + ' days in one round') : (n + ' days all-time');
   }
@@ -8927,7 +8978,12 @@ function raceBadgeDesc(b, lang) {
   if (rule === BADGE_RULE_WRONG) return '累计重做错题 ' + n + ' 道';
   if (rule === BADGE_RULE_FAV) return '累计收藏题目 ' + n + ' 道';
   if (rule === BADGE_RULE_PRACTICE) return '练习模式累计答题 ' + n + ' 道';
-  if (rule === BADGE_RULE_THEME) return '仅在当期打卡 ' + n + ' 天可得，过期不补';
+  if (rule === BADGE_RULE_THEME) {
+    var mc2 = parseInt((def && def.mc) || (b && b.mc), 10) || 0;
+    return mc2 > 0
+      ? ('当期打卡 ' + n + ' 天 + 答对 ' + mc2 + ' 题，过期不补')
+      : ('仅在当期打卡 ' + n + ' 天可得，过期不补');
+  }
   return rule === BADGE_RULE_STREAK ? ('连续打卡 ' + n + ' 天')
     : rule === BADGE_RULE_PERIOD ? ('单期累计打卡 ' + n + ' 天') : ('累计打卡 ' + n + ' 天');
 }
@@ -8974,12 +9030,26 @@ function raceBadgeProgressOf(rec, def) {
     var c0 = def.rule === BADGE_RULE_WRONG ? sc.wrong : (def.rule === BADGE_RULE_FAV ? sc.fav : sc.practice);
     return { cur: Math.min(c0, def.n), max: def.n };
   }
-  // 竞速闯关 / 限定主题：只有"达成 / 没达成"，没有中间进度可报
+  // 竞速闯关：只有"达成 / 没达成"，没有中间进度可报
   if (def.rule === BADGE_RULE_DEPT_TOP || def.rule === BADGE_RULE_ALL_TOP) return { cur: 0, max: 1 };
+  // 限定主题：双条件。主进度取「卡住的那一步」（打卡先满就报答题），
+  // 同时把两个维度的原始值都带上，卡片上能拼成「0/8 天 · 0/30 题」。
   if (def.rule === BADGE_RULE_THEME) {
     var trid = def.rid || (raceConfOf() || {}).id || '';
     var td = trid ? raceDayList(rec, trid).length : 0;
-    return { cur: Math.min(td, def.n), max: def.n };
+    var needC = parseInt(def.mc, 10) || 0;
+    var sumC = 0;
+    if (needC > 0) {
+      var lg0 = Array.isArray(rec && rec.log) ? rec.log : [], q3;
+      for (q3 = 0; q3 < lg0.length; q3++) if (lg0[q3] && lg0[q3].id === trid) sumC += (lg0[q3].c || 0);
+    }
+    var pg = {
+      cur: Math.min(td, def.n), max: def.n, unit: 'd',
+      dCur: Math.min(td, def.n), dMax: def.n,
+      cCur: Math.min(sumC, needC), cMax: needC
+    };
+    if (needC > 0 && td >= def.n) { pg.cur = Math.min(sumC, needC); pg.max = needC; pg.unit = 'q'; }
+    return pg;
   }
   var c = raceConfOf();
   return { cur: Math.min(raceDaysCount(rec, c && c.id), def.n), max: def.n };
@@ -10040,6 +10110,71 @@ function raceBoardReload(force) {
 }
 
 // ---- 页面 ----
+// 本期主题徽章（2026-11-04）：首页公示。
+// 之前主题徽章只躺在徽章页里，员工期初根本不知道有这枚 —— 稀缺感有了，激励却空转。
+// 现在开赛就摆在首页：图标 + 名字 + 两条进度（打卡 / 答对）+ 剩余天数，一眼知道还差多少。
+function raceThemeBadgeOf(conf) {
+  var rid = (conf && conf.id) || '';
+  var defs = raceBadgeDefs(false), i, d;
+  for (i = 0; i < defs.length; i++) {
+    d = defs[i];
+    if (d.rule !== BADGE_RULE_THEME) continue;
+    if (d.rid && d.rid !== rid) continue;   // 钉在别的届 → 不是本期的
+    return d;
+  }
+  return null;
+}
+function raceThemeCardHtml(conf) {
+  var def = raceThemeBadgeOf(conf);
+  if (!def) return '';
+  var en = state.lang === 'en';
+  var rid = (conf && conf.id) || '';
+  var rec = raceLocalRecord();
+  var box = (rec && rec.badges && rec.badges[rid]) || {};
+  var got = !!box[def.id];
+  var needD = parseInt(def.n, 10) || 1;
+  var needC = parseInt(def.mc, 10) || 0;
+  // 剩余天数（有结束时间才显示）
+  var leftTxt = '';
+  var endTs = conf && conf.endTime ? Date.parse(conf.endTime) : 0;
+  if (isFinite(endTs) && endTs > Date.now()) {
+    var leftD = Math.ceil((endTs - Date.now()) / 86400000);
+    leftTxt = (en ? leftD + 'd left' : '还剩 ' + leftD + ' 天');
+  }
+  var html = '<div class="q-card" style="border:1px solid #f3e0c0;background:linear-gradient(135deg,#fffdf8,#fff7ea);">';
+  html += '<div style="display:flex;align-items:center;gap:10px;">';
+  html += '<div style="flex:0 0 auto;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;'
+    + 'background:linear-gradient(135deg,' + def.c1 + ',' + def.c2 + ');box-shadow:0 2px 8px rgba(0,0,0,.08);' + (got ? '' : 'opacity:.72;') + '">' + def.icon + '</div>';
+  html += '<div style="flex:1;min-width:0;">';
+  html += '<div style="font-size:11px;font-weight:700;color:#b7791f;letter-spacing:.6px;">' + t('race_theme_kicker') + '</div>';
+  html += '<div style="font-size:15px;font-weight:700;color:#1a3a5c;">' + escapeHtml(en ? (def.en || def.cn) : (def.cn || def.en))
+    + (got ? ' <span style="font-size:11.5px;color:#1e7a3c;">✓ ' + t('race_theme_got') + '</span>' : '') + '</div>';
+  html += '</div>';
+  if (leftTxt && !got) html += '<div style="flex:0 0 auto;font-size:11px;color:#a06a00;background:#fff2d6;border-radius:20px;padding:3px 9px;">' + leftTxt + '</div>';
+  html += '</div>';
+  if (!got) {
+    var td = rid ? raceDayList(rec, rid).length : 0;
+    var sumC = 0;
+    if (needC > 0) {
+      var lg = Array.isArray(rec && rec.log) ? rec.log : [];
+      for (var i = 0; i < lg.length; i++) if (lg[i] && lg[i].id === rid) sumC += (lg[i].c || 0);
+    }
+    var okD = td >= needD, okC = !needC || sumC >= needC;
+    html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">';
+    html += '<span style="font-size:11.5px;padding:3px 9px;border-radius:20px;'
+      + (okD ? 'background:#e6f5ea;color:#1e7a3c;' : 'background:#fff;color:#666;border:1px solid #eee;') + '">'
+      + '📅 ' + (en ? 'Check-in ' : '打卡 ') + Math.min(td, needD) + '/' + needD + (en ? 'd' : ' 天') + (okD ? ' ✓' : '') + '</span>';
+    if (needC > 0) {
+      html += '<span style="font-size:11.5px;padding:3px 9px;border-radius:20px;'
+        + (okC ? 'background:#e6f5ea;color:#1e7a3c;' : 'background:#fff;color:#666;border:1px solid #eee;') + '">'
+        + '✅ ' + (en ? 'Correct ' : '答对 ') + Math.min(sumC, needC) + '/' + needC + (en ? 'q' : ' 题') + (okC ? ' ✓' : '') + '</span>';
+    }
+    html += '</div>';
+    html += '<div style="font-size:10.5px;color:#a08b6b;margin-top:6px;">' + t('race_theme_expire') + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
 function renderRaceHome() {
   // 2026-10-28：以前这里只读本机缓存，而学员端**从未**从云端拉过答题赛配置
   // （racePullConf 定义了却没人调）—— 管理端一发布，学员端照样停在"没有答题赛"。
@@ -10091,6 +10226,8 @@ function renderRaceHome() {
       : _sz + ' ' + (state.lang === 'en' ? 'questions' : '题'));
   }
   html += '</div></div>';
+  // 本期主题徽章公示（已结束的届不再展示，避免"现在还能拿吗"的歧义）
+  if (st === 'open' || st === 'pending') html += raceThemeCardHtml(c);
   if (st === 'pending') html += '<div class="q-card" style="text-align:center;color:#a14a00;">' + t('race_pending') + '</div>';
   if (st === 'ended') html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_ended') + '</div>';
   if (st === 'closed') html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_closed') + '</div>';
@@ -10274,6 +10411,12 @@ function raceBadgeProgText(def, prg, en) {
   if (r === BADGE_RULE_FAST) return (en ? '\u2264' : '≤') + max + (en ? ' s/q' : ' 秒/题');
   if (r === BADGE_RULE_PERFECT) return (en ? '\u2265' : '≥') + max + (en ? ' correct' : ' 题');
   if (r === BADGE_RULE_NIGHT) return en ? '1 run' : '1 次';
+  if (r === BADGE_RULE_THEME) {
+    // 双条件一起报：打卡 x/N 天 · 答对 y/M 题（没有第二道门槛就只报天数）
+    var dTxt = (prg.dCur || 0) + '/' + (prg.dMax || max) + (en ? 'd' : ' 天');
+    if (prg.cMax > 0) dTxt += ' · ' + (prg.cCur || 0) + '/' + prg.cMax + (en ? 'q' : ' 题');
+    return dTxt;
+  }
   return cur + '/' + max + (en ? ' d' : ' 天');
 }
 // 徽章墙：一眼看到拿到了什么、下一枚还差多少。进度用**历史最长连续**算 ——
@@ -11258,7 +11401,7 @@ function badgeSuggestFromDesc(desc) {
     : rule === BADGE_RULE_NEWBIE ? 3
     : rule === BADGE_RULE_DEPT_TOP || rule === BADGE_RULE_ALL_TOP ? 10
     : rule === BADGE_RULE_WRONG ? 50 : rule === BADGE_RULE_FAV ? 20 : rule === BADGE_RULE_PRACTICE ? 100
-    : rule === BADGE_RULE_THEME ? 1 : 0;
+    : rule === BADGE_RULE_THEME ? 8 : 0;
   var n = m ? parseInt(m[1], 10) : (nDef || (rule === BADGE_RULE_STREAK ? 3 : (rule === BADGE_RULE_PERIOD ? 15 : 30)));
   if (!(n > 0)) n = 3;
   if (n > 365) n = 365;
@@ -11305,7 +11448,15 @@ function badgeSuggestFromDesc(desc) {
   else if (rule === BADGE_RULE_PERIOD) lv = n >= 25 ? 5 : (n >= 20 ? 4 : (n >= 15 ? 3 : (n >= 10 ? 2 : 1)));
   else lv = n >= 100 ? 5 : (n >= 60 ? 3 : (n >= 30 ? 2 : 1));
   var th = badgeThemeOf(rule, lv);
-  return { rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: th.c1, c2: th.c2 };
+  // 限定主题的第二道门槛：描述里写了"答对 30 题"就照抄，没写默认 30（0 = 只看打卡）
+  var mc = 0;
+  if (rule === BADGE_RULE_THEME) {
+    var m2 = low.match(/(?:答对|做对|correct)[^0-9]{0,8}([0-9]+)/);
+    mc = m2 ? parseInt(m2[1], 10) : 30;
+    if (!(mc > 0)) mc = 30;
+    if (mc > 2000) mc = 2000;
+  }
+  return { rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: th.c1, c2: th.c2, mc: mc };
 }
 // 配色只由 规则 + 等级 决定：连续=火焰橙、单期=蓝、累计=绿，竞速=金橙、学习=紫蓝、
 // 主题=琥珀；高等级一律转金色。
@@ -11360,7 +11511,13 @@ function adminBadgeRuleText(b, en) {
   if (b.rule === BADGE_RULE_WRONG) return en ? ('redo ' + b.n + ' wrong') : ('重做错题 ' + b.n + ' 道');
   if (b.rule === BADGE_RULE_FAV) return en ? ('save ' + b.n + ' questions') : ('收藏 ' + b.n + ' 道');
   if (b.rule === BADGE_RULE_PRACTICE) return en ? ('practice ' + b.n + ' q') : ('练习 ' + b.n + ' 道');
-  if (b.rule === BADGE_RULE_THEME) return en ? ('theme ' + b.n + 'd' + (b.rid ? ' @' + b.rid : '')) : ('主题 ' + b.n + ' 天' + (b.rid ? ' @' + b.rid : ''));
+  if (b.rule === BADGE_RULE_THEME) {
+    var mc = parseInt(b.mc, 10) || 0;
+    var tail = b.rid ? (' @' + b.rid) : '';
+    return en
+      ? ('theme ' + b.n + 'd' + (mc > 0 ? ' +' + mc + ' correct' : '') + tail)
+      : ('主题 ' + b.n + ' 天' + (mc > 0 ? ' + 答对 ' + mc + ' 题' : '') + tail);
+  }
   if (b.rule === BADGE_RULE_STREAK) return en ? ('streak ' + b.n + 'd') : ('连续 ' + b.n + ' 天');
   if (b.rule === BADGE_RULE_PERIOD) return en ? ('round ' + b.n + 'd') : ('单期 ' + b.n + ' 天');
   return en ? ('total ' + b.n + 'd') : ('累计 ' + b.n + ' 天');
@@ -11412,7 +11569,7 @@ function renderAdminBadges() {
   // 新增 / 编辑表单
   var ed = adminState.badgeEditing || '';
   var cur = ed && ed !== 'new' ? adminBadgeById(ed) : null;
-  var d = cur || { id: '', rule: BADGE_RULE_STREAK, n: 3, cn: '', en: '', icon: '🔥', lv: 1, c1: '#ffc46b', c2: '#ff9a3c', on: true, rid: '' };
+  var d = cur || { id: '', rule: BADGE_RULE_STREAK, n: 3, cn: '', en: '', icon: '🔥', lv: 1, c1: '#ffc46b', c2: '#ff9a3c', on: true, rid: '', mc: 0 };
   html += '<div id="badgeFormCard" class="q-card" style="margin-top:10px;transition:box-shadow .4s;">';
   html += '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">' + (cur ? ('✏️ ' + t('badge_admin_edit')) : ('➕ ' + t('badge_admin_add'))) + '</div>';
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'Describe it in one sentence' : '一句话描述这枚徽章') + '</label>';
@@ -11452,6 +11609,11 @@ function renderAdminBadges() {
     + '<input id="bdRid" class="admin-input" style="flex:1;min-width:0;padding:8px;border:1px solid #d8dee4;border-radius:6px;box-sizing:border-box;" value="' + escapeHtml(d.rid || '') + '" placeholder="' + (en ? 'blank = current round' : '留空 = 当前届') + '">'
     + '<button type="button" class="admin-mini-btn" style="white-space:nowrap;" onclick="adminBadgeUseCurRid()">' + t('badge_admin_rid_cur') + '</button>'
     + '</div></div>';
+  // 限定主题的第二道门槛：光打卡不够 —— 员工随手答两题也算打卡，产品知识一道没学会。
+  // 填 0 表示只看打卡天数（老行为）。
+  html += '<div style="margin-top:8px;"><label style="font-size:12px;color:#666;">' + t('badge_admin_mc') + '</label>'
+    + '<input id="bdMc" type="number" min="0" max="2000" class="admin-input" style="width:100%;padding:8px;border:1px solid #d8dee4;border-radius:6px;box-sizing:border-box;" value="' + (parseInt(d.mc, 10) || 0) + '" placeholder="0">'
+    + '<div style="font-size:11px;color:#8b98a3;margin-top:3px;">' + t('badge_admin_mc_hint') + '</div></div>';
   html += '<div style="display:flex;gap:8px;margin-top:8px;">';
   html += '<div style="flex:1;"><label style="font-size:12px;color:#666;">' + t('badge_admin_n') + '</label>'
     + '<input id="bdN" type="number" min="1" max="365" class="admin-input" style="width:100%;padding:8px;border:1px solid #d8dee4;border-radius:6px;box-sizing:border-box;" value="' + d.n + '"></div>';
@@ -11462,7 +11624,7 @@ function renderAdminBadges() {
   html += '</div>';
   html += '<div style="font-size:12px;color:#666;margin-top:10px;">' + t('badge_admin_preview') + '</div>';
   html += '<div id="bdPreview" style="margin-top:6px;">'
-    + raceBadgeChipHtml({ id: 'preview', rule: d.rule, n: d.n, cn: d.cn || '—', en: d.en || '—', icon: d.icon, lv: d.lv, c1: d.c1, c2: d.c2 }, true, '2026-10-30', '', 2)
+    + raceBadgeChipHtml({ id: 'preview', rule: d.rule, n: d.n, mc: (parseInt(d.mc, 10) || 0), cn: d.cn || '—', en: d.en || '—', icon: d.icon, lv: d.lv, c1: d.c1, c2: d.c2 }, true, '2026-10-30', '', 2)
     + '</div>';
   html += '<div style="display:flex;gap:8px;margin-top:10px;">';
   html += '<button class="action-btn primary" style="flex:1;" onclick="adminBadgeSave()">' + t('badge_admin_save') + '</button>';
@@ -11512,8 +11674,9 @@ function adminBadgeGen() {
   var s = badgeSuggestFromDesc(descEl ? descEl.value : '');
   var set = function (id, v) { var e = document.getElementById(id); if (e) e.value = v; };
   set('bdCn', s.cn); set('bdEn', s.en); set('bdIcon', s.icon); set('bdRule', s.rule); set('bdN', s.n); set('bdLv', s.lv);
+  set('bdMc', s.mc || 0);
   var prev = document.getElementById('bdPreview');
-  if (prev) prev.innerHTML = raceBadgeChipHtml({ id: 'preview', rule: s.rule, n: s.n, cn: s.cn, en: s.en, icon: s.icon, lv: s.lv, c1: s.c1, c2: s.c2 }, true, '2026-10-30', '', 2);
+  if (prev) prev.innerHTML = raceBadgeChipHtml({ id: 'preview', rule: s.rule, n: s.n, mc: (s.mc || 0), cn: s.cn, en: s.en, icon: s.icon, lv: s.lv, c1: s.c1, c2: s.c2 }, true, '2026-10-30', '', 2);
 }
 function adminBadgeUseCurRid() {
   var e = document.getElementById('bdRid');
@@ -11528,6 +11691,8 @@ function adminBadgeSave() {
   var lv = parseInt(g('bdLv'), 10) || 1;
   var icon = String(g('bdIcon') || '🏅').trim() || '🏅';
   var rid = String(g('bdRid') || '').trim();
+  // 限定主题的第二道门槛（答对题数）；非主题规则一律存 0，避免脏字段跟着别的规则漂。
+  var mc = rule === BADGE_RULE_THEME ? Math.max(0, Math.min(2000, parseInt(g('bdMc'), 10) || 0)) : 0;
   var onEl = document.getElementById('bdOn');
   if (!cn || !(n > 0)) { adminBadgeMsg(t('badge_admin_invalid'), '#b3261e'); return; }
   var list = adminBadgeDraft();
@@ -11536,11 +11701,11 @@ function adminBadgeSave() {
   var sug = badgeSuggestFromDesc((document.getElementById('bdDesc') || {}).value || '');
   var th = badgeThemeOf(rule, lv);
   if (!b) {
-    b = { id: 'bd_' + rule.charAt(0) + n + '_' + Date.now().toString(36), rule: rule, n: n, cn: cn, en: en2 || cn, icon: icon, lv: lv, c1: th.c1, c2: th.c2, on: true, rid: rid };
+    b = { id: 'bd_' + rule.charAt(0) + n + '_' + Date.now().toString(36), rule: rule, n: n, cn: cn, en: en2 || cn, icon: icon, lv: lv, c1: th.c1, c2: th.c2, on: true, rid: rid, mc: mc };
     list.push(b);
   } else {
     b.rule = rule; b.n = n; b.cn = cn; b.en = en2 || cn; b.icon = icon; b.lv = lv;
-    b.c1 = th.c1; b.c2 = th.c2; b.rid = rid;
+    b.c1 = th.c1; b.c2 = th.c2; b.rid = rid; b.mc = mc;
   }
   b.on = onEl ? !!onEl.checked : true;
   adminState.badgeDirty = true;
