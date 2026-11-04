@@ -8819,6 +8819,8 @@ function raceLocalRecord() {
       }
     }
   // 徽章也是后加的：结构变了 / 目录更新了就对齐一次（只补发，不会收回）
+  // 顺手把已下线的徽章（老「题库征服者」）从记录里删掉，删到了就落盘，下次同步会覆盖云端那份。
+  if (racePurgeRetiredBadges(o)) raceSaveLocalRecord(o);
   raceSyncBadges(o);
   return o;
 }
@@ -9160,6 +9162,40 @@ function badgePatchSplitDeptTop(list) {
   }
   return true;
 }
+// v7 收尾（2026-11-04）：老的「题库征服者」（bd_depttop）是**错的定义**（一枚管所有板块），
+// 用户要求彻底下架 —— 目录里不再出现，学员记录里也要删掉，不能挂在任何人名下。
+// 两道保险：
+//   ① badgeDropRetired 把 id 从目录里剔掉（云端目录万一是旧版也照样剔）→ 界面根本画不出来；
+//   ② racePurgeRetiredBadges 把 rec.badges 里残留的键删掉 → 数据层面也干净，换设备 / 导 CSV 都不会冒出来。
+// 以后再有徽章要下架，往 BADGE_RETIRED_IDS 里加 id 就行。
+var BADGE_RETIRED_IDS = ['bd_depttop'];
+function badgeDropRetired(list) {
+  var n = 0;
+  for (var i = list.length - 1; i >= 0; i--) {
+    if (list[i] && BADGE_RETIRED_IDS.indexOf(list[i].id) >= 0) { list.splice(i, 1); n++; }
+  }
+  return n;
+}
+// 删掉已下线徽章的记录；返回删了几个（0 = 本来就干净，调用方据此决定要不要落盘 / 推云端）。
+// 注意：只动 BADGE_RETIRED_IDS，其它键一律不碰 —— 管理员手工停用（on:false）的徽章记录要留着。
+function racePurgeRetiredBadges(rec) {
+  if (!rec || !rec.badges || typeof rec.badges !== 'object') return 0;
+  var n = 0, i, pk, box;
+  for (pk in rec.badges) {
+    if (!Object.prototype.hasOwnProperty.call(rec.badges, pk)) continue;
+    box = rec.badges[pk];
+    if (!box || typeof box !== 'object') continue;
+    for (i = 0; i < BADGE_RETIRED_IDS.length; i++) {
+      if (Object.prototype.hasOwnProperty.call(box, BADGE_RETIRED_IDS[i])) {
+        delete box[BADGE_RETIRED_IDS[i]];
+        n++;
+      }
+    }
+  }
+  // 头像/榜单展示的那枚要是正好是它，清掉，否则展示位会空白（raceDisplayBadgeOf 会自己回退）
+  if (rec.showBadge && BADGE_RETIRED_IDS.indexOf(String(rec.showBadge)) >= 0) rec.showBadge = '';
+  return n;
+}
 function raceBadgeCatalog() {
   var raw = null;
   try { raw = JSON.parse(localStorage.getItem(BADGE_CATALOG_KEY) || 'null'); } catch (e) { raw = null; }
@@ -9172,6 +9208,8 @@ function raceBadgeCatalog() {
   // 不受 ver 限制：发布过的目录 ver 是时间戳，只能按值打补丁（见 badgePatchThemeMc）
   badgePatchThemeMc(list);
   badgePatchSplitDeptTop(list);
+  // 已下线的 id 一律剔掉：云端目录若还是旧版（管理员没重发布 / 旧缓存），界面也不会再画出来
+  badgeDropRetired(list);
   return { ver: ver, list: list };
 }
 // 云端目录 → 本机。版本更新才覆盖，避免把管理端刚改、还没发布的草稿冲掉。
@@ -12619,6 +12657,11 @@ function adminBadgeDraft() {
   // 老草稿里还挂着「题库征服者」→ 当场拆成三枚，并标成"未发布"，
   // 免得管理员顺手点发布、把旧目录又推回学员端（学员端会被本地补丁再拆一次，但两边显示就对不上了）。
   if (badgePatchSplitDeptTop(adminState.badgeDraft)) {
+    adminState.badgeDirty = true;
+    adminBadgePersistDraft();
+  }
+  // 已下线的 id 不给重新发布的机会（否则学员端会把它再当一枚「未获得」画出来）
+  if (badgeDropRetired(adminState.badgeDraft)) {
     adminState.badgeDirty = true;
     adminBadgePersistDraft();
   }
