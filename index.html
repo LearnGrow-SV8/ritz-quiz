@@ -4632,6 +4632,11 @@ var I18N = {
   race_board_days_hint_dept: {cn:'统计范围：本届赛事期间各部门参赛人员的打卡天数合计。同一天完成多次挑战只计一天。', en:'Scope: the sum of check-in days of each department\u2019s participants in this round. Multiple challenges on the same day count as one day.'},
   race_board_days_hint_dept_avg: {cn:'统计范围：本届赛事期间各部门参赛人员的打卡天数，按部门人均天数排名（部门总打卡天数 ÷ 参赛人数）。同一天完成多次挑战只计一天。', en:'Scope: check-in days per department, ranked by average per participant (total check-in days ÷ participants). Multiple challenges on the same day count as one day.'},
   race_board_days_hint_best: {cn:'统计范围：全酒店所有绅士淑女的历届累计打卡天数，同一天只计一天，发布新一届赛事后不清空。', en:'Scope: all-time check-in days of every lady and gentleman, one day counted once, never reset when a new round is published.'},
+  // 竞速闯关徽章（2026-11-04）：赛季结束后统一结算，赛中只在榜单上报当前名次
+  race_rank_cur: {cn:'你在这个板块当前排第 {r} 名', en:'You are currently #{r} in this section'},
+  race_rank_settle: {cn:'竞速闯关徽章在赛事结束后统一发放：最终仍留在前 {n} 名才拿得到。', en:'Section badges are granted once the round ends \u2014 only those still in the top {n} keep them.'},
+  race_rank_settle_out: {cn:'前 {n} 名才有徽章，再加把劲。', en:'The top {n} earn the badge \u2014 keep pushing.'},
+  race_rank_settle_done: {cn:'本届已结算，达标徽章已发放并永久保留。', en:'This round is settled; earned badges are now permanent.'},
   race_dept_days_mode: {cn:'部门打卡天数统计口径', en:'Department check-in ranking'},
   race_dept_days_sum: {cn:'部门总打卡天数（鼓励更多人参与）', en:'Total days (rewards headcount)'},
   race_dept_days_avg: {cn:'部门人均打卡天数（大小部门更公平）', en:'Average per person (fairer across sizes)'},
@@ -4672,7 +4677,7 @@ var I18N = {
   badge_admin_rule_fast: {cn:'单期平均每题不超过 N 秒（每期一枚）', en:'Avg under N sec per question (per round)'},
   badge_admin_rule_newbie: {cn:'首周打卡 N 天（终身一次）', en:'N days in first week (one-off)'},
   // 竞速闯关 / 学习沉淀 / 限定主题（2026-11-04）
-  badge_admin_rule_dept_top: {cn:'任意单一板块速答榜当期前 N 名（每期一枚）', en:'Top N on any single-section board this round'},
+  badge_admin_rule_dept_top: {cn:'板块速答榜当期前 N 名（赛季结束后结算）', en:'Top N on a section board (settled after the round ends)'},
   badge_admin_rule_all_top: {cn:'全题库速答榜当期前 N 名（每期一枚）', en:'Top N on the all-question board this round'},
   badge_admin_rule_wrong: {cn:'累计重做错题 N 道（终身一次）', en:'N wrong answers redone all-time (one-off)'},
   badge_admin_rule_fav: {cn:'累计收藏题目 N 道（终身一次）', en:'N questions saved all-time (one-off)'},
@@ -4681,6 +4686,9 @@ var I18N = {
   badge_admin_rid: {cn:'限定届次（仅主题徽章用，留空 = 当前届）', en:'Bound round (theme badges only, blank = current)'},
   badge_admin_mc: {cn:'另需当期答对多少题（仅主题徽章用，0 = 只看打卡）', en:'Also require N correct answers this round (theme only, 0 = check-ins only)'},
   badge_admin_mc_hint: {cn:'打卡管「来过」，答对管「学过」，两个一起才配得上主题徽章。整月赛事建议 8 天 + 50 题。', en:'Check-ins prove showing up, correct answers prove learning. For a full month, 8 days + 50 correct is a good balance.'},
+  badge_admin_sec: {cn:'限定板块（仅「板块速答榜」类徽章用）', en:'Bound section (section-board badges only)'},
+  badge_admin_sec_hint: {cn:'留空 = 任一板块榜都算；选具体板块 = 只认该板块榜（如「厨房部题库征服者」选厨房部）。', en:'Blank = any section board counts; pick a section to count only that board (e.g. Culinary Bank Conqueror → Culinary).'},
+  badge_admin_sec_any: {cn:'任一板块（不限）', en:'Any section'},
   race_theme_kicker: {cn:'本期限定徽章', en:'This round only'},
   race_theme_got: {cn:'已获得', en:'earned'},
   race_theme_expire: {cn:'仅本期可拿，换届后不再补发', en:'Only this round — no make-ups after the season changes'},
@@ -8960,8 +8968,17 @@ var BADGE_CATALOG_KEY = 'badgeCatalog';
 
 // mc = 限定主题徽章的「第二道门槛」：当期还要答对多少题（0/空 = 只看打卡天数）。
 // 打卡管「来过」，答对管「学过」——两个一起才对得上「主题徽章绑定当期学习重点」的定位。
-function badgeDef(id, rule, n, cn, en, icon, lv, c1, c2, rid, mc) {
-  return { id: id, rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: c1, c2: c2, on: true, rid: rid || '', mc: mc || 0 };
+function badgeDef(id, rule, n, cn, en, icon, lv, c1, c2, rid, mc, sec) {
+  return { id: id, rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: c1, c2: c2, on: true, rid: rid || '', mc: mc || 0, sec: sec || '' };
+}
+// 板块键白名单（'all' 不算：全题库榜另有 all_top 规则管）。
+// 徽章上挂的 sec 只用来区分「哪张板块榜」，不认识的键一律当空（= 任一板块），
+// 否则一枚写错板块名的徽章会永远发不出去，管理员还找不到原因。
+function badgeSecValid(sec) {
+  var s = String(sec || '').trim();
+  if (!s || s === 'all') return '';
+  for (var i = 0; i < RACE_SECTIONS.length; i++) if (RACE_SECTIONS[i].key === s) return s;
+  return '';
 }
 // 预设徽章：先用一套合理的，管理端随时可改（改完发布即生效）。
 // 命名走「主题名 + 规则说明」：名号给人身份感（学习王者），副标题说清怎么拿到。
@@ -8984,7 +9001,13 @@ function badgeDefaultCatalog() {
       badgeDef('bd_t30', T, 30, '稳步前行', '30-day Walker', '🌿', 2, '#b7e4c7', '#2f855a'),
       badgeDef('bd_t60', T, 60, '勤学不辍', '60-day Scholar', '🌳', 3, '#9fd8b0', '#276749'),
       badgeDef('bd_t100', T, 100, '学习王者', 'Learning Champion', '👑', 5, '#ffe08a', '#b7791f'),
-      badgeDef('bd_depttop', DT, 10, '题库征服者', 'Section Conqueror', '🎯', 3, '#ffd08a', '#e06c00'),
+      // 竞速闯关 · 板块榜（2026-11-04 细分）：原来一枚「题库征服者」= 任一板块前十，
+      // 太笼统 —— 厨房部的人拿了也不知道自己是"哪个题库"的征服者。现在按三大板块各发一枚，
+      // 名字直接点名板块（厨房部题库征服者），拿到的人一眼知道强在哪。
+      // sec = 只认该板块榜；留空 = 任一板块（兼容老目录）。
+      badgeDef('bd_top_cul', DT, 10, '厨房部题库征服者', 'Culinary Bank Conqueror', '🍳', 3, '#ffd08a', '#e06c00', '', 0, 'culinary'),
+      badgeDef('bd_top_fb', DT, 10, '餐饮部题库征服者', 'F&B Bank Conqueror', '🍽', 3, '#ffdca8', '#c86400', '', 0, 'fb'),
+      badgeDef('bd_top_rooms', DT, 10, '房务部题库征服者', 'Rooms Bank Conqueror', '🛏', 3, '#ffd2a0', '#b85c00', '', 0, 'rooms'),
       badgeDef('bd_alltop', AT, 10, '全题库大师', 'All-Bank Master', '🥇', 5, '#ffe08a', '#b7791f'),
       badgeDef('bd_wrong', WG, 50, '错题猎手', 'Mistake Hunter', '🏹', 3, '#d7c4f5', '#6b46c1'),
       badgeDef('bd_fav', FV, 20, '考点收藏家', 'Key Point Collector', '⭐', 3, '#ffe9a8', '#c08a00'),
@@ -9050,7 +9073,10 @@ function badgeNormList(list) {
       // 限定主题徽章绑定哪一届（空 = 当前届）
       rid: String(b.rid || ''),
       // 限定主题的第二道门槛：当期答对题数（0 = 不限）
-      mc: Math.max(0, Math.min(2000, parseInt(b.mc, 10) || 0))
+      mc: Math.max(0, Math.min(2000, parseInt(b.mc, 10) || 0)),
+      // 「板块速答榜」类徽章只认哪个板块（空 = 任一板块）。白名单外的值一律当空，
+      // 免得脏字段让徽章永远发不出去又查不出原因。
+      sec: badgeSecValid(b.sec)
     });
   }
   return badgeMigrateIcons(out);
@@ -9060,7 +9086,7 @@ function badgeNormList(list) {
 // 补进去并把版本推到 4 —— 否则云端旧目录永远盖住新徽章。
 // 只在 ver < 4 时合并一次：v2/v3 的老目录既缺挑战彩蛋、也缺这 6 枚新徽章；
 // 之后管理员删掉某枚再发布（ver ≥ 5）不会被强行加回。
-var BADGE_NEW_DEFAULT_IDS = ['bd_depttop', 'bd_alltop', 'bd_wrong', 'bd_fav', 'bd_prac', 'bd_theme1',
+var BADGE_NEW_DEFAULT_IDS = ['bd_top_cul', 'bd_top_fb', 'bd_top_rooms', 'bd_alltop', 'bd_wrong', 'bd_fav', 'bd_prac', 'bd_theme1',
   'bd_newb', 'bd_night', 'bd_wkend', 'bd_perf', 'bd_fast'];
 function badgeMergeNewDefaults(list) {
   var have = {}, i, added = false;
@@ -9106,6 +9132,34 @@ function badgePatchThemeMc(list) {
   }
   return changed;
 }
+// v6 → v7（2026-11-04）：一枚「题库征服者」按板块拆成三枚。
+// 同样**不能靠 ver 比较**（发布过的目录 ver 是 Date.now()），按"老 id 还在不在"判定：
+// 见到 bd_depttop 就删掉、补进三枚新的，并把老徽章调过的门槛（n / lv / 配色）继承下来；
+// 老 id 已经不在 = 拆过了 / 管理员自己删了，什么都不做（幂等，也不会把删掉的加回来）。
+var BADGE_SPLIT_IDS = ['bd_top_cul', 'bd_top_fb', 'bd_top_rooms'];
+function badgePatchSplitDeptTop(list) {
+  var oldIdx = -1, i, have = {};
+  for (i = 0; i < list.length; i++) {
+    if (!list[i]) continue;
+    if (list[i].id === 'bd_depttop') oldIdx = i;
+    have[list[i].id] = 1;
+  }
+  if (oldIdx < 0) return false;
+  var old = list[oldIdx];
+  var oldN = Math.max(1, parseInt(old.n, 10) || 10);
+  list.splice(oldIdx, 1);
+  var defs = badgeDefaultCatalog().list;
+  for (i = 0; i < defs.length; i++) {
+    var d = defs[i];
+    if (BADGE_SPLIT_IDS.indexOf(d.id) < 0 || have[d.id]) continue;
+    var nb = Object.assign({}, d);
+    nb.n = oldN;
+    nb.lv = old.lv || nb.lv;
+    nb.on = old.on !== false;
+    list.push(nb);
+  }
+  return true;
+}
 function raceBadgeCatalog() {
   var raw = null;
   try { raw = JSON.parse(localStorage.getItem(BADGE_CATALOG_KEY) || 'null'); } catch (e) { raw = null; }
@@ -9117,6 +9171,7 @@ function raceBadgeCatalog() {
   if (ver < 5) { badgeMigrationV5(list); ver = 5; }
   // 不受 ver 限制：发布过的目录 ver 是时间戳，只能按值打补丁（见 badgePatchThemeMc）
   badgePatchThemeMc(list);
+  badgePatchSplitDeptTop(list);
   return { ver: ver, list: list };
 }
 // 云端目录 → 本机。版本更新才覆盖，避免把管理端刚改、还没发布的草稿冲掉。
@@ -9462,9 +9517,20 @@ function raceBadgeEarnedAnywhere(rec, id) {
   }
   return false;
 }
-// ===== 竞速闯关 · 当期 TOP N（2026-11-04）=====
-// 「当期 TOP10」必须跟别人比，本机算不出来，只能等**榜单数据**到手时结算一次
-// （跟着 raceFetchBoard 走）。只写当期桶，每期可再拿；没有榜单数据就永远不发。
+// ===== 竞速闯关 · 当期 TOP N（2026-11-04，2026-11-04 晚改为「赛后结算」）=====
+// 「TOP N」必须跟别人比，本机算不出来，只能等**榜单数据**到手时结算（跟着 raceFetchBoard 走）。
+//
+// 🔴 发放时机：**赛季结束后才发**，赛中一枚不发。
+//   ① 语义：名次天天在变，赛中发就等于"进过前十就有"，跟"最终前十"是两件事；
+//   ② 技术：这套架构做不到"收回"—— 徽章存在本机记录里、跟着快照同步，多设备合并是并集，
+//      另一台设备的旧快照会把已收回的徽章原样复活，撤销结果不可信；
+//   ③ 体验：给了又收回，比一开始不给更伤人。
+//   所以赛中只在榜单页公示「你当前第 N 名」（raceMyRankOnSection），赛季结束、榜单最终定稿后
+//   才落徽章，落下去就只加不减，永久保留。
+//
+// 「已结束」怎么判：当前届看 raceStateOf（ended / closed）；**非当前届一律算已结束**
+// —— 榜单里还能看到往届成绩，往届结算不需要等谁点开关，谁先打开 App 谁先把自己那笔结掉。
+//   只认 `r + 时间戳` 形式的届次 id：老记录里按自然月落的 'YYYY-MM' 键不是真届次，跳过。
 var RACE_TOP_BADGE_RANK = 10;
 function raceBadgeMyRowKey() {
   try {
@@ -9473,52 +9539,184 @@ function raceBadgeMyRowKey() {
       : String(state.currentUser || '');
   } catch (e) { return String(state.currentUser || ''); }
 }
+// 我在某张榜上的名次（1 起；0 = 没上榜）。sec 传空 = 全酒店总榜。
+function raceMyRankOnSection(rows, sec, rid, myKey) {
+  if (!rows || !rows.length || !rid) return 0;
+  var key = myKey || raceBadgeMyRowKey();
+  if (!key) return 0;
+  var list = raceBoardRowsFrom(rows, 'period', sec || '', rid), i;
+  for (i = 0; i < list.length; i++) if (list[i] && list[i].key === key) return i + 1;
+  return 0;
+}
+// 这张榜上该用哪枚「名次徽章」（全酒店总榜 → 全题库大师；板块榜 → 对应板块的征服者）。
+// 老目录里那枚没绑板块的 dept_top 继续兜底：任一板块榜都能挂。
+function raceRankBadgeForSec(sec) {
+  var defs = raceBadgeDefs(false), i, d, s;
+  if (!sec) {
+    for (i = 0; i < defs.length; i++) if (defs[i].rule === BADGE_RULE_ALL_TOP) return defs[i];
+    return null;
+  }
+  for (i = 0; i < defs.length; i++) {
+    d = defs[i];
+    if (d.rule !== BADGE_RULE_DEPT_TOP) continue;
+    if (badgeSecValid(d.sec) === sec) return d;
+  }
+  for (i = 0; i < defs.length; i++) {
+    d = defs[i];
+    if (d.rule === BADGE_RULE_DEPT_TOP && !badgeSecValid(d.sec)) return d;
+  }
+  return null;
+}
+// 榜单顶部的「离徽章还差多远」小卡：赛季进行中才显示（结束后徽章已结算，榜单上直接看得到）。
+// 不发徽章但也不藏着规则 —— 让学员知道"现在第几、要第几"，比一句干巴巴的说明有用。
+function raceRankBadgeCardHtml(def, sec) {
+  if (!def) return '';
+  var en = state.lang === 'en';
+  var conf = raceConfOf() || {};
+  var st = raceStateOf(conf);
+  if (!conf.id || (st !== 'open' && st !== 'ended' && st !== 'closed')) return '';
+  var need = Math.max(1, def.n || RACE_TOP_BADGE_RANK);
+  var rk = raceMyRankOnSection(state.raceBoard, sec, conf.id, '');
+  var inTop = rk > 0 && rk <= need;
+  var settled = st !== 'open';
+  var got = false;
+  if (settled) {
+    try {
+      var rr = raceLocalRecord();
+      got = !!(rr && rr.badges && rr.badges[conf.id] && rr.badges[conf.id][def.id]);
+    } catch (eG) { got = false; }
+  }
+  var foot = got ? t('race_rank_settle_done')
+    : (settled ? t('race_rank_settle_out').replace('{n}', String(need))
+               : t('race_rank_settle').replace('{n}', String(need)));
+  var html = '<div class="q-card" style="padding:10px 12px;margin-bottom:10px;background:' + (got ? '#eefaf1' : '#fffdf5')
+    + ';border:1px solid ' + (got ? '#a5d6a7' : '#f0d9a8') + ';">';
+  html += '<div style="display:flex;align-items:center;gap:8px;">';
+  html += '<div style="flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
+    + 'font-size:15px;background:linear-gradient(135deg,' + (def.c1 || '#ffd08a') + ',' + (def.c2 || '#e06c00') + ');">'
+    + (def.icon || '🎯') + '</div>';
+  html += '<div style="flex:1;min-width:0;">';
+  html += '<div style="font-size:13px;font-weight:700;color:' + (got ? '#1e7a3c' : '#8a5a00') + ';">'
+    + escapeHtml(en ? (def.en || def.cn) : (def.cn || def.en)) + '</div>';
+  html += '<div style="font-size:11.5px;color:#9a7b4f;margin-top:1px;">'
+    + escapeHtml(rk > 0 ? t('race_rank_cur').replace('{r}', String(rk)) : t('race_rank_settle_out').replace('{n}', String(need)))
+    + '</div>';
+  html += '</div>';
+  html += '<div style="flex:0 0 auto;font-size:18px;font-weight:800;color:' + (got ? '#1e7a3c' : (inTop ? '#1e7a3c' : '#b7791f')) + ';">'
+    + (rk > 0 ? '#' + rk : '—') + '</div>';
+  html += '</div>';
+  html += '<div style="font-size:11px;color:' + (got ? '#2e7d32' : '#b7791f') + ';line-height:1.5;margin-top:6px;'
+    + 'border-top:1px dashed ' + (got ? '#a5d6a7' : '#f0d9a8') + ';padding-top:6px;">' + escapeHtml(foot) + '</div>';
+  html += '</div>';
+  return html;
+}
+// 榜单数据里出现过的届次 id（真实届次 = 'r' + 时间戳；老的月度键丢掉）
+function raceRidsInRows(rows) {
+  var out = {}, i, b;
+  for (i = 0; i < (rows || []).length; i++) {
+    var race = null;
+    try { race = raceRecordOf(rows[i]); } catch (e) { race = null; }
+    if (!race) continue;
+    var boxes = [race.byRound, race.byRoundSec];
+    for (b = 0; b < boxes.length; b++) {
+      var o = boxes[b];
+      if (!o || typeof o !== 'object') continue;
+      for (var k in o) {
+        if (!Object.prototype.hasOwnProperty.call(o, k)) continue;
+        if (/^r\d+$/.test(k)) out[k] = 1;
+      }
+    }
+  }
+  return out;
+}
 function raceAwardRankBadges(rows, rid) {
   if (!rows || !rows.length || !rid) return 0;
   var defs = raceBadgeDefs(false), i;
-  var want = {};
+  var want = false;
   for (i = 0; i < defs.length; i++) {
-    if (defs[i].rule === BADGE_RULE_DEPT_TOP || defs[i].rule === BADGE_RULE_ALL_TOP) want[defs[i].rule] = true;
+    if (defs[i].rule === BADGE_RULE_DEPT_TOP || defs[i].rule === BADGE_RULE_ALL_TOP) { want = true; break; }
   }
-  if (!want[BADGE_RULE_DEPT_TOP] && !want[BADGE_RULE_ALL_TOP]) return 0;
+  if (!want) return 0;
   var myKey = raceBadgeMyRowKey();
   if (!myKey) return 0;
-  function inTop(list) {
-    for (var j = 0; j < list.length && j < RACE_TOP_BADGE_RANK; j++) {
-      if (list[j] && list[j].key === myKey) return true;
-    }
-    return false;
+  var conf = null;
+  try { conf = raceConfOf(); } catch (e0) { conf = null; }
+  var st = conf ? raceStateOf(conf) : 'none';
+  // 待结算届次：当前届（已结束 / 已关闭）+ 榜单里能看到的往届
+  var rids = [], seen = {};
+  if (conf && conf.id === rid && (st === 'ended' || st === 'closed')) { rids.push(rid); seen[rid] = 1; }
+  var pool = raceRidsInRows(rows);
+  for (var pr in pool) {
+    if (!Object.prototype.hasOwnProperty.call(pool, pr)) continue;
+    if (pr === rid || seen[pr]) continue;
+    rids.push(pr);
+    seen[pr] = 1;
   }
-  var hitAll = want[BADGE_RULE_ALL_TOP] ? inTop(raceBoardRowsFrom(rows, 'period', '', rid)) : false;
-  var hitSec = false;
-  if (want[BADGE_RULE_DEPT_TOP]) {
-    for (var s = 0; s < RACE_SECTIONS.length; s++) {
-      var sk = RACE_SECTIONS[s].key;
-      if (sk === 'all') continue;
-      if (inTop(raceBoardRowsFrom(rows, 'period', sk, rid))) { hitSec = true; break; }
-    }
-  }
+  if (!rids.length) return 0;   // 赛事进行中（或还没同步到届次）→ 一枚都不发
   var rec = null;
   try { rec = raceLocalRecord(); } catch (e) { rec = null; }
   if (!rec) return 0;
   if (!rec.badges || typeof rec.badges !== 'object') rec.badges = {};
-  var box = rec.badges[rid];
-  if (!box || typeof box !== 'object' || box.s || box.m) box = rec.badges[rid] = {};
-  var today = raceDayKey(Date.now()), added = 0;
-  for (i = 0; i < defs.length; i++) {
-    var d = defs[i], ok = false;
-    if (d.rule === BADGE_RULE_ALL_TOP) ok = hitAll;
-    else if (d.rule === BADGE_RULE_DEPT_TOP) ok = hitSec;
-    else continue;
-    if (!ok || box[d.id]) continue;
-    box[d.id] = today;
-    added++;
+  var today = raceDayKey(Date.now()), added = 0, r, s2;
+  for (r = 0; r < rids.length; r++) {
+    var R = rids[r];
+    var box = rec.badges[R];
+    if (!box || typeof box !== 'object' || box.s || box.m) box = rec.badges[R] = {};
+    // 同一个板块名次只算一次（多枚徽章共用一张榜时省算力）
+    var rankCache = {};
+    function rankOf(sec) {
+      var k = String(sec || '');
+      if (rankCache[k] == null) rankCache[k] = raceMyRankOnSection(rows, k, R, myKey);
+      return rankCache[k];
+    }
+    for (i = 0; i < defs.length; i++) {
+      var d = defs[i], need = Math.max(1, d.n || RACE_TOP_BADGE_RANK), ok = false;
+      if (box[d.id]) continue;
+      if (d.rule === BADGE_RULE_ALL_TOP) {
+        var rAll = rankOf('');
+        ok = rAll > 0 && rAll <= need;
+      } else if (d.rule === BADGE_RULE_DEPT_TOP) {
+        var sec = badgeSecValid(d.sec);
+        if (sec) {
+          var rs = rankOf(sec);
+          ok = rs > 0 && rs <= need;
+        } else {
+          // 老目录（没绑板块）= 任一板块榜；新目录三枚各绑一个板块，互不干扰
+          for (s2 = 0; s2 < RACE_SECTIONS.length; s2++) {
+            var sk = RACE_SECTIONS[s2].key;
+            if (sk === 'all') continue;
+            var ra = rankOf(sk);
+            if (ra > 0 && ra <= need) { ok = true; break; }
+          }
+        }
+      } else continue;
+      if (!ok) continue;
+      box[d.id] = today;
+      added++;
+    }
   }
   if (!added) return 0;
   rec.badgesVer = raceBadgeCatalog().ver;
   try { raceSaveLocalRecord(rec); } catch (e2) {}
   if (typeof pushStudentSnapshotToKv === 'function') { try { pushStudentSnapshotToKv(); } catch (e3) {} }
   return added;
+}
+// 开机顺手结算一次（2026-11-04）：赛季已结束的设备，开 App 就静默拉一次榜单，
+// 把自己那笔名次徽章结掉 —— 很多人赛季结束后根本不会再进排行榜页，等他们自己点就永远发不出去。
+// 每个 App 会话只试一次；失败不提示、不改状态位，下次开机再来。
+var _raceSettleAsked = false;
+function raceSettleOnBoot() {
+  if (_raceSettleAsked) return;
+  _raceSettleAsked = true;
+  try {
+    if (typeof SB_ON === 'undefined' || !SB_ON) return;
+    if (!state.currentUser) return;
+    var conf = raceConfOf();
+    if (!conf || !conf.id) return;
+    var st = raceStateOf(conf);
+    if (st !== 'ended' && st !== 'closed') return;
+    raceFetchBoard(true, true);
+  } catch (e) {}
 }
 // 结算并写回：只补没拿到的，已拿到的不动（改达标线也不会把旧徽章收回去）。
 // 返回本次新增的徽章；给了 rid 就只返回这一期的（结果页当场点亮用）。
@@ -9708,7 +9906,11 @@ function raceBadgeDesc(b, lang) {
     if (rule === BADGE_RULE_PERFECT) return n + '+ correct answers in one run';
     if (rule === BADGE_RULE_FAST) return 'Avg \u2264 ' + n + ' sec per question';
     if (rule === BADGE_RULE_NEWBIE) return n + ' days in your first week';
-    if (rule === BADGE_RULE_DEPT_TOP) return 'Top ' + n + ' on any single-section board this round';
+    if (rule === BADGE_RULE_DEPT_TOP) {
+      var secEn = badgeSecValid(def && def.sec);
+      return 'Top ' + n + ' on the ' + (secEn ? raceSecMeta(secEn).en : 'any single-section')
+        + ' board \u2014 final standings once the round ends';
+    }
     if (rule === BADGE_RULE_ALL_TOP) return 'Top ' + n + ' on the all-question board this round';
     if (rule === BADGE_RULE_WRONG) return n + ' wrong answers redone';
     if (rule === BADGE_RULE_FAV) return n + ' questions saved';
@@ -9727,7 +9929,11 @@ function raceBadgeDesc(b, lang) {
   if (rule === BADGE_RULE_PERFECT) return '单次答对 ' + n + ' 题以上';
   if (rule === BADGE_RULE_FAST) return '单期平均每题不超过 ' + n + ' 秒（至少答 5 题）';
   if (rule === BADGE_RULE_NEWBIE) return '首次打卡 7 天内打卡满 ' + n + ' 天';
-  if (rule === BADGE_RULE_DEPT_TOP) return '任一板块速答榜当期前 ' + n + ' 名';
+  if (rule === BADGE_RULE_DEPT_TOP) {
+    var secCn = badgeSecValid(def && def.sec);
+    return (secCn ? ('「' + raceSecMeta(secCn).cn + '」速答榜当期前 ' + n + ' 名')
+                  : ('任一板块速答榜当期前 ' + n + ' 名')) + '，赛季结束后结算';
+  }
   if (rule === BADGE_RULE_ALL_TOP) return '全题库速答榜当期前 ' + n + ' 名';
   if (rule === BADGE_RULE_WRONG) return '累计重做错题 ' + n + ' 道';
   if (rule === BADGE_RULE_FAV) return '累计收藏题目 ' + n + ' 道';
@@ -11382,6 +11588,9 @@ function renderRaceCalendar() {
   html += '<div style="flex:1;"><div style="font-size:22px;font-weight:700;color:#1a3a5c;">' + raceDaysCount(rec, '') + '</div>'
     + '<div style="font-size:11px;color:#888;">' + lblAllDays + '</div></div>';
   html += '</div>';
+  // 日历 ⇄ 排行榜 互相直达：看完自己的打卡记录，顺手就能看自己在榜上第几。
+  // 两个页面都放了这颗按钮，位置也统一放在页面上部（不用滚到底才找得到）。
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;padding:9px;font-size:13px;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
   // 「我的徽章」墙挪到日历格子 + 当天明细之后：选中的日期内容夹在日历和徽章中间，
   // 复盘完答题清单往下顺手就是徽章，不用先滚过一长排徽章才看到日历。
 
@@ -11807,6 +12016,8 @@ function renderRaceBoard() {
       else if (state.currentPage === 'raceBoard' && _quiet && rows && rows.length) render();
     });
   }
+  // 排行榜 ⇄ 打卡日历 互相直达（日历页顶部也有回排行榜的按钮）
+  html += '<button class="action-btn secondary" style="width:100%;margin-bottom:8px;padding:9px;font-size:13px;" onclick="raceOpenCalendar()">' + t('race_cal_open') + '</button>';
   html += '<div style="display:flex;gap:8px;margin-bottom:6px;">';
   html += '<button class="action-btn ' + (tab === 'period' ? 'primary' : 'secondary') + '" style="flex:1;min-width:0;white-space:nowrap;font-size:13px;" onclick="state.raceBoardTab=\'period\';render()">' + t('race_board_all') + '</button>';
   html += '<button class="action-btn ' + (tab === 'dept' ? 'primary' : 'secondary') + '" style="flex:1;min-width:0;white-space:nowrap;font-size:13px;" onclick="state.raceBoardTab=\'dept\';render()">' + t('race_board_dept') + '</button>';
@@ -11841,6 +12052,11 @@ function renderRaceBoard() {
                  + t(tab === 'dept' ? 'race_board_dept_mix_hint' : (tab === 'best' ? 'race_board_best_mix_hint' : 'race_board_mix_hint'))))))
     + '</div>';
   var isDeptTab = tab === 'dept';
+  // 竞速闯关徽章：赛中不发，但把「现在第几 / 要第几」摆在榜头上，规则才算真的公布出去了。
+  // 只在「全酒店榜 + 分数口径」下显示（打卡天数榜 / 部门 / 历史 / 进步榜都不是同一口径）。
+  if (tab === 'period' && !isMoverTab && !isDays && Array.isArray(state.raceBoard) && state.raceBoard.length) {
+    html += raceRankBadgeCardHtml(raceRankBadgeForSec(sec), sec);
+  }
   var rows = isMoverTab ? raceMoverRows()
     : isDays
     ? (isDeptTab ? raceDeptDaysRows(raceDeptDaysMode()) : raceDaysRows(tab))
@@ -12337,6 +12553,13 @@ function badgeSuggestFromDesc(desc) {
   if (/王者|king|champion/i.test(low)) { cn = '学习王者'; en = 'Learning Champion'; }
   else if (/全勤|满勤|attendance/i.test(low)) { cn = (rule === BADGE_RULE_PERIOD ? '全勤之星' : '全勤达人'); en = 'Perfect Attendance'; }
   else if (/冠军|第一/.test(low)) { cn = '挑战冠军'; en = 'Challenge Champion'; }
+  // 描述里点名了板块 → 顺便把这枚徽章绑到那张榜上（"厨房部题库前十" → 只认厨房部榜）
+  var sec = '';
+  if (rule === BADGE_RULE_DEPT_TOP) {
+    if (/厨房|culinary/.test(low)) sec = 'culinary';
+    else if (/餐饮|f&b|f&amp;b|food\s*(and|&)?\s*beverage/.test(low)) sec = 'fb';
+    else if (/房务|客房|rooms|housekeeping/.test(low)) sec = 'rooms';
+  }
   var lv = 1;
   if (badgeIsSpecialRule(rule)) lv = rule === BADGE_RULE_PERFECT || rule === BADGE_RULE_FAST ? 3 : (rule === BADGE_RULE_NEWBIE ? 1 : 2);
   else if (rule === BADGE_RULE_DEPT_TOP) lv = n <= 3 ? 4 : 3;
@@ -12355,7 +12578,7 @@ function badgeSuggestFromDesc(desc) {
     if (!(mc > 0)) mc = 50;
     if (mc > 2000) mc = 2000;
   }
-  return { rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: th.c1, c2: th.c2, mc: mc };
+  return { rule: rule, n: n, cn: cn, en: en, icon: icon, lv: lv, c1: th.c1, c2: th.c2, mc: mc, sec: sec };
 }
 // 配色只由 规则 + 等级 决定：连续=火焰橙、单期=蓝、累计=绿，竞速=金橙、学习=紫蓝、
 // 主题=琥珀；高等级一律转金色。
@@ -12393,6 +12616,12 @@ function adminBadgeDraft() {
       adminState.badgeDirty = false;
     }
   }
+  // 老草稿里还挂着「题库征服者」→ 当场拆成三枚，并标成"未发布"，
+  // 免得管理员顺手点发布、把旧目录又推回学员端（学员端会被本地补丁再拆一次，但两边显示就对不上了）。
+  if (badgePatchSplitDeptTop(adminState.badgeDraft)) {
+    adminState.badgeDirty = true;
+    adminBadgePersistDraft();
+  }
   return adminState.badgeDraft;
 }
 function adminBadgePersistDraft() {
@@ -12405,7 +12634,11 @@ function adminBadgeRuleText(b, en) {
   if (b.rule === BADGE_RULE_PERFECT) return en ? (b.n + '+ correct in a run') : ('单次答对 ' + b.n + ' 题');
   if (b.rule === BADGE_RULE_FAST) return en ? ('\u2264' + b.n + 's/q') : ('每题\u2264' + b.n + ' 秒');
   if (b.rule === BADGE_RULE_NEWBIE) return en ? ('first week ' + b.n + 'd') : ('首周 ' + b.n + ' 天');
-  if (b.rule === BADGE_RULE_DEPT_TOP) return en ? ('section top ' + b.n) : ('板块前 ' + b.n + ' 名');
+  if (b.rule === BADGE_RULE_DEPT_TOP) {
+    var sTxt = badgeSecValid(b.sec);
+    return en ? ('top ' + b.n + ' \u00b7 ' + (sTxt ? raceSecMeta(sTxt).en : 'any section'))
+              : ('前 ' + b.n + ' 名 \u00b7 ' + (sTxt ? raceSecMeta(sTxt).cn : '任一板块'));
+  }
   if (b.rule === BADGE_RULE_ALL_TOP) return en ? ('overall top ' + b.n) : ('全题库前 ' + b.n + ' 名');
   if (b.rule === BADGE_RULE_WRONG) return en ? ('redo ' + b.n + ' wrong') : ('重做错题 ' + b.n + ' 道');
   if (b.rule === BADGE_RULE_FAV) return en ? ('save ' + b.n + ' questions') : ('收藏 ' + b.n + ' 道');
@@ -12468,7 +12701,7 @@ function renderAdminBadges() {
   // 新增 / 编辑表单
   var ed = adminState.badgeEditing || '';
   var cur = ed && ed !== 'new' ? adminBadgeById(ed) : null;
-  var d = cur || { id: '', rule: BADGE_RULE_STREAK, n: 3, cn: '', en: '', icon: '🔥', lv: 1, c1: '#ffc46b', c2: '#ff9a3c', on: true, rid: '', mc: 0 };
+  var d = cur || { id: '', rule: BADGE_RULE_STREAK, n: 3, cn: '', en: '', icon: '🔥', lv: 1, c1: '#ffc46b', c2: '#ff9a3c', on: true, rid: '', mc: 0, sec: '' };
   html += '<div id="badgeFormCard" class="q-card" style="margin-top:10px;transition:box-shadow .4s;">';
   html += '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">' + (cur ? ('✏️ ' + t('badge_admin_edit')) : ('➕ ' + t('badge_admin_add'))) + '</div>';
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'Describe it in one sentence' : '一句话描述这枚徽章') + '</label>';
@@ -12501,6 +12734,19 @@ function renderAdminBadges() {
     + '<option value="theme"' + (d.rule === BADGE_RULE_THEME ? ' selected' : '') + '>' + t('badge_admin_rule_theme') + '</option>'
     + '</select></div>';
   html += '</div>';
+  // 「板块速答榜」类徽章要说明**绑哪张榜**：厨房部/餐饮部/房务部三枚「题库征服者」就靠这里区分。
+  // 留空 = 任一板块榜都算（老目录的「题库征服者」就是这个语义）。
+  var secVal = badgeSecValid(d.sec);
+  html += '<div style="margin-top:8px;"><label style="font-size:12px;color:#666;">' + t('badge_admin_sec') + '</label>'
+    + '<select id="bdSec" class="admin-input" style="width:100%;padding:8px;border:1px solid #d8dee4;border-radius:6px;box-sizing:border-box;">'
+    + '<option value=""' + (secVal ? '' : ' selected') + '>' + t('badge_admin_sec_any') + '</option>';
+  for (var si = 0; si < RACE_SECTIONS.length; si++) {
+    var skS = RACE_SECTIONS[si].key;
+    if (skS === 'all') continue;
+    html += '<option value="' + skS + '"' + (secVal === skS ? ' selected' : '') + '>'
+      + RACE_SECTIONS[si].icon + ' ' + escapeHtml(en ? RACE_SECTIONS[si].en : RACE_SECTIONS[si].cn) + '</option>';
+  }
+  html += '</select><div style="font-size:11px;color:#8b98a3;margin-top:3px;">' + t('badge_admin_sec_hint') + '</div></div>';
   // 限定主题徽章要绑定"哪一届"：留空 = 当前届（发布时才知道 id，所以留空最省心）；
   // 想把它钉死在某一届就填进去（新一季换了 id 之后，旧主题自动变成"已结束、不再发放"）。
   html += '<div style="margin-top:8px;"><label style="font-size:12px;color:#666;">' + t('badge_admin_rid') + '</label>'
@@ -12602,6 +12848,7 @@ function adminBadgeGen() {
   var set = function (id, v) { var e = document.getElementById(id); if (e) e.value = v; };
   set('bdCn', s.cn); set('bdEn', s.en); set('bdIcon', s.icon); set('bdRule', s.rule); set('bdN', s.n); set('bdLv', s.lv);
   set('bdMc', s.mc || 0);
+  set('bdSec', s.sec || '');
   var prev = document.getElementById('bdPreview');
   if (prev) prev.innerHTML = raceBadgeChipHtml({ id: 'preview', rule: s.rule, n: s.n, mc: (s.mc || 0), cn: s.cn, en: s.en, icon: s.icon, lv: s.lv, c1: s.c1, c2: s.c2 }, true, '2026-10-30', '', 2);
 }
@@ -12626,6 +12873,8 @@ function adminBadgeSave() {
   var lv = parseInt(g('bdLv'), 10) || 1;
   var icon = String(g('bdIcon') || '🏅').trim() || '🏅';
   var rid = String(g('bdRid') || '').trim();
+  // 绑哪张板块榜（只有「板块速答榜」规则用得上；别的规则一律存空，避免脏字段漂移）
+  var sec = rule === BADGE_RULE_DEPT_TOP ? badgeSecValid(g('bdSec')) : '';
   // 限定主题的第二道门槛（答对题数）；非主题规则一律存 0，避免脏字段跟着别的规则漂。
   var mc = rule === BADGE_RULE_THEME ? Math.max(0, Math.min(2000, parseInt(g('bdMc'), 10) || 0)) : 0;
   var onEl = document.getElementById('bdOn');
@@ -12636,11 +12885,11 @@ function adminBadgeSave() {
   var sug = badgeSuggestFromDesc((document.getElementById('bdDesc') || {}).value || '');
   var th = badgeThemeOf(rule, lv);
   if (!b) {
-    b = { id: 'bd_' + rule.charAt(0) + n + '_' + Date.now().toString(36), rule: rule, n: n, cn: cn, en: en2 || cn, icon: icon, lv: lv, c1: th.c1, c2: th.c2, on: true, rid: rid, mc: mc };
+    b = { id: 'bd_' + rule.charAt(0) + n + '_' + Date.now().toString(36), rule: rule, n: n, cn: cn, en: en2 || cn, icon: icon, lv: lv, c1: th.c1, c2: th.c2, on: true, rid: rid, mc: mc, sec: sec };
     list.push(b);
   } else {
     b.rule = rule; b.n = n; b.cn = cn; b.en = en2 || cn; b.icon = icon; b.lv = lv;
-    b.c1 = th.c1; b.c2 = th.c2; b.rid = rid; b.mc = mc;
+    b.c1 = th.c1; b.c2 = th.c2; b.rid = rid; b.mc = mc; b.sec = sec;
   }
   b.on = onEl ? !!onEl.checked : true;
   adminState.badgeDirty = true;
@@ -21699,6 +21948,8 @@ function examOpenSessionNames(exceptPk) {
   return out.join(state.lang === 'en' ? ', ' : '、');
 }
 
+// 开机先看一眼有没有"赛季已结束、徽章还没结"的账，再渲染首屏
+try { raceSettleOnBoot(); } catch (eBoot) {}
 render();
 </script>
 </body>
