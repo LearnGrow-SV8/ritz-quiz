@@ -10630,7 +10630,10 @@ function raceDaysRowsFrom(list, scope, rid) {
     if (!race) continue;
     var days = raceDaysCount(race, filter);
     if (!days) continue;
-    var blD = raceBadgeListOf(race, filter);
+    // 徽章是"人"的属性，跟这张榜按本届还是历届统计无关（2026-11-04 统一）：
+    // 以前这里传的是 filter（本届榜只取本届徽章），导致同一个人在本届打卡天数榜和
+    // 分数榜上挂的徽章不一样 —— 学员会以为是 bug。现在一律历届全部。
+    var blD = raceBadgeListOf(race, '');
     rows.push({
       key: String((raw && (raw.akey || raw.key || raw.phone)) || ''),
       name: raceRowNameOf(raw, race),
@@ -10639,7 +10642,7 @@ function raceDaysRowsFrom(list, scope, rid) {
       days: days,
       runs: raceDaysRuns(race, filter),
       last: raceDaysLastTs(race, filter),
-      // 打卡天数榜上带徽章：filter 为空（历史最佳榜）就是历届全部徽章
+      // 打卡天数榜上带徽章：一律历届全部（见上方说明）
       badges: blD,
       show: raceDisplayBadgeOf(race, blD),
       // 段位永远按**历届累计**天数算（不受本榜 period/best 口径影响），否则
@@ -17186,7 +17189,7 @@ function dashRaceRows(from, to, sec) {
       days: raceDaysCount(raceEnsureDays(rr), rid),
       totalDays: raceDaysCount(raceEnsureDays(rr), ''),
       streak: raceStreakInfo(raceEnsureDays(rr), rid).max,
-      badges: raceBadgeListOf(raceEnsureDays(rr), rid)
+      badges: raceBadgeListOf(raceEnsureDays(rr), '')   // 与学员端一致：徽章不分本届/历届
     });
   }
   out.sort(function (a, b) {
