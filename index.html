@@ -4704,6 +4704,13 @@ var I18N = {
   race_frame_locked: {cn:'还差 {n} 枚', en:'{n} to go'},
   race_frame_unlocked: {cn:'已解锁', en:'Unlocked'},
   race_frame_on: {cn:'头像框已生效', en:'Frame active'},
+  // 点头像框看说明（2026-11-04）：不挂任何视觉标识，点开才知道是什么框、怎么拿
+  race_frame_info_title: {cn:'{cat}头像框', en:'{cat} frame'},
+  race_frame_info_owner: {cn:'{name} 已解锁', en:'Unlocked by {name}'},
+  race_frame_info_how: {cn:'集齐下面 {n} 枚{cat}徽章即可解锁，解锁后永久套在头像外圈。', en:'Collect all {n} badges below to unlock it. Once unlocked it stays around your avatar for good.'},
+  race_frame_info_tap: {cn:'点徽章可以看单枚的拿法', en:'Tap a badge to see how to earn it'},
+  race_frame_info_none: {cn:'这个系列暂时还没有徽章', en:'No badges in this series yet'},
+  race_frame_info_ok: {cn:'知道了', en:'Got it'},
   // 学员头像（2026-11-04）：首字母 / 预置库 / 上传照片 三级，排行榜与个人主页共用
   avatar_title: {cn:'我的头像', en:'My avatar'},
   avatar_sub: {cn:'排行榜和个人主页都会显示', en:'Shown on the leaderboard and your profile'},
@@ -10063,7 +10070,10 @@ function raceTopFrame(rec) {
 }
 // 头像框预览：外圈金属渐变环 + 内侧白描边 + 彩色外发光 + 内容（图标 / 头像）
 // 尺寸越小环按比例仍保留 3px 起步，否则 36–38px 的行上看不出"有没有框"。
-function raceFrameCircleHtml(inner, frame, size) {
+// click：可选的 JS 表达式（如 raceFrameInfoShow('checkin','Alice')）。只有真的解锁了
+// 才挂 onclick —— 没框的人点了什么都不该发生，也不给任何视觉标识（不写下划线、不加标记），
+// 想了解框是什么、怎么拿的人自己点一下就知道了。
+function raceFrameCircleHtml(inner, frame, size, click) {
   var sz = size || 40, on = !!frame;
   var pad = on ? Math.max(3, Math.round(sz * 0.085)) : Math.max(2, Math.round(sz / 15));
   var ring = on ? frame.style.ring : 'linear-gradient(135deg,#eef1f4,#dce2e7)';
@@ -10074,13 +10084,74 @@ function raceFrameCircleHtml(inner, frame, size) {
       + '0 0 0 ' + Math.max(2, Math.round(sz / 16)) + 'px ' + glow + ','
       + '0 0 ' + Math.round(sz / 5) + 'px ' + glow + ';'
     : 'box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);';
-  return '<div style="flex:0 0 auto;width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;padding:' + pad + 'px;'
-    + 'box-sizing:border-box;background:' + ring + ';' + box + '">'
+  var act = (on && click) ? ' cursor:pointer;-webkit-tap-highlight-color:transparent;' : '';
+  var oc = (on && click) ? ' onclick="' + click + '"' : '';
+  return '<div' + oc + ' style="flex:0 0 auto;width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;padding:' + pad + 'px;'
+    + 'box-sizing:border-box;background:' + ring + ';' + act + box + '">'
     + '<div style="position:relative;width:100%;height:100%;border-radius:50%;display:flex;align-items:center;'
     + 'justify-content:center;overflow:hidden;'
     + 'font-size:' + Math.round(sz * 0.45) + 'px;line-height:1;background:' + (on ? frame.style.bg : '#fff') + ';'
     + 'box-shadow:inset 0 0 0 ' + (on ? '1.5' : '1') + 'px rgba(255,255,255,.92);">'
     + inner + '</div></div>';
+}
+// 榜单 / 设置页共用：拼出"点这个框"的 onclick 表达式。没框就返回空串（= 不可点）。
+function raceFrameClickOf(frame, name) {
+  if (!frame || !frame.cat) return '';
+  var n = '';
+  // encodeURIComponent 不转义单引号，而 onclick="..." 里用的就是单引号，不补这一刀
+  // 名字带撇号（O'Brien）的人会让整段表达式语法错误，点了没反应。
+  try { n = encodeURIComponent(String(name || '')).replace(/'/g, '%27'); } catch (e) { n = ''; }
+  return "raceFrameInfoShow('" + frame.cat + "','" + n + "')";
+}
+// 点头像框 → 这个框是什么、谁解锁的、怎么拿。再点单枚徽章能看到那一枚的条件。
+function raceFrameInfoShow(rawCat, rawName) {
+  if (typeof document === 'undefined' || !document.body || !document.body.appendChild) return;
+  var cat = String(rawCat || '');
+  var style = RACE_FRAME_STYLE[cat];
+  if (!style) return;
+  var name = '';
+  try { name = decodeURIComponent(String(rawName || '')); } catch (e) { name = String(rawName || ''); }
+  var meta = badgeCatMeta(cat);
+  var catShort = badgeCatLabel(cat).replace(/^\S+\s/, '');      // 去掉分类自带的 emoji
+  var defs = [], all = raceBadgeDefs(false);
+  for (var i = 0; i < all.length; i++) if (badgeCatOf(all[i].rule) === cat) defs.push(all[i]);
+  var circle = raceFrameCircleHtml('<span style="font-size:34px;line-height:1;">' + meta.icon + '</span>',
+    { cat: cat, style: style }, 88);
+  var body = defs.length
+    ? '<div style="font-size:11.5px;color:#5b6672;line-height:1.6;text-align:left;">'
+      + escapeHtml(t('race_frame_info_how').replace('{n}', String(defs.length)).replace('{cat}', catShort)) + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px;">'
+      + defs.map(function (d) {
+          return '<div onclick="raceBadgeInfoShow(\'' + encodeURIComponent(d.id) + '\')" '
+            + 'style="display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:8px;cursor:pointer;'
+            + 'border:1px solid #f0b357;background:#fffdf5;min-width:0;">'
+            + '<span style="flex:0 0 auto;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;'
+            + 'justify-content:center;font-size:12px;line-height:1;background:linear-gradient(135deg,'
+            + (d.c1 || '#ffcf6b') + ',' + (d.c2 || '#d99a00') + ');">' + raceBadgeIcon(d) + '</span>'
+            + '<span style="font-size:10.5px;font-weight:600;color:#6b4300;line-height:1.25;overflow:hidden;'
+            + 'text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(raceBadgeName(d)) + '</span></div>';
+        }).join('')
+      + '</div>'
+      + '<div style="font-size:10px;color:#b0a08a;text-align:center;margin-top:7px;">'
+      + escapeHtml(t('race_frame_info_tap')) + '</div>'
+    : '<div style="font-size:11.5px;color:#8b98a3;text-align:center;">' + escapeHtml(t('race_frame_info_none')) + '</div>';
+  var overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML =
+    '<div class="confirm-box" style="max-width:330px;text-align:center;">'
+      + '<div style="display:flex;justify-content:center;margin:2px 0 12px;">' + circle + '</div>'
+      + '<div class="confirm-title" style="margin-bottom:2px;">'
+      + escapeHtml(t('race_frame_info_title').replace('{cat}', catShort)) + '</div>'
+      + '<div style="font-size:11px;color:#b7791f;font-weight:600;margin-bottom:6px;">'
+      + escapeHtml(name ? t('race_frame_info_owner').replace('{name}', name) : '') + '</div>'
+      + '<div class="confirm-body" style="padding:0;">' + body + '</div>'
+      + '<div class="confirm-actions"><button class="confirm-btn primary" data-act="ok">'
+      + escapeHtml(t('race_frame_info_ok')) + '</button></div>'
+    + '</div>';
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  overlay.querySelector('[data-act="ok"]').onclick = close;
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+  document.body.appendChild(overlay);
 }
 // ===== 学员头像（2026-11-04）=====
 // 三级回退：上传照片 > 预置头像 > 首字母。全部信息只压在 snap.av 一个短字符串里：
@@ -10288,8 +10359,9 @@ function avatarInnerHtml(cn, en, key, av, size) {
     + 'letter-spacing:.2px;background:' + avatarLetterBg(key) + ';">' + escapeHtml(l2) + '</span>';
 }
 // 对外唯一入口：头像 + 头像框。frame 为 null 时套一圈浅灰环（未解锁的样子）。
-function raceAvatarHtml(cn, en, key, av, frame, size) {
-  return raceFrameCircleHtml(avatarInnerHtml(cn, en, key, av, size), frame, size || 36);
+// click 只在有框时生效（见 raceFrameCircleHtml）：没框的人点击不产生任何反应。
+function raceAvatarHtml(cn, en, key, av, frame, size, click) {
+  return raceFrameCircleHtml(avatarInnerHtml(cn, en, key, av, size), frame, size || 36, click);
 }
 // 从快照行取头像存档值：raw 可能是快照 record（有 snap）也可能已经是 snap。
 function avatarOfRaw(raw) {
@@ -10326,11 +10398,11 @@ function renderAvatarPage() {
   // 预览：96px 连框一起，所见即所得（榜单上是 38px，这里放大看细节）
   html += '<div class="q-card" style="text-align:center;padding:20px 12px 16px;">';
   html += '<div style="display:flex;justify-content:center;">'
-    + raceAvatarHtml(p.cnName || '', p.enName || '', key, av, frame, 96) + '</div>';
+    + raceAvatarHtml(p.cnName || '', p.enName || '', key, av, frame, 96, raceFrameClickOf(frame, profileDisplayName() || ''))
+    + '</div>';
   html += '<div style="font-size:12.5px;color:#5b6670;margin-top:12px;font-weight:600;">'
     + escapeHtml(profileDisplayName() || '') + '</div>';
-  html += '<div style="font-size:11px;color:#9aa3ad;margin-top:3px;">' + srcLabel
-    + (frame ? ' · 🖼 ' + t('race_frame_on') : '') + '</div>';
+  html += '<div style="font-size:11px;color:#9aa3ad;margin-top:3px;">' + srcLabel + '</div>';
   html += '</div>';
   // 自选 emoji —— 零存储、零流量，想用什么用什么（2026-11-04）
   html += '<div class="q-card" style="padding:14px;">';
@@ -10567,7 +10639,8 @@ function raceFrameSectionHtml(counts) {
     var label = badgeCatLabel(r.cat).replace(/^\S+\s/, '');   // 去掉分类 emoji，避免和图标重复
     html += '<div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:10px;'
       + 'border:1px solid ' + (r.unlocked ? '#f0b357' : '#e2e6ea') + ';background:' + (r.unlocked ? '#fffdf5' : '#fafbfc') + ';">'
-      + raceFrameCircleHtml('<span style="font-weight:700;color:' + (r.unlocked ? '#b7791f' : '#b0b8bf') + ';">' + meta.icon + '</span>', r.unlocked ? r : null, 34)
+      + raceFrameCircleHtml('<span style="font-weight:700;color:' + (r.unlocked ? '#b7791f' : '#b0b8bf') + ';">' + meta.icon + '</span>',
+        r.unlocked ? r : null, 34, r.unlocked ? raceFrameClickOf(r, '') : '')
       + '<div style="min-width:0;"><div style="font-size:12px;font-weight:700;color:' + (r.unlocked ? '#8a5a00' : '#8b98a3') + ';">'
       + escapeHtml(label) + '</div><div style="font-size:10.5px;color:#9aa3ad;">'
       + (r.unlocked ? ('✓ ' + t('race_frame_unlocked')) : t('race_frame_locked').replace('{n}', String(r.total - r.got)))
@@ -11362,14 +11435,16 @@ function raceTierStripHtml() {
       ? accountRowKeyForUser(String(state.currentUser || ''), _pA) : String(state.currentUser || '');
   } catch (eKA) { _keyA = String(state.currentUser || ''); }
   // 点头像 = 去换头像：这是唯一能改头像的入口，不给个角标没人会发现。
+  // 点头像框（只在外圈那一小圈）= 看这个框是什么、怎么拿；顺手拦住冒泡，别把人带去改头像。
+  var _fClickMe = '';
+  if (frame) _fClickMe = 'event.stopPropagation();' + raceFrameClickOf(frame, profileDisplayName() || '');
   html += '<div style="position:relative;flex:0 0 auto;cursor:pointer;" onclick="navigate(\'avatar\')">';
-  html += raceAvatarHtml(_pA.cnName || '', _pA.enName || '', _keyA, _pA.avatar || '', frame, 46);
+  html += raceAvatarHtml(_pA.cnName || '', _pA.enName || '', _keyA, _pA.avatar || '', frame, 46, _fClickMe);
   html += '<div style="position:absolute;right:-3px;bottom:-3px;width:17px;height:17px;border-radius:50%;'
     + 'background:#1a3a5c;color:#fff;font-size:9px;line-height:16px;text-align:center;border:1.5px solid #fff;">✎</div>';
   html += '</div>';
   html += '<div style="flex:1;min-width:0;" onclick="raceTierInfoShow()">';
-  html += '<div style="font-size:14px;font-weight:700;">' + tier.icon + ' ' + (en ? tier.en : tier.cn)
-    + (frame ? ' <span style="font-size:10.5px;color:#b7791f;">🖼 ' + t('race_frame_on') + '</span>' : '') + '</div>';
+  html += '<div style="font-size:14px;font-weight:700;">' + tier.icon + ' ' + (en ? tier.en : tier.cn) + '</div>';
   html += '<div style="font-size:11px;color:#888;margin-top:1px;">'
     + (st.locked ? t('race_tier_reacc') : t('race_tier_strip')) + ' · '
     + (en ? (st.locked ? 're-earned days ' : 'all-time days ') : (st.locked ? '重新累计 ' : '累计打卡 ')) + shown + (en ? '' : ' 天')
@@ -12668,7 +12743,11 @@ function renderRaceBoard() {
       var rankBg = i === 0 ? 'linear-gradient(135deg,#ffd76b,#d4a017)'
         : i === 1 ? 'linear-gradient(135deg,#d7dde3,#8b98a3)'
         : i === 2 ? 'linear-gradient(135deg,#d9a06a,#a9662f)' : '#1a3a5c';
-      html += '<div style="position:relative;flex:0 0 auto;">';
+      // 有框的人：点头像（连排名角标一起）就能看到"这是什么框、谁解锁的、怎么拿"。
+      // 不加任何标识 —— 没框的人这个容器不可点，也不会出现下划线或额外文字。
+      var _fClick = raceFrameClickOf(rw.frame, rw.name);
+      html += '<div style="position:relative;flex:0 0 auto;'
+        + (_fClick ? 'cursor:pointer;-webkit-tap-highlight-color:transparent;" onclick="' + _fClick : '') + '">';
       html += raceAvatarHtml(rw.cn, rw.en, rw.key, rw.av, rw.frame, 38);
       html += '<div style="position:absolute;left:-3px;bottom:-3px;min-width:18px;height:18px;padding:0 2px;'
         + 'box-sizing:border-box;border-radius:10px;background:' + rankBg + ';color:#fff;font-weight:700;'
