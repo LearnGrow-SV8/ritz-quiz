@@ -41,17 +41,24 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .app-header .header-logo { height:22px; width:auto; display:block; margin:0 auto 6px; opacity:0.9; }
 .back-btn { position:absolute; left:12px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.5); border:1px solid rgba(0,0,0,0.08); color:var(--primary); width:36px; height:36px; border-radius:50%; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 
-/* 统一学员端顶栏：左侧「← 返回上一层」，右侧 语言切换 + 🏠 一键回首页。
-   Batch-4d：改为上下堆叠、右对齐——横向平铺太宽，会压住 banner 居中标题。 */
-.app-header .header-right { position:absolute; right:12px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+/* 统一学员端顶栏：左侧「← 返回上一层」，右侧 [中/EN] [🏠] [我的头像] 三者并排。
+   2026-11 改回横排：竖排三层总高 110px+，头像被挤到贴住 banner 上下边沿；
+   横排总高只有 38px，整组与 logo 行顶对齐 —— 标题/副标题在下方整行铺开，互不遮挡。 */
+.app-header .header-right { position:absolute; right:12px; top:13px; transform:none; display:flex; flex-direction:row; align-items:center; gap:7px; }
 .back-btn.wide { width:auto; height:34px; padding:0 12px 0 8px; border-radius:17px; gap:3px; font-size:16px; }
+/* 「返回」也抬到顶行，和右侧控件同一水平线（顶栏中线已被标题占据） */
+.app-header .back-btn.wide { top:13px; transform:none; }
 .back-btn.wide .back-label, .home-btn .back-label { font-size:13px; font-weight:600; letter-spacing:0; margin-left:3px; }
 .home-btn { background:rgba(255,255,255,0.5); border:1px solid rgba(0,0,0,0.08); color:var(--primary); height:34px; min-width:34px; padding:0 10px; border-radius:17px; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 .app-header.has-back .header-logo, .app-header.has-back h1 { padding-left:4px; }
 /* banner 右下角的"我的头像"：比语言/首页按钮小一号，✎ 角标提示可编辑 */
-.header-avatar { position:relative; flex:0 0 auto; width:38px; height:38px; margin-top:2px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.header-avatar { position:relative; flex:0 0 auto; width:38px; height:38px; margin:0; cursor:pointer; -webkit-tap-highlight-color:transparent; }
 .header-avatar .header-avatar-pen { position:absolute; right:-4px; bottom:-4px; width:15px; height:15px; box-sizing:border-box; border-radius:50%; background:#1a3a5c; color:#fff; font-size:8.5px; line-height:12px; text-align:center; border:1.5px solid #fff; }
-@media (max-width:360px) { .back-btn.wide .back-label, .home-btn .back-label { display:none; } .back-btn.wide { padding:0 10px; } .home-btn { padding:0 8px; } }
+/* 首页按钮默认只留房子图标：三个控件并排后横向空间变紧，文字交给 title/aria 提示；
+   屏幕够宽（≥430px）再补出「首页」两个字，窄屏不去挤居中标题。 */
+.home-btn .back-label { display:none; }
+@media (min-width:430px) { .home-btn .back-label { display:inline; } }
+@media (max-width:360px) { .back-btn.wide .back-label { display:none; } .back-btn.wide { padding:0 10px; } .home-btn { padding:0 8px; } .app-header .header-right { gap:5px; right:10px; } }
 .page { padding:16px; padding-bottom:80px; }
 
 .home-hero { background:linear-gradient(160deg,var(--primary-soft) 0%,var(--primary-light) 100%); color:var(--primary); padding:36px 20px 32px; border-radius:0 0 28px 28px; text-align:center; margin:-16px -16px 20px; position:relative; }
@@ -368,7 +375,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .restart-banner .restart-btn { margin-top:8px; padding:8px 20px; background:var(--success); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
 
 .lang-toggle { display:inline-flex; background:rgba(255,255,255,0.4); border-radius:8px; overflow:hidden; border:1px solid rgba(0,0,0,0.08); }
-.lang-toggle button { background:none; border:none; color:var(--primary); padding:4px 12px; font-size:13px; cursor:pointer; opacity:0.6; transition:opacity 0.15s; }
+.lang-toggle button { background:none; border:none; color:var(--primary); padding:4px 9px; font-size:13px; cursor:pointer; opacity:0.6; transition:opacity 0.15s; }
 .lang-toggle button.active { opacity:1; background:rgba(255,255,255,0.6); color:var(--primary); font-weight:600; }
 
 .home-lang-bar { display:flex; justify-content:center; margin-bottom:12px; }
@@ -4734,7 +4741,9 @@ var I18N = {
   avatar_uploading: {cn:'正在上传…', en:'Uploading…'},
   avatar_ok: {cn:'头像已更新', en:'Avatar updated'},
   avatar_fail: {cn:'上传失败，请稍后再试', en:'Upload failed, please try again'},
-  avatar_off: {cn:'照片上传还没开通（需管理员在后台开一次），先用 emoji 或预置头像吧', en:'Photo upload is not enabled yet (an admin needs to switch it on once). Use an emoji or preset for now.'},
+  avatar_off: {cn:'照片上传暂未开通，先用 emoji 或预置头像吧', en:'Photo upload is not enabled yet — use an emoji or preset for now.'},
+  avatar_nopolicy: {cn:'照片上传通道还没配好，先用 emoji 或预置头像吧', en:'Photo upload is not fully configured yet — use an emoji or preset for now.'},
+  avatar_toobig: {cn:'这张图太大了，换一张小一点的试试', en:'That image is too large — please try a smaller one.'},
   avatar_bad_img: {cn:'这张图片读不出来，换一张试试', en:'That image could not be read, try another'},
   avatar_need_key: {cn:'请先补完个人资料再设置头像', en:'Finish your profile before setting an avatar'},
   // C1 参与保底（2026-11-03）
@@ -10538,6 +10547,8 @@ function avatarOnFile(inp) {
     var msg = t('avatar_fail');
     if (err && (err.code === 'badimg')) msg = t('avatar_bad_img');
     else if (err && (err.code === 'nobucket')) msg = t('avatar_off');
+    else if (err && (err.code === 'nopolicy')) msg = t('avatar_nopolicy');
+    else if (err && (err.code === 'toobig')) msg = t('avatar_toobig');
     try { alert(msg); } catch (eB) {}
   });
 }
@@ -10608,8 +10619,20 @@ function avatarUpload(akey, blob, mime) {
   }, 25000, 'avatar-up').then(function (r) {
     if (r && r.ok) return path;
     var e = new Error('upload ' + (r ? r.status : '?'));
-    // 404 / 400（Bucket not found）说明桶还没建：这是"功能没开通"，不是网络故障
-    if (r && (r.status === 404 || r.status === 400)) e.code = 'nobucket';
+    e.status = r ? r.status : 0;
+    // 桶没建 和 桶建了但策略没配，Storage 都回 400 —— 必须读 response body 才分得清，
+    // 否则"权限没配"会被当成"功能没开通"，管理员照着提示也修不好。
+    function classify(txt) {
+      var s = String(txt || '');
+      if (/Bucket not found|NoSuchBucket/i.test(s)) { e.code = 'nobucket'; return; }
+      if (/row-level security|policy/i.test(s)) { e.code = 'nopolicy'; return; }
+      if (/maximum allowed size|too large|Payload too large/i.test(s)) { e.code = 'toobig'; }
+    }
+    if (r && /^(400|403|404)$/.test(String(r.status)) && typeof r.text === 'function') {
+      return r.text().then(function (txt) { classify(txt); throw e; },
+        function () { if (r.status === 404) e.code = 'nobucket'; throw e; });
+    }
+    if (r && r.status === 404) e.code = 'nobucket';
     throw e;
   });
 }
