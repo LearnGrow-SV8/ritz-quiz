@@ -2480,6 +2480,8 @@ function applyPfFixEntry(oldKey, fix) {
   if (normEmpNo(p.empNo) && prevEmp && normEmpNo(p.empNo) !== prevEmp) { p.pinHash = ''; p.pinSetAt = 0; }
   // Stage 10: 管理员的任何更正都视为已核实 —— 清掉注册待核查标记。
   if (fix.clearNv) { delete p.needsVerify; }
+  // 管理员重置头像（审核用途）：空串 = 退回名字首字母。
+  if (typeof fix.av === 'string') { if (fix.av) p.avatar = fix.av; else delete p.avatar; }
   var newKey = accountKeyFor(p.cnName, p.enName, p.empNo) || oldKey;
   try { localStorage.setItem(oldKey + '_profile', JSON.stringify(p)); } catch (e) {}
   if (newKey !== oldKey) migrateAccountKey(oldKey, newKey);
@@ -3601,7 +3603,13 @@ function renderAccountSwitcher() {
       var r = recents[i];
       var isCurrent = r.key === state.currentUser;
       html += '<div class="account-card' + (isCurrent ? ' current' : '') + '">';
-      html += '<div class="account-avatar">👤</div>';
+      // 账户列表也显示各自的头像：多账号切换时一眼认人，比统一的人形图标有用。
+      var _rp = null;
+      try { _rp = loadProfileForKey(r.key); } catch (eRP) { _rp = null; }
+      html += '<div class="account-avatar" style="padding:0;background:none;">'
+        + raceAvatarHtml((_rp && _rp.cnName) || r.name || '', (_rp && _rp.enName) || '', r.key,
+                         (_rp && _rp.avatar) || '', null, 42)
+        + '</div>';
       html += '<div class="account-info">';
       html += '<div class="account-name">' + escapeHtml(r.name) + '</div>';
       html += '<div class="account-empid">' + escapeHtml(t('login_empid_ph').replace('请输入', '').replace('Enter ', '')) + ' ' + escapeHtml(r.empId) + '</div>';
@@ -4696,6 +4704,24 @@ var I18N = {
   race_frame_locked: {cn:'还差 {n} 枚', en:'{n} to go'},
   race_frame_unlocked: {cn:'已解锁', en:'Unlocked'},
   race_frame_on: {cn:'头像框已生效', en:'Frame active'},
+  // 学员头像（2026-11-04）：首字母 / 预置库 / 上传照片 三级，排行榜与个人主页共用
+  avatar_title: {cn:'我的头像', en:'My avatar'},
+  avatar_sub: {cn:'排行榜和个人主页都会显示', en:'Shown on the leaderboard and your profile'},
+  avatar_src_letter: {cn:'默认 · 名字首字母', en:'Default · name initials'},
+  avatar_src_preset: {cn:'预置头像', en:'Preset avatar'},
+  avatar_src_photo: {cn:'已上传照片', en:'Uploaded photo'},
+  avatar_upload: {cn:'上传照片', en:'Upload a photo'},
+  avatar_change: {cn:'更换照片', en:'Change photo'},
+  avatar_preset: {cn:'或挑一个预置头像', en:'Or pick a preset'},
+  avatar_reset: {cn:'恢复默认头像', en:'Reset to initials'},
+  avatar_hint: {cn:'照片会先压到 128×128 再上传，服务器只保留当前这一张，换掉旧的自动清掉。', en:'Photos are resized to 128×128 before upload. Only the current one is kept — older files are removed.'},
+  avatar_private: {cn:'照片只在本平台内展示，可随时恢复成首字母。', en:'Your photo is only shown inside this app and can be reset to initials any time.'},
+  avatar_uploading: {cn:'正在上传…', en:'Uploading…'},
+  avatar_ok: {cn:'头像已更新', en:'Avatar updated'},
+  avatar_fail: {cn:'上传失败，请稍后再试', en:'Upload failed, please try again'},
+  avatar_off: {cn:'照片上传暂未开通，可先挑一个预置头像', en:'Photo upload is not enabled yet — pick a preset for now'},
+  avatar_bad_img: {cn:'这张图片读不出来，换一张试试', en:'That image could not be read, try another'},
+  avatar_need_key: {cn:'请先补完个人资料再设置头像', en:'Finish your profile before setting an avatar'},
   // C1 参与保底（2026-11-03）
   race_part_n_label: {cn:'参与奖达标次数', en:'Participation target'},
   race_part_n_hint: {cn:'本届打卡次数达到该值的学员名单会出现在导出 CSV 的「参与保底达标名单」表里（发参与奖用）。', en:'Employees who checked in at least this many times this round appear in the "Participation" sheet of the exported CSV (for participation rewards).'},
@@ -4987,6 +5013,10 @@ function collectSyncSnapshot() {
     // so the admin panel can flag "no PIN" (and offer a reset) without reading
     // the directory row for every student in the list.
     pinSetAt: (p.pinSetAt || 0),
+    // 头像存档值（2026-11-04）：'' / 'p12' / '@e3825/1748000000'，最多二十来个字节。
+    // 图片本体在 Storage，这里只放"用哪张"的指针 —— 快照每 15 秒被全量拉一次，
+    // 放 base64 会把榜单流量放大到不可收拾。
+    av: (p.avatar || ''),
     // Stage 10: 注册待核查标记（'reserved' = 预留工号注册，'off-roster' = 工号
     // 不在员工名册）。管理员核实后通过 pfFix 清除。
     needsVerify: (p.needsVerify && p.needsVerify.reason) || '',
@@ -5635,6 +5665,12 @@ function applyCloudAccountData(key, rec) {
     if (!prof.empNo && snap.emp) prof.empNo = snap.emp;
     if (!prof.division && (snap.div || snap.divEn)) prof.division = { cn: snap.div || '', en: snap.divEn || '' };
     if (!prof.dept && (snap.dept || snap.deptEn)) prof.dept = { cn: snap.dept || '', en: snap.deptEn || '' };
+    // 头像与 PIN 相反：它不是安全相关的，也不是"本机独有"的，而是学员在某一台
+    // 设备上主动选的展示偏好 —— 所以云端优先，换设备登录后头像跟着走。
+    // 用 typeof 判断而不是真值判断：'' 是"明确设的首字母"，得能把旧的覆盖掉。
+    if (typeof snap.av === 'string') {
+      if (snap.av) prof.avatar = snap.av; else delete prof.avatar;
+    }
     // Seed the PIN only when this device has none — a local PIN always wins,
     // except that an admin reset (handled by the login flow) deliberately
     // clears the local copy first.
@@ -5647,6 +5683,7 @@ function applyCloudAccountData(key, rec) {
       division: (snap.div || snap.divEn) ? { cn: snap.div || '', en: snap.divEn || '' } : null,
       dept: (snap.dept || snap.deptEn) ? { cn: snap.dept || '', en: snap.deptEn || '' } : null
     };
+    if (typeof snap.av === 'string' && snap.av) prof.avatar = snap.av;
     if (rec.pin) { prof.pinHash = rec.pin; prof.pinSetAt = rec.pinSetAt || 0; }
     try { localStorage.setItem(key + '_profile', JSON.stringify(prof)); } catch (e) { return false; }
   }
@@ -6937,6 +6974,7 @@ function adminFixAccountRow(oldKey, newKey, fix) {
     if (fix.divCn || fix.divEn) { s.div = fix.divCn || ''; s.divEn = fix.divEn || ''; }
     if (fix.deptCn || fix.deptEn) { s.dept = fix.deptCn || ''; s.deptEn = fix.deptEn || ''; }
     if (fix.clearNv) delete s.needsVerify;
+    if (typeof fix.av === 'string') s.av = fix.av;
     var jobs = [];
     if (target !== oldKey) {
       // 旧行 neutralize：清掉 key，目录查询（fetchKvAccountByRowKey 要求
@@ -10026,6 +10064,367 @@ function raceFrameCircleHtml(inner, frame, size) {
     + 'font-size:' + Math.round(sz * 0.45) + 'px;line-height:1;background:' + (frame ? frame.style.bg : '#fff') + ';">'
     + inner + '</div></div>';
 }
+// ===== 学员头像（2026-11-04）=====
+// 三级回退：上传照片 > 预置头像 > 首字母。全部信息只压在 snap.av 一个短字符串里：
+//   ''                     → 首字母（默认，零存储、零流量）
+//   'p12'                  → 预置头像第 12 号（编号即存档值，只能往后加不能插队）
+//   '@e3825/1748000000'    → 上传照片，{akey}/{版本}，图片在 avatars 桶里
+// 🔴 图片二进制绝不能进快照：排行榜每次进页面都全量拉一次 student_snapshots
+//    （limit 5000，每条完整 record）。一张 6 KB 头像 × 500 人 × 每次拉取会直接
+//    把免费额度烧穿，榜单加载也会从几 MB 涨到几十 MB。
+var AVATAR_BUCKET = 'avatars';
+var AVATAR_SIDE = 128;              // 压缩后边长；96 太小、256 会让单张超 10 KB
+var AVATAR_QUALITY = 0.82;
+var AVATAR_MAX_BYTES = 14 * 1024;   // 压缩目标上限，超了降质量重来
+var AVATAR_CACHE_CTRL = '31536000'; // 一年强缓存；靠版本化文件名失效，不靠时间
+// 预置头像：emoji + 固定渐变底。零字节依赖，不进任何存储，换设备也不会丢。
+var AVATAR_PRESETS = [
+  { i: 1,  e: '🛎️', bg: 'linear-gradient(135deg,#ffe1b3,#efa11d)' },
+  { i: 2,  e: '🔑', bg: 'linear-gradient(135deg,#ffe8b8,#d9a441)' },
+  { i: 3,  e: '🧳', bg: 'linear-gradient(135deg,#e8c9a0,#a97544)' },
+  { i: 4,  e: '☕', bg: 'linear-gradient(135deg,#d9b08c,#7a4f2a)' },
+  { i: 5,  e: '🍷', bg: 'linear-gradient(135deg,#c76b7c,#7b2140)' },
+  { i: 6,  e: '🥂', bg: 'linear-gradient(135deg,#ffe9a8,#c9a227)' },
+  { i: 7,  e: '🍰', bg: 'linear-gradient(135deg,#ffd0dc,#e0708f)' },
+  { i: 8,  e: '🧁', bg: 'linear-gradient(135deg,#ffe0ef,#d67aa5)' },
+  { i: 9,  e: '🍳', bg: 'linear-gradient(135deg,#ffd9a8,#e07a1f)' },
+  { i: 10, e: '🔪', bg: 'linear-gradient(135deg,#dfe6ec,#8395a7)' },
+  { i: 11, e: '🌿', bg: 'linear-gradient(135deg,#c9ead2,#3f9160)' },
+  { i: 12, e: '🥐', bg: 'linear-gradient(135deg,#ffe6b0,#c98a2e)' },
+  { i: 13, e: '🛏️', bg: 'linear-gradient(135deg,#cfe3f7,#4a7fae)' },
+  { i: 14, e: '🧺', bg: 'linear-gradient(135deg,#efe6d2,#a89574)' },
+  { i: 15, e: '🌸', bg: 'linear-gradient(135deg,#ffd9e6,#d6709a)' },
+  { i: 16, e: '🕯️', bg: 'linear-gradient(135deg,#ffeec2,#c99a3f)' },
+  { i: 17, e: '🏊', bg: 'linear-gradient(135deg,#c8eef2,#2e8fa3)' },
+  { i: 18, e: '🧖', bg: 'linear-gradient(135deg,#e2d6f7,#7b5ea8)' },
+  { i: 19, e: '💆', bg: 'linear-gradient(135deg,#f3d6ec,#a5568f)' },
+  { i: 20, e: '🏋️', bg: 'linear-gradient(135deg,#c6d4e8,#34527a)' },
+  { i: 21, e: '🌟', bg: 'linear-gradient(135deg,#ffeaa0,#d9a600)' },
+  { i: 22, e: '🌙', bg: 'linear-gradient(135deg,#c9cdf0,#464c8f)' },
+  { i: 23, e: '🎯', bg: 'linear-gradient(135deg,#ffc9c2,#b53c2c)' },
+  { i: 24, e: '🎨', bg: 'linear-gradient(135deg,#d8cdf5,#6b4fa0)' }
+];
+function avatarPresetOf(i) {
+  for (var p = 0; p < AVATAR_PRESETS.length; p++) if (AVATAR_PRESETS[p].i === i) return AVATAR_PRESETS[p];
+  return null;
+}
+// 首字母：英文名优先按词取首字母（Andrea Liu → AL），没有英文名就用中文名前两字
+// （「刘安琪」→「刘安」，同姓的人多，取一个字区分不开）。都没有就退工号尾号。
+function avatarInitialsOf(cn, en, key) {
+  var e = String(en || '').trim();
+  if (e) {
+    var parts = e.split(/[\s,.\-_/()]+/), s = '';
+    for (var i = 0; i < parts.length && s.length < 2; i++) {
+      var ch = parts[i].charAt(0);
+      if (/[A-Za-z]/.test(ch)) s += ch.toUpperCase();
+    }
+    if (s) return s;
+  }
+  var c = String(cn || '').trim();
+  if (c) {
+    // 中文名去掉称谓 / 括号备注，只留正文
+    c = c.replace(/[（(].*?[)）]/g, '').trim();
+    if (c) return c.slice(0, 2);
+  }
+  var k = String(key || '').replace(/^e/, '');
+  return k ? k.slice(-2).toUpperCase() : '?';
+}
+// 底色由身份键哈希出来：同一个人所有设备、所有页面都是同一个颜色，且零存储。
+// 用浅底 + 深字（微信默认头像的路子）：整张榜单色调统一、不抢戏，上传了真实
+// 照片的人反而被衬托出来 —— 这本身就是一点"想换照片"的推力。
+function avatarHueOf(key) {
+  var s = String(key || ''), h = 7;
+  for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return h;
+}
+function avatarLetterBg(key) {
+  var h = avatarHueOf(key);
+  return 'linear-gradient(135deg,hsl(' + h + ',62%,93%),hsl(' + ((h + 24) % 360) + ',54%,84%))';
+}
+function avatarLetterFg(key) {
+  var h = avatarHueOf(key);
+  return 'hsl(' + h + ',44%,31%)';
+}
+// 存档值解析：类型 + 照片路径。任何不认识的脏值一律当"没设置"，绝不抛错。
+function avatarKindOf(av) {
+  var s = String(av || '');
+  if (s.charAt(0) === '@' && s.indexOf('/') > 1) {
+    var p = s.slice(1);
+    if (/^[\w.-]+\/\d{6,}$/.test(p)) return { t: 'photo', path: p };
+  }
+  var m = /^p(\d{1,3})$/.exec(s);
+  if (m) {
+    var pr = avatarPresetOf(parseInt(m[1], 10));
+    if (pr) return { t: 'preset', preset: pr };
+  }
+  return { t: 'letter' };
+}
+function avatarPhotoUrl(path) {
+  if (!path) return '';
+  return SB_BASE + '/storage/v1/object/public/' + AVATAR_BUCKET + '/' + path + '.webp';
+}
+// 头像本体（不含外框）。照片加载失败（文件被删 / 桶没建）自动退回首字母，
+// 榜单不会出现裂图。
+function avatarInnerHtml(cn, en, key, av, size) {
+  var sz = size || 36, k = avatarKindOf(av);
+  if (k.t === 'photo') {
+    var letters = avatarInitialsOf(cn, en, key);
+    var fs = (letters.length > 1 ? sz * 0.34 : sz * 0.44);
+    var fb = '<span style="display:none;position:absolute;inset:0;border-radius:50%;align-items:center;'
+      + 'justify-content:center;color:' + avatarLetterFg(key) + ';font-weight:700;font-size:' + fs.toFixed(1) + 'px;'
+      + 'background:' + avatarLetterBg(key) + ';">' + escapeHtml(letters) + '</span>';
+    return '<span style="position:relative;display:block;width:100%;height:100%;">'
+      + '<img src="' + avatarPhotoUrl(k.path) + '" alt="" loading="lazy" decoding="async" '
+      + 'style="position:absolute;inset:0;width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;" '
+      + 'onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\';">'
+      + fb + '</span>';
+  }
+  if (k.t === 'preset') {
+    return '<span style="display:flex;width:100%;height:100%;border-radius:50%;align-items:center;'
+      + 'justify-content:center;font-size:' + (sz * 0.5).toFixed(1) + 'px;line-height:1;'
+      + 'background:' + k.preset.bg + ';">' + k.preset.e + '</span>';
+  }
+  var l2 = avatarInitialsOf(cn, en, key);
+  var fs2 = (l2.length > 1 ? sz * 0.34 : sz * 0.44);
+  return '<span style="display:flex;width:100%;height:100%;border-radius:50%;align-items:center;'
+    + 'justify-content:center;color:' + avatarLetterFg(key) + ';font-weight:700;font-size:' + fs2.toFixed(1) + 'px;'
+    + 'letter-spacing:.2px;background:' + avatarLetterBg(key) + ';">' + escapeHtml(l2) + '</span>';
+}
+// 对外唯一入口：头像 + 头像框。frame 为 null 时套一圈浅灰环（未解锁的样子）。
+function raceAvatarHtml(cn, en, key, av, frame, size) {
+  return raceFrameCircleHtml(avatarInnerHtml(cn, en, key, av, size), frame, size || 36);
+}
+// 从快照行取头像存档值：raw 可能是快照 record（有 snap）也可能已经是 snap。
+function avatarOfRaw(raw) {
+  if (!raw || typeof raw !== 'object') return '';
+  if (raw.snap && typeof raw.snap === 'object') return String(raw.snap.av || '');
+  return String(raw.av || '');
+}
+
+// ---- 头像设置页 ----
+function avatarAkeyNow() {
+  try {
+    return (typeof accountRowKeyForUser === 'function')
+      ? accountRowKeyForUser(String(state.currentUser || ''), state.profile || {})
+      : String(state.currentUser || '');
+  } catch (e) { return ''; }
+}
+function avatarMyFrame() {
+  var rec = {};
+  try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
+  try { return raceTopFrame(rec); } catch (e2) { return null; }
+}
+function renderAvatarPage() {
+  var p = state.profile || {};
+  var av = String(p.avatar || '');
+  var k = avatarKindOf(av);
+  var frame = null;
+  try { frame = avatarMyFrame(); } catch (e) { frame = null; }
+  var key = avatarAkeyNow();
+  var srcLabel = k.t === 'photo' ? t('avatar_src_photo') : (k.t === 'preset' ? t('avatar_src_preset') : t('avatar_src_letter'));
+  var html = renderAppHeader({ title: '🖼 ' + t('avatar_title'), subtitle: t('avatar_sub') });
+  html += '<div class="page">';
+  // 预览：96px 连框一起，所见即所得（榜单上是 38px，这里放大看细节）
+  html += '<div class="q-card" style="text-align:center;padding:20px 12px 16px;">';
+  html += '<div style="display:flex;justify-content:center;">'
+    + raceAvatarHtml(p.cnName || '', p.enName || '', key, av, frame, 96) + '</div>';
+  html += '<div style="font-size:12.5px;color:#5b6670;margin-top:12px;font-weight:600;">'
+    + escapeHtml(profileDisplayName() || '') + '</div>';
+  html += '<div style="font-size:11px;color:#9aa3ad;margin-top:3px;">' + srcLabel
+    + (frame ? ' · 🖼 ' + t('race_frame_on') : '') + '</div>';
+  html += '</div>';
+  // 上传照片
+  html += '<div class="q-card" style="padding:14px;">';
+  if (state.avatarBusy) {
+    html += '<div style="text-align:center;color:#8b98a3;font-size:13px;padding:8px 0;">⏳ ' + t('avatar_uploading') + '</div>';
+  } else {
+    html += '<button class="action-btn primary" style="width:100%;" onclick="avatarPickFileDialog()">📷 '
+      + (k.t === 'photo' ? t('avatar_change') : t('avatar_upload')) + '</button>';
+  }
+  html += '<div style="font-size:11px;color:#9aa3ad;margin-top:9px;line-height:1.6;">' + t('avatar_hint') + '</div>';
+  html += '<div style="font-size:11px;color:#b0b8bf;margin-top:3px;line-height:1.6;">' + t('avatar_private') + '</div>';
+  html += '</div>';
+  // 预置头像库
+  html += '<div class="q-card" style="padding:14px;">';
+  html += '<div style="font-size:13px;font-weight:700;margin-bottom:10px;">🎨 ' + t('avatar_preset') + '</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;">';
+  for (var i = 0; i < AVATAR_PRESETS.length; i++) {
+    var pr = AVATAR_PRESETS[i];
+    var on = (k.t === 'preset' && k.preset.i === pr.i);
+    html += '<div onclick="avatarChoosePreset(' + pr.i + ')" style="position:relative;aspect-ratio:1/1;cursor:pointer;'
+      + 'border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;'
+      + 'background:' + pr.bg + ';box-shadow:' + (on ? '0 0 0 3px #fff,0 0 0 5px #1a3a5c' : '0 0 0 1px rgba(0,0,0,.05)') + ';'
+      + 'opacity:' + (state.avatarBusy ? '.55' : '1') + ';">' + pr.e + '</div>';
+  }
+  html += '</div></div>';
+  if (av) {
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="avatarReset()">↩️ '
+      + t('avatar_reset') + '</button>';
+  }
+  html += '<input type="file" id="avatarFile" accept="image/*" style="display:none" onchange="avatarOnFile(this)">';
+  html += '</div>';
+  return html;
+}
+function avatarSave(av) {
+  var p = {};
+  for (var kk in (state.profile || {})) {
+    if (Object.prototype.hasOwnProperty.call(state.profile, kk)) p[kk] = state.profile[kk];
+  }
+  if (av) p.avatar = av; else delete p.avatar;
+  saveProfile(p);
+  // 立刻推一次快照，别的设备下次拉榜就能看到；失败也无所谓，后续同步会补。
+  try { syncNow(true); } catch (e) {}
+}
+function avatarChoosePreset(i) {
+  if (state.avatarBusy) return;
+  if (!avatarPresetOf(i)) return;
+  var prev = String((state.profile || {}).avatar || '');
+  avatarSave('p' + i);
+  render();
+  // 原来挂的是照片 → 换预置后那张图就没用了，顺手删掉，别占配额。
+  var pk = avatarKindOf(prev);
+  if (pk.t === 'photo') {
+    var ix = pk.path.lastIndexOf('/');
+    if (ix > 0) avatarCleanOld(pk.path.slice(0, ix), '');
+  }
+}
+function avatarReset() {
+  if (state.avatarBusy) return;
+  var prev = String((state.profile || {}).avatar || '');
+  avatarSave('');
+  render();
+  var pk = avatarKindOf(prev);
+  if (pk.t === 'photo') {
+    var ix = pk.path.lastIndexOf('/');
+    if (ix > 0) avatarCleanOld(pk.path.slice(0, ix), '');
+  }
+}
+function avatarPickFileDialog() {
+  if (state.avatarBusy) return;
+  var el = document.getElementById('avatarFile');
+  if (el) { try { el.value = ''; } catch (e) {} el.click(); }
+}
+function avatarOnFile(inp) {
+  var f = inp && inp.files && inp.files[0];
+  if (!f) return;
+  var key = avatarAkeyNow();
+  if (!key) { alert(t('avatar_need_key')); return; }
+  state.avatarBusy = true;
+  render();
+  avatarPhotoFromFile(f).then(function (out) {
+    return avatarUpload(key, out.blob, out.mime);
+  }).then(function (path) {
+    state.avatarBusy = false;
+    avatarSave('@' + path);
+    try {
+      var ix = path.lastIndexOf('/');
+      avatarCleanOld(path.slice(0, ix), path.slice(ix + 1));
+    } catch (eC) {}
+    render();
+    try { alert(t('avatar_ok')); } catch (eA) {}
+  }, function (err) {
+    state.avatarBusy = false;
+    render();
+    var msg = t('avatar_fail');
+    if (err && (err.code === 'badimg')) msg = t('avatar_bad_img');
+    else if (err && (err.code === 'nobucket')) msg = t('avatar_off');
+    try { alert(msg); } catch (eB) {}
+  });
+}
+// 客户端压缩：居中裁正方形 → 128×128 → WebP（不支持就退 JPEG）→ 超预算降质量重编。
+// 免费版没有图片处理服务，所有缩放必须在浏览器里做完，否则原图 3 MB 直接上传。
+function avatarPhotoFromFile(file) {
+  return new Promise(function (resolve, reject) {
+    if (!file || !/^image\//.test(String(file.type || ''))) {
+      var e0 = new Error('bad image'); e0.code = 'badimg'; return reject(e0);
+    }
+    var objUrl = null;
+    try { objUrl = URL.createObjectURL(file); } catch (e) { var e1 = new Error('bad'); e1.code = 'badimg'; return reject(e1); }
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var side = AVATAR_SIDE;
+        var cv = document.createElement('canvas');
+        cv.width = side; cv.height = side;
+        var ctx = cv.getContext('2d');
+        // cover 裁切：短边对齐，长边居中切掉，人物不会变形
+        var s = Math.min(img.width || side, img.height || side);
+        var sx = ((img.width || side) - s) / 2, sy = ((img.height || side) - s) / 2;
+        ctx.drawImage(img, sx, sy, s, s, 0, 0, side, side);
+        try { URL.revokeObjectURL(objUrl); } catch (eR) {}
+        var mime = 'image/webp';
+        try {
+          var probe = cv.toDataURL('image/webp');
+          if (probe.indexOf('data:image/webp') !== 0) mime = 'image/jpeg';
+        } catch (eP) { mime = 'image/jpeg'; }
+        var q = AVATAR_QUALITY;
+        (function encode() {
+          cv.toBlob(function (blob) {
+            if (!blob) { var e2 = new Error('encode'); e2.code = 'badimg'; return reject(e2); }
+            // WebP 通常 3–6 KB；万一浏览器只给 PNG，降质量也压不下来，就接受
+            if (blob.size > AVATAR_MAX_BYTES && q > 0.5) { q -= 0.14; return encode(); }
+            resolve({ blob: blob, mime: mime });
+          }, mime, q);
+        })();
+      } catch (eI) {
+        try { URL.revokeObjectURL(objUrl); } catch (eR2) {}
+        var e3 = new Error('draw'); e3.code = 'badimg'; reject(e3);
+      }
+    };
+    img.onerror = function () {
+      try { URL.revokeObjectURL(objUrl); } catch (eR3) {}
+      var e4 = new Error('decode'); e4.code = 'badimg'; reject(e4);
+    };
+    img.src = objUrl;
+  });
+}
+// 上传到 avatars 桶：路径 {akey}/{版本}.webp。
+// 文件名带版本而不是覆盖同一个名字 —— 覆盖同名时 CDN 会继续返回旧图（最长一年），
+// 换头像看起来"没生效"；换新名字则 100% 立即生效，旧文件随后删掉。
+function avatarUpload(akey, blob, mime) {
+  var ver = String(Date.now());
+  var path = akey + '/' + ver;
+  var url = SB_BASE + '/storage/v1/object/' + AVATAR_BUCKET + '/' + encodeURIComponent(akey) + '/' + ver + '.webp';
+  return fetchWithTimeout(url, {
+    method: 'POST',
+    headers: {
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + SB_KEY,
+      'Content-Type': mime || 'image/webp',
+      'x-upsert': 'true',
+      'cache-control': 'public, max-age=' + AVATAR_CACHE_CTRL
+    },
+    body: blob
+  }, 25000, 'avatar-up').then(function (r) {
+    if (r && r.ok) return path;
+    var e = new Error('upload ' + (r ? r.status : '?'));
+    // 404 / 400（Bucket not found）说明桶还没建：这是"功能没开通"，不是网络故障
+    if (r && (r.status === 404 || r.status === 400)) e.code = 'nobucket';
+    throw e;
+  });
+}
+// 只保留当前这一张：列出自己的目录，把不是当前版本的全删掉。失败静默（纯清理）。
+function avatarCleanOld(akey, keepVer) {
+  if (!akey) return Promise.resolve();
+  return sbJson('/storage/v1/object/list/' + AVATAR_BUCKET, {
+    method: 'POST',
+    body: JSON.stringify({ prefix: akey + '/', limit: 100, sortBy: { column: 'name', order: 'asc' } })
+  }, 15000, 'avatar-list').then(function (list) {
+    if (!Array.isArray(list) || !list.length) return;
+    var dead = [];
+    for (var i = 0; i < list.length; i++) {
+      var n = String((list[i] && list[i].name) || '');
+      if (!n) continue;
+      if (keepVer && n.indexOf(String(keepVer)) === 0) continue;
+      dead.push(akey + '/' + n);
+    }
+    if (!dead.length) return;
+    return sbFetch('/storage/v1/object/' + AVATAR_BUCKET, {
+      method: 'DELETE',
+      body: JSON.stringify({ prefixes: dead })
+    }, 15000, 'avatar-del').catch(function () {});
+  }).catch(function () {});
+}
 function raceFrameSectionHtml(counts) {
   var en = state.lang === 'en';
   var rows = raceFrameRows(counts);
@@ -10461,20 +10860,29 @@ function raceBoardRowsFrom(list, scope, secFilter, rid) {
     // 很多学员为空，用它会让「（我）」高亮永远匹配不上。
     var it = { key: String((raw && (raw.akey || raw.key || raw.phone)) || ''), race: race, raw: raw };
     it.name = raceRowNameOf(raw, race);
+    // 头像三件套在行构建时算一次：头像存档值、英文名（算首字母用）、已解锁的头像框。
+    // 放到渲染循环里算会让 500 行各自重跑一遍徽章统计，没必要。
+    var _snapA = (raw && raw.snap) || {};
+    it.av = String(_snapA.av || '');
+    it.en = String(_snapA.en || '');
+    it.cn = String(_snapA.cn || '');
+    var _frameA = null;
+    try { _frameA = raceTopFrame(race); } catch (eFA) { _frameA = null; }
+    it.frame = _frameA;
     if (scope === 'best') {
       // 历史最佳：切了板块就看**该板块**的历届最佳（同一个人可以在多张板块榜上
       // 各有一条成绩）；不切板块每人只出现一次，取他各板块里最好的那条。
       var b = raceBestEntryOf(it.race, secFilter);
       if (!b) continue;
       var blB = raceBadgeListOf(it.race, '');
-      rows.push({ key: it.key, name: it.name, dept: raceDeptUnitOfRow(raw, it.race), div: raceDeptOfRow(raw, it.race), section: b.section || secFilter || 'all', correct: b.correct, answered: b.answered || 0, acc: b.acc, ts: b.ts, raw: raw, badges: blB, show: raceDisplayBadgeOf(it.race, blB), tier: raceTierStateOf(it.race).tier });
+      rows.push({ key: it.key, name: it.name, dept: raceDeptUnitOfRow(raw, it.race), div: raceDeptOfRow(raw, it.race), section: b.section || secFilter || 'all', correct: b.correct, answered: b.answered || 0, acc: b.acc, ts: b.ts, raw: raw, badges: blB, show: raceDisplayBadgeOf(it.race, blB), av: it.av, en: it.en, cn: it.cn, frame: it.frame, tier: raceTierStateOf(it.race).tier });
     } else {
       // 总榜 = 本届（可带板块筛选）。带筛选时取**该板块**的最佳成绩，
       // 所以某人做过 A/B/C 三个板块，就会分别出现在三张板块榜上。
       var e = raceRoundEntryOf(it.race, rid, secFilter);
       if (!e) continue;
       var blR = raceBadgeListOf(it.race, '');
-      rows.push({ key: it.key, name: it.name, dept: raceDeptUnitOfRow(raw, it.race), div: raceDeptOfRow(raw, it.race), section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts, raw: raw, badges: blR, show: raceDisplayBadgeOf(it.race, blR), tier: raceTierStateOf(it.race).tier });
+      rows.push({ key: it.key, name: it.name, dept: raceDeptUnitOfRow(raw, it.race), div: raceDeptOfRow(raw, it.race), section: e.section || 'all', correct: e.correct, answered: e.answered, acc: e.acc, ts: e.ts, raw: raw, badges: blR, show: raceDisplayBadgeOf(it.race, blR), av: it.av, en: it.en, cn: it.cn, frame: it.frame, tier: raceTierStateOf(it.race).tier });
     }
   }
   rows.sort(function (a, b) {
@@ -10815,7 +11223,20 @@ function raceTierStripHtml() {
   var frame = null;
   try { frame = raceTopFrame(rec); } catch (e2) { frame = null; }
   var html = '<div class="q-card" style="margin-bottom:10px;display:flex;align-items:center;gap:10px;padding:12px;">';
-  html += raceFrameCircleHtml('<span style="font-size:20px;line-height:1;">' + tier.icon + '</span>', frame, 44);
+  // 圈里装本人头像（不是段位图标）：段位名字就在右边文字里，装同一个图标等于重复。
+  // 头像是自己设的，圈是集齐系列才解锁的，两者叠在一起才叫「专属」。
+  var _pA = state.profile || {};
+  var _keyA = '';
+  try {
+    _keyA = (typeof accountRowKeyForUser === 'function')
+      ? accountRowKeyForUser(String(state.currentUser || ''), _pA) : String(state.currentUser || '');
+  } catch (eKA) { _keyA = String(state.currentUser || ''); }
+  // 点头像 = 去换头像：这是唯一能改头像的入口，不给个角标没人会发现。
+  html += '<div style="position:relative;flex:0 0 auto;cursor:pointer;" onclick="navigate(\'avatar\')">';
+  html += raceAvatarHtml(_pA.cnName || '', _pA.enName || '', _keyA, _pA.avatar || '', frame, 46);
+  html += '<div style="position:absolute;right:-3px;bottom:-3px;width:17px;height:17px;border-radius:50%;'
+    + 'background:#1a3a5c;color:#fff;font-size:9px;line-height:16px;text-align:center;border:1.5px solid #fff;">✎</div>';
+  html += '</div>';
   html += '<div style="flex:1;min-width:0;" onclick="raceTierInfoShow()">';
   html += '<div style="font-size:14px;font-weight:700;">' + tier.icon + ' ' + (en ? tier.en : tier.cn)
     + (frame ? ' <span style="font-size:10.5px;color:#b7791f;">🖼 ' + t('race_frame_on') + '</span>' : '') + '</div>';
@@ -12112,7 +12533,18 @@ function renderRaceBoard() {
       var isMe = myKey && rw.key === myKey;
       var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
       html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#1a3a5c' : '#e2e6ea') + ';border-radius:10px;background:' + (isMe ? '#eef4fa' : '#fff') + ';">';
-      html += '<div style="width:32px;text-align:center;font-weight:700;color:#1a3a5c;">' + medal + '</div>';
+      // 排名不再单独占一列，改成头像左下角的小标：一行省下 32px，名字能多显示两个字。
+      // 前三名用金 / 银 / 铜底 + 奖牌，第 4 名起深蓝底 + 数字。
+      var rankBg = i === 0 ? 'linear-gradient(135deg,#ffd76b,#d4a017)'
+        : i === 1 ? 'linear-gradient(135deg,#d7dde3,#8b98a3)'
+        : i === 2 ? 'linear-gradient(135deg,#d9a06a,#a9662f)' : '#1a3a5c';
+      html += '<div style="position:relative;flex:0 0 auto;">';
+      html += raceAvatarHtml(rw.cn, rw.en, rw.key, rw.av, rw.frame, 38);
+      html += '<div style="position:absolute;left:-3px;bottom:-3px;min-width:18px;height:18px;padding:0 2px;'
+        + 'box-sizing:border-box;border-radius:10px;background:' + rankBg + ';color:#fff;font-weight:700;'
+        + 'font-size:' + (i < 3 ? 11 : 9.5) + 'px;line-height:18px;text-align:center;border:1.5px solid #fff;'
+        + (i < 3 ? '' : 'letter-spacing:-.3px;') + '">' + medal + '</div>';
+      html += '</div>';
       html += '<div style="flex:1;min-width:0;">';
       // 排行榜（个人榜）每行挂一枚徽章：学员自选的展示徽章优先，没选就挂
       // 等级最高的（同级取最近拿到的）；部门聚合行不是个人，不挂。
@@ -13628,6 +14060,9 @@ function pfSave() {
   // any more, but silently dropping the value would rewrite history.
   if (existing.phone) p.phone = existing.phone;
   if (existing._phoneLocked) p._phoneLocked = true;
+  // 头像也是"资料以外的东西"：这个函数每次保存都用新对象覆盖旧 profile，
+  // 不显式搬过来，学员改一次部门头像就没了（而且不会有任何报错）。
+  if (existing.avatar) p.avatar = existing.avatar;
 
   // Move any pre-Stage-9 keys belonging to this employee onto the canonical
   // key, then switch the active user. The employee ID is the identity, so this
@@ -18943,6 +19378,31 @@ function adminOpenStudentDetail(key) {
   try { window.scrollTo(0, 0); } catch (e) {}
 }
 // 从学员详情返回：回到进入前的页面与页签（默认学员列表），并还原滚动位置。
+// 管理员重置某个学员的头像（照片不合规 / 学员要求 / 换人用了旧账号）。
+// 与改名字走同一条可靠链路：pfFix 名单 + 待重试队列 → 快照 + 账户目录双写。
+// 云端一致之后才发布 pfFix，学员设备下次同步（约 90 s）就会退回名字首字母。
+function adminResetStudentAvatar(stuKey) {
+  var en = state.lang === 'en';
+  if (!stuKey) return;
+  if (!confirm(en ? 'Reset this student\'s avatar back to name initials?'
+                  : '把这个学员的头像重置为「名字首字母」？')) return;
+  var fix = { av: '', fv: Date.now() };
+  var fixes = adminLoadPfFixes();
+  var base = fixes.list[stuKey];
+  if (base && typeof base === 'object') { base.av = ''; base.fv = fix.fv; }
+  else fixes.list[stuKey] = fix;
+  adminSavePfFixes(fixes);
+  adminEnqueueFix(stuKey, fix);
+  render();
+  adminFixFlush().then(function (ok) {
+    alert(ok
+      ? (en ? '✅ Avatar reset. The student device applies it within ~90 s.'
+            : '✅ 已重置。学员设备约 90 秒内生效。')
+      : (en ? '⚠️ Queued. Cloud write failed this round — it retries every 30 s.'
+            : '⚠️ 已排队。这一轮云端写入失败，系统每 30 秒自动重试。'));
+    render();
+  });
+}
 function adminBackFromStudent() {
   var y = adminState.studentListScrollY || 0;
   var key = adminState.studentListLastKey || '';
@@ -19045,6 +19505,25 @@ function renderAdminStudents() {
       ? ' <span style="font-weight:400;font-size:13px;color:#8a8f96;">· ' + escapeHtml(snap.cn) + '</span>'
       : '';
     html += '<div class="sync-note">' + statusLine + '</div>';
+    // 头像（2026-11-04）：员工能自己传照片，管理员得看得到、也能一键清回去。
+    // 审核动作落在 pfFix 名单 + 快照/目录三写上，跟改名字同一条链路。
+    var _avA = avatarOfRaw(snap);
+    var _avKd = avatarKindOf(_avA);
+    var _avTxt = _avKd.t === 'photo' ? (en ? 'photo' : '照片')
+      : (_avKd.t === 'preset' ? (en ? 'preset' : '预置头像') : (en ? 'initials' : '首字母'));
+    html += '<div style="display:flex;align-items:center;gap:12px;margin:0 0 10px;padding:10px 12px;'
+      + 'border:1px solid #e2e6ea;border-radius:10px;background:#fafbfc;">';
+    html += raceAvatarHtml(snap.cn || '', snap.en || '', rec.key, _avA, null, 52);
+    html += '<div style="flex:1;min-width:0;font-size:12px;color:#6b7681;line-height:1.5;">'
+      + (en ? 'Avatar: ' : '头像：') + '<b>' + _avTxt + '</b>'
+      + (_avKd.t === 'photo' ? '<div style="font-size:10.5px;color:#9aa3ad;word-break:break-all;">'
+        + escapeHtml(_avKd.path) + '</div>' : '')
+      + '</div>';
+    if (_avA) {
+      html += '<button class="action-btn nav-btn secondary" style="flex:0 0 auto;font-size:12px;" '
+        + 'onclick="adminResetStudentAvatar(\'' + jsKey(rec.key) + '\')">' + (en ? 'Reset' : '重置头像') + '</button>';
+    }
+    html += '</div>';
     html += '<div class="stu-row" style="cursor:default;">';
     html += '<div class="stu-name">' + escapeHtml(stuName) + stuCnTag + '</div>';
     // Stage 9: the account identity is the EMPLOYEE ID, so that is what the
@@ -19453,6 +19932,7 @@ function adminPushFixToSnapshot(stuKey, fix) {
     if (fix.divCn || fix.divEn) { s.div = fix.divCn || s.div || ''; s.divEn = fix.divEn || s.divEn || ''; }
     if (fix.deptCn || fix.deptEn) { s.dept = fix.deptCn || ''; s.deptEn = fix.deptEn || ''; }
     if (fix.clearNv) delete s.needsVerify;
+    if (typeof fix.av === 'string') s.av = fix.av;
     var newKey = (typeof accountKeyFor === 'function' && accountKeyFor(s.cn, s.en, s.emp)) || stuKey;
     var jobs = [];
     if (newKey && newKey !== stuKey) {
@@ -21838,6 +22318,7 @@ function render() {
   switch(state.currentPage) {
     case 'home': app.innerHTML = renderHome(); break;
     case 'profile': app.innerHTML = renderProfile(); break;
+    case 'avatar': app.innerHTML = renderAvatarPage(); break;
     case 'paperSelect': app.innerHTML = renderPaperSelect(state.currentBank); break;
     case 'bank': app.innerHTML = renderBank(state.currentBank); break;
     case 'question': app.innerHTML = renderQuestion(); break;
