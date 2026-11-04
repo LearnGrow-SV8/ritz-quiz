@@ -48,6 +48,9 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .back-btn.wide .back-label, .home-btn .back-label { font-size:13px; font-weight:600; letter-spacing:0; margin-left:3px; }
 .home-btn { background:rgba(255,255,255,0.5); border:1px solid rgba(0,0,0,0.08); color:var(--primary); height:34px; min-width:34px; padding:0 10px; border-radius:17px; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 .app-header.has-back .header-logo, .app-header.has-back h1 { padding-left:4px; }
+/* banner 右下角的"我的头像"：比语言/首页按钮小一号，✎ 角标提示可编辑 */
+.header-avatar { position:relative; flex:0 0 auto; width:38px; height:38px; margin-top:2px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.header-avatar .header-avatar-pen { position:absolute; right:-4px; bottom:-4px; width:15px; height:15px; box-sizing:border-box; border-radius:50%; background:#1a3a5c; color:#fff; font-size:8.5px; line-height:12px; text-align:center; border:1.5px solid #fff; }
 @media (max-width:360px) { .back-btn.wide .back-label, .home-btn .back-label { display:none; } .back-btn.wide { padding:0 10px; } .home-btn { padding:0 8px; } }
 .page { padding:16px; padding-bottom:80px; }
 
@@ -4567,7 +4570,7 @@ var I18N = {
   race_new_season_confirm: {cn:'确认开启新一季赛事？\n\n本届榜单（个人总榜 / 板块榜 / 部门榜 / 打卡天数榜）将清空重新开始；历史最佳榜保留。', en:'Start a new season?\n\nThe current boards (overall / section / department / check-in days) will reset and start from zero; the all-time best board is kept.'},
   race_season_id_label: {cn:'本届 ID', en:'Season ID'},
   race_badge_tap_hint: {cn:'👆 点名字旁的徽章可以查看它的含义', en:'Tap a badge to see what it means'},
-  race_badge_promo: {cn:'在限时答题赛里坚持打卡就能拿到，快来挑战！', en:'Keep checking in during the Speed Quiz to earn it — give it a go!'},
+  race_badge_promo: {cn:'每一枚都靠真本事挣来 —— 条件就写在上面，达到就能解锁，下一个挂上它的就是你！', en:'Every badge is earned, not given — the goal is right above. Hit it and the next one is yours!'},
   race_badge_ok: {cn:'知道了', en:'Got it'},
   race_cloud_fail: {cn:'❌ 没有同步到云端，学员端看不到这场答题赛。请检查网络后重新点「发布」。', en:'❌ Not synced to the cloud — student devices cannot see this race. Check the network, then press Publish again.'},
   race_syncing: {cn:'正在从云端重新同步…', en:'Re-syncing from the cloud…'},
@@ -4722,6 +4725,7 @@ var I18N = {
   avatar_change: {cn:'更换照片', en:'Change photo'},
   avatar_preset: {cn:'或挑一个预置头像', en:'Or pick a preset'},
   avatar_reset: {cn:'恢复默认头像', en:'Reset to initials'},
+  avatar_go_profile: {cn:'编辑个人资料（姓名 / 部门）', en:'Edit my profile (name / department)'},
   // 自选 emoji（2026-11-04）：任意一个 emoji 即成一个头像，零存储、零流量
   avatar_emoji_title: {cn:'✏️ 自己选一个 emoji', en:'✏️ Pick your own emoji'},
   avatar_emoji_ph: {cn:'在这里输入或粘贴一个 emoji', en:'Type or paste an emoji'},
@@ -10398,7 +10402,7 @@ function renderAvatarPage() {
   // 预览：96px 连框一起，所见即所得（榜单上是 38px，这里放大看细节）
   html += '<div class="q-card" style="text-align:center;padding:20px 12px 16px;">';
   html += '<div style="display:flex;justify-content:center;">'
-    + raceAvatarHtml(p.cnName || '', p.enName || '', key, av, frame, 96, raceFrameClickOf(frame, profileDisplayName() || ''))
+    + raceAvatarHtml(p.cnName || '', p.enName || '', key, av, frame, 112)
     + '</div>';
   html += '<div style="font-size:12.5px;color:#5b6670;margin-top:12px;font-weight:600;">'
     + escapeHtml(profileDisplayName() || '') + '</div>';
@@ -10446,6 +10450,10 @@ function renderAvatarPage() {
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="avatarReset()">↩️ '
       + t('avatar_reset') + '</button>';
   }
+  // 顺手给一条去「个人信息」（姓名/部门）的路：banner 头像把人带进来，改完头像
+  // 想顺手改名字的人不用再回首页找入口。
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'profile\')">👤 '
+    + t('avatar_go_profile') + '</button>';
   html += '<input type="file" id="avatarFile" accept="image/*" style="display:none" onchange="avatarOnFile(this)">';
   html += '</div>';
   return html;
@@ -11434,14 +11442,13 @@ function raceTierStripHtml() {
     _keyA = (typeof accountRowKeyForUser === 'function')
       ? accountRowKeyForUser(String(state.currentUser || ''), _pA) : String(state.currentUser || '');
   } catch (eKA) { _keyA = String(state.currentUser || ''); }
-  // 点头像 = 去换头像：这是唯一能改头像的入口，不给个角标没人会发现。
-  // 点头像框（只在外圈那一小圈）= 看这个框是什么、怎么拿；顺手拦住冒泡，别把人带去改头像。
-  var _fClickMe = '';
-  if (frame) _fClickMe = 'event.stopPropagation();' + raceFrameClickOf(frame, profileDisplayName() || '');
+  // 点头像 = 去换头像：整个头像连框一起都是编辑入口 —— 自己的框不用"看说明"，
+  // 框加粗之后外圈占比大，只让中心可点会让人"点了没反应"（2026-11-04 反馈）。
+  // 放大到 56px：这是个人主页的视觉锚点，也是"想换头像"时最先想到的地方。
   html += '<div style="position:relative;flex:0 0 auto;cursor:pointer;" onclick="navigate(\'avatar\')">';
-  html += raceAvatarHtml(_pA.cnName || '', _pA.enName || '', _keyA, _pA.avatar || '', frame, 46, _fClickMe);
-  html += '<div style="position:absolute;right:-3px;bottom:-3px;width:17px;height:17px;border-radius:50%;'
-    + 'background:#1a3a5c;color:#fff;font-size:9px;line-height:16px;text-align:center;border:1.5px solid #fff;">✎</div>';
+  html += raceAvatarHtml(_pA.cnName || '', _pA.enName || '', _keyA, _pA.avatar || '', frame, 56);
+  html += '<div style="position:absolute;right:-3px;bottom:-3px;width:18px;height:18px;border-radius:50%;'
+    + 'background:#1a3a5c;color:#fff;font-size:9.5px;line-height:17px;text-align:center;border:1.5px solid #fff;">✎</div>';
   html += '</div>';
   html += '<div style="flex:1;min-width:0;" onclick="raceTierInfoShow()">';
   html += '<div style="font-size:14px;font-weight:700;">' + tier.icon + ' ' + (en ? tier.en : tier.cn) + '</div>';
@@ -12354,7 +12361,7 @@ function renderRacePlay() {
   var q = r.pool[r.idx];
   if (!q) { return '<div class="page"></div>'; }
   var idx = r.idx;
-  var html = renderAppHeader({ title: '⚡ ' + (r.conf.title || t('race_title')), subtitle: raceSecIcon(r.section || 'all') + ' ' + raceSecName(r.section || 'all'), showBack: true, showHome: false });
+  var html = renderAppHeader({ title: '⚡ ' + (r.conf.title || t('race_title')), subtitle: raceSecIcon(r.section || 'all') + ' ' + raceSecName(r.section || 'all'), showBack: true, showHome: false, avatar: false });
   html += '<div class="page">';
   // 倒计时：上排是「⏱ 60s ｜ 已答 N」，色块贴在这个矩形的下沿，
   // 开局满格、随剩余时间连续缩短、归零即空。raceTick 每 250ms 只改宽度
@@ -12435,7 +12442,7 @@ function renderRaceResult() {
   var acc = r.answered ? Math.round(r.correct / r.answered * 1000) / 10 : 0;
   // 锁定中大横幅会写「时间到」，页头小字就不重复了，只留板块名
   var lockNow = ((state.raceLockUntil || 0) - Date.now() > 0 || !state.raceResultRevealed);
-  var html = renderAppHeader({ title: '🏁 ' + t('race_title'), subtitle: raceSecIcon(r.section || 'all') + ' ' + raceSecName(r.section || 'all') + (lockNow ? '' : ' · ' + (r.endReason === 'timeout' ? t('race_time_up') : t('race_pool_done'))), showBack: false });
+  var html = renderAppHeader({ title: '🏁 ' + t('race_title'), subtitle: raceSecIcon(r.section || 'all') + ' ' + raceSecName(r.section || 'all') + (lockNow ? '' : ' · ' + (r.endReason === 'timeout' ? t('race_time_up') : t('race_pool_done'))), showBack: false, avatar: false });
   html += '<div class="page">';
   // 成绩保护期（2026-11-02 改版）：交卷后先给一张**大成绩单**（时间到横幅 + 姓名 /
   // 板块 / 答题·答对·准确率 三格数据），页面上只有一颗「查看答案解析」按钮 ——
@@ -14438,7 +14445,7 @@ function renderQuestion() {
   var progressPct = Math.round((idx + 1) / total * 100);
   var modeText = isExamMode() ? (state.currentMode === 'formal' ? t('mode_formal') : t('mode_exam')) : (state.currentMode === 'wrong' ? t('mode_wrong') : (state.currentMode === 'review' ? t('mode_review') : t('mode_practice')));
   
-  var html = renderAppHeader({ title: escapeHtml(currentSectionTitle()), subtitle: modeText+' · '+(idx+1)+'/'+total });
+  var html = renderAppHeader({ title: escapeHtml(currentSectionTitle()), subtitle: modeText+' · '+(idx+1)+'/'+total, avatar: false });
   html += '<div class="page">';
   
   html += '<div class="progress-bar"><div class="progress-fill" style="width:'+progressPct+'%"></div></div>';
@@ -14981,7 +14988,7 @@ function renderExamResult() {
   var divLabel = en ? (divObj.en || '') : (divObj.cn || '');
   var deptLabel = en ? (deptObj.en || '') : (deptObj.cn || '');
 
-  var html = renderAppHeader({ title: t('result_title'), subtitle: getBankName(state.currentBank) });
+  var html = renderAppHeader({ title: t('result_title'), subtitle: getBankName(state.currentBank), avatar: false });
   html += '<div class="page"><div class="q-card result-card">';
   if (state.examEndReason) {
     var note = state.examEndReason === 'switch' ? t('exam_switch_note') : t('exam_timeout_note');
@@ -15117,6 +15124,22 @@ function renderAppHeader(opt) {
   }
   if (showHome) {
     html += '<button class="home-btn" onclick="navHome()" title="' + t('nav_home_hint') + '" aria-label="' + t('nav_home') + '">🏠<span class="back-label">' + t('nav_home') + '</span></button>';
+  }
+  // banner 右下角放"我的头像"（语言切换/首页按钮的下面一行）：员工在榜上看到别人
+  // 都有头像，抬眼就能看到自己的 —— 带 ✎ 角标，点一下直达头像编辑页。
+  // 答题/结算/回放等页面传 avatar:false 关掉，避免误触跳走。
+  if (o.avatar !== false && state.currentUser) {
+    var _hp = state.profile || {};
+    var _hk = '';
+    try {
+      _hk = (typeof accountRowKeyForUser === 'function')
+        ? accountRowKeyForUser(String(state.currentUser || ''), _hp) : String(state.currentUser || '');
+    } catch (eHk) { _hk = String(state.currentUser || ''); }
+    var _hf = null;
+    try { _hf = avatarMyFrame(); } catch (eHf) { _hf = null; }
+    html += '<div class="header-avatar" onclick="navigate(\'avatar\')" title="' + t('avatar_title') + '">'
+      + raceAvatarHtml(_hp.cnName || '', _hp.enName || '', _hk, _hp.avatar || '', _hf, 38)
+      + '<span class="header-avatar-pen">✎</span></div>';
   }
   html += '</div></div>';
   return html;
@@ -15517,7 +15540,7 @@ function renderExamReplay() {
   var empNo = (prof.empNo || getProfileEmpNo() || '').trim();
   var dispName = profileDisplayName();
 
-  var html = renderAppHeader({ title: '🎬 ' + (en ? 'Answer Replay' : '答题回放'), subtitle: getBankName(state.currentBank) + (snap.title ? ' · ' + escapeHtml(snap.title) : '') });
+  var html = renderAppHeader({ title: '🎬 ' + (en ? 'Answer Replay' : '答题回放'), subtitle: getBankName(state.currentBank) + (snap.title ? ' · ' + escapeHtml(snap.title) : ''), avatar: false });
   html += '<div class="page">';
 
   html += '<div class="q-card result-card">';
