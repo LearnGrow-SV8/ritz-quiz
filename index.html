@@ -46,9 +46,8 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
    不与居中 logo 抢同一行，头像也不贴 banner 上下边沿。 */
 .app-header .header-right { position:absolute; right:10px; top:11px; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
 .app-header .header-tools { display:flex; align-items:center; gap:6px; }
-.back-btn.wide { width:auto; height:32px; padding:0 11px 0 8px; border-radius:16px; gap:3px; font-size:16px; }
-/* 「返回」跟右侧上排同一水平线（顶栏中线已被标题占据） */
-.app-header .back-btn.wide { top:11px; transform:none; }
+/* 「返回」保持 banner 垂直居中（拇指最容易够到的高度），不跟右上控件抢顶部那一行 */
+.back-btn.wide { width:auto; height:34px; padding:0 12px 0 8px; border-radius:17px; gap:3px; font-size:16px; }
 .back-btn.wide .back-label, .home-btn .back-label { font-size:13px; font-weight:600; letter-spacing:0; margin-left:3px; }
 .home-btn { background:rgba(255,255,255,0.5); border:1px solid rgba(0,0,0,0.08); color:var(--primary); height:31px; min-width:32px; padding:0 8px; border-radius:16px; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 .app-header.has-back .header-logo, .app-header.has-back h1 { padding-left:4px; }
@@ -4732,6 +4731,7 @@ var I18N = {
   avatar_upload: {cn:'上传照片', en:'Upload a photo'},
   avatar_change: {cn:'更换照片', en:'Change photo'},
   avatar_preset: {cn:'或挑一个预置头像', en:'Or pick a preset'},
+  avatar_or: {cn:'或', en:'or'},
   avatar_reset: {cn:'恢复默认头像', en:'Reset to initials'},
   avatar_go_profile: {cn:'编辑个人资料（姓名 / 部门）', en:'Edit my profile (name / department)'},
   // 自选 emoji（2026-11-04）：任意一个 emoji 即成一个头像，零存储、零流量
@@ -10197,7 +10197,7 @@ var AVATAR_PRESETS = [
   { i: 13, e: '🛏️', bg: 'linear-gradient(135deg,#cfe3f7,#4a7fae)' },
   { i: 14, e: '🧺', bg: 'linear-gradient(135deg,#efe6d2,#a89574)' },
   { i: 15, e: '🌸', bg: 'linear-gradient(135deg,#ffd9e6,#d6709a)' },
-  { i: 16, e: '🕯️', bg: 'linear-gradient(135deg,#ffeec2,#c99a3f)' },
+  { i: 16, e: '💻', bg: 'linear-gradient(135deg,#d6e4f2,#55708f)' },
   { i: 17, e: '🏊', bg: 'linear-gradient(135deg,#c8eef2,#2e8fa3)' },
   { i: 18, e: '🧖', bg: 'linear-gradient(135deg,#e2d6f7,#7b5ea8)' },
   { i: 19, e: '💆', bg: 'linear-gradient(135deg,#f3d6ec,#a5568f)' },
@@ -10418,15 +10418,15 @@ function renderAvatarPage() {
     + escapeHtml(profileDisplayName() || '') + '</div>';
   html += '<div style="font-size:11px;color:#9aa3ad;margin-top:3px;">' + srcLabel + '</div>';
   html += '</div>';
-  // 自选 emoji —— 零存储、零流量，想用什么用什么（2026-11-04）
+  // ① 自选 emoji —— 零存储、零流量。没选过头像时预览就是 🦁（品牌狮子），点「用这个」即生效。
+  var peekCh = (k.t === 'emoji') ? k.ch : '🦁';
   html += '<div class="q-card" style="padding:14px;">';
   html += '<div style="font-size:13px;font-weight:700;margin-bottom:10px;">' + t('avatar_emoji_title') + '</div>';
   html += '<div style="display:flex;gap:8px;align-items:center;">';
   html += '<div id="avEmoPeek" style="flex:0 0 auto;width:44px;height:44px;border-radius:50%;display:flex;'
     + 'align-items:center;justify-content:center;font-size:23px;line-height:1;'
-    + 'background:' + (k.t === 'emoji' ? avatarEmojiBg(av) : 'linear-gradient(135deg,#f1f3f5,#e6eaee)') + ';'
-    + 'box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);'
-    + 'opacity:' + (k.t === 'emoji' ? '1' : '.5') + ';">' + (k.t === 'emoji' ? escapeHtml(k.ch) : '🙂') + '</div>';
+    + 'background:' + avatarEmojiBg((k.t === 'emoji') ? av : 'c1f981') + ';'
+    + 'box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);">' + escapeHtml(peekCh) + '</div>';
   html += '<input id="avEmoIn" type="text" maxlength="16" autocomplete="off" autocorrect="off" spellcheck="false" '
     + 'placeholder="' + escapeHtml(t('avatar_emoji_ph')) + '" oninput="avatarEmojiPeek(this)" '
     + 'style="flex:1 1 auto;min-width:0;height:44px;border-radius:10px;border:1px solid #dfe4e9;padding:0 12px;'
@@ -10434,20 +10434,11 @@ function renderAvatarPage() {
   html += '<button class="action-btn primary" style="flex:0 0 auto;height:44px;padding:0 14px;white-space:nowrap;" '
     + 'onclick="avatarChooseEmoji()">' + escapeHtml(t('avatar_emoji_use')) + '</button>';
   html += '</div></div>';
-  // 预置头像库
-  html += '<div class="q-card" style="padding:14px;">';
-  html += '<div style="font-size:13px;font-weight:700;margin-bottom:10px;">🎨 ' + t('avatar_preset') + '</div>';
-  html += '<div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;">';
-  for (var i = 0; i < AVATAR_PRESETS.length; i++) {
-    var pr = AVATAR_PRESETS[i];
-    var on = (k.t === 'preset' && k.preset.i === pr.i);
-    html += '<div onclick="avatarChoosePreset(' + pr.i + ')" style="position:relative;aspect-ratio:1/1;cursor:pointer;'
-      + 'border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;'
-      + 'background:' + pr.bg + ';box-shadow:' + (on ? '0 0 0 3px #fff,0 0 0 5px #1a3a5c' : '0 0 0 1px rgba(0,0,0,.05)') + ';'
-      + 'opacity:' + (state.avatarBusy ? '.55' : '1') + ';">' + pr.e + '</div>';
-  }
-  html += '</div></div>';
-  // 上传照片（说明文字已按需求去掉，只留按钮）
+  // ② 或者上传照片：只要一张图，不填任何资料（客户端重编码，EXIF/定位一律不带）
+  html += '<div style="display:flex;align-items:center;gap:10px;margin:12px 4px;">'
+    + '<div style="flex:1 1 auto;height:1px;background:#e3e8ec;"></div>'
+    + '<div style="font-size:11.5px;color:#9aa3ad;">' + t('avatar_or') + '</div>'
+    + '<div style="flex:1 1 auto;height:1px;background:#e3e8ec;"></div></div>';
   html += '<div class="q-card" style="padding:14px;">';
   if (state.avatarBusy) {
     html += '<div style="text-align:center;color:#8b98a3;font-size:13px;padding:8px 0;">⏳ ' + t('avatar_uploading') + '</div>';
@@ -10494,6 +10485,8 @@ function avatarApply(av) {
   render();
   avatarDropOldPhoto(prev);
 }
+// 旧版「预置头像库」的兼容入口：设置页已不再提供选择器，但历史上选过 p12 的人
+// 仍要靠 avatarPresetOf 渲染出对应 emoji，所以数据和这个函数都留着。
 function avatarChoosePreset(i) {
   if (state.avatarBusy) return;
   if (!avatarPresetOf(i)) return;
@@ -10503,16 +10496,14 @@ function avatarEmojiPeek(inp) {
   var el = document.getElementById('avEmoPeek');
   if (!el) return;
   var ch = avatarEmojiFirst(inp ? inp.value : '');
-  el.textContent = ch || '🙂';
-  el.style.opacity = ch ? '1' : '.5';
-  el.style.background = ch ? avatarEmojiBg('c' + avatarEmojiEncode(ch))
-    : 'linear-gradient(135deg,#f1f3f5,#e6eaee)';
+  // 没输入就回到默认的 🦁（品牌狮子），和进页面时的预览保持一样
+  el.textContent = ch || '🦁';
+  el.style.background = avatarEmojiBg('c' + avatarEmojiEncode(ch || '🦁'));
 }
 function avatarChooseEmoji() {
   if (state.avatarBusy) return;
   var inp = document.getElementById('avEmoIn');
-  var ch = avatarEmojiFirst(inp ? inp.value : '');
-  if (!ch) { try { alert(t('avatar_emoji_bad')); } catch (e) {} return; }
+  var ch = avatarEmojiFirst(inp ? inp.value : '') || '🦁';   // 空着点「用这个」= 直接用默认狮子
   avatarApply('c' + avatarEmojiEncode(ch));
 }
 function avatarReset() {
