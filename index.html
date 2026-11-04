@@ -4709,17 +4709,21 @@ var I18N = {
   avatar_sub: {cn:'排行榜和个人主页都会显示', en:'Shown on the leaderboard and your profile'},
   avatar_src_letter: {cn:'默认 · 名字首字母', en:'Default · name initials'},
   avatar_src_preset: {cn:'预置头像', en:'Preset avatar'},
+  avatar_src_emoji: {cn:'自定义 emoji', en:'Custom emoji'},
   avatar_src_photo: {cn:'已上传照片', en:'Uploaded photo'},
   avatar_upload: {cn:'上传照片', en:'Upload a photo'},
   avatar_change: {cn:'更换照片', en:'Change photo'},
   avatar_preset: {cn:'或挑一个预置头像', en:'Or pick a preset'},
   avatar_reset: {cn:'恢复默认头像', en:'Reset to initials'},
-  avatar_hint: {cn:'照片会先压到 128×128 再上传，服务器只保留当前这一张，换掉旧的自动清掉。', en:'Photos are resized to 128×128 before upload. Only the current one is kept — older files are removed.'},
-  avatar_private: {cn:'照片只在本平台内展示，可随时恢复成首字母。', en:'Your photo is only shown inside this app and can be reset to initials any time.'},
+  // 自选 emoji（2026-11-04）：任意一个 emoji 即成一个头像，零存储、零流量
+  avatar_emoji_title: {cn:'✏️ 自己选一个 emoji', en:'✏️ Pick your own emoji'},
+  avatar_emoji_ph: {cn:'在这里输入或粘贴一个 emoji', en:'Type or paste an emoji'},
+  avatar_emoji_use: {cn:'用这个', en:'Use it'},
+  avatar_emoji_bad: {cn:'请只输入一个 emoji（如 😀 🦁 ⚽）', en:'Please enter a single emoji (e.g. 😀 🦁 ⚽)'},
   avatar_uploading: {cn:'正在上传…', en:'Uploading…'},
   avatar_ok: {cn:'头像已更新', en:'Avatar updated'},
   avatar_fail: {cn:'上传失败，请稍后再试', en:'Upload failed, please try again'},
-  avatar_off: {cn:'照片上传暂未开通，可先挑一个预置头像', en:'Photo upload is not enabled yet — pick a preset for now'},
+  avatar_off: {cn:'照片上传还没开通（需管理员在后台开一次），先用 emoji 或预置头像吧', en:'Photo upload is not enabled yet (an admin needs to switch it on once). Use an emoji or preset for now.'},
   avatar_bad_img: {cn:'这张图片读不出来，换一张试试', en:'That image could not be read, try another'},
   avatar_need_key: {cn:'请先补完个人资料再设置头像', en:'Finish your profile before setting an avatar'},
   // C1 参与保底（2026-11-03）
@@ -10028,12 +10032,15 @@ function raceBadgeProgressOf(rec, def) {
 // ===== 专属头像框（2026-11-04）=====
 // 集齐同一系列（同一大类）的全部徽章 → 解锁该系列的专属头像框。
 // 纯荣誉、只在本平台内展示（个人主页段位圆圈 + 徽章页预览），不产生任何费用。
+// ring 用 conic 渐变（有金属高光，不是一条死色），glow 用来做外发光。
+// 2026-11-04：原来只是 2–3px 的渐变描边，缩到榜单尺寸几乎看不出区别 —— 现在改成
+// 「粗环 + 内白描边 + 彩色外发光」三层，36px 上也能一眼认出有没有框。
 var RACE_FRAME_STYLE = {
-  checkin: { ring: 'linear-gradient(135deg,#ffd27f,#ff7a00,#ffe08a)', bg: '#fff8e1' },
-  speed:   { ring: 'linear-gradient(135deg,#ffe08a,#e06c00,#ffd27f)', bg: '#fff5e6' },
-  study:   { ring: 'linear-gradient(135deg,#bfe3ff,#6b46c1,#a8d8ff)', bg: '#f2f6ff' },
-  special: { ring: 'linear-gradient(135deg,#b2dfdb,#303f9f,#c5cae9)', bg: '#eef2ff' },
-  theme:   { ring: 'linear-gradient(135deg,#ffb347,#c2410c,#ffd7a8)', bg: '#fff3e6' }
+  checkin: { ring: 'conic-gradient(from 200deg,#fff6d8,#ffb300,#ff7a00,#ffd54f,#fff6d8)', bg: '#fffaf0', glow: 'rgba(255,150,20,.75)' },
+  speed:   { ring: 'conic-gradient(from 20deg,#fff0c2,#ffc107,#e06c00,#ffe082,#fff0c2)', bg: '#fff8ec', glow: 'rgba(230,120,0,.72)' },
+  study:   { ring: 'conic-gradient(from 150deg,#e3f2ff,#4a86e8,#6b46c1,#a8d8ff,#e3f2ff)', bg: '#f4f8ff', glow: 'rgba(90,110,220,.68)' },
+  special: { ring: 'conic-gradient(from 110deg,#d7f7f0,#26a69a,#303f9f,#b2dfdb,#d7f7f0)', bg: '#f1fbf8', glow: 'rgba(40,140,150,.66)' },
+  theme:   { ring: 'conic-gradient(from 260deg,#fff0d6,#ffb347,#c2410c,#ffd7a8,#fff0d6)', bg: '#fff4e8', glow: 'rgba(200,90,20,.70)' }
 };
 function raceFrameRows(counts) {
   var defs = raceBadgeDefs(false), rows = [], i, j;
@@ -10054,14 +10061,25 @@ function raceTopFrame(rec) {
   for (var i = 0; i < rows.length; i++) if (rows[i].unlocked) return rows[i];
   return null;
 }
-// 头像框预览：外圈渐变环 + 内圈底 + 内容（图标 / 首字母）
+// 头像框预览：外圈金属渐变环 + 内侧白描边 + 彩色外发光 + 内容（图标 / 头像）
+// 尺寸越小环按比例仍保留 3px 起步，否则 36–38px 的行上看不出"有没有框"。
 function raceFrameCircleHtml(inner, frame, size) {
-  var sz = size || 40, pad = Math.max(2, Math.round(sz / 13));
-  var ring = frame ? frame.style.ring : 'linear-gradient(135deg,#eceff1,#dfe3e6)';
+  var sz = size || 40, on = !!frame;
+  var pad = on ? Math.max(3, Math.round(sz * 0.085)) : Math.max(2, Math.round(sz / 15));
+  var ring = on ? frame.style.ring : 'linear-gradient(135deg,#eef1f4,#dce2e7)';
+  var glow = on ? (frame.style.glow || 'rgba(200,140,0,.6)') : '';
+  // 外层第一道白圈把渐变环"托"出来，第二道彩色发光让框在浅色榜单上跳出来
+  var box = on
+    ? 'box-shadow:0 0 0 ' + Math.max(1, Math.round(sz / 40)) + 'px rgba(255,255,255,.98),'
+      + '0 0 0 ' + Math.max(2, Math.round(sz / 16)) + 'px ' + glow + ','
+      + '0 0 ' + Math.round(sz / 5) + 'px ' + glow + ';'
+    : 'box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);';
   return '<div style="flex:0 0 auto;width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;padding:' + pad + 'px;'
-    + 'box-sizing:border-box;background:' + ring + ';' + (frame ? 'box-shadow:0 2px 8px rgba(200,140,0,.32);' : '') + '">'
-    + '<div style="width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;'
-    + 'font-size:' + Math.round(sz * 0.45) + 'px;line-height:1;background:' + (frame ? frame.style.bg : '#fff') + ';">'
+    + 'box-sizing:border-box;background:' + ring + ';' + box + '">'
+    + '<div style="position:relative;width:100%;height:100%;border-radius:50%;display:flex;align-items:center;'
+    + 'justify-content:center;overflow:hidden;'
+    + 'font-size:' + Math.round(sz * 0.45) + 'px;line-height:1;background:' + (on ? frame.style.bg : '#fff') + ';'
+    + 'box-shadow:inset 0 0 0 ' + (on ? '1.5' : '1') + 'px rgba(255,255,255,.92);">'
     + inner + '</div></div>';
 }
 // ===== 学员头像（2026-11-04）=====
@@ -10157,7 +10175,81 @@ function avatarKindOf(av) {
     var pr = avatarPresetOf(parseInt(m[1], 10));
     if (pr) return { t: 'preset', preset: pr };
   }
+  // 自选 emoji：'c1f600' / 'c1f9d1-200d-1f373'（码点十六进制，纯 ASCII，几十字节）
+  if (s.charAt(0) === 'c') {
+    var ch = avatarEmojiDecode(s);
+    if (ch) return { t: 'emoji', ch: ch };
+  }
   return { t: 'letter' };
+}
+// 自选 emoji 编码：只用作存档，不参与任何排序 / 比较，所以直接用码点最省事。
+// 用码点而不是存 emoji 原文 —— record 里一个 emoji 的 UTF-8 是 4–10 字节，
+// 但更麻烦的是不同设备规范化不一致，存码点永远只认一个值。
+function avatarEmojiEncode(ch) {
+  var out = [], s = String(ch || '');
+  for (var i = 0; i < s.length; i++) {
+    var cp = s.codePointAt(i);
+    if (cp > 0xffff) i++;
+    out.push(cp.toString(16));
+    if (out.length > 8) break;          // 上限：再长的就是贴了一整句话
+  }
+  return out.join('-');
+}
+function avatarEmojiDecode(av) {
+  var s = String(av || ''), out = '';
+  if (s.charAt(0) !== 'c') return '';
+  var parts = s.slice(1).split('-');
+  if (!parts.length || parts.length > 8) return '';
+  for (var i = 0; i < parts.length; i++) {
+    if (!/^[0-9a-f]{1,6}$/.test(parts[i])) return '';
+    var cp = parseInt(parts[i], 16);
+    if (!(cp > 0x20 && cp <= 0x10ffff)) return '';
+    try { out += String.fromCodePoint(cp); } catch (e) { return ''; }
+  }
+  return out;
+}
+// 判定一个码点是不是 emoji 的起点。不用 \p{Extended_Pictographic}
+// —— 老版 iOS Safari 不支持 unicode property 正则，会整段抛错。
+function avatarIsEmojiCp(cp) {
+  if (cp >= 0x1f000 && cp <= 0x1faff) return true;   // 主要 emoji 区（🦁🍳🧑‍🍳…）
+  if (cp >= 0x1f1e6 && cp <= 0x1f1ff) return true;   // 区域旗
+  if (cp >= 0x2600 && cp <= 0x27bf) return true;     // ☕ ✅ ✨ ➡
+  if (cp >= 0x2b00 && cp <= 0x2bff) return true;     // ⭐ ⬛ ⭕
+  if (cp >= 0x2190 && cp <= 0x21ff) return true;     // ↕ ↩
+  if (cp >= 0x2300 && cp <= 0x23ff) return true;     // ⌚ ⏰ ⏳
+  if (cp >= 0x25aa && cp <= 0x25fe) return true;     // ▪ ◀ ◻
+  if (cp >= 0x2934 && cp <= 0x2935) return true;
+  if (cp === 0x203c || cp === 0x2049 || cp === 0x2122 || cp === 0x2139) return true;
+  if (cp === 0x00a9 || cp === 0x00ae) return true;
+  if (cp === 0x3030 || cp === 0x303d || cp === 0x3297 || cp === 0x3299) return true;
+  return false;
+}
+// 从用户输入里取"第一个 emoji"。手打十个表情的、粘贴一整句带文字的，都只取一个。
+function avatarEmojiFirst(raw) {
+  var s = String(raw || '').replace(/[\s\uFEFF]/g, '');
+  if (!s) return '';
+  var out = '', started = false;
+  for (var i = 0; i < s.length; i++) {
+    var cp = s.codePointAt(i);
+    if (cp > 0xffff) i++;
+    var ch = String.fromCodePoint(cp);
+    if (!started) {
+      // 起点：emoji 码点，或「数字/#/* + 变体选择符」组成的键帽（1️⃣ #️⃣）
+      var nx = s.charAt(i + 1);
+      if (avatarIsEmojiCp(cp) || (/[0-9#*]/.test(ch) && (nx === '\uFE0F' || nx === '\u20E3'))) {
+        out = ch; started = true;
+      }
+      continue;
+    }
+    if (cp === 0xfe0f || cp === 0xfe0e || cp === 0x200d || cp === 0x20e3) { out += ch; continue; }
+    if (out.charCodeAt(out.length - 1) === 0x200d) { out += ch; continue; }   // ZWJ 链继续
+    break;
+  }
+  return out;
+}
+function avatarEmojiBg(av) {
+  var h = avatarHueOf('emoji:' + String(av || ''));
+  return 'linear-gradient(135deg,hsl(' + h + ',72%,92%),hsl(' + ((h + 30) % 360) + ',62%,84%))';
 }
 function avatarPhotoUrl(path) {
   if (!path) return '';
@@ -10182,7 +10274,12 @@ function avatarInnerHtml(cn, en, key, av, size) {
   if (k.t === 'preset') {
     return '<span style="display:flex;width:100%;height:100%;border-radius:50%;align-items:center;'
       + 'justify-content:center;font-size:' + (sz * 0.5).toFixed(1) + 'px;line-height:1;'
-      + 'background:' + k.preset.bg + ';">' + k.preset.e + '</span>';
+      + 'background:' + k.preset.bg + ';">' + escapeHtml(k.preset.e) + '</span>';
+  }
+  if (k.t === 'emoji') {
+    return '<span style="display:flex;width:100%;height:100%;border-radius:50%;align-items:center;'
+      + 'justify-content:center;font-size:' + (sz * 0.52).toFixed(1) + 'px;line-height:1;'
+      + 'background:' + avatarEmojiBg(av) + ';">' + escapeHtml(k.ch) + '</span>';
   }
   var l2 = avatarInitialsOf(cn, en, key);
   var fs2 = (l2.length > 1 ? sz * 0.34 : sz * 0.44);
@@ -10221,7 +10318,9 @@ function renderAvatarPage() {
   var frame = null;
   try { frame = avatarMyFrame(); } catch (e) { frame = null; }
   var key = avatarAkeyNow();
-  var srcLabel = k.t === 'photo' ? t('avatar_src_photo') : (k.t === 'preset' ? t('avatar_src_preset') : t('avatar_src_letter'));
+  var srcLabel = k.t === 'photo' ? t('avatar_src_photo')
+    : k.t === 'preset' ? t('avatar_src_preset')
+    : k.t === 'emoji' ? t('avatar_src_emoji') : t('avatar_src_letter');
   var html = renderAppHeader({ title: '🖼 ' + t('avatar_title'), subtitle: t('avatar_sub') });
   html += '<div class="page">';
   // 预览：96px 连框一起，所见即所得（榜单上是 38px，这里放大看细节）
@@ -10233,17 +10332,22 @@ function renderAvatarPage() {
   html += '<div style="font-size:11px;color:#9aa3ad;margin-top:3px;">' + srcLabel
     + (frame ? ' · 🖼 ' + t('race_frame_on') : '') + '</div>';
   html += '</div>';
-  // 上传照片
+  // 自选 emoji —— 零存储、零流量，想用什么用什么（2026-11-04）
   html += '<div class="q-card" style="padding:14px;">';
-  if (state.avatarBusy) {
-    html += '<div style="text-align:center;color:#8b98a3;font-size:13px;padding:8px 0;">⏳ ' + t('avatar_uploading') + '</div>';
-  } else {
-    html += '<button class="action-btn primary" style="width:100%;" onclick="avatarPickFileDialog()">📷 '
-      + (k.t === 'photo' ? t('avatar_change') : t('avatar_upload')) + '</button>';
-  }
-  html += '<div style="font-size:11px;color:#9aa3ad;margin-top:9px;line-height:1.6;">' + t('avatar_hint') + '</div>';
-  html += '<div style="font-size:11px;color:#b0b8bf;margin-top:3px;line-height:1.6;">' + t('avatar_private') + '</div>';
-  html += '</div>';
+  html += '<div style="font-size:13px;font-weight:700;margin-bottom:10px;">' + t('avatar_emoji_title') + '</div>';
+  html += '<div style="display:flex;gap:8px;align-items:center;">';
+  html += '<div id="avEmoPeek" style="flex:0 0 auto;width:44px;height:44px;border-radius:50%;display:flex;'
+    + 'align-items:center;justify-content:center;font-size:23px;line-height:1;'
+    + 'background:' + (k.t === 'emoji' ? avatarEmojiBg(av) : 'linear-gradient(135deg,#f1f3f5,#e6eaee)') + ';'
+    + 'box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);'
+    + 'opacity:' + (k.t === 'emoji' ? '1' : '.5') + ';">' + (k.t === 'emoji' ? escapeHtml(k.ch) : '🙂') + '</div>';
+  html += '<input id="avEmoIn" type="text" maxlength="16" autocomplete="off" autocorrect="off" spellcheck="false" '
+    + 'placeholder="' + escapeHtml(t('avatar_emoji_ph')) + '" oninput="avatarEmojiPeek(this)" '
+    + 'style="flex:1 1 auto;min-width:0;height:44px;border-radius:10px;border:1px solid #dfe4e9;padding:0 12px;'
+    + 'font-size:16px;line-height:44px;background:#fbfcfd;box-sizing:border-box;">';
+  html += '<button class="action-btn primary" style="flex:0 0 auto;height:44px;padding:0 14px;white-space:nowrap;" '
+    + 'onclick="avatarChooseEmoji()">' + escapeHtml(t('avatar_emoji_use')) + '</button>';
+  html += '</div></div>';
   // 预置头像库
   html += '<div class="q-card" style="padding:14px;">';
   html += '<div style="font-size:13px;font-weight:700;margin-bottom:10px;">🎨 ' + t('avatar_preset') + '</div>';
@@ -10257,6 +10361,15 @@ function renderAvatarPage() {
       + 'opacity:' + (state.avatarBusy ? '.55' : '1') + ';">' + pr.e + '</div>';
   }
   html += '</div></div>';
+  // 上传照片（说明文字已按需求去掉，只留按钮）
+  html += '<div class="q-card" style="padding:14px;">';
+  if (state.avatarBusy) {
+    html += '<div style="text-align:center;color:#8b98a3;font-size:13px;padding:8px 0;">⏳ ' + t('avatar_uploading') + '</div>';
+  } else {
+    html += '<button class="action-btn secondary" style="width:100%;" onclick="avatarPickFileDialog()">📷 '
+      + (k.t === 'photo' ? t('avatar_change') : t('avatar_upload')) + '</button>';
+  }
+  html += '</div>';
   if (av) {
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="avatarReset()">↩️ '
       + t('avatar_reset') + '</button>';
@@ -10275,29 +10388,46 @@ function avatarSave(av) {
   // 立刻推一次快照，别的设备下次拉榜就能看到；失败也无所谓，后续同步会补。
   try { syncNow(true); } catch (e) {}
 }
+// 上次挂的是照片 → 换成别的之后那张图就没用了，顺手删掉，别占配额。
+function avatarDropOldPhoto(prev) {
+  try {
+    var pk = avatarKindOf(prev);
+    if (pk.t !== 'photo') return;
+    var ix = pk.path.lastIndexOf('/');
+    if (ix > 0) avatarCleanOld(pk.path.slice(0, ix), '');
+  } catch (e) {}
+}
+// 所有"换头像"共用的落地点：写存档 → 重绘 → 清理旧照片
+function avatarApply(av) {
+  var prev = String((state.profile || {}).avatar || '');
+  avatarSave(av);
+  render();
+  avatarDropOldPhoto(prev);
+}
 function avatarChoosePreset(i) {
   if (state.avatarBusy) return;
   if (!avatarPresetOf(i)) return;
-  var prev = String((state.profile || {}).avatar || '');
-  avatarSave('p' + i);
-  render();
-  // 原来挂的是照片 → 换预置后那张图就没用了，顺手删掉，别占配额。
-  var pk = avatarKindOf(prev);
-  if (pk.t === 'photo') {
-    var ix = pk.path.lastIndexOf('/');
-    if (ix > 0) avatarCleanOld(pk.path.slice(0, ix), '');
-  }
+  avatarApply('p' + i);
+}
+function avatarEmojiPeek(inp) {
+  var el = document.getElementById('avEmoPeek');
+  if (!el) return;
+  var ch = avatarEmojiFirst(inp ? inp.value : '');
+  el.textContent = ch || '🙂';
+  el.style.opacity = ch ? '1' : '.5';
+  el.style.background = ch ? avatarEmojiBg('c' + avatarEmojiEncode(ch))
+    : 'linear-gradient(135deg,#f1f3f5,#e6eaee)';
+}
+function avatarChooseEmoji() {
+  if (state.avatarBusy) return;
+  var inp = document.getElementById('avEmoIn');
+  var ch = avatarEmojiFirst(inp ? inp.value : '');
+  if (!ch) { try { alert(t('avatar_emoji_bad')); } catch (e) {} return; }
+  avatarApply('c' + avatarEmojiEncode(ch));
 }
 function avatarReset() {
   if (state.avatarBusy) return;
-  var prev = String((state.profile || {}).avatar || '');
-  avatarSave('');
-  render();
-  var pk = avatarKindOf(prev);
-  if (pk.t === 'photo') {
-    var ix = pk.path.lastIndexOf('/');
-    if (ix > 0) avatarCleanOld(pk.path.slice(0, ix), '');
-  }
+  avatarApply('');
 }
 function avatarPickFileDialog() {
   if (state.avatarBusy) return;
