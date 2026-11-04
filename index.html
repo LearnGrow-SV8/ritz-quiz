@@ -4449,7 +4449,7 @@ var I18N = {
   race_board_dept: {cn:'部门排名', en:'Departments'},
   race_board_best: {cn:'历史最佳榜', en:'All-time best'},
   race_board_hint_period: {cn:'统计范围：本届赛事全酒店参赛的绅士淑女。每人只计一条最佳成绩，即其所答板块中得分最高的一次。', en:'Scope: all Ladies and Gentlemen taking part in this round. Each person counts one best result only \u2014 the highest score among the sections they answered.'},
-  race_board_hint_dept: {cn:'统计范围：本届赛事全酒店参赛部门。各部门按参赛人员的答对题数合计排名，答对题数相同时比较准确率，每人只计一条最佳成绩。<br>层级口径：后线部门以部门为单位排名；餐饮部、厨房部、房务部以所属下一级部门（如客房部、大堂吧）为单位排名。', en:'Scope: all departments taking part in this round. Departments are ranked by total correct answers, then by accuracy, counting one best result per person.<br>Ranking level: Heart-of-House Divisions are ranked as whole departments; Food & Beverage, Culinary and Rooms are ranked by their next-level departments (e.g. Housekeeping, Onyx).'},
+  race_board_hint_dept: {cn:'统计范围：本届赛事全酒店参赛部门。各部门按参赛人员的答对题数合计排名，答对题数相同时比较准确率，每人只计一条最佳成绩。<br>层级口径：后线部门以一级部门（如市场销售部、财务部）为单位排名；厨房部、餐饮部、房务部以二级部门（如客房部、大堂吧）为单位排名。', en:'Scope: all departments taking part in this round. Departments are ranked by total correct answers, then by accuracy, counting one best result per person.<br>Ranking level: Heart-of-House divisions are ranked as first-level departments (e.g. Sales & Marketing, Finance); Culinary, F&B and Rooms are ranked by their second-level departments (e.g. Housekeeping, Onyx).'},
   race_board_hint_best: {cn:'统计范围：全酒店所有绅士淑女的历史个人最佳成绩，按板块分别记录，发布新一届赛事后不清空。同一人可在多个板块分别参与排名。', en:'Scope: the all-time personal best of all Ladies and Gentlemen in the hotel, recorded per section and kept when a new round is published. The same person can be ranked in more than one section.'},
   race_board_best_mix_hint: {cn:'每人显示其在各板块中的最佳成绩；如需查看某一板块的单项排名，请选择上方的对应板块。', en:'One best result per person across sections; to view a single section, select that section above.'},
   race_board_best_sec_hint: {cn:'本榜为历届个人最佳排名，仅统计本板块；同一人在其他板块的最佳成绩计入对应板块榜单。', en:'All-time personal best in this section only; a person\u2019s best results in other sections appear on those sections\u2019 boards.'},
@@ -4633,10 +4633,6 @@ var I18N = {
   race_board_days_hint_dept_avg: {cn:'统计范围：本届赛事期间各部门参赛人员的打卡天数，按部门人均天数排名（部门总打卡天数 ÷ 参赛人数）。同一天完成多次挑战只计一天。', en:'Scope: check-in days per department, ranked by average per participant (total check-in days ÷ participants). Multiple challenges on the same day count as one day.'},
   race_board_days_hint_best: {cn:'统计范围：全酒店所有绅士淑女的历届累计打卡天数，同一天只计一天，发布新一届赛事后不清空。', en:'Scope: all-time check-in days of every lady and gentleman, one day counted once, never reset when a new round is published.'},
   // 竞速闯关徽章（2026-11-04）：赛季结束后统一结算，赛中只在榜单上报当前名次
-  race_rank_cur: {cn:'你在这个板块当前排第 {r} 名', en:'You are currently #{r} in this section'},
-  race_rank_settle: {cn:'竞速闯关徽章在赛事结束后统一发放：最终仍留在前 {n} 名才拿得到。', en:'Section badges are granted once the round ends \u2014 only those still in the top {n} keep them.'},
-  race_rank_settle_out: {cn:'前 {n} 名才有徽章，再加把劲。', en:'The top {n} earn the badge \u2014 keep pushing.'},
-  race_rank_settle_done: {cn:'本届已结算，达标徽章已发放并永久保留。', en:'This round is settled; earned badges are now permanent.'},
   race_dept_days_mode: {cn:'部门打卡天数统计口径', en:'Department check-in ranking'},
   race_dept_days_sum: {cn:'部门总打卡天数（鼓励更多人参与）', en:'Total days (rewards headcount)'},
   race_dept_days_avg: {cn:'部门人均打卡天数（大小部门更公平）', en:'Average per person (fairer across sizes)'},
@@ -9563,8 +9559,8 @@ function raceBadgeEarnedAnywhere(rec, id) {
 //   ② 技术：这套架构做不到"收回"—— 徽章存在本机记录里、跟着快照同步，多设备合并是并集，
 //      另一台设备的旧快照会把已收回的徽章原样复活，撤销结果不可信；
 //   ③ 体验：给了又收回，比一开始不给更伤人。
-//   所以赛中只在榜单页公示「你当前第 N 名」（raceMyRankOnSection），赛季结束、榜单最终定稿后
-//   才落徽章，落下去就只加不减，永久保留。
+//   所以赛中不公示也不发（用户 2026-11-04：徽章解释不必占榜单页——规则在徽章墙 / 管理端说明里都有），
+//   赛季结束、榜单最终定稿后才落徽章，落下去就只加不减，永久保留。
 //
 // 「已结束」怎么判：当前届看 raceStateOf（ended / closed）；**非当前届一律算已结束**
 // —— 榜单里还能看到往届成绩，往届结算不需要等谁点开关，谁先打开 App 谁先把自己那笔结掉。
@@ -9585,68 +9581,6 @@ function raceMyRankOnSection(rows, sec, rid, myKey) {
   var list = raceBoardRowsFrom(rows, 'period', sec || '', rid), i;
   for (i = 0; i < list.length; i++) if (list[i] && list[i].key === key) return i + 1;
   return 0;
-}
-// 这张榜上该用哪枚「名次徽章」（全酒店总榜 → 全题库大师；板块榜 → 对应板块的征服者）。
-// 老目录里那枚没绑板块的 dept_top 继续兜底：任一板块榜都能挂。
-function raceRankBadgeForSec(sec) {
-  var defs = raceBadgeDefs(false), i, d, s;
-  if (!sec) {
-    for (i = 0; i < defs.length; i++) if (defs[i].rule === BADGE_RULE_ALL_TOP) return defs[i];
-    return null;
-  }
-  for (i = 0; i < defs.length; i++) {
-    d = defs[i];
-    if (d.rule !== BADGE_RULE_DEPT_TOP) continue;
-    if (badgeSecValid(d.sec) === sec) return d;
-  }
-  for (i = 0; i < defs.length; i++) {
-    d = defs[i];
-    if (d.rule === BADGE_RULE_DEPT_TOP && !badgeSecValid(d.sec)) return d;
-  }
-  return null;
-}
-// 榜单顶部的「离徽章还差多远」小卡：赛季进行中才显示（结束后徽章已结算，榜单上直接看得到）。
-// 不发徽章但也不藏着规则 —— 让学员知道"现在第几、要第几"，比一句干巴巴的说明有用。
-function raceRankBadgeCardHtml(def, sec) {
-  if (!def) return '';
-  var en = state.lang === 'en';
-  var conf = raceConfOf() || {};
-  var st = raceStateOf(conf);
-  if (!conf.id || (st !== 'open' && st !== 'ended' && st !== 'closed')) return '';
-  var need = Math.max(1, def.n || RACE_TOP_BADGE_RANK);
-  var rk = raceMyRankOnSection(state.raceBoard, sec, conf.id, '');
-  var inTop = rk > 0 && rk <= need;
-  var settled = st !== 'open';
-  var got = false;
-  if (settled) {
-    try {
-      var rr = raceLocalRecord();
-      got = !!(rr && rr.badges && rr.badges[conf.id] && rr.badges[conf.id][def.id]);
-    } catch (eG) { got = false; }
-  }
-  var foot = got ? t('race_rank_settle_done')
-    : (settled ? t('race_rank_settle_out').replace('{n}', String(need))
-               : t('race_rank_settle').replace('{n}', String(need)));
-  var html = '<div class="q-card" style="padding:10px 12px;margin-bottom:10px;background:' + (got ? '#eefaf1' : '#fffdf5')
-    + ';border:1px solid ' + (got ? '#a5d6a7' : '#f0d9a8') + ';">';
-  html += '<div style="display:flex;align-items:center;gap:8px;">';
-  html += '<div style="flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
-    + 'font-size:15px;background:linear-gradient(135deg,' + (def.c1 || '#ffd08a') + ',' + (def.c2 || '#e06c00') + ');">'
-    + (def.icon || '🎯') + '</div>';
-  html += '<div style="flex:1;min-width:0;">';
-  html += '<div style="font-size:13px;font-weight:700;color:' + (got ? '#1e7a3c' : '#8a5a00') + ';">'
-    + escapeHtml(en ? (def.en || def.cn) : (def.cn || def.en)) + '</div>';
-  html += '<div style="font-size:11.5px;color:#9a7b4f;margin-top:1px;">'
-    + escapeHtml(rk > 0 ? t('race_rank_cur').replace('{r}', String(rk)) : t('race_rank_settle_out').replace('{n}', String(need)))
-    + '</div>';
-  html += '</div>';
-  html += '<div style="flex:0 0 auto;font-size:18px;font-weight:800;color:' + (got ? '#1e7a3c' : (inTop ? '#1e7a3c' : '#b7791f')) + ';">'
-    + (rk > 0 ? '#' + rk : '—') + '</div>';
-  html += '</div>';
-  html += '<div style="font-size:11px;color:' + (got ? '#2e7d32' : '#b7791f') + ';line-height:1.5;margin-top:6px;'
-    + 'border-top:1px dashed ' + (got ? '#a5d6a7' : '#f0d9a8') + ';padding-top:6px;">' + escapeHtml(foot) + '</div>';
-  html += '</div>';
-  return html;
 }
 // 榜单数据里出现过的届次 id（真实届次 = 'r' + 时间戳；老的月度键丢掉）
 function raceRidsInRows(rows) {
@@ -11626,9 +11560,8 @@ function renderRaceCalendar() {
   html += '<div style="flex:1;"><div style="font-size:22px;font-weight:700;color:#1a3a5c;">' + raceDaysCount(rec, '') + '</div>'
     + '<div style="font-size:11px;color:#888;">' + lblAllDays + '</div></div>';
   html += '</div>';
-  // 日历 ⇄ 排行榜 互相直达：看完自己的打卡记录，顺手就能看自己在榜上第几。
-  // 两个页面都放了这颗按钮，位置也统一放在页面上部（不用滚到底才找得到）。
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;padding:9px;font-size:13px;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
+  // 日历 ⇄ 排行榜 互相直达：入口放页面**最底部**（2026-11-04 从顶部挪下来，
+  // 顶部统计卡才是日历的主角，跳转属于次级动作，不值得占一整行首屏）。
   // 「我的徽章」墙挪到日历格子 + 当天明细之后：选中的日期内容夹在日历和徽章中间，
   // 复盘完答题清单往下顺手就是徽章，不用先滚过一长排徽章才看到日历。
 
@@ -11778,6 +11711,8 @@ function renderRaceCalendar() {
   html += '<button class="action-btn primary" style="width:100%;margin-top:2px;" onclick="navigate(\'race\')">⚡ ' + t('race_cal_retry') + '</button>';
   // 复盘语境：温故知新后再刷一遍产品知识题库
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">🔁 ' + t('race_study_cal') + '</button>';
+  // 看完自己的打卡记录，顺手就能看自己在榜上第几（页面底部，次级入口）
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
   html += '</div>';
   return html;
 }
@@ -12054,8 +11989,8 @@ function renderRaceBoard() {
       else if (state.currentPage === 'raceBoard' && _quiet && rows && rows.length) render();
     });
   }
-  // 排行榜 ⇄ 打卡日历 互相直达（日历页顶部也有回排行榜的按钮）
-  html += '<button class="action-btn secondary" style="width:100%;margin-bottom:8px;padding:9px;font-size:13px;" onclick="raceOpenCalendar()">' + t('race_cal_open') + '</button>';
+  // 排行榜 ⇄ 打卡日历 互相直达：入口放页面**最底部**（2026-11-04 从顶部挪下来，
+  // 榜单本身才是主角；底部在「去刷题」按钮之后，与日历页的摆放互为镜像）。
   html += '<div style="display:flex;gap:8px;margin-bottom:6px;">';
   html += '<button class="action-btn ' + (tab === 'period' ? 'primary' : 'secondary') + '" style="flex:1;min-width:0;white-space:nowrap;font-size:13px;" onclick="state.raceBoardTab=\'period\';render()">' + t('race_board_all') + '</button>';
   html += '<button class="action-btn ' + (tab === 'dept' ? 'primary' : 'secondary') + '" style="flex:1;min-width:0;white-space:nowrap;font-size:13px;" onclick="state.raceBoardTab=\'dept\';render()">' + t('race_board_dept') + '</button>';
@@ -12090,11 +12025,6 @@ function renderRaceBoard() {
                  + t(tab === 'dept' ? 'race_board_dept_mix_hint' : (tab === 'best' ? 'race_board_best_mix_hint' : 'race_board_mix_hint'))))))
     + '</div>';
   var isDeptTab = tab === 'dept';
-  // 竞速闯关徽章：赛中不发，但把「现在第几 / 要第几」摆在榜头上，规则才算真的公布出去了。
-  // 只在「全酒店榜 + 分数口径」下显示（打卡天数榜 / 部门 / 历史 / 进步榜都不是同一口径）。
-  if (tab === 'period' && !isMoverTab && !isDays && Array.isArray(state.raceBoard) && state.raceBoard.length) {
-    html += raceRankBadgeCardHtml(raceRankBadgeForSec(sec), sec);
-  }
   var rows = isMoverTab ? raceMoverRows()
     : isDays
     ? (isDeptTab ? raceDeptDaysRows(raceDeptDaysMode()) : raceDaysRows(tab))
@@ -12229,6 +12159,8 @@ function renderRaceBoard() {
   // 名人堂暂时下架（2026-11-04）：入口先收起来，页面与数据都保留，随时能再开。
   // 看完榜单顺手去产品知识题库刷题（榜单语境：想上榜就先刷题）
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">📚 ' + t('race_study_board') + '</button>';
+  // 去看自己的打卡日历（页面底部，次级入口）
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenCalendar()">' + t('race_cal_open') + '</button>';
   html += '</div>';
   return html;
 }
