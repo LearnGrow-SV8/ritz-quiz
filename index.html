@@ -4731,11 +4731,11 @@ var I18N = {
   avatar_upload: {cn:'上传照片', en:'Upload a photo'},
   avatar_change: {cn:'更换照片', en:'Change photo'},
   avatar_preset: {cn:'或挑一个预置头像', en:'Or pick a preset'},
-  avatar_or: {cn:'或', en:'or'},
   avatar_reset: {cn:'恢复默认头像', en:'Reset to initials'},
   avatar_go_profile: {cn:'编辑个人资料（姓名 / 部门）', en:'Edit my profile (name / department)'},
   // 自选 emoji（2026-11-04）：任意一个 emoji 即成一个头像，零存储、零流量
-  avatar_emoji_title: {cn:'✏️ 自己选一个 emoji', en:'✏️ Pick your own emoji'},
+  avatar_emoji_title: {cn:'✏️ 自选一个 emoji 作为头像', en:'✏️ Pick an emoji as your avatar'},
+  avatar_photo_title: {cn:'📷 或上传照片作为头像', en:'📷 Or upload a photo as your avatar'},
   avatar_emoji_ph: {cn:'在这里输入或粘贴一个 emoji', en:'Type or paste an emoji'},
   avatar_emoji_use: {cn:'用这个', en:'Use it'},
   avatar_emoji_bad: {cn:'请只输入一个 emoji（如 😀 🦁 ⚽）', en:'Please enter a single emoji (e.g. 😀 🦁 ⚽)'},
@@ -10397,6 +10397,17 @@ function avatarMyFrame() {
   try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
   try { return raceTopFrame(rec); } catch (e2) { return null; }
 }
+// "上传到云端"图标：内联 SVG 而不是 emoji —— ☁️ 在多数系统里只是个天气云，
+// 一眼看不出是上传；这里画的是云 + 向上的箭头（描边色跟随按钮文字色）。
+function avatarCloudIcon(sz) {
+  var s = sz || 18;
+  return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    + ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"'
+    + ' style="flex:0 0 auto;display:block;">'
+    + '<path d="M7 16.6h9.4a3.4 3.4 0 0 0 .6-6.76 5.4 5.4 0 0 0-10.42-1.28A3.7 3.7 0 0 0 7 16.6z"/>'
+    + '<path d="M12 15.2V8.9"/><path d="M9.3 11.6 12 8.9l2.7 2.7"/>'
+    + '</svg>';
+}
 function renderAvatarPage() {
   var p = state.profile || {};
   var av = String(p.avatar || '');
@@ -10434,17 +10445,15 @@ function renderAvatarPage() {
   html += '<button class="action-btn primary" style="flex:0 0 auto;height:44px;padding:0 14px;white-space:nowrap;" '
     + 'onclick="avatarChooseEmoji()">' + escapeHtml(t('avatar_emoji_use')) + '</button>';
   html += '</div></div>';
-  // ② 或者上传照片：只要一张图，不填任何资料（客户端重编码，EXIF/定位一律不带）
-  html += '<div style="display:flex;align-items:center;gap:10px;margin:12px 4px;">'
-    + '<div style="flex:1 1 auto;height:1px;background:#e3e8ec;"></div>'
-    + '<div style="font-size:11.5px;color:#9aa3ad;">' + t('avatar_or') + '</div>'
-    + '<div style="flex:1 1 auto;height:1px;background:#e3e8ec;"></div></div>';
-  html += '<div class="q-card" style="padding:14px;">';
+  // ② 上传照片：和上面那张**同款卡片**并列（不再画分隔线），标题自己说明"或"
+  html += '<div class="q-card" style="padding:14px;margin-top:10px;">';
+  html += '<div style="font-size:13px;font-weight:700;margin-bottom:10px;">' + t('avatar_photo_title') + '</div>';
   if (state.avatarBusy) {
     html += '<div style="text-align:center;color:#8b98a3;font-size:13px;padding:8px 0;">⏳ ' + t('avatar_uploading') + '</div>';
   } else {
-    html += '<button class="action-btn secondary" style="width:100%;" onclick="avatarPickFileDialog()">📷 '
-      + (k.t === 'photo' ? t('avatar_change') : t('avatar_upload')) + '</button>';
+    html += '<button class="action-btn secondary" style="width:100%;display:flex;align-items:center;'
+      + 'justify-content:center;gap:7px;" onclick="avatarPickFileDialog()">'
+      + avatarCloudIcon(18) + '<span>' + (k.t === 'photo' ? t('avatar_change') : t('avatar_upload')) + '</span></button>';
   }
   html += '</div>';
   if (av) {
