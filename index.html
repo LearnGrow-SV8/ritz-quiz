@@ -265,6 +265,37 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .empty-state .icon { font-size:48px; margin-bottom:12px; }
 .empty-state p { font-size:14px; }
 
+/* ===== 错题本 / 复习中心：层级样式（2026-11-05 二版）=====
+   原来三排筛选都长一个样（全是 .chip 圆角胶囊），学员分不清哪排是"大类"、
+   哪排是"细项"。这里把三种控件做成三种**明显不同**的样子：
+     ① .rv-seg    分段控件：一个大灰底 + 白色选中块 —— 页面级页签
+     ② .rv-pill   小药丸：白底细边、字号更小 —— 二级细项（知识点）
+     ③ .rv-srcrow 带圆点的整行 —— 单选列表（练习来源 / 来源筛选）
+   颜色仍然只用品牌的黑 + 回忆蓝，不加新色。 */
+.rv-seg { display:flex; background:#EDF2F9; border-radius:10px; padding:3px; gap:3px; margin-bottom:8px; }
+.rv-seg .seg { flex:1; text-align:center; padding:9px 4px; font-size:12.5px; font-weight:600; color:#5a6473; border-radius:8px; cursor:pointer; transition:all .15s; }
+.rv-seg .seg.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 4px rgba(14,37,69,.14); }
+.rv-seg .seg.active .n { color:#1a1a1a; }
+.rv-seg .seg .n { font-size:11px; opacity:.7; font-weight:600; }
+.rv-pill { display:inline-block; border:1px solid var(--border); background:#fff; border-radius:999px; padding:5px 12px; font-size:12px; color:#4a5568; cursor:pointer; transition:all .15s; }
+.rv-pill.active { background:#1a1a1a; color:#fff; border-color:#1a1a1a; }
+.rv-pill:active { transform:scale(.96); }
+.rv-srcrow { display:flex; align-items:flex-start; gap:10px; padding:11px 12px; border:1.5px solid var(--border); border-radius:10px; margin-bottom:8px; cursor:pointer; background:#fff; }
+.rv-srcrow.active { border-color:#1a1a1a; background:#F5F9FE; }
+.rv-srcrow .radio { width:16px; height:16px; border-radius:50%; border:1.5px solid #c2ccd8; flex:0 0 auto; margin-top:3px; }
+.rv-srcrow.active .radio { border-color:#1a1a1a; background:#1a1a1a; box-shadow:inset 0 0 0 3px #fff; }
+.rv-srcrow .t { font-size:13px; font-weight:600; color:#1a1a1a; }
+.rv-srcrow .d { font-size:11.5px; color:#7b8896; line-height:1.55; margin-top:2px; }
+.rv-label { font-size:11.5px; font-weight:700; color:#7b8896; letter-spacing:.5px; margin:0 0 6px; }
+.rv-note { background:#F7F9FC; border-left:3px solid var(--primary-light); border-radius:0 8px 8px 0; padding:8px 10px; font-size:11.5px; color:#5a6473; line-height:1.65; }
+.rv-picker { display:flex; align-items:center; gap:8px; padding:11px 12px; background:#fff; border:1px solid var(--border); border-radius:10px; cursor:pointer; margin-bottom:10px; }
+.rv-picker .cur { flex:1; min-width:0; font-size:13px; font-weight:600; color:#1a1a1a; }
+.rv-picker .caret { font-size:11px; color:#9aa6b3; }
+.rv-sec { background:#fff; border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; margin-bottom:12px; }
+.rv-sec-title { font-size:14px; font-weight:800; color:#1a1a1a; display:flex; align-items:center; gap:6px; }
+.rv-count { display:inline-flex; align-items:baseline; gap:4px; }
+.rv-count b { font-size:27px; font-weight:800; color:#1a1a1a; line-height:1; }
+
 /* Paper version selection */
 .paper-tag { display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:600; margin-right:6px; vertical-align:middle; }
 .paper-tag.all { background:var(--primary-soft); color:var(--primary); }
@@ -4157,7 +4188,13 @@ const state = {
   wrongTab: 'due',    // 错题本页签：'due' 到期 | 'all' 全部 | 'tag' 按知识点
   wrongTag: '',       // 错题本按知识点筛选的当前标签
   wrongSec: '',       // 错题本按章节筛选的当前章节
-  paperSource: 'due', // 专项卷弹层里选中的来源
+  // 来源筛选（2026-11-05 二版）：'' 全部 | 'manual' | 'day21' | 'tsos' | 'race'
+  // 领导问"能不能只复习某一场的错题"，这个字段就是答案：进错题本时带上是哪一套，
+  // 页面上会显示"只看「21 天培训」"，随时可以展开改回全部。
+  wrongSrc: '',
+  wrongSrcOpen: false, // 来源下拉是否展开
+  paperOpen: false,   // 组卷面板是否在错题本页内展开（不再跳新页面）
+  paperSource: 'all', // 组卷面板里选中的来源（默认"全部错题"，最好懂）
   paperCount: 10,     // 专项卷题量档位
   practiceProgress: {},
   requireProfile: false, // true after login when profile is incomplete; forces profile page
@@ -5033,68 +5070,103 @@ var I18N = {
   // Misc
   answered: {cn:'已答', en:'Answered'},
   // ===== 复习闭环（2026-11-05）=====
-  rv_due_now: {cn:'现在可复习', en:'Due now'},
-  rv_due_in: {cn:'{n} 天后再练', en:'in {n}d'},
-  rv_due_n: {cn:'{n} 道到期', en:'{n} due'},
-  rv_tab_due: {cn:'到期', en:'Due'},
-  rv_tab_all: {cn:'全部', en:'All'},
+  // 文案铁律（领导明确要求）：学员端每一句话都要能被"读一遍就懂"，不写管理端目的、
+  // 不写"所以没法一局刷掉"这类内部考虑。术语统一：到期 → "该复习"；移出错题本 →
+  // "移出"；掌握阶 → "第几阶"。数字后面统一用"道"，不用"题"混着。
+  rv_due_now: {cn:'该复习了', en:'Due now'},
+  rv_due_in: {cn:'{n} 天后再复习', en:'in {n}d'},
+  rv_due_n: {cn:'{n} 道该复习', en:'{n} due'},
+  rv_tab_due: {cn:'该复习', en:'Due'},
+  rv_tab_all: {cn:'全部错题', en:'All'},
   rv_tab_tag: {cn:'按知识点', en:'By topic'},
-  rv_no_due: {cn:'今天没有到期错题，明天再来巩固一次。', en:'Nothing due today — come back tomorrow.'},
-  rv_stage_hint: {cn:'答错进本后，每次答对升一阶，阶间隔 1 → 3 → 7 天；走完三阶再答对一次就移出错题本。同一天里重复答对不算，所以没法一局刷掉。', en:'Each correct answer moves it up one stage (gaps of 1 → 3 → 7 days). After the third stage, one more correct answer retires it. Same-day repeats do not count.'},
-  rv_stage_n: {cn:'已过 {n}/{m} 阶', en:'Stage {n}/{m}'},
-  rv_stage_last: {cn:' · 下次答对即毕业', en:' · one more to retire'},
-  rv_wrong_times: {cn:'错过 {n} 次', en:'{n} misses'},
-  rv_redo_due: {cn:'重做到期（{n}）', en:'Review due ({n})'},
+  rv_tab_due_hint: {cn:'下面这些题的复习时间到了，现在练记得最牢。', en:'These are due for review — the best time to practise them.'},
+  rv_tab_all_hint: {cn:'你在练习、模拟考、答题赛里做错过的全部题目。', en:'Every question you have got wrong in practice, exams and races.'},
+  rv_tab_tag_hint: {cn:'选一个知识点，看看这一类你错了几道。', en:'Pick a topic to see how many you got wrong in it.'},
+  rv_no_due: {cn:'现在没有该复习的题。等它到期再来，效果最好。', en:'Nothing due right now — come back when it is.'},
+  rv_stage_hint: {cn:'规则：每答对一次，下次复习的间隔就拉长一次（1 天 → 3 天 → 7 天）。三阶都通过后再答对一次，这道题就移出错题本。', en:'How it works: each correct answer stretches the next review gap (1 → 3 → 7 days). One more correct answer after the third stage and the question leaves your mistake book.'},
+  rv_stage_n: {cn:'已通过 {n}/{m} 阶', en:'Stage {n}/{m}'},
+  rv_stage_last: {cn:' · 再答对一次就移出', en:' · one more to clear'},
+  rv_wrong_times: {cn:'您做错过 {n} 次', en:'{n} wrong attempts'},
+  rv_redo_due: {cn:'复习这 {n} 道题', en:'Review these {n}'},
+  rv_redo_due_sub: {cn:'复习时间已到，现在练记得最牢。', en:'Due now — the best time to review.'},
   rv_redo_one: {cn:'重做', en:'Redo'},
-  rv_make_paper: {cn:'生成专项卷', en:'Build a paper'},
-  rv_paper_title: {cn:'专项练习卷', en:'Focused practice'},
-  rv_paper_sub: {cn:'只刷你该刷的', en:'Only what you need'},
-  rv_pick_src: {cn:'选择练习来源', en:'Pick a source'},
-  rv_pick_count: {cn:'选择题量', en:'Pick a length'},
-  rv_src_due: {cn:'到期错题', en:'Due mistakes'},
+  rv_make_paper: {cn:'自己组一份练习卷', en:'Build my own paper'},
+  rv_make_paper_sub: {cn:'按全部错题、知识点或收藏题组卷，题量自己定。', en:'Build a paper from all mistakes, a topic, or your saved questions.'},
+  rv_paper_title: {cn:'组一份练习卷', en:'Build a paper'},
+  rv_paper_sub: {cn:'选批次和题量，练完给小结', en:'Pick a batch and a length'},
+  rv_pick_src: {cn:'① 要练哪一批题', en:'1 · Which questions'},
+  rv_pick_count: {cn:'② 这次练几道', en:'2 · How many'},
+  rv_src_due: {cn:'该复习的错题', en:'Due for review'},
+  rv_src_due_d: {cn:'复习时间已到、现在练最有效的题', en:'Due now — most effective to review'},
   rv_src_all: {cn:'全部错题', en:'All mistakes'},
+  rv_src_all_d: {cn:'练习、考试、答题赛里做错过的全部题目', en:'Every question you have got wrong so far'},
   rv_src_fav: {cn:'收藏题', en:'Saved questions'},
-  rv_src_tag: {cn:'薄弱知识点', en:'Weak topics'},
+  rv_src_fav_d: {cn:'你自己收藏的题（不一定是错题）', en:'Questions you saved yourself'},
+  rv_src_tag: {cn:'薄弱知识点', en:'Weak topic'},
+  rv_src_tag_d: {cn:'挑一个错得最多的知识点，只练这一类', en:'Pick the topic you miss most'},
   rv_all_q: {cn:'全部', en:'All'},
-  rv_paper_take: {cn:'本轮会出这么多题，答完给掌握阶小结', en:'Questions in this paper — you get a stage summary at the end'},
+  rv_paper_take: {cn:'道题', en:'questions'},
+  rv_paper_take_note: {cn:'答完会给你本轮小结：答对几道、几道进入下一阶、几道移出错题本。', en:'Afterwards you get a summary: correct count, stages advanced, and questions cleared.'},
+  rv_paper_none: {cn:'这一批暂时没有题，换一个批次试试。', en:'Nothing in this batch — try another.'},
   rv_start_paper: {cn:'开始练习', en:'Start practising'},
   rv_paper_done: {cn:'本轮完成', en:'Paper complete'},
   rv_paper_line: {cn:'答对 {ok} / {total} 道', en:'{ok} / {total} correct'},
-  rv_paper_gain: {cn:'推进 {p} 道掌握阶 · 毕业 {g} 道', en:'{p} advanced · {g} graduated'},
+  rv_paper_gain: {cn:'{p} 道进入下一阶 · {g} 道移出错题本', en:'{p} advanced · {g} cleared'},
   rv_back_wrong: {cn:'返回错题本', en:'Back to mistakes'},
   rv_again_paper: {cn:'再组一卷', en:'New paper'},
-  rv_strip: {cn:'答对 {ok} · 推进 {p} · 毕业 {g}', en:'{ok} ok · {p} advanced · {g} graduated'},
-  rv_no_weak: {cn:'还没有足够数据判断薄弱知识点，先练几道再来。', en:'Not enough data yet — practise a few questions first.'},
+  rv_strip: {cn:'答对 {ok} · 推进 {p} · 移出 {g}', en:'{ok} ok · {p} advanced · {g} cleared'},
+  rv_no_weak: {cn:'还没有足够数据找出薄弱知识点，先练几道再来。', en:'Not enough data yet — practise a few questions first.'},
   rv_task_title: {cn:'今日复习', en:"Today's review"},
   rv_task_desc: {cn:'近一周你的错题集中在「{tag}」，点开复习巩固一下。', en:'Most of your recent mistakes are in "{tag}" — review them now.'},
   rv_task_go: {cn:'开始复习', en:'Start review'},
-  rv_task_go_n: {cn:'开始复习（{n} 题）', en:'Start review ({n})'},
+  rv_task_go_n: {cn:'开始复习（{n} 道）', en:'Start review ({n})'},
   rv_redo_all: {cn:'重做错题', en:'Review mistakes'},
-  rv_hub_title: {cn:'复习中心', en:'Review centre'},
-  rv_hub_browse: {cn:'错题本', en:'Mistake book'},
-  rv_hub_mastery_short: {cn:'掌握度', en:'Mastery'},
-  rv_hub_sub: {cn:'已掌握 {g} 题 · 错题本 {n} 题', en:'{g} mastered · {n} on the list'},
+  rv_hub_title: {cn:'我的错题', en:'My mistakes'},
+  rv_hub_browse: {cn:'打开错题本', en:'Open'},
+  rv_hub_mastery_short: {cn:'错题掌握度', en:'Mistake mastery'},
+  rv_hub_sub: {cn:'已掌握错题 {g} 道 · 错题本共 {n} 道', en:'{g} cleared · {n} in the book'},
   rv_hub_empty: {cn:'还没有错题记录，去练几道新题吧。', en:'No mistakes yet — start practising.'},
-  rv_hub_due: {cn:'今天到期 {n} 题', en:'{n} due today'},
+  rv_hub_due: {cn:'今天该复习 {n} 道', en:'{n} due today'},
   rv_hub_hint: {cn:'近一周你的错题集中在「{tag}」，点开复习巩固一下。', en:'Most of your recent mistakes are in "{tag}" — review them now.'},
-  rv_hub_none: {cn:'本周没有到期错题，可以自己挑几道错题巩固，或者练几道新题。', en:'Nothing due this week — review any mistake you like, or practise new questions.'},
-  rv_stat_line: {cn:'累计复习 {rv} 次 · 推进 {p} 阶 · 已掌握 {g} 题', en:'{rv} reviews · {p} stages advanced · {g} mastered'},
-  race_goto_wrong: {cn:'去错题本复习（本次答错已收录）', en:'Review mistakes (this run saved)'},
+  rv_hub_none: {cn:'本周没有该复习的错题，可以自己挑几道错题巩固，或者练几道新题。', en:'Nothing due this week — review any mistake you like, or practise new questions.'},
+  rv_stat_line: {cn:'累计复习 {rv} 次 · 推进 {p} 阶 · 已掌握 {g} 道', en:'{rv} reviews · {p} stages advanced · {g} cleared'},
+  race_goto_wrong: {cn:'去错题本复习（本场答错已收录）', en:'Review mistakes (this run saved)'},
+  race_goto_wrong_run: {cn:'只复习本场答错的 {n} 道', en:'Review only this run\'s {n} misses'},
+  exam_goto_wrong_run: {cn:'只复习本卷答错的 {n} 道', en:'Review only this paper\'s {n} misses'},
   rv_book_ledger: {cn:'我的学习记录', en:'My learning record'},
   rv_hub_go_practice: {cn:'去练新题', en:'Practise questions'},
-  rv_week_line: {cn:'近 7 天推进 {p} 阶 · 毕业 {g} 题', en:'Last 7 days: {p} advanced · {g} graduated'},
+  rv_week_line: {cn:'近 7 天：推进 {p} 阶 · 移出 {g} 道', en:'Last 7 days: {p} advanced · {g} cleared'},
   rv_task_skip: {cn:'换一个', en:'Swap'},
-  rv_task_done: {cn:'本周已完成', en:'Done this week'},
-  rv_task_none: {cn:'暂无到期错题，去练几道新题保持手感。', en:'Nothing due — practise some new questions.'},
+  rv_task_done: {cn:'本周任务已完成', en:'Done this week'},
+  rv_task_none: {cn:'暂无该复习的错题，去练几道新题保持手感。', en:'Nothing due — try some new questions.'},
   rv_task_progress: {cn:'已完成 {d}/{n}', en:'{d}/{n} done'},
-  rv_mastery: {cn:'错题掌握率', en:'Mistake mastery'},
-  rv_mastery_sub: {cn:'已掌握 {g} 题 · 错题本还剩 {n} 题', en:'{g} mastered · {n} still on the list'},
+  rv_mastery: {cn:'错题掌握度', en:'Mistake mastery'},
+  rv_mastery_sub: {cn:'已掌握错题 {g} 道 · 错题本还剩 {n} 道', en:'{g} cleared · {n} left'},
   rv_mastery_none: {cn:'还没有错题记录，先练几道再来。', en:'No mistakes recorded yet.'},
   rv_cal_redo_run: {cn:'重做本次错题（{n}）', en:'Redo this run\'s mistakes ({n})'},
   rv_cal_redo_one: {cn:'重做', en:'Redo'},
   rv_cal_redo_none: {cn:'本次全对，没有需要重做的题', en:'No mistakes in this run'},
   rv_fav_paper: {cn:'刷一遍收藏题', en:'Practise saved questions'},
   rv_fav_mastered: {cn:'已掌握，可移出', en:'Mastered — can remove'},
+  // 来源筛选（领导问"能不能只复习某一场的错题"）
+  rv_src_label: {cn:'看哪一批错题', en:'Which questions'},
+  rv_src_all_opt: {cn:'全部来源', en:'All sources'},
+  rv_src_all_opt_d: {cn:'产品知识 + 21 天培训 + 三步法 + 答题赛', en:'Product knowledge + 21-day + 3 steps + races'},
+  rv_src_bank_manual: {cn:'酒店产品知识', en:'Product knowledge'},
+  rv_src_bank_manual_d: {cn:'酒店产品知识手册里的题（含模拟考）', en:'From the product knowledge handbook'},
+  rv_src_bank_day21: {cn:'21 天培训', en:'21-day training'},
+  rv_src_bank_day21_d: {cn:'21 天培训考试的题', en:'21-day training exam questions'},
+  rv_src_bank_tsos: {cn:'优质服务三步骤', en:'Service steps'},
+  rv_src_bank_tsos_d: {cn:'优质服务三步骤考核的题', en:'Service-steps assessment questions'},
+  rv_paper_unit: {cn:'道', en:''},
+  rv_pick_tag: {cn:'选一个知识点', en:'Pick a topic'},
+  rv_book_sub: {cn:'共 {n} 道 · 该复习 {d} 道', en:'{n} total · {d} due'},
+  rv_src_race: {cn:'答题赛', en:'Quiz races'},
+  rv_src_race_d: {cn:'在限时答题赛里做错的题', en:'Missed in timed races'},
+  rv_src_clear: {cn:'看全部来源', en:'Show all sources'},
+  rv_src_on: {cn:'只看「{x}」', en:'Only "{x}"'},
+  rv_paper_open_hint: {cn:'下面就是组卷设置', en:'Set up your paper below'},
+  rv_paper_close: {cn:'收起，看错题清单', en:'Close'},
 };
 
 function t(key) {
@@ -13163,7 +13235,15 @@ function renderRaceResult() {
   }
   html += '<button class="action-btn primary" style="width:100%;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
   // 赛后第一件事应该是"把错的弄懂"，而不是马上再打一局。入口给在成绩单下面。
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'wrongAll\')">❌ ' + t('race_goto_wrong') + '</button>';
+  // 成绩单下面第一步该是"把错的弄懂"。本场有错题就直接给"只复习本场这几道"，
+  // 不用先跳进错题本再从一堆题里找（领导提的"针对某场考试"）。本场全对则退到整本。
+  var _runN = raceRunWrongIds().length;
+  if (_runN > 0) {
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceRedoRun()">❌ '
+      + escapeHtml(t('race_goto_wrong_run').replace('{n}', String(_runN))) + '</button>';
+  } else {
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'wrongAll\')">📕 ' + t('race_goto_wrong') + '</button>';
+  }
   if (raceStateOf(raceConfOf()) === 'open') {
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceAgain()">⚡ ' + t('race_again') + '</button>';
   }
@@ -14987,7 +15067,7 @@ function renderBank(bank) {
   // 2026-11-05 改：统一进「错题本汇总页」。旧的按试卷分列表页（wrongList）既不带
   // 掌握阶，也看不到别的试卷的错题，员工从不同入口进去看到的东西不一样，容易以为
   // 错题丢了。所有入口现在都指向同一个页。
-  html += '<button class="menu-btn" onclick="navigate(\'wrongAll\')"><span class="icon">❌</span><div class="label">'+t('menu_wrong')+'</div><div class="count">'+wrongCount+t('questions_unit')+'</div></button>';
+  html += '<button class="menu-btn" onclick="wrongOpenSrc(\''+bank+'\')"><span class="icon">❌</span><div class="label">'+t('menu_wrong')+'</div><div class="count">'+wrongBankCount(bank)+t('questions_unit')+'</div></button>';
   html += '<button class="menu-btn" onclick="startSearch(\''+bank+'\')"><span class="icon">🔍</span><div class="label">'+t('menu_search')+'</div><div class="count">'+t('kw_search')+'</div></button>';
   html += '<button class="menu-btn" onclick="openExamHistory()"><span class="icon">📊</span><div class="label">'+t('result_history')+'</div><div class="count">'+(state.lang==='en'?'Past attempts':'历史成绩')+'</div></button>';
   if (isPaperBank(bank)) {
@@ -15632,6 +15712,7 @@ function wrongRowsAll(opts) {
       var e = wrongNormEntry(book[qid]);
       if (!e) continue;
       if (opts.section && (e.section || '') !== opts.section) continue;
+      if (opts.src && (e.src || '') !== opts.src) continue;
       if (opts.dueOnly && !wrongIsDue(e, now)) continue;
       if (opts.tag) {
         var q0 = findByIdAllBanks(qid);
@@ -15884,13 +15965,16 @@ function reviewTaskDone() {
 // + 进度 + 一个按钮）。整张卡都能点进错题本，按钮只是把动作做得更明确。
 function reviewRingHtml(pct, size, label) {
   var p = Math.max(0, Math.min(100, pct || 0));
-  var inner = size - 12;
+  var inner = size - 10;
+  // "错题掌握度"五个字要塞进环心：小环用 7px、大环用 8.5px，再加 nowrap，
+  // 否则字被裁成"错题掌握…"，员工不知道这个百分比是什么（实测截过）。
+  var lfs = size >= 60 ? 8.5 : 7;
   var html = '<div style="position:relative;width:' + size + 'px;height:' + size + 'px;flex:0 0 auto;">';
   html += '<div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(#27ae60 0% ' + p + '%, #e6ebef ' + p + '% 100%);"></div>';
-  html += '<div style="position:absolute;left:6px;top:6px;width:' + inner + 'px;height:' + inner + 'px;border-radius:50%;background:#fff;'
+  html += '<div style="position:absolute;left:5px;top:5px;width:' + inner + 'px;height:' + inner + 'px;border-radius:50%;background:#fff;'
     + 'display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;">'
     + '<div style="font-size:15px;font-weight:800;color:#1a3a5c;">' + (pct < 0 ? '—' : p + '%') + '</div>'
-    + '<div style="font-size:9px;color:#8a97a4;">' + label + '</div></div>';
+    + '<div style="font-size:' + lfs + 'px;color:#8a97a4;white-space:nowrap;">' + label + '</div></div>';
   html += '</div>';
   return html;
 }
@@ -15906,52 +15990,67 @@ function reviewHubCardHtml() {
   var pct = hasTask ? Math.round(done / task.target * 100) : 0;
   var finished = hasTask && done >= task.target;
 
-  var html = '<div class="bank-card" style="padding:0;overflow:hidden;cursor:pointer;border-color:#dbe3ea;" onclick="navigate(\'wrongAll\')">';
-  // 上半：身份感（掌握度环 + 错题本存量）
-  html += '<div style="display:flex;align-items:center;gap:14px;padding:14px 14px 12px;">';
-  html += reviewRingHtml(m, 66, t('rv_hub_mastery_short'));
+  // 两张卡，不是一个卡里的上下两段（2026-11-05 二版）。
+  // 上次把"看我的错题"和"今天该练什么"塞进同一张卡，虽然少了一个卡片框，但员工
+  // 读起来仍是一坨：不知道上半是身份、下半是任务。这次直接拆成两张：
+  //   卡 A：白底、黑左边 —— 状态与入口（我的错题 / 掌握度）
+  //   卡 B：浅蓝底、蓝左边 —— 今天要做的事（任务 + 进度 + 按钮）
+  // 颜色、边框方向、背景都不一样，扫一眼就知道是两件事。
+  var html = '';
+
+  // ---------- 卡 A：我的错题（状态 + 入口） ----------
+  html += '<div class="bank-card" style="padding:0;overflow:hidden;cursor:pointer;border-left-color:#1a1a1a;margin-bottom:10px;" onclick="navigate(\'wrongAll\')">';
+  html += '<div style="display:flex;align-items:center;gap:14px;padding:14px;">';
+  html += reviewRingHtml(m, 68, t('rv_hub_mastery_short'));
   html += '<div style="flex:1;min-width:0;">';
   html += '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">'
-    + '<div style="font-size:15px;font-weight:800;color:#1a3a5c;">🔥 ' + t('rv_hub_title') + '</div>'
-    + '<div style="font-size:12px;font-weight:600;color:#1a3a5c;white-space:nowrap;">' + t('rv_hub_browse') + ' ›</div></div>';
-  html += '<div style="font-size:12px;color:#65727f;margin-top:5px;line-height:1.5;">'
+    + '<div style="font-size:15px;font-weight:800;color:#1a1a1a;">📕 ' + t('rv_hub_title') + '</div>'
+    + '<div style="font-size:11.5px;font-weight:600;color:#5a6473;white-space:nowrap;background:#EDF2F9;padding:3px 9px;border-radius:999px;">'
+    + t('rv_hub_browse') + ' ›</div></div>';
+  html += '<div style="font-size:12.5px;color:#5a6473;margin-top:6px;line-height:1.5;">'
     + (left > 0 ? escapeHtml(t('rv_hub_sub').replace('{g}', String(grad)).replace('{n}', String(left)))
                 : escapeHtml(t('rv_hub_empty'))) + '</div>';
   if (dueN > 0) {
-    html += '<div style="margin-top:6px;display:inline-block;background:#fdecea;color:#c0392b;font-size:11px;'
-      + 'font-weight:700;padding:2px 8px;border-radius:999px;">⏰ ' + escapeHtml(t('rv_hub_due').replace('{n}', String(dueN))) + '</div>';
+    html += '<div style="margin-top:7px;display:inline-block;background:#FDECEA;color:#c62828;font-size:11px;'
+      + 'font-weight:700;padding:3px 9px;border-radius:999px;">⏰ ' + escapeHtml(t('rv_hub_due').replace('{n}', String(dueN))) + '</div>';
   }
-  html += '</div></div>';
+  html += '</div></div></div>';
 
-  // 下半：行动（一句话建议 + 进度 + 按钮）
-  html += '<div style="border-top:1px solid #eef2f5;padding:12px 14px 14px;background:#fcfdfe;">';
+  // ---------- 卡 B：今日复习（任务 + 行动） ----------
+  html += '<div class="bank-card" style="padding:0;overflow:hidden;border-left-color:#4a7ba7;cursor:default;margin-bottom:14px;">';
+  html += '<div style="padding:12px 14px 11px;background:linear-gradient(135deg,#EDF4FC,#F8FBFF);border-bottom:1px solid #e3ecf7;">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
+  html += '<div style="font-size:14.5px;font-weight:800;color:#1a1a1a;">🔥 ' + t('rv_task_title') + '</div>';
+  if (finished) html += '<div style="font-size:11px;font-weight:700;color:#2e7d32;background:#eaf5eb;padding:3px 9px;border-radius:999px;">✓ ' + t('rv_task_done') + '</div>';
+  html += '</div>';
+  html += '<div style="font-size:12.5px;color:#3c4b59;margin-top:5px;line-height:1.6;">'
+    + escapeHtml(hasTask ? t('rv_hub_hint').replace('{tag}', reviewTagName(task.tag)) : t('rv_hub_none')) + '</div>';
+  html += '</div>';
+  html += '<div style="padding:12px 14px 14px;background:#fff;">';
   if (!hasTask) {
-    html += '<div style="font-size:12.5px;color:#5a6874;line-height:1.6;">' + escapeHtml(t('rv_hub_none')) + '</div>';
-    html += '<div style="display:flex;gap:8px;margin-top:10px;">';
+    html += '<div style="display:flex;gap:8px;">';
     if (left > 0) {
-      // 还有错题但暂时没到期：让他自己挑一批，不能出现"点了没反应"的按钮
-      html += '<button class="nav-btn primary" style="flex:1;" onclick="event.stopPropagation();startWrongRedoIds(wrongIdsFor(\'all\'),{kind:\'all\',title:\'' + t('rv_src_all') + '\'})">▶ ' + t('rv_redo_all') + '</button>';
-      html += '<button class="nav-btn secondary" style="flex:0 0 auto;" onclick="event.stopPropagation();navigate(\'wrongPaper\')">🎯 ' + t('rv_make_paper') + '</button>';
+      html += '<button class="nav-btn primary" style="flex:1;" onclick="wrongStartAllRedo()">▶ ' + t('rv_redo_all') + '</button>';
+      html += '<button class="nav-btn secondary" style="flex:0 0 auto;" onclick="wrongOpenPaper()">🎯 ' + t('rv_make_paper') + '</button>';
     } else {
-      html += '<button class="nav-btn primary" style="flex:1;" onclick="event.stopPropagation();goToBank(\'manual\')">📖 ' + t('rv_hub_go_practice') + '</button>';
+      html += '<button class="nav-btn primary" style="flex:1;" onclick="goToBank(\'manual\')">📖 ' + t('rv_hub_go_practice') + '</button>';
     }
     html += '</div>';
   } else {
-    html += '<div style="font-size:12.5px;color:#3c4b59;line-height:1.6;">'
-      + escapeHtml(t('rv_hub_hint').replace('{tag}', reviewTagName(task.tag))) + '</div>';
-    html += '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;">';
+    html += '<div style="display:flex;align-items:center;gap:8px;">';
     html += '<div style="flex:1;height:7px;background:#e8edf2;border-radius:4px;overflow:hidden;">'
-      + '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#1a3a5c,#4a7ba7);transition:width .3s;"></div></div>';
+      + '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#1a1a1a,#4a7ba7);transition:width .3s;"></div></div>';
     html += '<div style="font-size:11px;font-weight:700;color:#65727f;">' + done + '/' + task.target + '</div></div>';
     if (finished) {
-      html += '<div style="margin-top:10px;font-size:12.5px;font-weight:700;color:#1f8a4c;">✓ ' + t('rv_task_done') + '</div>';
+      html += '<button class="nav-btn secondary" style="width:100%;margin-top:10px;" onclick="wrongStartAllRedo()">🔁 ' + t('rv_redo_all') + '</button>';
     } else {
       var ids = (task.ids || []).filter(function (x) { return !(task.doneIds && task.doneIds[x]); });
       var idsLit = '[' + ids.map(function (x) { return "'" + x + "'"; }).join(',') + ']';
       html += '<div style="display:flex;gap:8px;margin-top:10px;">';
-      html += '<button class="nav-btn primary" style="flex:1;" onclick="event.stopPropagation();startWrongRedoIds(' + idsLit + ',{kind:\'task\',title:\'' + t('rv_task_title') + '\'})">▶ '
+      html += '<button class="nav-btn primary" style="flex:1;" onclick="wrongStartTaskRedo()">▶ '
+        + escapeHtml(t('rv_task_go_n').replace('{n}', String(wrongTaskTodoIds().length))) + '</button>';
         + escapeHtml(t('rv_task_go_n').replace('{n}', String(ids.length))) + '</button>';
-      html += '<button class="nav-btn secondary" style="flex:0 0 auto;" onclick="event.stopPropagation();reviewTaskSwap()">' + t('rv_task_skip') + '</button>';
+      html += '<button class="nav-btn secondary" style="flex:0 0 auto;" onclick="reviewTaskSwap()">' + t('rv_task_skip') + '</button>';
       html += '</div>';
     }
   }
@@ -15968,7 +16067,7 @@ function masteryCardHtml() {
   var total = { reviewed: 0, promoted: 0, graduated: 0, failed: 0 };
   try { total = reviewTotalsOf(); } catch (e2) {}
   var grad = 0, left = 0;
-  try { grad = masteredCount(); left = wrongRowsAll({ bank: 'manual' }).length; } catch (e3) {}
+  try { grad = masteredCount(); left = wrongRowsAll({}).length; } catch (e3) {}
   var html = '<div class="bank-card" style="cursor:pointer;display:flex;align-items:center;gap:14px;" onclick="navigate(\'wrongAll\')">';
   html += reviewRingHtml(m, 58, t('rv_hub_mastery_short'));
   html += '<div style="flex:1;min-width:0;">';
@@ -16045,12 +16144,121 @@ function wrongDueLabel(e) {
   var d = wrongDueInDays(e);
   return t('rv_due_in').replace('{n}', String(d));
 }
+// ---- 错题本页（2026-11-05 二版）----
+// 这一版只做三件事：把话说清楚、把层级分开、把"某一批题"单独拎出来能练。
+// 布局顺序固定为：学习记录 → 两个动作 → （组卷面板 | 来源 + 页签 + 清单）。
+// 组卷面板打开时上面三块原地不动，只把下面换成设置项（领导明确要求）。
+function wrongRowsScoped() {
+  var o = {};
+  if (state.wrongSrc === 'race') o.src = 'race';
+  else if (state.wrongSrc) o.bank = state.wrongSrc;
+  return wrongRowsAll(o);
+}
+function wrongSrcLabel(v) {
+  if (!v) return t('rv_src_all_opt');
+  if (v === 'race') return t('rv_src_race');
+  if (v === 'manual') return t('rv_src_bank_manual');
+  if (v === 'day21') return t('rv_src_bank_day21');
+  if (v === 'tsos') return t('rv_src_bank_tsos');
+  return t('rv_src_all_opt');
+}
+function wrongSrcCounts() {
+  var rows = wrongRowsAll({});
+  var out = { '': rows.length, manual: 0, day21: 0, tsos: 0, race: 0 };
+  for (var i = 0; i < rows.length; i++) {
+    var b = wrongBankOfKey(rows[i].skey);
+    if (typeof out[b] === 'number') out[b]++;
+    if (rows[i].e.src === 'race') out.race++;
+  }
+  return out;
+}
+function wrongSrcSet(v) { state.wrongSrc = v || ''; state.wrongSrcOpen = false; if (v === 'race') state.wrongTab = 'all'; render(); }
+function wrongSrcPickToggle() { state.wrongSrcOpen = !state.wrongSrcOpen; render(); }
+function wrongPaperToggle() { state.paperOpen = !state.paperOpen; render(); }
+// 从别的页面进错题本：可以指定"只看哪一批"
+//   wrongOpenSrc('day21') —— 从 21 天题库点进来，只显示 21 天的错题
+//   wrongOpenPaper()      —— 直接展开组卷面板（首页"自己组一份"用）
+function wrongOpenSrc(src) { state.wrongSrc = src || ''; state.wrongSrcOpen = false; state.wrongTab = 'due'; state.paperOpen = false; navigate('wrongAll'); }
+function wrongOpenPaper() { state.wrongSrc = ''; state.wrongTab = 'due'; state.paperOpen = true; navigate('wrongAll'); }
+function wrongBankCount(bank) { try { return wrongRowsAll({ bank: bank }).length; } catch (e) { return 0; } }
+// 本场答题赛答错的题（交卷后立刻能"只复习这一场"）
+function raceRunWrongIds() {
+  var r = state.race, out = [];
+  if (!r || !Array.isArray(r.pool) || !Array.isArray(r.answers)) return out;
+  for (var i = 0; i < r.answers.length; i++) {
+    var a = r.answers[i], q = r.pool[i];
+    if (!a || !a.ans || !a.ans.length || !q || !q.id) continue;
+    if (!raceGrade(q, a.ans)) out.push(q.id);
+  }
+  return out;
+}
+function raceRedoRun() {
+  var ids = raceRunWrongIds();
+  if (!ids.length) { alert(t('wrong_none_alert')); return; }
+  startWrongRedoIds(ids, { kind: 'race', title: t('rv_src_race') });
+}
+// 本卷答错的题（模拟考 / 正式考试交卷后）
+function examWrongIds() {
+  var out = [];
+  if (!Array.isArray(state.questions)) return out;
+  for (var i = 0; i < state.questions.length; i++) {
+    var q = state.questions[i], ans = state.examAnswers ? state.examAnswers[i] : null;
+    if (!ans || (Array.isArray(ans) && !ans.length)) continue;
+    var ok = false;
+    if (q.type === 'fill') ok = checkAllFillAnswers(ans, q.fill_answers);
+    else {
+      var c = q.correct_answer || [];
+      ok = ans.length === c.length && ans.every(function (x) { return c.indexOf(x) >= 0; });
+    }
+    if (!ok) out.push(q.id);
+  }
+  return out;
+}
+function examRedoWrong() {
+  var ids = examWrongIds();
+  if (!ids.length) { alert(t('wrong_none_alert')); return; }
+  startWrongRedoIds(ids, { kind: 'exam', title: t('exam_goto_wrong_run').replace('{n}', String(ids.length)) });
+}
+function wrongRedoOne(qid) { startWrongRedoIds([qid], { kind: 'one' }); }
+function wrongRemoveOne(skey, qid) { removeFromWrong(skey, qid); }
+function wrongTagPick(tag) { state.wrongTag = tag; render(); }
+function wrongStartAllRedo() { startWrongRedoIds(wrongIdsFor('all'), { kind: 'all', title: t('rv_src_all') }); }
+function wrongTaskTodoIds() {
+  var task = null;
+  try { task = reviewTaskOf(); } catch (e) { return []; }
+  if (!task) return [];
+  return (task.ids || []).filter(function (x) { return !(task.doneIds && task.doneIds[x]); });
+}
+function wrongStartTaskRedo() {
+  var ids = wrongTaskTodoIds();
+  if (!ids.length) { alert(t('wrong_none_alert')); return; }
+  startWrongRedoIds(ids, { kind: 'task', title: t('rv_task_title') });
+}
+function wrongStartDueRedo() {
+  var ids = wrongIdsFor('due');
+  if (!ids.length) { alert(t('wrong_none_alert')); return; }
+  startWrongRedoIds(ids, { kind: 'due', title: t('rv_src_due') });
+}
+// 来源单选行：给"来源筛选"和"组卷来源"共用一套，避免两处长得不一样
+function rvSrcRowHtml(v, title, desc, count, handler) {
+  var active = (state.wrongSrc || '') === v;
+  if (handler === 'paper') active = (state.paperSource || 'all') === v;
+  var h = '<div class="rv-srcrow ' + (active ? 'active' : '') + '" onclick="'
+    + (handler === 'paper' ? 'setPaperSource(&quot;' + v + '&quot;)' : 'wrongSrcSet(&quot;' + v + '&quot;)') + '">';
+  h += '<div class="radio"></div><div style="flex:1;min-width:0;">';
+  h += '<div class="t">' + escapeHtml(title)
+    + (typeof count === 'number' ? ' <span style="font-weight:600;color:#7b8896;font-size:11.5px;">（' + count + ' ' + t('rv_paper_unit') + '）</span>' : '')
+    + '</div>';
+  h += '<div class="d">' + escapeHtml(desc) + '</div>';
+  h += '</div></div>';
+  return h;
+}
 function renderWrongAll() {
   var tab = state.wrongTab || 'due';
-  var rows = wrongRowsAll({});
-  var dueRows = [];
-  for (var di = 0; di < rows.length; di++) if (wrongIsDue(rows[di].e)) dueRows.push(rows[di]);
-  var shown = (tab === 'due') ? dueRows : rows;
+  var scoped = wrongRowsScoped();
+  var dueAll = [];
+  for (var di = 0; di < scoped.length; di++) if (wrongIsDue(scoped[di].e)) dueAll.push(scoped[di]);
+  var shown = (tab === 'due') ? dueAll : scoped;
   if (tab === 'tag' && state.wrongTag) {
     var keep = [];
     for (var ti = 0; ti < shown.length; ti++) {
@@ -16059,56 +16267,92 @@ function renderWrongAll() {
     }
     shown = keep;
   }
+  var allRows = wrongRowsAll({});
+  var dueTotal = 0;
+  for (var ai = 0; ai < allRows.length; ai++) if (wrongIsDue(allRows[ai].e)) dueTotal++;
+
   var html = renderAppHeader({
     title: '❌ ' + t('wrong_title'),
-    subtitle: rows.length + t('questions_unit') + ' · ' + t('rv_due_n').replace('{n}', String(dueRows.length))
+    subtitle: t('rv_book_sub').replace('{n}', String(allRows.length)).replace('{d}', String(dueTotal))
   });
   html += '<div class="page">';
 
-  // 顶部一条"学习记录"：掌握度 + 累计复习量。错题本不只是一张清单，它还是
-  // 员工自己的学习凭证（以后积分就从这里取数），所以先给数字，再给操作。
+  // ---- ① 学习记录 ----
   var _m = -1, _tot = { reviewed: 0, promoted: 0, graduated: 0 };
   var _wk = { promoted: 0, graduated: 0 };
   try { _m = masteryOf(); _tot = reviewTotalsOf(); _wk = reviewCreditSummary(7); } catch (e0) {}
-  html += '<div class="q-card" style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:10px;background:#fbfcfd;">';
-  html += reviewRingHtml(_m, 46, t('rv_hub_mastery_short'));
-  html += '<div style="flex:1;min-width:0;font-size:11.5px;color:#65727f;line-height:1.7;">';
-  html += '<div style="font-size:12.5px;font-weight:700;color:#1a3a5c;">' + t('rv_book_ledger') + '</div>';
-  html += '<div>' + escapeHtml(t('rv_stat_line').replace('{rv}', String(_tot.reviewed)).replace('{p}', String(_tot.promoted)).replace('{g}', String(_tot.graduated))) + '</div>';
+  html += '<div class="q-card" style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:12px;background:#fff;">';
+  html += reviewRingHtml(_m, 48, t('rv_hub_mastery_short'));
+  html += '<div style="flex:1;min-width:0;font-size:11.5px;color:#5a6473;line-height:1.7;">';
+  html += '<div style="font-size:12.5px;font-weight:800;color:#1a1a1a;">' + t('rv_book_ledger') + '</div>';
+  html += '<div>' + escapeHtml(t('rv_hub_sub').replace('{g}', String(masteredCount())).replace('{n}', String(allRows.length))) + '</div>';
   html += '<div>' + escapeHtml(t('rv_week_line').replace('{p}', String(_wk.promoted)).replace('{g}', String(_wk.graduated))) + '</div>';
   html += '</div></div>';
 
-  // 两个动作入口：重做到期 / 生成专项卷。都放在最上面 —— 员工打开错题本的目的
-  // 就是"练"，不是为了浏览清单。
-  html += '<div style="display:flex;gap:8px;margin-bottom:10px;">';
-  html += '<button class="nav-btn primary" style="flex:1;" ' + (dueRows.length ? '' : 'disabled ')
-    + ' onclick="startWrongRedoIds(wrongIdsFor(\'due\'),{kind:\'due\',title:\'' + t('rv_src_due') + '\'})">▶ '
-    + t('rv_redo_due').replace('{n}', String(dueRows.length)) + '</button>';
-  html += '<button class="nav-btn secondary" style="flex:1;" onclick="navigate(\'wrongPaper\')">🎯 ' + t('rv_make_paper') + '</button>';
+  // ---- ② 两个动作：说人话 + 一行说明 ----
+  html += '<div style="margin-bottom:14px;">';
+  html += '<button class="nav-btn primary" style="width:100%;padding:13px;" ' + (dueTotal ? '' : 'disabled ')
+    + 'onclick="wrongStartDueRedo()">⏰ ' + escapeHtml(t('rv_redo_due').replace('{n}', String(dueTotal))) + '</button>';
+  html += '<div style="font-size:11.5px;color:#7b8896;margin:6px 2px 12px;line-height:1.6;">' + escapeHtml(t('rv_redo_due_sub')) + '</div>';
+  html += '<button class="nav-btn secondary" style="width:100%;padding:13px;" onclick="wrongPaperToggle()">'
+    + (state.paperOpen ? '✕ ' + t('rv_paper_close') : '🎯 ' + t('rv_make_paper')) + '</button>';
+  html += '<div style="font-size:11.5px;color:#7b8896;margin:6px 2px 0;line-height:1.6;">' + escapeHtml(t('rv_make_paper_sub')) + '</div>';
   html += '</div>';
 
-  // 页签：到期 / 全部 / 按知识点
-  html += '<div class="section-chips" style="margin-bottom:10px;">';
-  html += '<div class="chip ' + (tab === 'due' ? 'active' : '') + '" onclick="wrongTabSet(\'due\')">⏰ ' + t('rv_tab_due') + ' (' + dueRows.length + ')</div>';
-  html += '<div class="chip ' + (tab === 'all' ? 'active' : '') + '" onclick="wrongTabSet(\'all\')">📚 ' + t('rv_tab_all') + ' (' + rows.length + ')</div>';
-  html += '<div class="chip ' + (tab === 'tag' ? 'active' : '') + '" onclick="wrongTabSet(\'tag\')">🏷 ' + t('rv_tab_tag') + '</div>';
-  html += '</div>';
+  if (state.paperOpen) {
+    html += wrongPaperPanelHtml();
+    html += '</div>';
+    return html;
+  }
 
-  if (tab === 'tag') {
-    var weak = reviewWeakTags('manual');
-    html += '<div class="section-chips" style="margin-bottom:10px;">';
-    html += '<div class="chip ' + (!state.wrongTag ? 'active' : '') + '" onclick="wrongTagSet(\'\')">' + t('section_all') + '</div>';
-    for (var wi = 0; wi < weak.length && wi < 12; wi++) {
-      html += '<div class="chip ' + (state.wrongTag === weak[wi].tag ? 'active' : '') + '" onclick="wrongTagSet(\'' + escapeHtml(weak[wi].tag).replace(/'/g, "\\'") + '\')">'
-        + escapeHtml(reviewTagName(weak[wi].tag)) + ' (' + weak[wi].total + ')</div>';
-    }
+  // ---- ③ 来源筛选：一个下拉，不是又一排小胶囊 ----
+  // 三种控件必须长得不一样，否则学员分不清层级（领导原话：展开后跟上一行混淆）。
+  var sc = wrongSrcCounts();
+  html += '<div class="rv-picker" onclick="wrongSrcPickToggle()">';
+  html += '<div style="font-size:11.5px;color:#7b8896;font-weight:700;white-space:nowrap;">' + t('rv_src_label') + '</div>';
+  html += '<div class="cur">' + escapeHtml(wrongSrcLabel(state.wrongSrc)) + ' · ' + scoped.length + t('rv_paper_unit') + '</div>';
+  html += '<div class="caret">' + (state.wrongSrcOpen ? '▲' : '▼') + '</div>';
+  html += '</div>';
+  if (state.wrongSrcOpen) {
+    html += '<div style="margin-bottom:12px;">';
+    html += rvSrcRowHtml('', t('rv_src_all_opt'), t('rv_src_all_opt_d'), sc[''], 'src');
+    html += rvSrcRowHtml('manual', t('rv_src_bank_manual'), t('rv_src_bank_manual_d'), sc.manual, 'src');
+    html += rvSrcRowHtml('day21', t('rv_src_bank_day21'), t('rv_src_bank_day21_d'), sc.day21, 'src');
+    html += rvSrcRowHtml('tsos', t('rv_src_bank_tsos'), t('rv_src_bank_tsos_d'), sc.tsos, 'src');
+    html += rvSrcRowHtml('race', t('rv_src_race'), t('rv_src_race_d'), sc.race, 'src');
     html += '</div>';
   }
 
+  // ---- ④ 页签：分段控件（和上面的下拉、下面的小药丸都不一样）----
+  html += '<div class="rv-seg">';
+  html += '<div class="seg ' + (tab === 'due' ? 'active' : '') + '" onclick="wrongTabSet(&quot;due&quot;)">⏰ ' + t('rv_tab_due') + ' <span class="n">' + dueAll.length + '</span></div>';
+  html += '<div class="seg ' + (tab === 'all' ? 'active' : '') + '" onclick="wrongTabSet(&quot;all&quot;)">📚 ' + t('rv_tab_all') + ' <span class="n">' + scoped.length + '</span></div>';
+  html += '<div class="seg ' + (tab === 'tag' ? 'active' : '') + '" onclick="wrongTabSet(&quot;tag&quot;)">🏷 ' + t('rv_tab_tag') + '</div>';
+  html += '</div>';
+  html += '<div style="font-size:11.5px;color:#7b8896;margin:0 2px 10px;line-height:1.6;">'
+    + escapeHtml(t(tab === 'due' ? 'rv_tab_due_hint' : (tab === 'tag' ? 'rv_tab_tag_hint' : 'rv_tab_all_hint'))) + '</div>';
+
+  // 二级细项：小药丸 + 自己的标题，绝不和上面那排同款
+  if (tab === 'tag') {
+    var weak = reviewWeakTags(state.wrongSrc === 'race' ? 'manual' : (state.wrongSrc || 'manual'));
+    html += '<div class="rv-label">' + t('rv_pick_tag') + '</div>';
+    if (!weak.length) {
+      html += '<div class="rv-note" style="margin-bottom:12px;">' + t('rv_no_weak') + '</div>';
+    } else {
+      html += '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;">';
+      for (var wi = 0; wi < weak.length && wi < 14; wi++) {
+        html += '<div class="rv-pill ' + (state.wrongTag === weak[wi].tag ? 'active' : '') + '" onclick="wrongTagPick(&quot;' + escapeHtml(weak[wi].tag) + '&quot;)">'
+          + escapeHtml(reviewTagName(weak[wi].tag)) + ' ' + weak[wi].total + '</div>';
+      }
+      html += '</div>';
+    }
+  }
+
+  // ---- ⑤ 清单 ----
   if (shown.length === 0) {
     html += '<div class="empty-state"><div class="icon">🎉</div><p>' + (tab === 'due' ? t('rv_no_due') : t('wrong_empty')) + '</p></div>';
   } else {
-    html += '<div style="font-size:11.5px;color:#8b98a3;line-height:1.6;margin-bottom:8px;">' + t('rv_stage_hint') + '</div>';
+    html += '<div class="rv-note" style="margin-bottom:10px;">' + escapeHtml(t('rv_stage_hint')) + '</div>';
     html += '<div class="wrong-list">';
     for (var r = 0; r < shown.length; r++) {
       var row = shown[r];
@@ -16116,33 +16360,27 @@ function renderWrongAll() {
       var preview = q ? qTextOf(q) : (row.e.question || '');
       var sectionDisplay = state.lang === 'en' ? (row.e.section_en || row.e.section || '') : (row.e.section || '');
       var dueNow = wrongIsDue(row.e);
-      html += '<div class="wrong-item" style="' + (dueNow ? 'border-left-color:#e67e22;' : '') + '" onclick="openWrongFromKey(\'' + row.skey + '\',\'' + row.qid + '\')">';
+      var stNow = wrongStageOf(row.e);
+      html += '<div class="wrong-item" style="' + (dueNow ? 'border-left-color:#e65100;' : '') + '" onclick="openWrongFromKey(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)">';
       html += '<div class="q-preview">' + escapeHtml(preview ? preview.substring(0, 100) : '') + '</div>';
       html += '<div class="q-meta">';
       html += '<span>' + escapeHtml(wrongBankLabel(row.skey)) + (sectionDisplay ? ' · ' + escapeHtml(sectionDisplay) : '') + ' · ' + getTypeShort(row.e.type) + '</span>';
       html += '<span>' + (dueNow
-        ? '<b style="color:#e67e22;">⏰ ' + t('rv_due_now') + '</b>'
+        ? '<b style="color:#e65100;">⏰ ' + t('rv_due_now') + '</b>'
         : '⏳ ' + t('rv_due_in').replace('{n}', String(wrongDueInDays(row.e)))) + '</span>';
       html += '</div>';
-      html += '<div class="q-meta" style="margin-top:4px;">';
-      html += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(wrongStageOf(row.e))).replace('{m}', String(WRONG_STAGE_MAX)) + (wrongStageOf(row.e) >= WRONG_STAGE_MAX ? t('rv_stage_last') : '') + '</span>';
+      html += '<div class="q-meta" style="margin-top:5px;">';
+      html += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(stNow)).replace('{m}', String(WRONG_STAGE_MAX)) + (stNow >= WRONG_STAGE_MAX ? t('rv_stage_last') : '') + '</span>';
       html += '<span>' + t('rv_wrong_times').replace('{n}', String(row.e.n || 1)) + '</span>';
       html += '</div>';
       var qtags = q ? questionTagsOf(q) : [];
       if (qtags.length) {
-        html += '<div style="margin-top:5px;font-size:11px;color:#5b6b7a;">🏷 ' + escapeHtml(qtags.map(reviewTagName).join(' · ')) + '</div>';
+        html += '<div style="margin-top:6px;font-size:11px;color:#5b6b7a;">🏷 ' + escapeHtml(qtags.map(reviewTagName).join(' · ')) + '</div>';
       }
-      html += '<div style="text-align:right;margin-top:8px;">';
-      html += '<button class="nav-btn secondary" style="font-size:12px;padding:4px 12px;" onclick="event.stopPropagation();startWrongRedoIds([\'' + row.qid + '\'],{kind:\'one\'})">🔁 ' + t('rv_redo_one') + '</button> ';
-      html += '<button class="nav-btn secondary" style="font-size:12px;padding:4px 12px;" onclick="event.stopPropagation();removeFromWrong(\'' + row.skey + '\',\'' + row.qid + '\')">🗑 ' + t('remove_one') + '</button>';
+      html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:9px;">';
+      html += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRedoOne(&quot;' + row.qid + '&quot;)">🔁 ' + t('rv_redo_one') + '</button>';
+      html += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRemoveOne(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)">🗑 ' + t('remove_one') + '</button>';
       html += '</div>';
-      if (row.e.ua && row.e.uok) {
-        var qq = findByIdAllBanks(row.qid);
-        if (qq && qq.type !== 'fill' && Array.isArray(row.e.ua)) {
-          var txt = row.e.ua.map(function (x) { return qOptText(qq, x); }).join(' / ');
-          if (txt) html += '<div style="font-size:11.5px;color:#c0392b;margin-top:6px;">✗ ' + t('your_answer') + escapeHtml(txt) + '</div>';
-        }
-      }
       html += '</div>';
     }
     html += '</div>';
@@ -16150,14 +16388,12 @@ function renderWrongAll() {
   html += '</div>';
   return html;
 }
-function wrongTabSet(tab) { state.wrongTab = tab; render(); }
-function wrongTagSet(tag) { state.wrongTag = tag; state.wrongTab = 'tag'; render(); }
+function wrongTabSet(tab) { state.wrongTab = tab; if (tab !== 'tag') state.wrongTag = ''; render(); }
 // 给内联 onclick 用的题号清单（到期 / 全部 / 某个知识点）
 function wrongIdsFor(kind, arg) {
-  var rows = wrongRowsAll({});
+  var rows = kind === 'due' ? wrongRowsAll({ dueOnly: true }) : wrongRowsAll({});
   var out = [];
   for (var i = 0; i < rows.length; i++) {
-    if (kind === 'due' && !wrongIsDue(rows[i].e)) continue;
     if (kind === 'tag' && arg) {
       var q = findByIdAllBanks(rows[i].qid);
       if (!q || questionTagsOf(q).indexOf(arg) < 0) continue;
@@ -16178,68 +16414,80 @@ function wrongIdsOnDay(day) {
   return out;
 }
 
-// ============ 专项练习卷（2026-11-05）============
-// 错题卷 / 收藏卷 / 薄弱知识点卷共用一套组卷：先把题号清单拼好，再交给
-// startWrongRedoIds 起一个「重做会话」。会话自带算术，本轮小结就地给结果。
+// ============ 专项练习卷（2026-11-05 / 二版改成页内面板）============
+// 领导反馈：点"生成专项卷"跳到一个"新界面"，感觉断了。现在它是错题本页里的
+// 一块面板 —— 学习记录、两个动作按钮原地不动，下面换设置项，收起就回到清单。
 function paperSourceIds(kind, arg) {
   if (kind === 'fav') return (state.collectedQuestions || []).slice();
   if (kind === 'tag' && arg) return wrongIdsFor('tag', arg);
   if (kind === 'all') return wrongIdsFor('all');
   return wrongIdsFor('due');
 }
-function renderWrongPaper() {
-  var src = state.paperSource || 'due';
+function wrongPaperPanelHtml() {
+  var src = state.paperSource || 'all';
   var ids = paperSourceIds(src, state.wrongTag);
   var dueN = wrongIdsFor('due').length, allN = wrongIdsFor('all').length, favN = (state.collectedQuestions || []).length;
   var weak = reviewWeakTags('manual');
-  var html = renderAppHeader({ title: '🎯 ' + t('rv_paper_title'), subtitle: t('rv_paper_sub') });
-  html += '<div class="page">';
+  var html = '<div class="rv-sec">';
+  html += '<div class="rv-sec-title">🎯 ' + t('rv_paper_title') + '</div>';
+  html += '<div style="font-size:11.5px;color:#7b8896;margin:3px 0 14px;">' + t('rv_paper_sub') + '</div>';
 
-  html += '<div style="font-size:12px;font-weight:700;color:#5b6b7a;margin:2px 0 6px;">① ' + t('rv_pick_src') + '</div>';
-  html += '<div class="section-chips" style="margin-bottom:10px;">';
-  html += '<div class="chip ' + (src === 'due' ? 'active' : '') + '" onclick="setPaperSource(\'due\')">⏰ ' + t('rv_src_due') + ' (' + dueN + ')</div>';
-  html += '<div class="chip ' + (src === 'all' ? 'active' : '') + '" onclick="setPaperSource(\'all\')">📚 ' + t('rv_src_all') + ' (' + allN + ')</div>';
-  html += '<div class="chip ' + (src === 'fav' ? 'active' : '') + '" onclick="setPaperSource(\'fav\')">⭐ ' + t('rv_src_fav') + ' (' + favN + ')</div>';
-  html += '<div class="chip ' + (src === 'tag' ? 'active' : '') + '" onclick="setPaperSource(\'tag\')">🏷 ' + t('rv_src_tag') + '</div>';
-  html += '</div>';
+  html += '<div class="rv-label">' + t('rv_pick_src') + '</div>';
+  html += rvSrcRowHtml('all', t('rv_src_all'), t('rv_src_all_d'), allN, 'paper');
+  html += rvSrcRowHtml('due', t('rv_src_due'), t('rv_src_due_d'), dueN, 'paper');
+  html += rvSrcRowHtml('fav', t('rv_src_fav'), t('rv_src_fav_d'), favN, 'paper');
+  html += rvSrcRowHtml('tag', t('rv_src_tag'), t('rv_src_tag_d'), null, 'paper');
 
   if (src === 'tag') {
     if (!weak.length) {
-      html += '<div class="empty-state" style="padding:16px;"><p>' + t('rv_no_weak') + '</p></div>';
+      html += '<div class="rv-note" style="margin:-2px 0 12px;">' + t('rv_no_weak') + '</div>';
     } else {
-      html += '<div class="section-chips" style="margin-bottom:10px;">';
+      html += '<div class="rv-label">' + t('rv_pick_tag') + '</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:7px;margin:0 0 14px;">';
       for (var i = 0; i < weak.length && i < 12; i++) {
-        html += '<div class="chip ' + (state.wrongTag === weak[i].tag ? 'active' : '') + '" onclick="wrongTagSet2(\'' + escapeHtml(weak[i].tag).replace(/'/g, "\\'") + '\')">'
-          + escapeHtml(reviewTagName(weak[i].tag)) + ' (' + weak[i].total + ')</div>';
+        html += '<div class="rv-pill ' + (state.wrongTag === weak[i].tag ? 'active' : '') + '" onclick="wrongTagSet2(&quot;' + escapeHtml(weak[i].tag) + '&quot;)">'
+          + escapeHtml(reviewTagName(weak[i].tag)) + ' ' + weak[i].total + '</div>';
       }
       html += '</div>';
     }
   }
 
-  html += '<div style="font-size:12px;font-weight:700;color:#5b6b7a;margin:2px 0 6px;">② ' + t('rv_pick_count') + '</div>';
-  html += '<div class="section-chips" style="margin-bottom:14px;">';
+  html += '<div class="rv-label" style="margin-top:4px;">' + t('rv_pick_count') + '</div>';
+  html += '<div style="display:flex;gap:7px;margin-bottom:14px;">';
   var counts = [10, 20, 0];
   for (var ci = 0; ci < counts.length; ci++) {
-    var cn2 = counts[ci] === 0 ? t('rv_all_q') : String(counts[ci]) + t('questions_unit');
-    html += '<div class="chip ' + ((state.paperCount || 10) === counts[ci] ? 'active' : '') + '" onclick="setPaperCount(' + counts[ci] + ')">' + cn2 + '</div>';
+    var cn2 = counts[ci] === 0 ? t('rv_all_q') : String(counts[ci]) + t('rv_paper_unit');
+    html += '<div class="rv-pill ' + ((state.paperCount || 10) === counts[ci] ? 'active' : '') + '" onclick="setPaperCount(' + counts[ci] + ')">' + cn2 + '</div>';
   }
   html += '</div>';
 
   var cnt = state.paperCount || 10;
   var take = (cnt === 0 || cnt > ids.length) ? ids.length : cnt;
-  html += '<div class="q-card" style="text-align:center;padding:18px 14px;">';
-  html += '<div style="font-size:30px;font-weight:700;color:#1a3a5c;">' + take + '</div>';
-  html += '<div style="font-size:12.5px;color:#7b8896;margin-top:4px;line-height:1.6;">' + t('rv_paper_take') + '</div>';
+  html += '<div style="text-align:center;padding:6px 0 2px;">';
+  html += '<span class="rv-count"><b>' + take + '</b><span style="font-size:12.5px;color:#7b8896;margin-left:3px;">' + t('rv_paper_take') + '</span></span>';
   html += '</div>';
+  html += '<div style="font-size:11.5px;color:#7b8896;text-align:center;line-height:1.65;margin:6px 0 14px;">'
+    + (ids.length ? escapeHtml(t('rv_paper_take_note')) : escapeHtml(t('rv_paper_none'))) + '</div>';
 
-  html += '<button class="action-btn primary" style="width:100%;" ' + (ids.length ? '' : 'disabled ')
+  html += '<button class="nav-btn primary" style="width:100%;padding:13px;" ' + (ids.length ? '' : 'disabled ')
     + 'onclick="startWrongPaper()">▶ ' + t('rv_start_paper') + '</button>';
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'wrongAll\')">← ' + t('rv_back_wrong') + '</button>';
   html += '</div>';
   return html;
 }
 function setPaperSource(kind) { state.paperSource = kind; render(); }
 function setPaperCount(n) { state.paperCount = n; render(); }
+function wrongTagSet2(tag) { state.wrongTag = tag; state.paperSource = 'tag'; render(); }
+function startWrongPaper() {
+  var src = state.paperSource || 'all';
+  var ids = paperSourceIds(src, state.wrongTag);
+  if (!ids.length) { alert(t('wrong_none_alert')); return; }
+  var cnt = state.paperCount || 10;
+  startWrongRedoIds(ids, {
+    kind: src,
+    count: (cnt > 0 && cnt < ids.length) ? cnt : 0,
+    title: src === 'fav' ? t('rv_src_fav') : (src === 'tag' ? reviewTagName(state.wrongTag) : (src === 'due' ? t('rv_src_due') : t('rv_src_all')))
+  });
+}
 function wrongTagSet2(tag) { state.wrongTag = tag; state.paperSource = 'tag'; render(); }
 function startWrongPaper() {
   var src = state.paperSource || 'due';
@@ -16541,6 +16789,11 @@ function renderExamResult() {
   html += '<button class="action-btn nav-btn primary" onclick="reviewExam()">'+t('result_review')+'</button>';
   html += '<button class="action-btn nav-btn secondary" onclick="state.lastExamReplay=null;goToBankDirect(\''+state.currentBank+'\')">'+t('result_back')+'</button>';
   html += '<button class="action-btn nav-btn secondary" onclick="openExamReplay()">🎬 '+(en?'Replay':'答题回放')+'</button>';
+  // 本卷答错的题：交卷后立刻能只练这几道，不必去错题本里翻（2026-11-05 二版）
+  var _exN = examWrongIds().length;
+  if (_exN > 0) {
+    html += '<button class="action-btn nav-btn secondary" onclick="examRedoWrong()">❌ ' + escapeHtml(t('exam_goto_wrong_run').replace('{n}', String(_exN))) + '</button>';
+  }
   html += '</div></div></div>';
   return html;
 }
@@ -24249,7 +24502,8 @@ function render() {
     case 'search': app.innerHTML = renderSearch(); break;
     case 'wrongList': app.innerHTML = renderWrongList(); break;
     case 'wrongAll': app.innerHTML = renderWrongAll(); break;
-    case 'wrongPaper': app.innerHTML = renderWrongPaper(); break;
+    // 组卷不再是独立页面：进来就是错题本页 + 展开的面板，员工不会觉得"跳了个新界面"
+    case 'wrongPaper': state.paperOpen = true; app.innerHTML = renderWrongAll(); break;
     case 'collectedList': app.innerHTML = renderCollectedList(); break;
     case 'examResult': app.innerHTML = renderExamResult(); break;
     case 'examReplay': app.innerHTML = renderExamReplay(); break;
