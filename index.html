@@ -160,6 +160,57 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
   animation:raceHintBreath 2.4s ease-in-out infinite; transform-origin:center; }
 .race-sec-hint-line { flex:1; height:1px; background:linear-gradient(90deg,#dfe4e9,rgba(223,228,233,0)); }
 
+/* ===== 赛事主卡（2026-11-04）：深色「赛事通行证」=====
+   原先赛事名/时长/时间只是三行「emoji + 标签：值」直接铺在白卡里，和下面精修的
+   「本期限定徽章」卡并排显得草率。改法不是加色块，而是换秩序：
+   ① kicker 一行（细体＋字距）与状态徽标
+   ② 标题独占一行（视觉锚点）
+   ③ 三格等宽指标 + 发丝竖线分隔（读起来像票面数据）
+   ④ 底部一条赛程轨：起点 —— 今天 —— 终点，进度用发光细线表示
+   深蓝取自品牌回忆蓝的暗部，右上角一道极淡光弧当舞台灯，不用大色块也能有质感。 */
+.race-hero { position:relative; overflow:hidden; border-radius:14px; padding:15px 16px 14px;
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(195,214,238,.18), rgba(195,214,238,0) 62%),
+    linear-gradient(160deg,#12324f 0%,#0E2545 58%,#0a1c34 100%);
+  border:1px solid rgba(255,255,255,.09); color:#fff;
+  box-shadow:0 8px 24px rgba(14,37,69,.26), inset 0 1px 0 rgba(255,255,255,.08);
+  margin-bottom:16px; }
+.race-hero::after { content:''; position:absolute; right:-64px; top:-82px; width:190px; height:190px;
+  border-radius:50%; border:1px solid rgba(195,214,238,.18);
+  box-shadow:0 0 0 16px rgba(195,214,238,.05), 0 0 0 34px rgba(195,214,238,.03);
+  pointer-events:none; z-index:0; }
+.race-hero > * { position:relative; z-index:1; }
+.race-hero-top { display:flex; align-items:center; gap:9px; }
+.race-hero-kicker { flex:0 0 auto; font-size:10px; font-weight:700; letter-spacing:2.2px;
+  color:#C3D6EE; opacity:.92; text-transform:uppercase; }
+.race-hero-rule { flex:1 1 auto; height:1px; background:linear-gradient(90deg,rgba(195,214,238,.5),rgba(195,214,238,0)); }
+.race-hero-pill { flex:0 0 auto; display:flex; align-items:center; gap:5px; font-size:10.5px; font-weight:600;
+  padding:3px 9px 3px 7px; border-radius:20px; letter-spacing:.2px; color:#DCE8F6;
+  border:1px solid rgba(195,214,238,.28); background:rgba(195,214,238,.10); white-space:nowrap; }
+.race-hero-pill i { width:5px; height:5px; border-radius:50%; display:block; }
+.race-hero-title { margin-top:10px; font-size:20px; font-weight:700; line-height:1.32;
+  letter-spacing:.3px; color:#fff; word-break:break-word; }
+.race-hero-sub { margin-top:4px; font-size:11px; color:rgba(220,232,246,.6); letter-spacing:.2px; }
+.race-hero-metrics { display:flex; margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,.10); }
+.race-hero-cell { flex:1 1 0; min-width:0; }
+.race-hero-cell + .race-hero-cell { margin-left:13px; padding-left:13px; border-left:1px solid rgba(255,255,255,.10); }
+.race-hero-cell em { display:block; font-style:normal; font-size:10px; letter-spacing:.9px;
+  color:rgba(220,232,246,.52); margin-bottom:3px; }
+.race-hero-cell b { display:block; font-size:15.5px; font-weight:700; color:#fff; letter-spacing:.2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.race-hero-cell b u { text-decoration:none; font-size:10.5px; font-weight:600;
+  color:rgba(220,232,246,.66); margin-left:3px; letter-spacing:0; }
+.race-hero-time { display:flex; align-items:center; gap:9px; margin-top:14px; }
+.race-hero-time span { flex:0 0 auto; font-size:10.5px; color:rgba(220,232,246,.62);
+  font-variant-numeric:tabular-nums; letter-spacing:.1px; }
+.race-hero-track { position:relative; flex:1 1 auto; min-width:22px; height:2px; border-radius:2px;
+  background:rgba(255,255,255,.13); }
+.race-hero-fill { position:absolute; left:0; top:0; bottom:0; border-radius:2px;
+  background:linear-gradient(90deg,rgba(143,180,221,.9),#C3D6EE); }
+.race-hero-mark { position:absolute; top:50%; width:7px; height:7px; margin-left:-3.5px; border-radius:50%;
+  transform:translateY(-50%); background:#fff; box-shadow:0 0 0 3px rgba(195,214,238,.22); }
+.race-hero-note { margin-top:9px; font-size:10.5px; color:rgba(220,232,246,.48); letter-spacing:.1px; }
+
 /* ===== 答题赛倒计时：贴在「⏱ 60s ｜ 已答 N」矩形下沿的色块，随时间从满格缩到空 ===== */
 .exam-info.race-timer-box { display:block; padding:12px 16px 0; overflow:hidden; }
 .race-timer-line { display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; }
@@ -4705,7 +4756,11 @@ var I18N = {
   badge_admin_sec_any: {cn:'任一板块（不限）', en:'Any section'},
   race_theme_kicker: {cn:'本期限定徽章', en:'This round only'},
   race_theme_got: {cn:'已获得', en:'earned'},
-  race_theme_expire: {cn:'仅本期可拿，换届后不再补发', en:'Only this round — no make-ups after the season changes'},
+  race_hero_kicker: {cn:'本期赛事', en:'Season'},
+  race_hero_section: {cn:'参赛板块', en:'Section'},
+  race_hero_pool: {cn:'题目池', en:'Pool'},
+  race_hero_sub_choice: {cn:'开赛时自选板块，按答对题数排名', en:'Pick a section when you start · ranked by correct answers'},
+  race_hero_spare: {cn:'答完后自动补充通用知识 {m} 题', en:'{m} general questions added after the pool runs out'},
   badge_admin_rid_cur: {cn:'当前届', en:'Current round'},
   race_badge_theme_ended: {cn:'本期已结束', en:'Round closed'},
   // 专属头像框（集齐同一系列全套解锁，纯荣誉）
@@ -11887,7 +11942,91 @@ function raceThemeCardHtml(conf) {
         + '✅ ' + (en ? 'Correct ' : '答对 ') + Math.min(sumC, needC) + '/' + needC + (en ? 'q' : ' 题') + (okC ? ' ✓' : '') + '</span>';
     }
     html += '</div>';
-    html += '<div style="font-size:10.5px;color:#a08b6b;margin-top:6px;">' + t('race_theme_expire') + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+// 赛程轨上的日期：同一天里 00:00 就不显示时分（管理员多数只设日期，多出来的 00:00 只是噪音）
+function raceHeroDateTxt(ts) {
+  var d = new Date(ts);
+  if (!isFinite(d.getTime())) return '—';
+  var s = (d.getMonth() + 1) + '/' + d.getDate();
+  var hh = d.getHours(), mm = d.getMinutes();
+  if (hh || mm) s += ' ' + String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+  return s;
+}
+// 赛事主卡（2026-11-04 改版）：样式与设计理由见 CSS 里 .race-hero 的注释。
+// 三格指标固定口径 —— 时长 / 参赛板块 / 题目池；赛程用底部的「起点—今天—终点」进度轨表达，
+// 不再把日期区间当一行文字铺出来。
+function raceHeroCardHtml(c, st, mode) {
+  var en = state.lang === 'en';
+  var conf = c || {};
+  var limitSec = parseInt(conf.limitSec, 10) || 60;
+  var now = Date.now();
+  var sTs = conf.startTime ? Date.parse(conf.startTime) : 0;
+  var eTs = conf.endTime ? Date.parse(conf.endTime) : 0;
+  if (!isFinite(sTs)) sTs = 0;
+  if (!isFinite(eTs)) eTs = 0;
+  var leftD = (eTs && eTs > now) ? Math.ceil((eTs - now) / 86400000) : 0;
+
+  // 状态徽标：进行中把「还剩几天」并进去，省掉一行小字
+  var pillTxt = '', dotColor = '#9aa3ad';
+  if (st === 'open') {
+    pillTxt = (en ? 'Live' : '进行中') + (leftD ? (en ? ' · ' + leftD + 'd left' : ' · 剩 ' + leftD + ' 天') : '');
+    dotColor = '#7ed6a5';
+  } else if (st === 'pending') { pillTxt = en ? 'Upcoming' : '未开始'; dotColor = '#ffd27f'; }
+  else if (st === 'ended') { pillTxt = en ? 'Ended' : '已结束'; }
+  else if (st === 'closed') { pillTxt = en ? 'Closed' : '已关闭'; }
+
+  // 第 2 格：参赛板块。管理员指定就报板块名，自由选则报「任选 + 可选数量」
+  var secVal = '', secUnit = '', allow = raceAllowedList(conf), i;
+  if (mode === 'admin') {
+    secVal = raceSecIcon(conf.section || 'all') + ' ' + raceSecName(conf.section || 'all');
+  } else {
+    // 英文用 "Any · of 9"（"Your pick" 在三格并排时会被省略号吃掉）
+    secVal = en ? 'Any' : '任选';
+    secUnit = en ? 'of ' + allow.length : allow.length + ' 选 1';
+  }
+  // 第 3 格：题目池。自由选时把各板块可答题数加起来，给一个「量很足」的直觉
+  var poolN = 0;
+  if (mode === 'admin') poolN = racePoolOfSize(conf.section || 'all');
+  else for (i = 0; i < allow.length; i++) poolN += racePoolOfSize(allow[i]);
+
+  var html = '<div class="race-hero">';
+  html += '<div class="race-hero-top">';
+  html += '<div class="race-hero-kicker">' + t('race_hero_kicker') + '</div>';
+  html += '<div class="race-hero-rule"></div>';
+  if (pillTxt) html += '<div class="race-hero-pill"><i style="background:' + dotColor + ';"></i>' + escapeHtml(pillTxt) + '</div>';
+  html += '</div>';
+  html += '<div class="race-hero-title">' + (conf.title ? escapeHtml(conf.title) : t('race_title')) + '</div>';
+  // 自由选板块的赛制多说一句：不然「任选」两个字不知道什么时候选
+  if (mode !== 'admin' && st === 'open') html += '<div class="race-hero-sub">' + t('race_hero_sub_choice') + '</div>';
+  html += '<div class="race-hero-metrics">';
+  html += '<div class="race-hero-cell"><em>' + t('race_limit') + '</em><b>' + limitSec
+    + '<u>' + (en ? 'sec' : '秒') + '</u></b></div>';
+  html += '<div class="race-hero-cell"><em>' + t('race_hero_section') + '</em><b>' + secVal
+    + (secUnit ? '<u>' + secUnit + '</u>' : '') + '</b></div>';
+  html += '<div class="race-hero-cell"><em>' + t('race_hero_pool') + '</em><b>' + poolN
+    + '<u>' + (en ? 'Q' : '题') + '</u></b></div>';
+  html += '</div>';
+  if (sTs || eTs) {
+    var pct = 0;
+    if (sTs && eTs && eTs > sTs) pct = Math.max(0, Math.min(100, (now - sTs) / (eTs - sTs) * 100));
+    else if (eTs && now >= eTs) pct = 100;
+    else if (sTs && !eTs && now >= sTs) pct = 100;
+    var mk = Math.max(2, Math.min(98, pct));
+    html += '<div class="race-hero-time">';
+    html += '<span>' + (sTs ? raceHeroDateTxt(sTs) : '—') + '</span>';
+    html += '<div class="race-hero-track">'
+      + '<div class="race-hero-fill" style="width:' + pct.toFixed(1) + '%;"></div>'
+      + '<div class="race-hero-mark" style="left:' + mk.toFixed(1) + '%;"></div></div>';
+    html += '<span>' + (eTs ? raceHeroDateTxt(eTs) : '—') + '</span>';
+    html += '</div>';
+  }
+  // 题池偏小时才提「答完自动补通用题」——题量够多的板块写这句反而让人以为要无限答下去
+  if (mode === 'admin' && poolN <= RACE_SPARE_HINT_MAX_POOL) {
+    var spare = raceSpareSizeOf(conf.section || 'all');
+    if (spare) html += '<div class="race-hero-note">' + t('race_hero_spare').replace('{m}', String(spare)) + '</div>';
   }
   html += '</div>';
   return html;
@@ -11927,22 +12066,7 @@ function renderRaceHome() {
     return html;
   }
   var mode = raceModeOf(c);
-  html += '<div class="q-card">';
-  html += '<h3 style="margin:0 0 6px;">' + (c.title ? escapeHtml(c.title) : t('race_title')) + '</h3>';
-  html += '<div style="font-size:14px;color:#444;line-height:1.9;">';
-  if (mode === 'admin') {
-    html += '🎯 ' + t('race_pick_section') + '：<b>' + raceSecIcon(c.section || 'all') + ' ' + raceSecName(c.section || 'all') + '</b><br>';
-  }
-  html += '⏱ ' + t('race_limit') + '：<b>' + (c.limitSec || 60) + ' ' + (state.lang === 'en' ? 'seconds' : '秒') + '</b><br>';
-  if (c.startTime || c.endTime) html += '🗓 ' + t('race_window') + '：' + raceFmtWindow(c) + '<br>';
-  if (mode === 'admin') {
-    // 题量已经够多（> RACE_SPARE_HINT_MAX_POOL）就不提"补充通用知识"这回事了
-    var _sz = racePoolOfSize(c.section || 'all');
-    var _sp = (_sz > RACE_SPARE_HINT_MAX_POOL) ? 0 : raceSpareSizeOf(c.section || 'all');
-    html += '📚 ' + t('race_pool_size') + '：' + (_sp ? t('race_pool_spare').replace('{n}', _sz).replace('{m}', _sp)
-      : _sz + ' ' + (state.lang === 'en' ? 'questions' : '题'));
-  }
-  html += '</div></div>';
+  html += raceHeroCardHtml(c, st, mode);
   // 本期主题徽章公示（已结束的届不再展示，避免"现在还能拿吗"的歧义）
   if (st === 'open' || st === 'pending') html += raceThemeCardHtml(c);
   if (st === 'pending') html += '<div class="q-card" style="text-align:center;color:#a14a00;">' + t('race_pending') + '</div>';
