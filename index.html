@@ -9526,7 +9526,7 @@ var BADGE_RULE_TOTAL = 'total';
 //   night   夜猫子 —— 22:00 后（凌晨 5 点前）打卡，每期一枚（按流水 ts 判断）
 //   weekend 周末战士 —— 累计周末打卡 N 天，终身一次
 //   perfect 答题能手 —— 单次答对 N 题以上（原「神射手」，2026-11-04 改为按答对题数判）
-//   fast    闪电快手 —— 单期平均每题不超过 N 秒（至少答 5 题），每期一枚（读成绩里的 secs）
+//   fast    闪电快手 —— 单期平均每题不超过 N 秒（至少答对 BADGE_FAST_MIN_ANS 题），每期一枚（读成绩里的 secs）
 //   newbie  初出茅庐 —— 首次打卡起 7 天内打卡满 N 天，终身一次（新手任务）
 // 2026-11-04 扩到五大类：
 //   竞速闯关 dept_top 任意单一板块速答榜当期 TOP N / all_top 全题库榜当期 TOP N
@@ -9538,6 +9538,8 @@ var BADGE_RULE_NIGHT = 'night';
 var BADGE_RULE_WEEKEND = 'weekend';
 var BADGE_RULE_PERFECT = 'perfect';
 var BADGE_RULE_FAST = 'fast';
+// 闪电快手的第二道门槛（2026-11-05 运营定稿：至少答对 8 题才算，避免蒙对 5 题就秒过）
+var BADGE_FAST_MIN_ANS = 8;
 var BADGE_RULE_NEWBIE = 'newbie';
 var BADGE_RULE_DEPT_TOP = 'dept_top';
 var BADGE_RULE_ALL_TOP = 'all_top';
@@ -9609,6 +9611,34 @@ function badgeSecValid(sec) {
   for (var i = 0; i < RACE_SECTIONS.length; i++) if (RACE_SECTIONS[i].key === s) return s;
   return '';
 }
+// 每枚徽章的「员工端说明」文案（2026-11-05 用户逐条定稿）。挂在 def.dcn / def.den 上，
+// raceBadgeDesc 优先用它，没有再按规则自动生成 —— 这样管理员以后也能在目录里单枚改。
+var BADGE_DESC_TEXT = {
+  bd_s3:      { cn: '连续打卡 3 天，迈出学习第一步', en: '3 check-ins in a row — your first step' },
+  bd_s5:      { cn: '连续打卡 5 天，保持学习节奏', en: '5 check-ins in a row — keep the rhythm' },
+  bd_s7:      { cn: '连续打卡 7 天，养成周度学习习惯', en: '7 check-ins in a row — a weekly habit forms' },
+  bd_s14:     { cn: '连续打卡 14 天，持之以恒的学习者', en: '14 check-ins in a row — you keep showing up' },
+  bd_s21:     { cn: '连续打卡 21 天，已形成稳定学习习惯', en: '21 check-ins in a row — the habit is yours' },
+  bd_p10:     { cn: '单期赛事累计打卡满 10 天', en: '10 check-in days within one round' },
+  bd_p15:     { cn: '单期赛事累计打卡满 15 天', en: '15 check-in days within one round' },
+  bd_p20:     { cn: '单期赛事累计打卡满 20 天，收获月度全勤荣耀', en: '20 check-in days within one round — full-month glory' },
+  bd_t30:     { cn: '全平台历史累计打卡满 30 天，步步积累', en: '30 check-in days all-time — step by step' },
+  bd_t60:     { cn: '全平台历史累计打卡满 60 天，勤学不止', en: '60 check-in days all-time — never stop learning' },
+  bd_t100:    { cn: '全平台历史累计打卡满 100 天，长期坚持的学习者', en: '100 check-in days all-time — the long runner' },
+  bd_top_cul: { cn: '「厨房部」速答榜前 10 名（赛季结束结算）', en: 'Top 10 on the Culinary board (settled at round end)' },
+  bd_top_fb:  { cn: '「餐饮部」速答榜前 10 名（赛季结束结算）', en: 'Top 10 on the F&B board (settled at round end)' },
+  bd_top_rooms: { cn: '「房务部」速答榜前 10 名（赛季结束结算）', en: 'Top 10 on the Rooms board (settled at round end)' },
+  bd_alltop:  { cn: '「全题库」速答榜前 10 名（赛季结束结算）', en: 'Top 10 on the All-Questions board (settled at round end)' },
+  bd_wrong:   { cn: '累计完成 50 道错题重做，主动攻克知识薄弱点', en: '50 wrong answers redone — you fix what you miss' },
+  bd_fav:     { cn: '累计收藏 20 道题目，收纳重点知识考题', en: '20 questions saved — your own key-point shelf' },
+  bd_prac:    { cn: '练习模式累计完成 100 道练习，温故巩固知识', en: '100 practice answers — review makes it stick' },
+  bd_newb:    { cn: '注册首周完成 3 次打卡，开启你的学习之旅', en: '3 check-ins in your first week — the journey starts' },
+  bd_night:   { cn: '22:00–次日 5:00 完成打卡，致敬夜晚坚持学习的你', en: 'Check in between 10 PM and 5 AM — for the night learners' },
+  bd_wkend:   { cn: '累计周末完成 3 天打卡', en: '3 weekend check-ins all-time' },
+  bd_perf:    { cn: '单场限时竞速答对 10 题以上，答题实力在线', en: '10+ correct in one race run — speed meets accuracy' },
+  bd_fast:    { cn: '单赛季答题平均每题用时 ≤5 秒（至少答对 8 题），反应敏捷', en: 'Avg \u2264 5 sec per question (8+ answered) — lightning reflexes' },
+  bd_theme1:  { cn: '✨ 月度限定 · 当期打卡满 8 天且累计答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers this round' }
+};
 // 预设徽章：先用一套合理的，管理端随时可改（改完发布即生效）。
 // 命名走「主题名 + 规则说明」：名号给人身份感（学习王者），副标题说清怎么拿到。
 function badgeDefaultCatalog() {
@@ -9616,18 +9646,18 @@ function badgeDefaultCatalog() {
   var N = BADGE_RULE_NIGHT, W = BADGE_RULE_WEEKEND, PF = BADGE_RULE_PERFECT, F = BADGE_RULE_FAST, NB = BADGE_RULE_NEWBIE;
   var DT = BADGE_RULE_DEPT_TOP, AT = BADGE_RULE_ALL_TOP;
   var WG = BADGE_RULE_WRONG, FV = BADGE_RULE_FAV, PR = BADGE_RULE_PRACTICE, TH = BADGE_RULE_THEME;
-  return {
+  var cat = {
     ver: 6,
     list: [
       badgeDef('bd_s3', S, 3, '星火初燃', 'First Spark', '✨', 1, '#ffd27f', '#ff9a3c'),
-      badgeDef('bd_s5', S, 5, '坚持之力', 'Steady Flame', '🔥', 2, '#ffc46b', '#ff7a00'),
+      badgeDef('bd_s5', S, 5, '灼灼微光', 'Steady Glow', '🔥', 2, '#ffc46b', '#ff7a00'),
       badgeDef('bd_s7', S, 7, '一周之火', 'Week of Fire', '🌋', 3, '#ffb347', '#ff5e00'),
       badgeDef('bd_s14', S, 14, '双周达人', 'Fortnight Pro', '🏅', 4, '#ffcf6b', '#e08e00'),
       badgeDef('bd_s21', S, 21, '习惯大师', 'Habit Master', '🏆', 5, '#ffe08a', '#c99700'),
-      badgeDef('bd_p10', P, 10, '月度常客', 'Monthly Regular', '📅', 2, '#a8d8ff', '#2b6cb0'),
+      badgeDef('bd_p10', P, 10, '月学常客', 'Monthly Learner', '📅', 2, '#a8d8ff', '#2b6cb0'),
       badgeDef('bd_p15', P, 15, '半程之星', 'Half-month Star', '🌟', 3, '#9fd0ff', '#1f5f9e'),
       badgeDef('bd_p20', P, 20, '月度全勤狮', 'Monthly Lion', '🦁', 4, '#8ec4ff', '#174a7c'),
-      badgeDef('bd_t30', T, 30, '稳步前行', '30-day Walker', '🌿', 2, '#b7e4c7', '#2f855a'),
+      badgeDef('bd_t30', T, 30, '积步成途', '30-day Walker', '🌿', 2, '#b7e4c7', '#2f855a'),
       badgeDef('bd_t60', T, 60, '勤学不辍', '60-day Scholar', '🌳', 3, '#9fd8b0', '#276749'),
       badgeDef('bd_t100', T, 100, '学习王者', 'Learning Champion', '👑', 5, '#ffe08a', '#b7791f'),
       // 竞速闯关 · 板块榜（2026-11-04 细分）：原来一枚「题库征服者」= 任一板块前十，
@@ -9651,6 +9681,14 @@ function badgeDefaultCatalog() {
       badgeDef('bd_theme1', TH, 8, '产品知识启航狮', 'Product Launch Lion', '⛵', 3, '#ffd7a8', '#c2410c', '', 50)
     ]
   };
+  // 挂上逐条定稿的员工端说明（见 BADGE_DESC_TEXT）
+  for (var di = 0; di < cat.list.length; di++) {
+    var dt = BADGE_DESC_TEXT[cat.list[di].id];
+    if (!dt) continue;
+    cat.list[di].dcn = dt.cn;
+    cat.list[di].den = dt.en;
+  }
+  return cat;
 }
 // 一次性迁移（v1 → 当前）：旧预设里图标 / 名字被“原封未动”的条目才改，
 // 管理员自己改过名字或图标的一律不碰（尊重手动配置）。
@@ -9659,7 +9697,7 @@ function badgeDefaultCatalog() {
 //   - 门槛：答题能手 5→10 题、闪电快手 15→5 秒
 var BADGE_LEGACY_MIGRATE = {
   'bd_s3':  { cn: '星火初燃', en: 'First Spark',       fromIcons: ['🔥'], icon: '✨' },
-  'bd_s5':  { cn: '坚持之力', en: 'Steady Flame',      fromIcons: ['🔥'], icon: '🔥' },
+  'bd_s5':  { cn: '灼灼微光', en: 'Steady Glow',       fromIcons: ['🔥'], icon: '🔥' },
   'bd_s7':  { cn: '一周之火', en: 'Week of Fire',       fromIcons: ['🔥'], icon: '🌋' },
   'bd_s14': { fromCn: '双周铁人', cn: '双周达人', en: 'Fortnight Pro' },
   'bd_p20': { fromCn: '月度全勤王', cn: '月度全勤狮', en: 'Monthly Lion', fromIcons: ['👑', '🥇'], icon: '🦁' },
@@ -9705,7 +9743,11 @@ function badgeNormList(list) {
       mc: Math.max(0, Math.min(2000, parseInt(b.mc, 10) || 0)),
       // 「板块速答榜」类徽章只认哪个板块（空 = 任一板块）。白名单外的值一律当空，
       // 免得脏字段让徽章永远发不出去又查不出原因。
-      sec: badgeSecValid(b.sec)
+      sec: badgeSecValid(b.sec),
+      // 员工端说明的**自定义文案**（2026-11-05）：有就用它，没有按规则自动生成。
+      // 单独一列存，不动 n / rule，所以改文案不会动门槛。
+      dcn: String(b.dcn || '').slice(0, 120),
+      den: String(b.den || '').slice(0, 160)
     });
   }
   return badgeMigrateIcons(out);
@@ -10114,7 +10156,7 @@ function raceComputeAwards(rec) {
     }
   }
   // 答题能手 / 闪电快手：读各届最佳成绩。答题能手 = 单次答对 ≥N 题（2026-11-04 改，
-  // 不再要求全对）；快手 = 至少答 5 题、平均每题 ≤N 秒（secs 是新字段，老成绩没有就自然不参与）。
+  // 不再要求全对）；快手 = 至少答对 BADGE_FAST_MIN_ANS 题、平均每题 ≤N 秒（secs 是新字段，老成绩没有就自然不参与）。
   var runs = raceRoundEntriesOf(rec);
   for (i = 0; i < runs.length; i++) {
     var re = runs[i], e = re.entry;
@@ -10126,7 +10168,7 @@ function raceComputeAwards(rec) {
       if (d.rule === BADGE_RULE_PERFECT) {
         okHit = (e.correct || 0) >= d.n && (e.answered || 0) > 0;
       } else if (d.rule === BADGE_RULE_FAST) {
-        okHit = (e.answered || 0) >= 5 && typeof e.secs === 'number' && e.secs > 0
+        okHit = (e.answered || 0) >= BADGE_FAST_MIN_ANS && typeof e.secs === 'number' && e.secs > 0
           && (e.secs / e.answered) <= d.n;
       }
       if (!okHit) continue;
@@ -10538,6 +10580,9 @@ function raceBadgeName(b, lang) {
 function raceBadgeDesc(b, lang) {
   var L = lang || state.lang;
   var def = b && (b.def || (b.id ? raceBadgeById(b.id) : null));
+  // 自定义说明优先（管理端逐条定稿的文案）：def.dcn / def.den
+  var custom = def ? (L === 'en' ? (def.den || def.dcn) : (def.dcn || def.den)) : '';
+  if (custom) return custom;
   var rule = def ? def.rule
     : (b && b.rule) || (b && b.kind === 's' ? BADGE_RULE_STREAK : (b && b.kind === 't' ? BADGE_RULE_TOTAL : BADGE_RULE_PERIOD));
   var n = (def ? def.n : (b && (b.n || b.minDays))) || 0;
@@ -10568,7 +10613,7 @@ function raceBadgeDesc(b, lang) {
   if (rule === BADGE_RULE_NIGHT) return '22:00 后打卡（凌晨 5 点前也算）';
   if (rule === BADGE_RULE_WEEKEND) return '累计周末打卡 ' + n + ' 天';
   if (rule === BADGE_RULE_PERFECT) return '单场竞速答对 ' + n + ' 题以上';
-  if (rule === BADGE_RULE_FAST) return '单期平均每题不超过 ' + n + ' 秒（至少答 5 题）';
+  if (rule === BADGE_RULE_FAST) return '单期平均每题不超过 ' + n + ' 秒（至少答对 ' + BADGE_FAST_MIN_ANS + ' 题）';
   if (rule === BADGE_RULE_NEWBIE) return '首次打卡 7 天内打卡满 ' + n + ' 天';
   if (rule === BADGE_RULE_DEPT_TOP) {
     var secCn = badgeSecValid(def && def.sec);
@@ -10634,7 +10679,7 @@ function raceBadgeProgressOf(rec, def) {
     var runsF = raceRoundEntriesOf(rec || {}), hitF = false, rf;
     for (rf = 0; rf < runsF.length; rf++) {
       var eF = runsF[rf].entry;
-      if ((eF.answered || 0) >= 5 && typeof eF.secs === 'number' && eF.secs > 0 && (eF.secs / eF.answered) <= def.n) { hitF = true; break; }
+      if ((eF.answered || 0) >= BADGE_FAST_MIN_ANS && typeof eF.secs === 'number' && eF.secs > 0 && (eF.secs / eF.answered) <= def.n) { hitF = true; break; }
     }
     return { cur: hitF ? 1 : 0, max: def.n };
   }
@@ -13882,9 +13927,9 @@ function renderAdminRace() {
 // ===== 管理端：徽章设置 =====
 // 三件事：增删改、按描述自动出图标与名字、发布到云端（写 admin_state.badges）。
 var BADGE_NAME_SEEDS = {
-  streak: [[3, '星火初燃', 'First Spark'], [5, '坚持之力', 'Steady Flame'], [7, '一周之火', 'Week of Fire'], [14, '双周达人', 'Fortnight Pro'], [21, '习惯大师', 'Habit Master'], [30, '月度传奇', 'Monthly Legend']],
-  period: [[5, '初来乍到', 'Getting Started'], [10, '月度常客', 'Monthly Regular'], [15, '半程之星', 'Half-month Star'], [20, '月度全勤狮', 'Monthly Lion'], [25, '满勤上将', 'Attendance General'], [31, '月度满贯', 'Perfect Month']],
-  total: [[15, '起步者', 'First Steps'], [30, '稳步前行', '30-day Walker'], [60, '勤学不辍', '60-day Scholar'], [100, '学习王者', 'Learning Champion'], [200, '殿堂学者', 'Hall of Fame']],
+  streak: [[3, '星火初燃', 'First Spark'], [5, '灼灼微光', 'Steady Glow'], [7, '一周之火', 'Week of Fire'], [14, '双周达人', 'Fortnight Pro'], [21, '习惯大师', 'Habit Master'], [30, '月度传奇', 'Monthly Legend']],
+  period: [[5, '初来乍到', 'Getting Started'], [10, '月学常客', 'Monthly Learner'], [15, '半程之星', 'Half-month Star'], [20, '月度全勤狮', 'Monthly Lion'], [25, '满勤上将', 'Attendance General'], [31, '月度满贯', 'Perfect Month']],
+  total: [[15, '起步者', 'First Steps'], [30, '积步成途', '30-day Walker'], [60, '勤学不辍', '60-day Scholar'], [100, '学习王者', 'Learning Champion'], [200, '殿堂学者', 'Hall of Fame']],
   dept_top: [[10, '题库征服者', 'Section Conqueror'], [3, '板块新星', 'Section Star'], [1, '板块霸主', 'Section Champion']],
   all_top: [[10, '全题库大师', 'All-Bank Master'], [3, '全库好手', 'All-Bank Ace'], [1, '全库霸主', 'All-Bank Champion']],
   wrong: [[50, '错题猎手', 'Mistake Hunter'], [100, '错题终结者', 'Mistake Slayer']],
