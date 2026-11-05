@@ -5127,7 +5127,7 @@ var I18N = {
   rv_wrong_times: {cn:'您做错过 {n} 次', en:'{n} wrong attempts'},
   rv_redo_due: {cn:'复习这 {n} 道题', en:'Review these {n}'},
   rv_redo_due_sub: {cn:'复习时间已到，现在练记得最牢。', en:'Due now — the best time to review.'},
-  rv_redo_one: {cn:'重做', en:'Redo'},
+  rv_redo_one: {cn:'再做一次', en:'Try again'},
   rv_make_paper: {cn:'自己组一份练习卷', en:'Build my own paper'},
   rv_make_paper_sub: {cn:'按全部错题、知识点或收藏题组卷，题量自己定。', en:'Build a paper from all mistakes, a topic, or your saved questions.'},
   rv_paper_title: {cn:'组一份练习卷', en:'Build a paper'},
@@ -5148,6 +5148,10 @@ var I18N = {
   rv_paper_none: {cn:'这一批暂时没有题，换一个批次试试。', en:'Nothing in this batch — try another.'},
   rv_start_paper: {cn:'开始练习', en:'Start practising'},
   rv_paper_done: {cn:'本轮完成', en:'Paper complete'},
+  rv_done_ok: {cn:'答对（道）', en:'correct'},
+  rv_done_promote: {cn:'进入下一阶', en:'advanced'},
+  rv_done_grad: {cn:'移出错题本', en:'cleared'},
+  rv_done_review: {cn:'本轮逐题解析', en:'Answers and explanations'},
   rv_paper_line: {cn:'答对 {ok} / {total} 道', en:'{ok} / {total} correct'},
   rv_paper_gain: {cn:'{p} 道进入下一阶 · {g} 道移出错题本', en:'{p} advanced · {g} cleared'},
   rv_back_wrong: {cn:'返回错题本', en:'Back to mistakes'},
@@ -5169,8 +5173,8 @@ var I18N = {
   rv_hub_none: {cn:'本周没有该复习的错题，可以自己挑几道错题巩固，或者练几道新题。', en:'Nothing due this week — review any mistake you like, or practise new questions.'},
   rv_stat_line: {cn:'累计复习 {rv} 次 · 推进 {p} 阶 · 已掌握 {g} 道', en:'{rv} reviews · {p} stages advanced · {g} cleared'},
   race_goto_wrong: {cn:'去错题本复习（本场答错已收录）', en:'Review mistakes (this run saved)'},
-  race_goto_wrong_run: {cn:'只复习本场答错的 {n} 道', en:'Review only this run\'s {n} misses'},
-  exam_goto_wrong_run: {cn:'只复习本卷答错的 {n} 道', en:'Review only this paper\'s {n} misses'},
+  race_goto_wrong_run: {cn:'一键重做本场错题（{n} 道）', en:'Redo all mistakes from this run ({n})'},
+  exam_goto_wrong_run: {cn:'一键重做本卷错题（{n} 道）', en:'Redo all mistakes from this paper ({n})'},
   rv_book_ledger: {cn:'我的学习记录', en:'My learning record'},
   rv_hub_go_practice: {cn:'去练新题', en:'Practise questions'},
   rv_week_line: {cn:'近 7 天：推进 {p} 阶 · 移出 {g} 道', en:'Last 7 days: {p} advanced · {g} cleared'},
@@ -5181,8 +5185,8 @@ var I18N = {
   rv_mastery: {cn:'错题掌握度', en:'Mistake mastery'},
   rv_mastery_sub: {cn:'已掌握错题 {g} 道 · 错题本还剩 {n} 道', en:'{g} cleared · {n} left'},
   rv_mastery_none: {cn:'还没有错题记录，先练几道再来。', en:'No mistakes recorded yet.'},
-  rv_cal_redo_run: {cn:'重做本次错题（{n}）', en:'Redo this run\'s mistakes ({n})'},
-  rv_cal_redo_one: {cn:'重做', en:'Redo'},
+  rv_cal_redo_run: {cn:'一键重做本次错题（{n} 道）', en:'Redo all mistakes from this run ({n})'},
+  rv_cal_redo_one: {cn:'再做一次', en:'Try again'},
   rv_cal_redo_none: {cn:'本次全对，没有需要重做的题', en:'No mistakes in this run'},
   rv_fav_paper: {cn:'刷一遍收藏题', en:'Practise saved questions'},
   rv_fav_mastered: {cn:'已掌握，可移出', en:'Mastered — can remove'},
@@ -8572,6 +8576,19 @@ function shuffleArray(arr) {
     var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
   }
   return a;
+}
+
+// 一次性判分（2026-11-05）：答题页的解析区一直是内联判断的，
+// 但"最后一题交卷后直接进本轮小结页"需要在渲染之前就知道对错 ——
+// 口径必须和 renderQuestion 里逐字一致，所以只此一份，两处都调它。
+function qIsCorrect(q, ans) {
+  if (!q) return false;
+  if (q.type === 'fill') return checkAllFillAnswers(ans || [], q.fill_answers || []);
+  var sel = Array.isArray(ans) ? ans : [];
+  var cor = q.correct_answer || [];
+  if (!sel.length || sel.length !== cor.length) return false;
+  for (var i = 0; i < sel.length; i++) { if (cor.indexOf(sel[i]) < 0) return false; }
+  return true;
 }
 
 function prepareQuestions(questions) {
@@ -13383,6 +13400,7 @@ function renderRaceResult() {
   }
   // 本次回顾只在结果页这一次可见，关掉就没了 → 给个入口去打卡日历长期留存的版本。
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenCalendar()">' + t('race_cal_open') + '</button>';
+  // 逐题解析下面留「再做一次」；整场一次性重做已在上方动作区（一键重做本场错题），不重复放。
   html += '<div style="margin-top:16px;font-size:13px;font-weight:600;">📖 ' + t('race_review') + '</div>';
   for (var i = 0; i < r.answers.length; i++) {
     var a = r.answers[i];
@@ -13395,6 +13413,10 @@ function renderRaceResult() {
     if (!ok) html += '<div style="font-size:13px;color:#27ae60;margin-top:2px;">✓ ' + escapeHtml(raceCorrectText(q)) + '</div>';
     var exp = state.lang === 'en' ? (q.explanation_en || q.explanation || '') : (q.explanation_cn || q.explanation || '');
     if (exp) html += '<div style="font-size:12px;color:#666;margin-top:6px;line-height:1.6;">📖 ' + escapeHtml(exp).replace(/\n/g, '<br>') + '</div>';
+    // 单题「再做一次」：和打卡日历里那颗按钮同名同位置，学员不用重新认一遍
+    if (!ok) {
+      html += '<button class="action-btn secondary" style="margin-top:8px;font-size:12px;padding:5px 14px;" onclick="startWrongRedoIds([&quot;' + q.id + '&quot;],{kind:&quot;race&quot;,title:&quot;' + escapeHtml(t('rv_cal_redo_one')) + '&quot;})">🔁 ' + t('rv_cal_redo_one') + '</button>';
+    }
     html += '</div>';
   }
   html += '</div>';
@@ -15480,19 +15502,7 @@ function renderQuestion() {
     // 和专项卷的小结数字反复累加。submitAnswer 时会清掉标记，所以重做同一题
     // 依旧算一次新的作答。
     if (state.currentMode !== 'exam' && state.currentMode !== 'formal') {
-      var recKey = q.id + '@' + idx;
-      if (!state.recGuards[recKey]) {
-        state.recGuards[recKey] = 1;
-        var passRes = recordAttempt(q, state.selectedAnswers[idx], { ok: isCorrect, skey: paperSkeyFor(q.id) });
-        if (passRes) {
-          saveState();
-          if (state.paperSession) {
-            if (passRes === 'graduated') state.paperSession.graduated++;
-            if (passRes === 'promoted') state.paperSession.promoted++;
-            if (isCorrect) state.paperSession.ok++;
-          }
-        }
-      }
+      settleAttempt(q, idx, isCorrect);
     }
   }
   
@@ -16830,6 +16840,43 @@ function paperSkeyFor(qid) {
   if (ps && ps.skeyOf && ps.skeyOf[qid]) return ps.skeyOf[qid];
   return bankStateKey();
 }
+// 一题的记账（进错题本 / 推进一阶 / 本轮小结计数）。renderQuestion 与
+// "最后一题直接进小结页"两条路都走这里，避免两套口径。
+function settleAttempt(q, idx, isCorrect) {
+  var recKey = q.id + '@' + idx;
+  if (state.recGuards[recKey]) return null;
+  state.recGuards[recKey] = 1;
+  var passRes = recordAttempt(q, state.selectedAnswers[idx], { ok: isCorrect, skey: paperSkeyFor(q.id) });
+  if (passRes) {
+    saveState();
+    if (state.paperSession) {
+      if (passRes === 'graduated') state.paperSession.graduated++;
+      if (passRes === 'promoted') state.paperSession.promoted++;
+      if (isCorrect) state.paperSession.ok++;
+    }
+  }
+  return passRes;
+}
+// 正确答案文本（小结页用）：填空题按"空"分组，和答题页解析区同款
+function qCorrectAnswerText(q) {
+  if (!q) return '';
+  if (q.type === 'fill') {
+    var fa = q.fill_answers || [];
+    var blankCnt = fa.length > 2 ? Math.ceil(fa.length / 2) : 1;
+    var parts = [];
+    for (var bi = 0; bi < blankCnt; bi++) {
+      var cnA = fa[bi * 2] || '', enA = fa[bi * 2 + 1] || '';
+      if (cnA && enA) parts.push((bi + 1) + '. ' + cnA + '  /  ' + enA);
+      else parts.push((bi + 1) + '. ' + (cnA || enA));
+    }
+    return parts.join('\n');
+  }
+  var cor = q.correct_answer || [];
+  var out = [];
+  for (var i = 0; i < cor.length; i++) out.push(qOptText(q, cor[i]));
+  return out.join(' / ');
+}
+// 兜底用小卡：只有在本轮小结页没能接管时才出现（例如中途刷新回到答题页）
 function wrongPaperSummaryHtml() {
   var ps = state.paperSession || {};
   var html = '<div class="restart-banner" style="display:block;">';
@@ -16838,11 +16885,63 @@ function wrongPaperSummaryHtml() {
     + t('rv_paper_line').replace('{ok}', String(ps.ok || 0)).replace('{total}', String(ps.total || 0)) + '<br>'
     + t('rv_paper_gain').replace('{p}', String(ps.promoted || 0)).replace('{g}', String(ps.graduated || 0))
     + '</div>';
-  html += '<div style="display:flex;gap:8px;margin-top:12px;">';
-  html += '<button class="restart-btn" style="flex:1;" onclick="navigate(\'wrongAll\')">' + t('rv_back_wrong') + '</button>';
-  html += '<button class="restart-btn" style="flex:1;" onclick="navigate(\'wrongPaper\')">' + t('rv_again_paper') + '</button>';
+  // 只留「返回错题本」：本轮已经结束，再组一卷要重选分类和题量，
+  // 那是错题本页的事（领导 2026-11-05 要求拿掉，别让完成提示变成又一个组卷入口）。
+  html += '<button class="restart-btn" style="width:100%;margin-top:12px;" onclick="paperDoneBack()">' + t('rv_back_wrong') + '</button>';
   html += '</div></div>';
   return html;
+}
+// 本轮小结页（2026-11-05 领导定稿）：答完最后一题直接进这一页 ——
+// 先给成绩，再往下是本轮**每一道题**的正误 + 正确答案 + 解析。
+// 之前只有最后一题的解析在答题页上，"作答结束可查看正误与解析"其实没兑现。
+function renderPaperDone() {
+  var ps = state.paperSession || {};
+  var qs = state.questions || [];
+  var total = ps.total || qs.length || 0;
+  var okCnt = ps.ok || 0;
+  var html = renderAppHeader({ title: '🎉 ' + t('rv_paper_done'), subtitle: ps.title || '', showBack: false });
+  html += '<div class="page">';
+  // ① 成绩：大数字答对 / 总数，下面两格小结
+  html += '<div class="q-card" style="text-align:center;padding:18px 14px 14px;">';
+  if (ps.title) html += '<div style="font-size:12px;color:#8a97a4;">' + escapeHtml(ps.title) + '</div>';
+  html += '<div style="font-size:46px;font-weight:800;line-height:1.15;color:#1a3a5c;margin-top:2px;">' + okCnt
+    + '<span style="font-size:19px;font-weight:700;color:#9aa8b5;"> / ' + total + '</span></div>';
+  html += '<div style="font-size:12px;color:#8a97a4;">' + t('rv_done_ok') + '</div>';
+  html += '<div style="display:flex;margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">';
+  html += '<div style="flex:1;"><div style="font-size:20px;font-weight:700;color:#2e7d32;">' + (ps.promoted || 0) + '</div>'
+    + '<div style="font-size:11px;color:#8a97a4;margin-top:2px;">' + t('rv_done_promote') + '</div></div>';
+  html += '<div style="flex:1;border-left:1px solid var(--border);"><div style="font-size:20px;font-weight:700;color:#2e7d32;">' + (ps.graduated || 0) + '</div>'
+    + '<div style="font-size:11px;color:#8a97a4;margin-top:2px;">' + t('rv_done_grad') + '</div></div>';
+  html += '</div></div>';
+  // ② 唯一出口：回错题本看这一轮把哪些题推进了 / 哪些该重练
+  html += '<button class="action-btn primary" style="width:100%;margin-top:12px;" onclick="paperDoneBack()">' + t('rv_back_wrong') + '</button>';
+  // ③ 逐题解析
+  html += '<div style="margin-top:20px;font-size:13px;font-weight:600;">📖 ' + t('rv_done_review') + '</div>';
+  for (var i = 0; i < qs.length; i++) {
+    var q = qs[i];
+    if (!q) continue;
+    var isOk = qIsCorrect(q, state.selectedAnswers[i]);
+    var cText = qCorrectAnswerText(q);
+    var isGS = q.section_en === 'Gold Standards';
+    html += '<div class="q-card" style="margin-top:10px;border-left:3px solid ' + (isOk ? '#27ae60' : '#c0392b') + ';">';
+    html += '<div style="font-size:14px;font-weight:600;">' + (i + 1) + '. ' + escapeHtml(qTextOf(q)).replace(/\n/g, '<br>') + '</div>';
+    html += '<div style="font-size:13px;margin-top:6px;' + (isOk ? 'color:#27ae60;' : 'color:#c0392b;') + ';font-weight:600;">'
+      + (isOk ? '✅ ' + t('correct_msg') : '❌ ' + t('wrong_msg')) + '</div>';
+    html += '<div style="font-size:13px;color:#2e7d32;margin-top:2px;">✓ ' + escapeHtml(t('correct_answer')) + escapeHtml(cText).replace(/\n/g, '<br>') + '</div>';
+    if (!isGS) {
+      var exp = qExplanationOf(q);
+      if (exp) html += '<div style="font-size:12px;color:#666;margin-top:6px;line-height:1.7;">📖 ' + escapeHtml(t('explanation')) + escapeHtml(exp).replace(/\n/g, '<br>') + '</div>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+function paperDoneBack() {
+  state.paperSession = null;
+  state.currentMode = 'practice';
+  state.showAnswer = false;
+  navigate('wrongAll');
 }
 function collectedBankOf(qid) {
   var order = ['day21', 'tsos', 'manual'];
@@ -17538,6 +17637,14 @@ function submitAnswer() {
     );
     saveState();
     scheduleSync(false); // throttled routine snapshot refresh
+  }
+  // 专项卷 / 错题重做：答完最后一题直接进「本轮小结页」。
+  // 这里必须先把这一题的账结掉 —— 记账是挂在答题页渲染里的，跳页后就不会再跑，
+  // 最后一题会漏记（不进错题本、不推进阶、小结数字少一个）。
+  if (state.paperSession && state.currentIndex === state.questions.length - 1) {
+    settleAttempt(q, state.currentIndex, qIsCorrect(q, ans));
+    navigate('paperDone');
+    return;
   }
   render();
 }
@@ -24795,6 +24902,8 @@ function render() {
     // 组卷不再是独立页面：进来就是错题本页 + 展开的面板，员工不会觉得"跳了个新界面"
     // 组卷不再是独立页面：进来就是错题本页，并滚到「自主组卷」那一块
     case 'wrongPaper': app.innerHTML = renderWrongAll(); rvScrollTo('rvBlkPaper'); break;
+    // 本轮小结：组卷 / 错题重做 / 单题再做一次 答完最后一题就落到这里
+    case 'paperDone': app.innerHTML = renderPaperDone(); break;
     case 'collectedList': app.innerHTML = renderCollectedList(); break;
     case 'examResult': app.innerHTML = renderExamResult(); break;
     case 'examReplay': app.innerHTML = renderExamReplay(); break;
