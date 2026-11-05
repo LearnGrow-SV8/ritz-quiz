@@ -493,6 +493,15 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 
 .restart-banner { background:linear-gradient(135deg,#e8f5e9,#c8e6c9); border:1px solid #a5d6a7; border-radius:10px; padding:12px 16px; margin-bottom:16px; text-align:center; font-size:13px; color:#2e7d32; }
 .restart-banner .restart-btn { margin-top:8px; padding:8px 20px; background:var(--success); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
+/* 本轮完成条：钉在底部操作条上方（bottom 值 = 底部条高度），只在本轮最后一题出现 */
+.paper-finish-bar { position:fixed; bottom:65px; left:50%; transform:translateX(-50%); width:100%; max-width:600px; z-index:99; box-sizing:border-box;
+  background:linear-gradient(135deg,#e9f6ea,#d5efd8); border-top:1px solid #a5d6a7; border-bottom:1px solid #a5d6a7;
+  padding:9px 16px; display:flex; align-items:center; gap:10px; box-shadow:0 -2px 12px rgba(46,125,50,.12); }
+.paper-finish-bar .pf-main { flex:1; min-width:0; }
+.paper-finish-bar .pf-t { font-size:13px; font-weight:700; color:#1e6b2e; }
+.paper-finish-bar .pf-s { font-size:11.5px; color:#3f7d4a; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.paper-finish-bar .pf-btn { flex:0 0 auto; padding:9px 14px; border-radius:999px; border:none; background:var(--success); color:#fff; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.paper-finish-bar .pf-btn:active { transform:scale(.97); }
 
 .lang-toggle { display:inline-flex; background:rgba(255,255,255,0.4); border-radius:8px; overflow:hidden; border:1px solid rgba(0,0,0,0.08); }
 .lang-toggle button { background:none; border:none; color:var(--primary); padding:3px 8px; font-size:12.5px; cursor:pointer; opacity:0.6; transition:opacity 0.15s; }
@@ -5152,6 +5161,8 @@ var I18N = {
   rv_done_promote: {cn:'进入下一阶', en:'advanced'},
   rv_done_grad: {cn:'移出错题本', en:'cleared'},
   rv_done_review: {cn:'本轮逐题解析', en:'Answers and explanations'},
+  rv_finish_bar_sub: {cn:'答对 {ok}/{n} · 推进 {p} · 移出 {g}', en:'{ok}/{n} correct · {p} advanced · {g} cleared'},
+  rv_finish_bar_go: {cn:'查看小结', en:'See summary'},
   rv_paper_line: {cn:'答对 {ok} / {total} 道', en:'{ok} / {total} correct'},
   rv_paper_gain: {cn:'{p} 道进入下一阶 · {g} 道移出错题本', en:'{p} advanced · {g} cleared'},
   rv_back_wrong: {cn:'返回错题本', en:'Back to mistakes'},
@@ -15528,7 +15539,10 @@ function renderQuestion() {
     html += '</div>';
     if (idx === total - 1 && state.showAnswer) {
       if (state.paperSession) {
-        html += wrongPaperSummaryHtml();
+        // 专项卷 / 错题重做：完成提示不放正文里（挂在解析下面根本看不见），
+        // 交给页面底部那条固定「本轮完成」条 —— 学员先看完最后一题的解析，
+        // 想收尾了自己点「查看本轮小结」（2026-11-05 二次修正：不再自动跳页）。
+        html += '<div style="height:56px;"></div>';
       } else {
         html += '<div class="restart-banner">';
         html += '<div>🎉 '+t('completed')+'</div>';
@@ -15547,7 +15561,22 @@ function renderQuestion() {
   }
   html += '<button class="btn-collect '+(isCollected?'active':'')+'" onclick="toggleCollect(\''+q.id+'\')">'+(isCollected?'⭐':'☆')+'</button>';
   html += '</div>';
-  
+
+  // 本轮完成条（2026-11-05）：固定在底部操作条上方 —— 不盖正文解析、不用等倒计时、
+  // 不会自己消失。最后一题答完先照常看解析，想收尾了再点「查看小结」进本轮小结页。
+  if (state.paperSession && idx === total - 1 && state.showAnswer) {
+    var _ps = state.paperSession;
+    html += '<div class="paper-finish-bar">';
+    html += '<div class="pf-main">';
+    html += '<div class="pf-t">🎉 ' + t('rv_paper_done') + '</div>';
+    html += '<div class="pf-s">' + t('rv_finish_bar_sub')
+      .replace('{ok}', String(_ps.ok || 0)).replace('{n}', String(_ps.total || total))
+      .replace('{p}', String(_ps.promoted || 0)).replace('{g}', String(_ps.graduated || 0)) + '</div>';
+    html += '</div>';
+    html += '<button class="pf-btn" onclick="openPaperDone()">' + t('rv_finish_bar_go') + '</button>';
+    html += '</div>';
+  }
+
   return html;
 }
 
@@ -16876,22 +16905,7 @@ function qCorrectAnswerText(q) {
   for (var i = 0; i < cor.length; i++) out.push(qOptText(q, cor[i]));
   return out.join(' / ');
 }
-// 兜底用小卡：只有在本轮小结页没能接管时才出现（例如中途刷新回到答题页）
-function wrongPaperSummaryHtml() {
-  var ps = state.paperSession || {};
-  var html = '<div class="restart-banner" style="display:block;">';
-  html += '<div style="font-weight:700;margin-bottom:6px;">🎉 ' + t('rv_paper_done') + '</div>';
-  html += '<div style="font-size:13px;line-height:1.85;">'
-    + t('rv_paper_line').replace('{ok}', String(ps.ok || 0)).replace('{total}', String(ps.total || 0)) + '<br>'
-    + t('rv_paper_gain').replace('{p}', String(ps.promoted || 0)).replace('{g}', String(ps.graduated || 0))
-    + '</div>';
-  // 只留「返回错题本」：本轮已经结束，再组一卷要重选分类和题量，
-  // 那是错题本页的事（领导 2026-11-05 要求拿掉，别让完成提示变成又一个组卷入口）。
-  html += '<button class="restart-btn" style="width:100%;margin-top:12px;" onclick="paperDoneBack()">' + t('rv_back_wrong') + '</button>';
-  html += '</div></div>';
-  return html;
-}
-// 本轮小结页（2026-11-05 领导定稿）：答完最后一题直接进这一页 ——
+// 本轮小结页（2026-11-05）：从答题页底部「本轮完成」条点进来 ——
 // 先给成绩，再往下是本轮**每一道题**的正误 + 正确答案 + 解析。
 // 之前只有最后一题的解析在答题页上，"作答结束可查看正误与解析"其实没兑现。
 function renderPaperDone() {
@@ -16937,6 +16951,7 @@ function renderPaperDone() {
   html += '</div>';
   return html;
 }
+function openPaperDone() { navigate('paperDone'); }
 function paperDoneBack() {
   state.paperSession = null;
   state.currentMode = 'practice';
@@ -17638,14 +17653,8 @@ function submitAnswer() {
     saveState();
     scheduleSync(false); // throttled routine snapshot refresh
   }
-  // 专项卷 / 错题重做：答完最后一题直接进「本轮小结页」。
-  // 这里必须先把这一题的账结掉 —— 记账是挂在答题页渲染里的，跳页后就不会再跑，
-  // 最后一题会漏记（不进错题本、不推进阶、小结数字少一个）。
-  if (state.paperSession && state.currentIndex === state.questions.length - 1) {
-    settleAttempt(q, state.currentIndex, qIsCorrect(q, ans));
-    navigate('paperDone');
-    return;
-  }
+  // 注意：这里**不再**自动跳「本轮小结页」。领导反馈"跳过去就来不及看最后一题的解析"——
+  // 答完最后一题照常停在答题页看解析，页面底部会出现「本轮完成」条，由学员自己点进小结。
   render();
 }
 
