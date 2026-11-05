@@ -32,7 +32,7 @@
   --shadow-lg: 0 4px 24px rgba(14,37,69,0.12);
 }
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif; background:var(--bg); color:var(--text); line-height:1.6; max-width:600px; margin:0 auto; min-height:100vh; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif; background:var(--bg); color:var(--text); line-height:1.6; max-width:600px; margin:0 auto; min-height:100vh; overflow-x:hidden; }
 .hidden { display:none !important; }
 
 .app-header { background:linear-gradient(135deg,var(--primary-soft),var(--primary-light)); color:var(--primary); padding:18px 16px 14px; text-align:center; position:sticky; top:0; z-index:100; box-shadow:var(--shadow); border-bottom:1px solid rgba(0,0,0,0.06); }
@@ -295,6 +295,36 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .rv-sec-title { font-size:14px; font-weight:800; color:#1a1a1a; display:flex; align-items:center; gap:6px; }
 .rv-count { display:inline-flex; align-items:baseline; gap:4px; }
 .rv-count b { font-size:27px; font-weight:800; color:#1a1a1a; line-height:1; }
+
+/* ---- 错题本三版：三大功能分区（2026-11-05）----
+   三块各一张卡，靠"编号 + 英文分类名"识别，不靠颜色堆叠。
+   控件只留两种：.rv-cat（2×2 分类卡）、.rv-chip（来源 / 题量小药丸）。 */
+.rv-overview { display:flex; align-items:center; flex-wrap:wrap; gap:7px; font-size:12px; color:#5a6473; margin:0 2px 12px; }
+.rv-overview b { font-size:14.5px; color:#1a1a1a; font-weight:800; }
+.rv-overview .bar { color:#d3dce6; }
+.rv-blk { background:#fff; border-radius:14px; box-shadow:0 1px 3px rgba(14,37,69,.07); padding:15px; margin-bottom:12px; }
+.rv-blk.hl { background:linear-gradient(160deg,#F1F7FD,#fff 62%); border:1px solid #dfeaf7; }
+.rv-blk-h { display:flex; align-items:center; gap:7px; }
+.rv-blk-num { width:19px; height:19px; border-radius:6px; background:#1a3a5c; color:#fff; font-size:11.5px; font-weight:800; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.rv-blk-eb { font-size:11px; font-weight:700; color:#91a0af; letter-spacing:.7px; }
+.rv-blk-t { font-size:15.5px; font-weight:800; color:#111; margin-top:7px; letter-spacing:.2px; }
+.rv-blk-d { font-size:12.5px; color:#5a6473; line-height:1.6; margin-top:4px; }
+.rv-blk-b { margin-top:12px; }
+.rv-due-num { font-size:30px; font-weight:800; color:#1a3a5c; line-height:1; }
+.rv-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:13px; }
+.rv-cat { border:1.5px solid var(--border); border-radius:11px; padding:10px 11px; cursor:pointer; background:#fff; transition:all .15s; }
+.rv-cat:active { transform:scale(.98); }
+.rv-cat .n { font-size:12.5px; font-weight:700; color:#2b3a49; display:flex; align-items:center; gap:5px; }
+.rv-cat .c { font-size:17px; font-weight:800; color:#1a3a5c; line-height:1.1; margin-top:4px; }
+.rv-cat .c span { font-size:10.5px; font-weight:600; color:#7b8896; margin-left:2px; }
+.rv-cat.on { border-color:#1a3a5c; background:#F2F7FD; }
+.rv-cat.on .n { color:#1a3a5c; }
+.rv-cat.on .c span { color:#5a7a9c; }
+.rv-chip { display:inline-flex; align-items:center; justify-content:center; gap:5px; border:1px solid var(--border); background:#fff; border-radius:999px; padding:5px 11px; font-size:12px; color:#4a5568; cursor:pointer; transition:all .15s; }
+.rv-chip.on { background:#1a3a5c; border-color:#1a3a5c; color:#fff; }
+.rv-chip.on .c { color:#dbe7f4; }
+.rv-chip .c { font-size:10.5px; opacity:.8; }
+.rv-blk details summary::-webkit-details-marker { display:none; }
 
 /* Paper version selection */
 .paper-tag { display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:600; margin-right:6px; vertical-align:middle; }
@@ -4185,17 +4215,17 @@ const state = {
   reviewStats: null,  // {rv:复习作答次数, ps:推进阶次, gr:毕业题数, fl:复习答错次数, ts:最近时间}
   paperSession: null, // 专项练习卷 / 错题重做的本轮会话 {kind,title,ids,total,ok,graduated,promoted}
   recGuards: {},      // 本轮已记账的「题号@位置」——防止重绘把错误次数/小结重复累加
-  wrongTab: 'due',    // 错题本页签：'due' 到期 | 'all' 全部 | 'tag' 按知识点
+  wrongTab: 'all',    // 错题本分类：'all' 全部错题 | 'due' 需要优先巩固 | 'fav' 收藏题目 | 'tag' 薄弱知识点
   wrongTag: '',       // 错题本按知识点筛选的当前标签
   wrongSec: '',       // 错题本按章节筛选的当前章节
-  // 来源筛选（2026-11-05 二版）：'' 全部 | 'manual' | 'day21' | 'tsos' | 'race'
+  // 来源筛选（2026-11-05）：'' 全部 | 'manual' | 'day21' | 'tsos' | 'race'
   // 领导问"能不能只复习某一场的错题"，这个字段就是答案：进错题本时带上是哪一套，
-  // 页面上会显示"只看「21 天培训」"，随时可以展开改回全部。
+  // 页面上「题目来源」那一排就选中它，随时可以点回全部来源。
   wrongSrc: '',
-  wrongSrcOpen: false, // 来源下拉是否展开
-  paperOpen: false,   // 组卷面板是否在错题本页内展开（不再跳新页面）
-  paperSource: 'all', // 组卷面板里选中的来源（默认"全部错题"，最好懂）
-  paperCount: 10,     // 专项卷题量档位
+  wrongSrcOpen: false, // 旧版来源下拉是否展开（三版已改成常显药丸，字段留作兼容）
+  paperOpen: false,   // 旧版组卷面板开关（三版改成常显，字段留作兼容）
+  paperSource: 'all', // 自主组卷选中的分类（默认"全部错题"，最好懂）
+  paperCount: 10,     // 自主组卷题量档位
   practiceProgress: {},
   requireProfile: false, // true after login when profile is incomplete; forces profile page
   pendingProfile: false, // true after the access code is verified; the identity was already resolved by the login flow
@@ -5152,15 +5182,47 @@ var I18N = {
   rv_src_all_opt_d: {cn:'产品知识 + 21 天培训 + 三步法 + 答题赛', en:'Product knowledge + 21-day + 3 steps + races'},
   rv_src_bank_manual: {cn:'酒店产品知识', en:'Product knowledge'},
   rv_src_bank_manual_d: {cn:'酒店产品知识手册里的题（含模拟考）', en:'From the product knowledge handbook'},
-  rv_src_bank_day21: {cn:'21 天培训', en:'21-day training'},
+  rv_src_bank_day21: {cn:'21 天培训考试', en:'21-day exam'},
   rv_src_bank_day21_d: {cn:'21 天培训考试的题', en:'21-day training exam questions'},
-  rv_src_bank_tsos: {cn:'优质服务三步骤', en:'Service steps'},
+  rv_src_bank_tsos: {cn:'优质服务三步骤考试', en:'Service-steps exam'},
   rv_src_bank_tsos_d: {cn:'优质服务三步骤考核的题', en:'Service-steps assessment questions'},
   rv_paper_unit: {cn:'道', en:''},
   rv_pick_tag: {cn:'选一个知识点', en:'Pick a topic'},
   rv_book_sub: {cn:'共 {n} 道 · 该复习 {d} 道', en:'{n} total · {d} due'},
-  rv_src_race: {cn:'答题赛', en:'Quiz races'},
+  rv_src_race: {cn:'限时答题赛', en:'Quiz races'},
   rv_src_race_d: {cn:'在限时答题赛里做错的题', en:'Missed in timed races'},
+  // ===== 错题本三版：三大功能分区（2026-11-05）=====
+  // 学员端只讲"这里能干什么"，不讲系统原理。分类名沿用领导的定稿，不再自创同义词。
+  rv_bk_eb1: {cn:'智能复习 · Smart Review', en:'Smart Review'},
+  rv_bk_t1: {cn:'智能巩固练习', en:'Smart review practice'},
+  rv_bk_d1: {cn:'系统优先推送需要复习的题目，趁热巩固记忆', en:'Questions recommended for review based on your learning progress'},
+  rv_bk_due_unit: {cn:'道待复习', en:'due'},
+  rv_bk_task: {cn:'本周巩固任务 {d}/{n}', en:'This week {d}/{n}'},
+  rv_bk_start: {cn:'开始复习（{n} 道）', en:'Start review ({n})'},
+  rv_bk_none: {cn:'今天没有待复习的题', en:'Nothing due today'},
+  rv_bk_rules_sum: {cn:'复习规则', en:'How review works'},
+  rv_bk_rules: {cn:'同一道错题：答对 1 次后隔 1 天再复习，答对 2 次后隔 3 天，答对 3 次后隔 7 天；第 4 次答对就移出错题本。', en:'For each mistake: 1 correct answer brings it back in 1 day, then 3 days, then 7 days; a 4th correct answer moves it out of your mistake book.'},
+  rv_cat_all: {cn:'全部错题', en:'All incorrect questions'},
+  rv_cat_due: {cn:'需要优先巩固', en:'For priority review'},
+  rv_cat_fav: {cn:'收藏题目', en:'Saved favourites'},
+  rv_cat_tag: {cn:'薄弱知识点', en:'Weak knowledge points'},
+  rv_cat_tag_sub: {cn:'错得最多的一类', en:'Most-missed topics'},
+  rv_bk_eb2: {cn:'自主组卷 · Custom Quiz', en:'Custom Quiz'},
+  rv_bk_t2: {cn:'自定义练习组卷', en:'Build your own practice paper'},
+  rv_bk_d2: {cn:'自选分类、题量，生成专属练习卷', en:'Pick a category and a length, and get your own paper'},
+  rv_bk_pick_cat: {cn:'选择题目分类', en:'Choose a category'},
+  rv_bk_pick_cnt: {cn:'选择答题数量', en:'Choose how many questions'},
+  rv_bk_gen: {cn:'生成练习卷（{n} 道）', en:'Create paper ({n})'},
+  rv_bk_gen_none: {cn:'这一类暂时没有题', en:'Nothing in this category yet'},
+  rv_bk_note2: {cn:'确认后生成试卷，作答结束可查看正误与解析', en:'Your paper starts right away; answers and explanations come at the end'},
+  rv_bk_eb3: {cn:'错题归档 · My Error Bank', en:'My Error Bank'},
+  rv_bk_t3: {cn:'历史错题', en:'All past mistakes'},
+  rv_bk_d3: {cn:'可按考核来源筛选，随时回看、查漏补缺', en:'Filter by source and revisit any time'},
+  rv_bk_cat_title: {cn:'错题分类', en:'Filter and review past incorrect answers by source'},
+  rv_bk_src_title: {cn:'题目来源', en:'Question source'},
+  rv_bk_total: {cn:'共 {n} 道', en:'{n} total'},
+  rv_bk_empty_fav: {cn:'还没有收藏题目，做题时点 ⭐ 就能收藏。', en:'No saved questions yet — tap ⭐ while practising to save one.'},
+  rv_bk_tag_pick: {cn:'先选一个知识点', en:'Pick a topic first'},
   rv_src_clear: {cn:'看全部来源', en:'Show all sources'},
   rv_src_on: {cn:'只看「{x}」', en:'Only "{x}"'},
   rv_paper_open_hint: {cn:'下面就是组卷设置', en:'Set up your paper below'},
@@ -8562,7 +8624,13 @@ function renderHome() {
     {key:'manual', icon:'🏨', name:t('bank_manual'), desc:t('desc_manual'), count: QUESTION_DATA.manual.length},
   ];
   
-  var html = '<div class="home-hero"><img class="hero-logo" src="assets/logo.webp" alt="The Ritz-Carlton Shenzhen"><h2>' + t('app_title') + '</h2><p>' + t('app_subtitle') + '</p></div>';
+  // 2026-11-05：首页整页包上 .page（其他页面都有，唯独首页漏了）。.home-hero 的
+  // 负边距（margin:-16px -16px）本来就是设计来抵消 .page 的 16px 内边距做通栏头的，
+  // 之前没有 .page 时这两个负边距把整页拉出屏幕各 16px —— 页面比屏幕宽 32px，
+  // 手机上左右一滑就拖着全部内容在白色底板上漂。包上之后宽度刚好贴合屏幕，
+  // 通栏头图效果也才是设计本意。
+  var html = '<div class="page">';
+  html += '<div class="home-hero"><img class="hero-logo" src="assets/logo.webp" alt="The Ritz-Carlton Shenzhen"><h2>' + t('app_title') + '</h2><p>' + t('app_subtitle') + '</p></div>';
 
   // Stage 9.2: surface a sync failure that happened during login / profile
   // save. The user can still use the app on this device (the local profile
@@ -8570,7 +8638,7 @@ function renderHome() {
   // the cloud directory has the PIN hash.
   if (state.accountSyncError) {
     var en = state.lang === 'en';
-    html += '<div class="login-error" style="display:block;margin:8px 16px;padding:10px 14px;border-radius:8px;background:#fff7e6;color:#a14a00;border:1px solid #ffd591;font-size:13px;line-height:1.5;">'
+    html += '<div class="login-error" style="display:block;margin:8px 0;padding:10px 14px;border-radius:8px;background:#fff7e6;color:#a14a00;border:1px solid #ffd591;font-size:13px;line-height:1.5;">'
       + '⚠️ ' + (en
         ? 'Cloud sync failed — your PIN is saved on this device only. Other devices will see you as a new login. <a href="javascript:void(0)" onclick="retryAccountSync()" style="color:#a14a00;text-decoration:underline;">Retry sync</a>'
         : '⚠️ 跨设备同步未成功 —— 您的密码只保存在了这台设备上。其他设备会把你当作新登录。 <a href="javascript:void(0)" onclick="retryAccountSync()" style="color:#a14a00;text-decoration:underline;">点此重试同步</a>')
@@ -8632,7 +8700,7 @@ function renderHome() {
   }
   html += '</div></div>';
 
-  return html;
+  return html + '</div>';   // 闭合 .page（见函数开头：2026-11-05 补上的整页包裹层）
 }
 
 // ============================================================================
@@ -16151,23 +16219,19 @@ function wrongDueLabel(e) {
   var d = wrongDueInDays(e);
   return t('rv_due_in').replace('{n}', String(d));
 }
-// ---- 错题本页（2026-11-05 二版）----
-// 这一版只做三件事：把话说清楚、把层级分开、把"某一批题"单独拎出来能练。
-// 布局顺序固定为：学习记录 → 两个动作 → （组卷面板 | 来源 + 页签 + 清单）。
-// 组卷面板打开时上面三块原地不动，只把下面换成设置项（领导明确要求）。
+// ---- 错题本页（2026-11-05 三版：三大功能分区）----
+// 领导第三轮反馈：「整页读不出错题本能做什么，文字还是绕」。这一版不再把页签、
+// 下拉、药丸三层控件堆在一页，而是把错题本拆成三块，每块只做一件事、只留一个主动作：
+//   ① 智能复习 Smart Review —— 系统按遗忘节奏挑题，一键开练
+//   ② 自主组卷 Custom Quiz   —— 自己选分类和题量，生成练习卷
+//   ③ 错题归档 My Error Bank —— 按分类 / 来源翻全部历史错题
+// 控件压到两种：2×2 分类卡（选"哪一类"）+ 小药丸（选"哪一批 / 多少个"）。
+// 说明只留"为什么值得点"的一句；复习规则收进 <details>，需要时才展开。
 function wrongRowsScoped() {
   var o = {};
   if (state.wrongSrc === 'race') o.src = 'race';
   else if (state.wrongSrc) o.bank = state.wrongSrc;
   return wrongRowsAll(o);
-}
-function wrongSrcLabel(v) {
-  if (!v) return t('rv_src_all_opt');
-  if (v === 'race') return t('rv_src_race');
-  if (v === 'manual') return t('rv_src_bank_manual');
-  if (v === 'day21') return t('rv_src_bank_day21');
-  if (v === 'tsos') return t('rv_src_bank_tsos');
-  return t('rv_src_all_opt');
 }
 function wrongSrcCounts() {
   var rows = wrongRowsAll({});
@@ -16179,14 +16243,32 @@ function wrongSrcCounts() {
   }
   return out;
 }
-function wrongSrcSet(v) { state.wrongSrc = v || ''; state.wrongSrcOpen = false; if (v === 'race') state.wrongTab = 'all'; render(); }
-function wrongSrcPickToggle() { state.wrongSrcOpen = !state.wrongSrcOpen; render(); }
-function wrongPaperToggle() { state.paperOpen = !state.paperOpen; render(); }
+function wrongSrcSet(v) {
+  state.wrongSrc = v || '';
+  state.wrongSrcOpen = false;
+  if (v === 'race') state.wrongTab = 'all';
+  render();
+}
 // 从别的页面进错题本：可以指定"只看哪一批"
-//   wrongOpenSrc('day21') —— 从 21 天题库点进来，只显示 21 天的错题
-//   wrongOpenPaper()      —— 直接展开组卷面板（首页"自己组一份"用）
-function wrongOpenSrc(src) { state.wrongSrc = src || ''; state.wrongSrcOpen = false; state.wrongTab = 'due'; state.paperOpen = false; navigate('wrongAll'); }
-function wrongOpenPaper() { state.wrongSrc = ''; state.wrongTab = 'due'; state.paperOpen = true; navigate('wrongAll'); }
+//   wrongOpenSrc('day21') —— 从 21 天题库点进来，只显示 21 天那一批
+//   wrongOpenPaper()      —— 直接滚到「自主组卷」那一块（首页"自己组一份"用）
+function wrongOpenSrc(src) { state.wrongSrc = src || ''; state.wrongSrcOpen = false; state.wrongTab = 'all'; navigate('wrongAll'); }
+function wrongOpenPaper() {
+  state.wrongSrc = '';
+  state.wrongTab = 'all';
+  if (!state.paperSource) state.paperSource = 'all';
+  navigate('wrongAll');
+  rvScrollTo('rvBlkPaper');
+}
+// 页面里跳转到某一块（组卷不再跳新页面，只是把视线带过去）
+function rvScrollTo(id) {
+  if (typeof setTimeout !== 'function') return;
+  setTimeout(function () {
+    var el = document.getElementById(id);
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 60);
+}
+function wrongPaperToggle() { wrongOpenPaper(); }
 function wrongBankCount(bank) { try { return wrongRowsAll({ bank: bank }).length; } catch (e) { return 0; } }
 // 本场答题赛答错的题（交卷后立刻能"只复习这一场"）
 function raceRunWrongIds() {
@@ -16229,7 +16311,7 @@ function examRedoWrong() {
 function wrongRedoOne(qid) { startWrongRedoIds([qid], { kind: 'one' }); }
 function wrongRemoveOne(skey, qid) { removeFromWrong(skey, qid); }
 function wrongTagPick(tag) { state.wrongTag = tag; render(); }
-function wrongStartAllRedo() { startWrongRedoIds(wrongIdsFor('all'), { kind: 'all', title: t('rv_src_all') }); }
+function wrongStartAllRedo() { startWrongRedoIds(wrongIdsFor('all'), { kind: 'all', title: t('rv_cat_all') }); }
 function wrongTaskTodoIds() {
   var task = null;
   try { task = reviewTaskOf(); } catch (e) { return []; }
@@ -16244,24 +16326,132 @@ function wrongStartTaskRedo() {
 function wrongStartDueRedo() {
   var ids = wrongIdsFor('due');
   if (!ids.length) { alert(t('wrong_none_alert')); return; }
-  startWrongRedoIds(ids, { kind: 'due', title: t('rv_src_due') });
+  startWrongRedoIds(ids, { kind: 'due', title: t('rv_cat_due') });
 }
-// 来源单选行：给"来源筛选"和"组卷来源"共用一套，避免两处长得不一样
-function rvSrcRowHtml(v, title, desc, count, handler) {
-  var active = (state.wrongSrc || '') === v;
-  if (handler === 'paper') active = (state.paperSource || 'all') === v;
-  var h = '<div class="rv-srcrow ' + (active ? 'active' : '') + '" onclick="'
-    + (handler === 'paper' ? 'setPaperSource(&quot;' + v + '&quot;)' : 'wrongSrcSet(&quot;' + v + '&quot;)') + '">';
-  h += '<div class="radio"></div><div style="flex:1;min-width:0;">';
-  h += '<div class="t">' + escapeHtml(title)
-    + (typeof count === 'number' ? ' <span style="font-weight:600;color:#7b8896;font-size:11.5px;">（' + count + ' ' + t('rv_paper_unit') + '）</span>' : '')
-    + '</div>';
-  h += '<div class="d">' + escapeHtml(desc) + '</div>';
-  h += '</div></div>';
+// 收藏题（分类「收藏题目」）：来源筛选按收藏时记录的题库过滤
+function favIdsForSrc() {
+  var ids = (state.collectedQuestions || []).slice();
+  var src = state.wrongSrc;
+  if (!src) return ids;
+  if (src === 'race') return [];
+  var out = [];
+  for (var i = 0; i < ids.length; i++) if (collectedBankOf(ids[i]) === src) out.push(ids[i]);
+  return out;
+}
+// ---- 分类卡：组卷和归档共用同一个组件，学员不用为第二处重新学一遍 ----
+function rvCatCounts() {
+  var scoped = wrongRowsScoped();
+  var due = 0;
+  for (var i = 0; i < scoped.length; i++) if (wrongIsDue(scoped[i].e)) due++;
+  return { all: scoped.length, due: due, fav: favIdsForSrc().length };
+}
+function rvCatCellHtml(v, icon, label, count, active, kind) {
+  var fn = kind === 'paper' ? 'setPaperCat' : 'wrongTabSet';
+  var h = '<div class="rv-cat' + (v === active ? ' on' : '') + '" onclick="' + fn + '(&quot;' + v + '&quot;)">';
+  h += '<div class="n">' + icon + ' ' + escapeHtml(label) + '</div>';
+  if (typeof count === 'number') h += '<div class="c">' + count + '<span>' + t('rv_paper_unit') + '</span></div>';
+  else h += '<div class="c" style="font-size:12px;font-weight:600;color:#8a97a4;margin-top:7px;">' + t('rv_cat_tag_sub') + '</div>';
+  h += '</div>';
+  return h;
+}
+function rvCatGridHtml(active, kind) {
+  var c = rvCatCounts();
+  var h = '<div class="rv-grid">';
+  h += rvCatCellHtml('all', '📚', t('rv_cat_all'), c.all, active, kind);
+  h += rvCatCellHtml('due', '⏰', t('rv_cat_due'), c.due, active, kind);
+  h += rvCatCellHtml('fav', '⭐', t('rv_cat_fav'), c.fav, active, kind);
+  h += rvCatCellHtml('tag', '🏷', t('rv_cat_tag'), null, active, kind);
+  h += '</div>';
+  return h;
+}
+function rvWeakTags() {
+  var bank = state.wrongSrc === 'race' ? 'manual' : (state.wrongSrc || 'manual');
+  return reviewWeakTags(bank);
+}
+function rvWeakPillsHtml(kind) {
+  var weak = rvWeakTags();
+  if (!weak.length) return '<div class="rv-note" style="margin:0 0 12px;">' + t('rv_no_weak') + '</div>';
+  var fn = kind === 'paper' ? 'wrongTagSet2' : 'wrongTagPick';
+  var h = '<div class="rv-label">' + t('rv_pick_tag') + '</div>';
+  h += '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;">';
+  for (var i = 0; i < weak.length && i < 14; i++) {
+    h += '<div class="rv-chip' + (state.wrongTag === weak[i].tag ? ' on' : '') + '" onclick="' + fn + '(&quot;' + escapeHtml(weak[i].tag) + '&quot;)">'
+      + escapeHtml(reviewTagName(weak[i].tag)) + ' <span class="c">' + weak[i].total + '</span></div>';
+  }
+  h += '</div>';
+  return h;
+}
+function rvSrcChipsHtml() {
+  var opts = [['', 'rv_src_all_opt'], ['manual', 'rv_src_bank_manual'], ['day21', 'rv_src_bank_day21'], ['tsos', 'rv_src_bank_tsos'], ['race', 'rv_src_race']];
+  var h = '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;">';
+  for (var i = 0; i < opts.length; i++) {
+    var on = (state.wrongSrc || '') === opts[i][0];
+    h += '<div class="rv-chip' + (on ? ' on' : '') + '" onclick="wrongSrcSet(&quot;' + opts[i][0] + '&quot;)">' + escapeHtml(t(opts[i][1])) + '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+// 三块功能的统一头部：编号 + 英文分类名 + 中文标题 + 一句说明
+function rvBlkHeadHtml(num, eb, title, desc) {
+  var h = '<div class="rv-blk-h"><div class="rv-blk-num">' + num + '</div><div class="rv-blk-eb">' + escapeHtml(eb) + '</div></div>';
+  h += '<div class="rv-blk-t">' + escapeHtml(title) + '</div>';
+  if (desc) h += '<div class="rv-blk-d">' + escapeHtml(desc) + '</div>';
+  return h;
+}
+function wrongRowListHtml(rows) {
+  var h = '<div class="wrong-list">';
+  for (var r = 0; r < rows.length; r++) {
+    var row = rows[r];
+    var q = findByIdAllBanks(row.qid);
+    var preview = q ? qTextOf(q) : (row.e.question || '');
+    var sectionDisplay = state.lang === 'en' ? (row.e.section_en || row.e.section || '') : (row.e.section || '');
+    var dueNow = wrongIsDue(row.e);
+    var stNow = wrongStageOf(row.e);
+    h += '<div class="wrong-item" style="' + (dueNow ? 'border-left-color:#e65100;' : '') + '" onclick="openWrongFromKey(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)">';
+    h += '<div class="q-preview">' + escapeHtml(preview ? preview.substring(0, 100) : '') + '</div>';
+    h += '<div class="q-meta">';
+    h += '<span>' + escapeHtml(wrongBankLabel(row.skey)) + (sectionDisplay ? ' · ' + escapeHtml(sectionDisplay) : '') + ' · ' + getTypeShort(row.e.type) + '</span>';
+    h += '<span>' + (dueNow
+      ? '<b style="color:#e65100;">⏰ ' + t('rv_due_now') + '</b>'
+      : '<span style="white-space:nowrap;">⏳ ' + t('rv_due_in').replace('{n}', String(wrongDueInDays(row.e))) + '</span>') + '</span>';
+    h += '</div>';    h += '<div class="q-meta" style="margin-top:5px;">';
+    h += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(stNow)).replace('{m}', String(WRONG_STAGE_MAX)) + (stNow >= WRONG_STAGE_MAX ? t('rv_stage_last') : '') + '</span>';
+    h += '<span>' + t('rv_wrong_times').replace('{n}', String(row.e.n || 1)) + '</span>';
+    h += '</div>';
+    var qtags = q ? questionTagsOf(q) : [];
+    if (qtags.length) h += '<div style="margin-top:6px;font-size:11px;color:#5b6b7a;">🏷 ' + escapeHtml(qtags.map(reviewTagName).join(' · ')) + '</div>';
+    h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:9px;">';
+    h += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRedoOne(&quot;' + row.qid + '&quot;)">🔁 ' + t('rv_redo_one') + '</button>';
+    h += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRemoveOne(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)">🗑 ' + t('remove_one') + '</button>';
+    h += '</div>';
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+function wrongFavListHtml() {
+  var ids = favIdsForSrc();
+  if (!ids.length) return '<div class="empty-state"><div class="icon">⭐</div><p>' + escapeHtml(t('rv_bk_empty_fav')) + '</p></div>';
+  var h = '<div class="wrong-list">';
+  for (var i = 0; i < ids.length; i++) {
+    var qid = ids[i], q = findByIdAllBanks(qid);
+    var gone = state.mastered && state.mastered[qid];
+    h += '<div class="wrong-item" style="border-left-color:#e8b339;" onclick="openCollectedQuestion(&quot;' + qid + '&quot;)">';
+    h += '<div class="q-preview">' + escapeHtml(q ? qTextOf(q).substring(0, 100) : qid) + '</div>';
+    h += '<div class="q-meta"><span>' + escapeHtml(getBankName(collectedBankOf(qid)) || '') + (q ? ' · ' + getTypeShort(q.type) : '') + '</span>';
+    if (gone) h += '<span style="color:#27ae60;">✓ ' + t('rv_fav_mastered') + '</span>';
+    h += '</div>';
+    h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:9px;">';
+    h += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRedoOne(&quot;' + qid + '&quot;)">🔁 ' + t('rv_redo_one') + '</button>';
+    h += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();removeFromCollected(&quot;' + qid + '&quot;)">🗑 ' + t('remove_one') + '</button>';
+    h += '</div>';
+    h += '</div>';
+  }
+  h += '</div>';
   return h;
 }
 function renderWrongAll() {
-  var tab = state.wrongTab || 'due';
+  var tab = state.wrongTab || 'all';
   var scoped = wrongRowsScoped();
   var dueAll = [];
   for (var di = 0; di < scoped.length; di++) if (wrongIsDue(scoped[di].e)) dueAll.push(scoped[di]);
@@ -16275,8 +16465,9 @@ function renderWrongAll() {
     shown = keep;
   }
   var allRows = wrongRowsAll({});
-  var dueTotal = 0;
-  for (var ai = 0; ai < allRows.length; ai++) if (wrongIsDue(allRows[ai].e)) dueTotal++;
+  var dueTotal = wrongIdsFor('due').length;
+  var m = -1, grad = 0;
+  try { m = masteryOf(); grad = masteredCount(); } catch (e0) {}
 
   var html = renderAppHeader({
     title: '❌ ' + t('wrong_title'),
@@ -16284,118 +16475,104 @@ function renderWrongAll() {
   });
   html += '<div class="page">';
 
-  // ---- ① 学习记录 ----
-  var _m = -1, _tot = { reviewed: 0, promoted: 0, graduated: 0 };
-  var _wk = { promoted: 0, graduated: 0 };
-  try { _m = masteryOf(); _tot = reviewTotalsOf(); _wk = reviewCreditSummary(7); } catch (e0) {}
-  html += '<div class="q-card" style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:12px;background:#fff;">';
-  html += reviewRingHtml(_m, 48, t('rv_hub_mastery_short'));
-  html += '<div style="flex:1;min-width:0;font-size:11.5px;color:#5a6473;line-height:1.7;">';
-  html += '<div style="font-size:12.5px;font-weight:800;color:#1a1a1a;">' + t('rv_book_ledger') + '</div>';
-  html += '<div>' + escapeHtml(t('rv_hub_sub').replace('{g}', String(masteredCount())).replace('{n}', String(allRows.length))) + '</div>';
-  html += '<div>' + escapeHtml(t('rv_week_line').replace('{p}', String(_wk.promoted)).replace('{g}', String(_wk.graduated))) + '</div>';
+  // ---- 总览：一行字，不占卡 —— 三块功能才是这一页的主角 ----
+  html += '<div class="rv-overview"><span>' + t('rv_mastery') + '</span><b>' + (m < 0 ? '—' : Math.round(m) + '%') + '</b>';
+  html += '<span class="bar">|</span><span>' + escapeHtml(t('rv_hub_sub').replace('{g}', String(grad)).replace('{n}', String(allRows.length))) + '</span></div>';
+
+  // ---- ① 智能复习：今天该练什么，一键开练 ----
+  html += '<div class="rv-blk hl" id="rvBlkSmart">';
+  html += rvBlkHeadHtml(1, t('rv_bk_eb1'), t('rv_bk_t1'), t('rv_bk_d1'));
+  html += '<div style="display:flex;align-items:flex-end;gap:14px;margin:13px 0 12px;">';
+  html += '<div style="flex:0 0 auto;"><span class="rv-due-num">' + dueTotal + '</span>'
+    + '<span style="font-size:12px;color:#3c4b59;font-weight:700;margin-left:4px;">' + t('rv_bk_due_unit') + '</span></div>';
+  var task = null;
+  try { task = reviewTaskOf(); } catch (e1) { task = null; }
+  if (task && task.target > 0) {
+    var td = Math.min(task.done || 0, task.target);
+    html += '<div style="flex:1;min-width:0;text-align:right;">';
+    html += '<div style="font-size:11.5px;color:#5a6473;font-weight:600;">'
+      + escapeHtml(t('rv_bk_task').replace('{d}', String(td)).replace('{n}', String(task.target))) + '</div>';
+    html += '<div style="height:6px;background:#dbe7f4;border-radius:3px;overflow:hidden;margin-top:5px;">'
+      + '<div style="height:100%;width:' + Math.round(td / task.target * 100) + '%;background:#1a3a5c;"></div></div>';
+    html += '</div>';
+  }
+  html += '</div>';
+  if (dueTotal > 0) {
+    html += '<button class="nav-btn primary" style="width:100%;padding:13px;" onclick="wrongStartDueRedo()">▶ '
+      + escapeHtml(t('rv_bk_start').replace('{n}', String(dueTotal))) + '</button>';
+  } else {
+    html += '<button class="nav-btn primary" style="width:100%;padding:13px;" disabled>' + t('rv_bk_none') + '</button>';
+  }
+  html += '<details style="margin-top:11px;">'
+    + '<summary style="font-size:11.5px;color:#8a97a4;cursor:pointer;font-weight:600;list-style:none;">▸ ' + t('rv_bk_rules_sum') + '</summary>'
+    + '<div style="font-size:11.5px;color:#5a6473;line-height:1.75;margin-top:7px;padding-left:13px;">' + escapeHtml(t('rv_bk_rules')) + '</div>'
+    + '</details>';
+  html += '</div>';
+
+  // ---- ② 自主组卷：分类 + 题量 → 生成练习卷（不跳页，就在这一页） ----
+  var pSrc = state.paperSource || 'all';
+  var pIds = paperSourceIds(pSrc, state.wrongTag);
+  var pCnt = state.paperCount || 10;
+  var pTake = (pCnt === 0 || pCnt > pIds.length) ? pIds.length : pCnt;
+  html += '<div class="rv-blk" id="rvBlkPaper">';
+  html += rvBlkHeadHtml(2, t('rv_bk_eb2'), t('rv_bk_t2'), t('rv_bk_d2'));
+  html += '<div class="rv-blk-b">';
+  html += '<div class="rv-label">' + t('rv_bk_pick_cat') + '</div>';
+  html += rvCatGridHtml(pSrc, 'paper');
+  if (pSrc === 'tag') html += rvWeakPillsHtml('paper');
+  html += '<div class="rv-label">' + t('rv_bk_pick_cnt') + '</div>';
+  html += '<div style="display:flex;gap:7px;margin-bottom:12px;">';
+  var counts = [10, 20, 0];
+  for (var ci = 0; ci < counts.length; ci++) {
+    var lab = counts[ci] === 0 ? t('rv_all_q') : String(counts[ci]) + ' ' + t('rv_paper_unit');
+    html += '<div class="rv-chip' + (pCnt === counts[ci] ? ' on' : '') + '" style="flex:1;justify-content:center;padding:8px 0;" onclick="setPaperCount(' + counts[ci] + ')">' + lab + '</div>';
+  }
+  html += '</div>';
+  if (pIds.length) {
+    html += '<button class="nav-btn primary" style="width:100%;padding:13px;" onclick="startWrongPaper()">🎯 '
+      + escapeHtml(t('rv_bk_gen').replace('{n}', String(pTake))) + '</button>';
+  } else {
+    html += '<button class="nav-btn primary" style="width:100%;padding:13px;" disabled>' + t('rv_bk_gen_none') + '</button>';
+  }
+  html += '<div style="font-size:11.5px;color:#8a97a4;text-align:center;margin-top:9px;line-height:1.6;">' + escapeHtml(t('rv_bk_note2')) + '</div>';
   html += '</div></div>';
 
-  // ---- ② 两个动作：说人话 + 一行说明 ----
-  html += '<div style="margin-bottom:14px;">';
-  html += '<button class="nav-btn primary" style="width:100%;padding:13px;" ' + (dueTotal ? '' : 'disabled ')
-    + 'onclick="wrongStartDueRedo()">⏰ ' + escapeHtml(t('rv_redo_due').replace('{n}', String(dueTotal))) + '</button>';
-  html += '<div style="font-size:11.5px;color:#7b8896;margin:6px 2px 12px;line-height:1.6;">' + escapeHtml(t('rv_redo_due_sub')) + '</div>';
-  html += '<button class="nav-btn secondary" style="width:100%;padding:13px;" onclick="wrongPaperToggle()">'
-    + (state.paperOpen ? '✕ ' + t('rv_paper_close') : '🎯 ' + t('rv_make_paper')) + '</button>';
-  html += '<div style="font-size:11.5px;color:#7b8896;margin:6px 2px 0;line-height:1.6;">' + escapeHtml(t('rv_make_paper_sub')) + '</div>';
-  html += '</div>';
+  // ---- ③ 错题归档：分类 + 来源 → 清单 ----
+  html += '<div class="rv-blk" id="rvBlkBank">';
+  html += rvBlkHeadHtml(3, t('rv_bk_eb3'), t('rv_bk_t3'), t('rv_bk_d3'));
+  html += '<div class="rv-blk-b">';
+  html += '<div class="rv-label" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">'
+    + '<span>' + t('rv_bk_cat_title') + '</span>'
+    + '<span style="font-weight:600;color:#a7b3c0;letter-spacing:0;">' + escapeHtml(t('rv_bk_total').replace('{n}', String(scoped.length))) + '</span></div>';
+  html += rvCatGridHtml(tab, 'bank');
+  html += '<div class="rv-label">' + t('rv_bk_src_title') + '</div>';
+  html += rvSrcChipsHtml();
+  if (tab === 'tag') html += rvWeakPillsHtml('bank');
 
-  if (state.paperOpen) {
-    html += wrongPaperPanelHtml();
-    html += '</div>';
-    return html;
-  }
-
-  // ---- ③ 来源筛选：一个下拉，不是又一排小胶囊 ----
-  // 三种控件必须长得不一样，否则学员分不清层级（领导原话：展开后跟上一行混淆）。
-  var sc = wrongSrcCounts();
-  html += '<div class="rv-picker" onclick="wrongSrcPickToggle()">';
-  html += '<div style="font-size:11.5px;color:#7b8896;font-weight:700;white-space:nowrap;">' + t('rv_src_label') + '</div>';
-  html += '<div class="cur">' + escapeHtml(wrongSrcLabel(state.wrongSrc)) + ' · ' + scoped.length + t('rv_paper_unit') + '</div>';
-  html += '<div class="caret">' + (state.wrongSrcOpen ? '▲' : '▼') + '</div>';
-  html += '</div>';
-  if (state.wrongSrcOpen) {
-    html += '<div style="margin-bottom:12px;">';
-    html += rvSrcRowHtml('', t('rv_src_all_opt'), t('rv_src_all_opt_d'), sc[''], 'src');
-    html += rvSrcRowHtml('manual', t('rv_src_bank_manual'), t('rv_src_bank_manual_d'), sc.manual, 'src');
-    html += rvSrcRowHtml('day21', t('rv_src_bank_day21'), t('rv_src_bank_day21_d'), sc.day21, 'src');
-    html += rvSrcRowHtml('tsos', t('rv_src_bank_tsos'), t('rv_src_bank_tsos_d'), sc.tsos, 'src');
-    html += rvSrcRowHtml('race', t('rv_src_race'), t('rv_src_race_d'), sc.race, 'src');
-    html += '</div>';
-  }
-
-  // ---- ④ 页签：分段控件（和上面的下拉、下面的小药丸都不一样）----
-  html += '<div class="rv-seg">';
-  html += '<div class="seg ' + (tab === 'due' ? 'active' : '') + '" onclick="wrongTabSet(&quot;due&quot;)">⏰ ' + t('rv_tab_due') + ' <span class="n">' + dueAll.length + '</span></div>';
-  html += '<div class="seg ' + (tab === 'all' ? 'active' : '') + '" onclick="wrongTabSet(&quot;all&quot;)">📚 ' + t('rv_tab_all') + ' <span class="n">' + scoped.length + '</span></div>';
-  html += '<div class="seg ' + (tab === 'tag' ? 'active' : '') + '" onclick="wrongTabSet(&quot;tag&quot;)">🏷 ' + t('rv_tab_tag') + '</div>';
-  html += '</div>';
-  html += '<div style="font-size:11.5px;color:#7b8896;margin:0 2px 10px;line-height:1.6;">'
-    + escapeHtml(t(tab === 'due' ? 'rv_tab_due_hint' : (tab === 'tag' ? 'rv_tab_tag_hint' : 'rv_tab_all_hint'))) + '</div>';
-
-  // 二级细项：小药丸 + 自己的标题，绝不和上面那排同款
-  if (tab === 'tag') {
-    var weak = reviewWeakTags(state.wrongSrc === 'race' ? 'manual' : (state.wrongSrc || 'manual'));
-    html += '<div class="rv-label">' + t('rv_pick_tag') + '</div>';
-    if (!weak.length) {
-      html += '<div class="rv-note" style="margin-bottom:12px;">' + t('rv_no_weak') + '</div>';
-    } else {
-      html += '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;">';
-      for (var wi = 0; wi < weak.length && wi < 14; wi++) {
-        html += '<div class="rv-pill ' + (state.wrongTag === weak[wi].tag ? 'active' : '') + '" onclick="wrongTagPick(&quot;' + escapeHtml(weak[wi].tag) + '&quot;)">'
-          + escapeHtml(reviewTagName(weak[wi].tag)) + ' ' + weak[wi].total + '</div>';
-      }
-      html += '</div>';
-    }
-  }
-
-  // ---- ⑤ 清单 ----
-  if (shown.length === 0) {
-    html += '<div class="empty-state"><div class="icon">🎉</div><p>' + (tab === 'due' ? t('rv_no_due') : t('wrong_empty')) + '</p></div>';
+  if (tab === 'fav') {
+    html += wrongFavListHtml();
+  } else if (tab === 'tag' && !state.wrongTag) {
+    html += '<div class="empty-state"><div class="icon">🏷</div><p>' + escapeHtml(t('rv_bk_tag_pick')) + '</p></div>';
+  } else if (shown.length === 0) {
+    html += '<div class="empty-state"><div class="icon">🎉</div><p>' + escapeHtml(tab === 'due' ? t('rv_no_due') : t('wrong_empty')) + '</p></div>';
   } else {
-    html += '<div class="rv-note" style="margin-bottom:10px;">' + escapeHtml(t('rv_stage_hint')) + '</div>';
-    html += '<div class="wrong-list">';
-    for (var r = 0; r < shown.length; r++) {
-      var row = shown[r];
-      var q = findByIdAllBanks(row.qid);
-      var preview = q ? qTextOf(q) : (row.e.question || '');
-      var sectionDisplay = state.lang === 'en' ? (row.e.section_en || row.e.section || '') : (row.e.section || '');
-      var dueNow = wrongIsDue(row.e);
-      var stNow = wrongStageOf(row.e);
-      html += '<div class="wrong-item" style="' + (dueNow ? 'border-left-color:#e65100;' : '') + '" onclick="openWrongFromKey(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)">';
-      html += '<div class="q-preview">' + escapeHtml(preview ? preview.substring(0, 100) : '') + '</div>';
-      html += '<div class="q-meta">';
-      html += '<span>' + escapeHtml(wrongBankLabel(row.skey)) + (sectionDisplay ? ' · ' + escapeHtml(sectionDisplay) : '') + ' · ' + getTypeShort(row.e.type) + '</span>';
-      html += '<span>' + (dueNow
-        ? '<b style="color:#e65100;">⏰ ' + t('rv_due_now') + '</b>'
-        : '⏳ ' + t('rv_due_in').replace('{n}', String(wrongDueInDays(row.e)))) + '</span>';
-      html += '</div>';
-      html += '<div class="q-meta" style="margin-top:5px;">';
-      html += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(stNow)).replace('{m}', String(WRONG_STAGE_MAX)) + (stNow >= WRONG_STAGE_MAX ? t('rv_stage_last') : '') + '</span>';
-      html += '<span>' + t('rv_wrong_times').replace('{n}', String(row.e.n || 1)) + '</span>';
-      html += '</div>';
-      var qtags = q ? questionTagsOf(q) : [];
-      if (qtags.length) {
-        html += '<div style="margin-top:6px;font-size:11px;color:#5b6b7a;">🏷 ' + escapeHtml(qtags.map(reviewTagName).join(' · ')) + '</div>';
-      }
-      html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:9px;">';
-      html += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRedoOne(&quot;' + row.qid + '&quot;)">🔁 ' + t('rv_redo_one') + '</button>';
-      html += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRemoveOne(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)">🗑 ' + t('remove_one') + '</button>';
-      html += '</div>';
-      html += '</div>';
-    }
-    html += '</div>';
+    html += wrongRowListHtml(shown);
   }
+  html += '</div></div>';
   html += '</div>';
   return html;
 }
-function wrongTabSet(tab) { state.wrongTab = tab; if (tab !== 'tag') state.wrongTag = ''; render(); }
+function wrongTabSet(tab) {
+  state.wrongTab = tab;
+  if (tab !== 'tag') state.wrongTag = '';
+  else if (!state.wrongTag) { var w = rvWeakTags(); if (w.length) state.wrongTag = w[0].tag; }
+  render();
+}
+function setPaperCat(v) {
+  state.paperSource = v;
+  if (v === 'tag' && !state.wrongTag) { var w = rvWeakTags(); if (w.length) state.wrongTag = w[0].tag; }
+  render();
+}
 // 给内联 onclick 用的题号清单（到期 / 全部 / 某个知识点）
 function wrongIdsFor(kind, arg) {
   var rows = kind === 'due' ? wrongRowsAll({ dueOnly: true }) : wrongRowsAll({});
@@ -16409,7 +16586,6 @@ function wrongIdsFor(kind, arg) {
   }
   return out;
 }
-
 // 日历兜底：某一天进错题本的题号（老记录没有逐题明细时用）
 function wrongIdsOnDay(day) {
   var rows = wrongRowsAll({ bank: 'manual' });
@@ -16420,68 +16596,14 @@ function wrongIdsOnDay(day) {
   }
   return out;
 }
-
-// ============ 专项练习卷（2026-11-05 / 二版改成页内面板）============
-// 领导反馈：点"生成专项卷"跳到一个"新界面"，感觉断了。现在它是错题本页里的
-// 一块面板 —— 学习记录、两个动作按钮原地不动，下面换设置项，收起就回到清单。
+// ============ 组卷取题（2026-11-05 三版：选项直接在页面里，没有独立面板）============
 function paperSourceIds(kind, arg) {
   if (kind === 'fav') return (state.collectedQuestions || []).slice();
   if (kind === 'tag' && arg) return wrongIdsFor('tag', arg);
   if (kind === 'all') return wrongIdsFor('all');
   return wrongIdsFor('due');
 }
-function wrongPaperPanelHtml() {
-  var src = state.paperSource || 'all';
-  var ids = paperSourceIds(src, state.wrongTag);
-  var dueN = wrongIdsFor('due').length, allN = wrongIdsFor('all').length, favN = (state.collectedQuestions || []).length;
-  var weak = reviewWeakTags('manual');
-  var html = '<div class="rv-sec">';
-  html += '<div class="rv-sec-title">🎯 ' + t('rv_paper_title') + '</div>';
-  html += '<div style="font-size:11.5px;color:#7b8896;margin:3px 0 14px;">' + t('rv_paper_sub') + '</div>';
-
-  html += '<div class="rv-label">' + t('rv_pick_src') + '</div>';
-  html += rvSrcRowHtml('all', t('rv_src_all'), t('rv_src_all_d'), allN, 'paper');
-  html += rvSrcRowHtml('due', t('rv_src_due'), t('rv_src_due_d'), dueN, 'paper');
-  html += rvSrcRowHtml('fav', t('rv_src_fav'), t('rv_src_fav_d'), favN, 'paper');
-  html += rvSrcRowHtml('tag', t('rv_src_tag'), t('rv_src_tag_d'), null, 'paper');
-
-  if (src === 'tag') {
-    if (!weak.length) {
-      html += '<div class="rv-note" style="margin:-2px 0 12px;">' + t('rv_no_weak') + '</div>';
-    } else {
-      html += '<div class="rv-label">' + t('rv_pick_tag') + '</div>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:7px;margin:0 0 14px;">';
-      for (var i = 0; i < weak.length && i < 12; i++) {
-        html += '<div class="rv-pill ' + (state.wrongTag === weak[i].tag ? 'active' : '') + '" onclick="wrongTagSet2(&quot;' + escapeHtml(weak[i].tag) + '&quot;)">'
-          + escapeHtml(reviewTagName(weak[i].tag)) + ' ' + weak[i].total + '</div>';
-      }
-      html += '</div>';
-    }
-  }
-
-  html += '<div class="rv-label" style="margin-top:4px;">' + t('rv_pick_count') + '</div>';
-  html += '<div style="display:flex;gap:7px;margin-bottom:14px;">';
-  var counts = [10, 20, 0];
-  for (var ci = 0; ci < counts.length; ci++) {
-    var cn2 = counts[ci] === 0 ? t('rv_all_q') : String(counts[ci]) + t('rv_paper_unit');
-    html += '<div class="rv-pill ' + ((state.paperCount || 10) === counts[ci] ? 'active' : '') + '" onclick="setPaperCount(' + counts[ci] + ')">' + cn2 + '</div>';
-  }
-  html += '</div>';
-
-  var cnt = state.paperCount || 10;
-  var take = (cnt === 0 || cnt > ids.length) ? ids.length : cnt;
-  html += '<div style="text-align:center;padding:6px 0 2px;">';
-  html += '<span class="rv-count"><b>' + take + '</b><span style="font-size:12.5px;color:#7b8896;margin-left:3px;">' + t('rv_paper_take') + '</span></span>';
-  html += '</div>';
-  html += '<div style="font-size:11.5px;color:#7b8896;text-align:center;line-height:1.65;margin:6px 0 14px;">'
-    + (ids.length ? escapeHtml(t('rv_paper_take_note')) : escapeHtml(t('rv_paper_none'))) + '</div>';
-
-  html += '<button class="nav-btn primary" style="width:100%;padding:13px;" ' + (ids.length ? '' : 'disabled ')
-    + 'onclick="startWrongPaper()">▶ ' + t('rv_start_paper') + '</button>';
-  html += '</div>';
-  return html;
-}
-function setPaperSource(kind) { state.paperSource = kind; render(); }
+function setPaperSource(kind) { setPaperCat(kind); }
 function setPaperCount(n) { state.paperCount = n; render(); }
 function wrongTagSet2(tag) { state.wrongTag = tag; state.paperSource = 'tag'; render(); }
 function startWrongPaper() {
@@ -16492,19 +16614,9 @@ function startWrongPaper() {
   startWrongRedoIds(ids, {
     kind: src,
     count: (cnt > 0 && cnt < ids.length) ? cnt : 0,
-    title: src === 'fav' ? t('rv_src_fav') : (src === 'tag' ? reviewTagName(state.wrongTag) : (src === 'due' ? t('rv_src_due') : t('rv_src_all')))
-  });
-}
-function wrongTagSet2(tag) { state.wrongTag = tag; state.paperSource = 'tag'; render(); }
-function startWrongPaper() {
-  var src = state.paperSource || 'due';
-  var ids = paperSourceIds(src, state.wrongTag);
-  if (!ids.length) { alert(t('wrong_none_alert')); return; }
-  var cnt = state.paperCount || 10;
-  startWrongRedoIds(ids, {
-    kind: src,
-    count: (cnt > 0 && cnt < ids.length) ? cnt : 0,
-    title: src === 'fav' ? t('rv_src_fav') : (src === 'tag' ? reviewTagName(state.wrongTag) : (src === 'all' ? t('rv_src_all') : t('rv_src_due')))
+    title: src === 'fav' ? t('rv_cat_fav')
+      : (src === 'tag' ? reviewTagName(state.wrongTag)
+        : (src === 'due' ? t('rv_cat_due') : t('rv_cat_all')))
   });
 }
 // 起一个「重做会话」：ids 可以是任意题库的题号（收藏卷会跨库），每题都记住自己
@@ -24510,7 +24622,8 @@ function render() {
     case 'wrongList': app.innerHTML = renderWrongList(); break;
     case 'wrongAll': app.innerHTML = renderWrongAll(); break;
     // 组卷不再是独立页面：进来就是错题本页 + 展开的面板，员工不会觉得"跳了个新界面"
-    case 'wrongPaper': state.paperOpen = true; app.innerHTML = renderWrongAll(); break;
+    // 组卷不再是独立页面：进来就是错题本页，并滚到「自主组卷」那一块
+    case 'wrongPaper': app.innerHTML = renderWrongAll(); rvScrollTo('rvBlkPaper'); break;
     case 'collectedList': app.innerHTML = renderCollectedList(); break;
     case 'examResult': app.innerHTML = renderExamResult(); break;
     case 'examReplay': app.innerHTML = renderExamReplay(); break;
