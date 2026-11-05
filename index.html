@@ -8937,7 +8937,7 @@ function raceLocalRecord() {
     }
   // 徽章也是后加的：结构变了 / 目录更新了就对齐一次（只补发，不会收回）
   // 顺手把已下线的徽章（老「题库征服者」）从记录里删掉，删到了就落盘，下次同步会覆盖云端那份。
-  if (racePurgeRetiredBadges(o)) raceSaveLocalRecord(o);
+  if (racePurgeRetiredBadges(o) || racePurgeNightBadges(o)) raceSaveLocalRecord(o);
   raceSyncBadges(o);
   return o;
 }
@@ -9453,8 +9453,19 @@ function raceDayIsWeekend(day) {
   var dow = new Date(String(day) + 'T00:00:00').getDay();
   return dow === 0 || dow === 6;
 }
+// 北京时间（UTC+8，无夏令时）的小时 / 日期。夜猫子按酒店所在时区判，不跟设备走 ——
+// 旧版用 new Date(ts).getHours()（设备本地时区），时区不是 +8 的设备（例如手机时区
+// 设成伦敦 / UTC）早上交卷也会被判成"夜间"而错发（2026-11-05 Yuki 的案例）。
+function raceBjHour(ts) {
+  return (Math.floor((ts || Date.now()) / 3600000) + 8) % 24;
+}
+function raceDayKeyBj(ts) {
+  var d = new Date((ts || Date.now()) + 8 * 3600000);
+  var m = d.getUTCMonth() + 1, dd = d.getUTCDate();
+  return d.getUTCFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd;
+}
 function raceIsNightTs(ts) {
-  var hr = new Date(ts).getHours();
+  var hr = raceBjHour(ts);
   return hr >= 22 || hr < 5;
 }
 // 某人各届的最佳成绩清单：[{rid, entry}]。byRoundSec（每届每板块）+ 老的 byRound（每届一条），
@@ -9577,13 +9588,13 @@ function raceComputeAwards(rec) {
       }
     }
   }
-  // 夜猫子：按流水 ts 判断。流水会裁剪，所以"有记录的第一次"即达成；
-  // 没有届次 id 的老流水按自然月归期，不会丢。
+  // 夜猫子：按流水 ts 判断（北京时间 22:00~凌晨5点）。流水会裁剪，所以"有记录的第一次"即达成；
+  // 没有届次 id 的老流水按自然月归期，不会丢。达成日用北京日期（不跟设备时区走）。
   var log = Array.isArray(rec.log) ? rec.log : [];
   for (i = 0; i < log.length; i++) {
     var le = log[i];
     if (!le || !le.ts || !raceIsNightTs(le.ts)) continue;
-    var nightDay = raceDayKey(le.ts);
+    var nightDay = raceDayKeyBj(le.ts);
     var nKey = le.id || nightDay.slice(0, 7);
     for (k = 0; k < defs.length; k++) {
       d = defs[k];
@@ -9851,9 +9862,36 @@ function raceRebuildBadges(rec) {
   rec.badges = {};
   raceAwardBadges(rec, '');
 }
+// 夜猫子回收（2026-11-05）：旧版 raceIsNightTs 跟设备时区走，时区不是 +8 的设备
+// 早上交卷也会错发夜猫子（Yuki 案例：北京时间 08:47 交卷却拿了夜猫子，换届后又拿一枚 → ×2）。
+// 按值回收、幂等：某届的 bd_night 只有在该届流水中**确实存在**北京时间 22:00~凌晨5点
+// 的提交时才保留；流水里有该届记录但无夜间提交 → 删。流水被裁剪到看不出该届 → 不动。
+// 每次读记录都跑一遍：即使另一台设备的旧快照把徽章并集复活，下次加载也会再删掉。
+function racePurgeNightBadges(rec) {
+  if (!rec || !rec.badges || typeof rec.badges !== 'object') return 0;
+  var log = Array.isArray(rec.log) ? rec.log : [];
+  var ridNight = {}, ridSeen = {}, i;
+  for (i = 0; i < log.length; i++) {
+    var le = log[i];
+    if (!le || !le.id || !le.ts) continue;
+    ridSeen[le.id] = true;
+    if (raceIsNightTs(le.ts)) ridNight[le.id] = true;
+  }
+  var n = 0;
+  for (var pk in rec.badges) {
+    if (!Object.prototype.hasOwnProperty.call(rec.badges, pk)) continue;
+    var box = rec.badges[pk];
+    if (!box || typeof box !== 'object' || !box.bd_night) continue;
+    if (!ridSeen[pk] || ridNight[pk]) continue;   // 流水不可证伪（无记录 / 被裁剪）→ 不动
+    delete box.bd_night;
+    n++;
+  }
+  return n;
+}
 // 每次读记录时对齐一次：老结构整体重建；目录版本变了就补发新徽章（只加不减）。
 function raceSyncBadges(rec) {
   if (!rec) return rec;
+  racePurgeNightBadges(rec);
   var legacy = false, k;
   if (rec.badges && typeof rec.badges === 'object') {
     for (k in rec.badges) {
