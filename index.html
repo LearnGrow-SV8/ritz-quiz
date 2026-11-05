@@ -4145,6 +4145,7 @@ const state = {
   mastered: {},
   reviewTask: null,   // 本周复习任务 {wk,tag,ids,target,done,doneIds,skippedList}
   paperSession: null, // 专项练习卷 / 错题重做的本轮会话 {kind,title,ids,total,ok,graduated,promoted}
+  recGuards: {},      // 本轮已记账的「题号@位置」——防止重绘把错误次数/小结重复累加
   wrongTab: 'due',    // 错题本页签：'due' 到期 | 'all' 全部 | 'tag' 按知识点
   wrongTag: '',       // 错题本按知识点筛选的当前标签
   wrongSec: '',       // 错题本按章节筛选的当前章节
@@ -5029,8 +5030,9 @@ var I18N = {
   rv_tab_all: {cn:'全部', en:'All'},
   rv_tab_tag: {cn:'按知识点', en:'By topic'},
   rv_no_due: {cn:'今天没有到期错题，明天再来巩固一次。', en:'Nothing due today — come back tomorrow.'},
-  rv_stage_hint: {cn:'答对一次升一阶：1 天 → 3 天 → 7 天，走满三阶才移出错题本。同一天里重复答对不算，所以没法一局刷掉。', en:'Each correct answer moves a question up one stage: 1d → 3d → 7d, then it graduates. Same-day repeats do not count.'},
-  rv_stage_n: {cn:'掌握 {n}/{m} 阶', en:'Stage {n}/{m}'},
+  rv_stage_hint: {cn:'答错进本后，每次答对升一阶，阶间隔 1 → 3 → 7 天；走完三阶再答对一次就移出错题本。同一天里重复答对不算，所以没法一局刷掉。', en:'Each correct answer moves it up one stage (gaps of 1 → 3 → 7 days). After the third stage, one more correct answer retires it. Same-day repeats do not count.'},
+  rv_stage_n: {cn:'已过 {n}/{m} 阶', en:'Stage {n}/{m}'},
+  rv_stage_last: {cn:' · 下次答对即毕业', en:' · one more to retire'},
   rv_wrong_times: {cn:'错过 {n} 次', en:'{n} misses'},
   rv_redo_due: {cn:'重做到期（{n}）', en:'Review due ({n})'},
   rv_redo_one: {cn:'重做', en:'Redo'},
@@ -5066,6 +5068,8 @@ var I18N = {
   rv_cal_redo_run: {cn:'重做本次错题（{n}）', en:'Redo this run\'s mistakes ({n})'},
   rv_cal_redo_one: {cn:'重做', en:'Redo'},
   rv_cal_redo_none: {cn:'本次全对，没有需要重做的题', en:'No mistakes in this run'},
+  rv_fav_paper: {cn:'刷一遍收藏题', en:'Practise saved questions'},
+  rv_fav_mastered: {cn:'已掌握，可移出', en:'Mastered — can remove'},
 };
 
 function t(key) {
@@ -15138,14 +15142,21 @@ function renderQuestion() {
     
     // 练习 / 错题重做模式：答错进错题本，答对推进一阶（不再"对一次就删"——
     // 那等于给"第二次猜对"开绿灯，正是记答案能奏效的原因）。
+    // 🔴 去重：renderQuestion 会因为各种原因重绘，这里不加保险就会把"错误次数"
+    // 和专项卷的小结数字反复累加。submitAnswer 时会清掉标记，所以重做同一题
+    // 依旧算一次新的作答。
     if (state.currentMode !== 'exam' && state.currentMode !== 'formal') {
-      var passRes = recordAttempt(q, state.selectedAnswers[idx], { ok: isCorrect, skey: paperSkeyFor(q.id) });
-      if (passRes) {
-        saveState();
-        if (state.paperSession) {
-          if (passRes === 'graduated') state.paperSession.graduated++;
-          if (passRes === 'promoted') state.paperSession.promoted++;
-          if (isCorrect) state.paperSession.ok++;
+      var recKey = q.id + '@' + idx;
+      if (!state.recGuards[recKey]) {
+        state.recGuards[recKey] = 1;
+        var passRes = recordAttempt(q, state.selectedAnswers[idx], { ok: isCorrect, skey: paperSkeyFor(q.id) });
+        if (passRes) {
+          saveState();
+          if (state.paperSession) {
+            if (passRes === 'graduated') state.paperSession.graduated++;
+            if (passRes === 'promoted') state.paperSession.promoted++;
+            if (isCorrect) state.paperSession.ok++;
+          }
         }
       }
     }
@@ -15753,6 +15764,7 @@ function wrongBankLabel(skey) {
 }
 function openWrongFromKey(skey, qid) {
   state.paperSession = null;
+  state.recGuards = {};
   var bank = wrongBankOfKey(skey);
   if (bank !== 'day21' && bank !== 'tsos' && bank !== 'manual') return;
   state.currentBank = bank;
@@ -15866,7 +15878,7 @@ function renderWrongAll() {
         : '⏳ ' + t('rv_due_in').replace('{n}', String(wrongDueInDays(row.e)))) + '</span>';
       html += '</div>';
       html += '<div class="q-meta" style="margin-top:4px;">';
-      html += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(wrongStageOf(row.e))).replace('{m}', String(WRONG_STAGE_MAX)) + '</span>';
+      html += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(wrongStageOf(row.e))).replace('{m}', String(WRONG_STAGE_MAX)) + (wrongStageOf(row.e) >= WRONG_STAGE_MAX ? t('rv_stage_last') : '') + '</span>';
       html += '<span>' + t('rv_wrong_times').replace('{n}', String(row.e.n || 1)) + '</span>';
       html += '</div>';
       var qtags = q ? questionTagsOf(q) : [];
@@ -16020,6 +16032,7 @@ function startWrongRedoIds(ids, opts) {
   state.currentIndex = 0;
   state.selectedAnswers = {};
   state.showAnswer = false;
+  state.recGuards = {};
   state.paperSession = {
     kind: opts.kind || 'redo', title: opts.title || '', total: list.length,
     ok: 0, promoted: 0, graduated: 0,
@@ -16068,14 +16081,21 @@ function renderCollectedList() {
   if (ids.length === 0) {
     html += '<div class="empty-state"><div class="icon">⭐</div><p>' + t('collected_empty') + '</p></div>';
   } else {
+    // 收藏夹也能变成练习：一键组一卷，只刷自己标记过的题（2026-11-05）
+    html += '<div style="display:flex;gap:8px;margin-bottom:10px;">';
+    html += '<button class="nav-btn primary" style="flex:1;" onclick="state.paperSource=\'fav\';state.paperCount=0;startWrongPaper()">🎯 ' + t('rv_fav_paper') + '</button>';
+    html += '</div>';
     html += '<div class="wrong-list">';
     for (var i = 0; i < ids.length; i++) {
       var qid = ids[i];
       var q = findByIdAllBanks(qid);
+      var gone = state.mastered && state.mastered[qid];
       html += '<div class="wrong-item" style="border-left-color:#e8b339;" onclick="openCollectedQuestion(\'' + qid + '\')">';
       html += '<div class="q-preview">' + escapeHtml(q ? qTextOf(q).substring(0, 100) : qid) + '</div>';
       html += '<div class="q-meta">';
       html += '<span>' + escapeHtml(getBankName(collectedBankOf(qid)) || '') + (q ? ' · ' + getTypeShort(q.type) : '') + '</span>';
+      // 已从错题本毕业的收藏题：提示"可以移出了"，但不自动删 —— 收藏是主观意愿
+      if (gone) html += '<span style="color:#27ae60;">✓ ' + t('rv_fav_mastered') + '</span>';
       html += '</div>';
       html += '<div style="text-align:right;margin-top:8px;"><button class="nav-btn secondary" style="font-size:12px;padding:4px 12px;" onclick="event.stopPropagation();removeFromCollected(\'' + qid + '\')">🗑 ' + t('remove_one') + '</button></div>';
       html += '</div>';
@@ -16087,6 +16107,7 @@ function renderCollectedList() {
 }
 function openCollectedQuestion(qid) {
   state.paperSession = null;
+  state.recGuards = {};
   var bank = collectedBankOf(qid);
   var allQuestions = QUESTION_DATA[bank] || [];
   var idx = -1;
@@ -16440,6 +16461,7 @@ function startPractice(bank) {
   state.currentBank = bank;
   state.currentMode = 'practice';
   state.paperSession = null;
+  state.recGuards = {};
   var rawQuestions = getBankQuestions(bank, state.currentSection);
   if (rawQuestions.length === 0) { alert(t('no_questions')); return; }
 
@@ -16614,6 +16636,7 @@ function startExam(bank) {
   state.currentBank = bank;
   state.currentMode = 'exam';
   state.paperSession = null;
+  state.recGuards = {};
   state.formalSession = null;
   var rawQuestions = getBankQuestions(bank, state.currentSection);
   if (rawQuestions.length === 0) { alert(t('no_questions')); return; }
@@ -16654,6 +16677,7 @@ function startWrongReview(bank) {
   state.currentBank = bank;
   state.currentMode = 'wrong';
   state.paperSession = null;
+  state.recGuards = {};
   var wrongData = state.wrongAnswers[bankStateKey(bank)] || {};
   var wrongIds = Object.keys(wrongData);
   if (wrongIds.length === 0) { alert(t('wrong_none_alert')); return; }
@@ -16705,6 +16729,8 @@ function submitAnswer() {
   var ans = state.selectedAnswers[state.currentIndex];
   if (!ans || (Array.isArray(ans) && ans.length === 0)) { alert(t('no_answer_alert')); return; }
   state.showAnswer = true;
+  // 新一轮作答：放行这一题，允许 renderQuestion 重新记一次
+  delete state.recGuards[q.id + '@' + state.currentIndex];
   // 学习沉淀徽章（2026-11-04）：练习模式每答一题记一笔，错题重做也记一笔 ——
   // 「温故知新 / 错题猎手」靠的就是这两个数，够数即刻点亮，不用等下次答题赛。
   if (state.currentMode === 'wrong') studyBump('wrong');
