@@ -67,7 +67,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .home-hero p { font-size:13px; opacity:0.75; }
 .home-hero .hero-logo { width:160px; max-width:55%; height:auto; display:block; margin:0 auto 14px; }
 
-.bank-card { background:var(--card-bg); border-radius:var(--radius); padding:20px; margin-bottom:14px; box-shadow:var(--shadow); cursor:pointer; transition:transform 0.15s, box-shadow 0.15s; border-left:4px solid var(--accent); }
+.bank-card { background:var(--card-bg); border-radius:var(--radius); padding:20px; margin-bottom:14px; box-shadow:var(--shadow); cursor:pointer; transition:transform 0.15s, box-shadow 0.15s; }
 .bank-card:active { transform:scale(0.98); box-shadow:var(--shadow-lg); }
 .bank-card h3 { font-size:17px; margin-bottom:6px; color:var(--primary); }
 .bank-card .desc { font-size:13px; color:var(--text-light); }
@@ -8550,12 +8550,10 @@ function getTypeShort(type) {
 
 // ============ Renderers ============
 function renderHome() {
-  var totalQ = QUESTION_DATA.day21.length + QUESTION_DATA.tsos.length + QUESTION_DATA.manual.length;
-  var totalWrong = 0;
-  ['day21','tsos','manual','day21_kitchen','tsos_kitchen'].forEach(function(bank) {
-    if (state.wrongAnswers[bank]) totalWrong += Object.keys(state.wrongAnswers[bank]).length;
-  });
-  
+  // 2026-11-05：首页顶部的「总题数 / 错题数 / 收藏数」统计卡整块删除（用户反馈放着
+  // 没意义）。totalQ / totalWrong 两个变量只为它服务，一并移除；错题与收藏的入口
+  // 仍保留在下方复习卡（reviewHubCardHtml）里。
+
   var displayName = profileDisplayName();
   
   var banks = [
@@ -8596,11 +8594,8 @@ function renderHome() {
     html += '<div class="profile-hint" onclick="navigate(\'profile\')">📝 ' + t('profile_edit_hint') + '<span class="go">' + t('profile_edit_go') + '</span></div>';
   }
   
-  html += '<div class="stats-summary">';
-  html += '<div class="stat-card"><div class="num">'+totalQ+'</div><div class="label">'+t('home_total')+'</div></div>';
-  html += '<div class="stat-card" style="cursor:pointer;" onclick="navigate(\'wrongAll\')"><div class="num" style="color:var(--danger)">'+totalWrong+'</div><div class="label">'+t('home_wrong')+'</div></div>';
-  html += '<div class="stat-card" style="cursor:pointer;" onclick="navigate(\'collectedList\')"><div class="num">'+state.collectedQuestions.length+'</div><div class="label">'+t('home_collected')+'</div></div>';
-  html += '</div>';
+  // 2026-11-05：彩色左边条整条拿掉（用户反馈不好看）。此前靠 border-left 区分卡种，
+  // 现在首页所有 bank-card 统一无左条；复习卡的 border-left-color 内联覆盖也已清除。
 
   // 复习闭环：复习中心摆在题库入口之前 —— 先复习该复习的，再刷新的。
   // 2026-11-05 改：今日复习 + 错题掌握率合并成一张卡，整卡可点进错题本。
@@ -8625,7 +8620,7 @@ function renderHome() {
 
   // 限时答题赛入口：只在管理员发布了赛事时才显示，避免学员看到空页面。
   var rc = raceConfOf();
-  html += '<div class="bank-card" style="border-color:#1a3a5c;background:linear-gradient(0deg,#fff,#fff) padding-box;" onclick="navigate(\'race\')">';
+  html += '<div class="bank-card" onclick="navigate(\'race\')">';
   html += '<h3>⚡ '+t('race_title')+'</h3>';
   html += '<div class="desc">'+t('race_sub')+'</div>';
   html += '<div class="meta">';
@@ -16004,13 +15999,14 @@ function reviewHubCardHtml() {
   // 两张卡，不是一个卡里的上下两段（2026-11-05 二版）。
   // 上次把"看我的错题"和"今天该练什么"塞进同一张卡，虽然少了一个卡片框，但员工
   // 读起来仍是一坨：不知道上半是身份、下半是任务。这次直接拆成两张：
-  //   卡 A：白底、黑左边 —— 状态与入口（我的错题 / 掌握度）
-  //   卡 B：浅蓝底、蓝左边 —— 今天要做的事（任务 + 进度 + 按钮）
-  // 颜色、边框方向、背景都不一样，扫一眼就知道是两件事。
+  //   卡 A：白底 —— 状态与入口（我的错题 / 掌握度）
+  //   卡 B：浅蓝底 —— 今天要做的事（任务 + 进度 + 按钮）
+  // （2026-11-05 追记：原来的"黑左边 / 蓝左边"彩色左边条已按用户要求整体移除，
+  //   两卡现在靠底色区分。）
   var html = '';
 
   // ---------- 卡 A：我的错题（状态 + 入口） ----------
-  html += '<div class="bank-card" style="padding:0;overflow:hidden;cursor:pointer;border-left-color:#1a1a1a;margin-bottom:10px;" onclick="navigate(\'wrongAll\')">';
+  html += '<div class="bank-card" style="padding:0;overflow:hidden;cursor:pointer;margin-bottom:10px;" onclick="navigate(\'wrongAll\')">';
   html += '<div style="display:flex;align-items:center;gap:14px;padding:14px;">';
   html += reviewRingHtml(m, 68, t('rv_hub_mastery_short'));
   html += '<div style="flex:1;min-width:0;">';
@@ -16028,7 +16024,7 @@ function reviewHubCardHtml() {
   html += '</div></div></div>';
 
   // ---------- 卡 B：今日复习（任务 + 行动） ----------
-  html += '<div class="bank-card" style="padding:0;overflow:hidden;border-left-color:#4a7ba7;cursor:default;margin-bottom:14px;">';
+  html += '<div class="bank-card" style="padding:0;overflow:hidden;cursor:default;margin-bottom:14px;">';
   html += '<div style="padding:12px 14px 11px;background:linear-gradient(135deg,#EDF4FC,#F8FBFF);border-bottom:1px solid #e3ecf7;">';
   html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
   html += '<div style="font-size:14.5px;font-weight:800;color:#1a1a1a;">🔥 ' + t('rv_task_title') + '</div>';
