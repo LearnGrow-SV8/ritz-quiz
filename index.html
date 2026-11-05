@@ -15464,6 +15464,12 @@ function wrongAdd(skey, q, ans, opts) {
     };
   }
   if (Array.isArray(ans) && ans.length) { e.userAnswer = ans; e.ua = ans; e.uok = 1; }
+  // 本周任务如果是"空的"（生成那一刻还没有到期错题），新错题进来就该让它重算，
+  // 否则这一周都看不到复习任务。
+  try {
+    var tk = state.reviewTask;
+    if (tk && tk.empty && tk.wk === reviewWeekKey()) state.reviewTask = null;
+  } catch (e2) {}
   return e;
 }
 // 答对一次 → 推进一阶；同一自然日 / 间隔不足 4 小时不算（防一局连点刷掉）
