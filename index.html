@@ -168,48 +168,52 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
    ③ 三格等宽指标 + 发丝竖线分隔（读起来像票面数据）
    ④ 底部一条赛程轨：起点 —— 今天 —— 终点，进度用发光细线表示
    深蓝取自品牌回忆蓝的暗部，右上角一道极淡光弧当舞台灯，不用大色块也能有质感。 */
+   2026-11-05 调色：原来整卡深蓝，夹在浅蓝页面和浅金徽章卡中间像"贴了一张别家的海报"。
+   改成同一家族的浅色系：底用回忆蓝渐变（和页头 / home-hero 同源），文字用深藏蓝，
+   唯一的强调色是金 —— kicker、分隔细线、赛程进度线用金，正好接住下面浅金的限定徽章卡，
+   两张卡并排变成"浅蓝 × 浅金"一组。 */
 .race-hero { position:relative; overflow:hidden; border-radius:14px; padding:15px 16px 14px;
   background:
-    radial-gradient(120% 90% at 100% 0%, rgba(195,214,238,.18), rgba(195,214,238,0) 62%),
-    linear-gradient(160deg,#12324f 0%,#0E2545 58%,#0a1c34 100%);
-  border:1px solid rgba(255,255,255,.09); color:#fff;
-  box-shadow:0 8px 24px rgba(14,37,69,.26), inset 0 1px 0 rgba(255,255,255,.08);
+    radial-gradient(120% 90% at 100% 0%, rgba(255,255,255,.6), rgba(255,255,255,0) 62%),
+    linear-gradient(160deg,#EDF3FB 0%,#DCE8F6 55%,#C3D6EE 100%);
+  border:1px solid rgba(255,255,255,.7); color:#0E2545;
+  box-shadow:0 8px 24px rgba(26,58,92,.10), inset 0 1px 0 rgba(255,255,255,.8);
   margin-bottom:16px; }
 .race-hero::after { content:''; position:absolute; right:-64px; top:-82px; width:190px; height:190px;
-  border-radius:50%; border:1px solid rgba(195,214,238,.18);
-  box-shadow:0 0 0 16px rgba(195,214,238,.05), 0 0 0 34px rgba(195,214,238,.03);
+  border-radius:50%; border:1px solid rgba(183,121,31,.18);
+  box-shadow:0 0 0 16px rgba(240,195,106,.12), 0 0 0 34px rgba(240,195,106,.06);
   pointer-events:none; z-index:0; }
 .race-hero > * { position:relative; z-index:1; }
 .race-hero-top { display:flex; align-items:center; gap:9px; }
 .race-hero-kicker { flex:0 0 auto; font-size:10px; font-weight:700; letter-spacing:2.2px;
-  color:#C3D6EE; opacity:.92; text-transform:uppercase; }
-.race-hero-rule { flex:1 1 auto; height:1px; background:linear-gradient(90deg,rgba(195,214,238,.5),rgba(195,214,238,0)); }
+  color:#b7791f; text-transform:uppercase; }
+.race-hero-rule { flex:1 1 auto; height:1px; background:linear-gradient(90deg,rgba(183,121,31,.45),rgba(183,121,31,0)); }
 .race-hero-pill { flex:0 0 auto; display:flex; align-items:center; gap:5px; font-size:10.5px; font-weight:600;
-  padding:3px 9px 3px 7px; border-radius:20px; letter-spacing:.2px; color:#DCE8F6;
-  border:1px solid rgba(195,214,238,.28); background:rgba(195,214,238,.10); white-space:nowrap; }
+  padding:3px 9px 3px 7px; border-radius:20px; letter-spacing:.2px; color:#1a3a5c;
+  border:1px solid rgba(26,58,92,.18); background:rgba(255,255,255,.65); white-space:nowrap; }
 .race-hero-pill i { width:5px; height:5px; border-radius:50%; display:block; }
 .race-hero-title { margin-top:10px; font-size:20px; font-weight:700; line-height:1.32;
-  letter-spacing:.3px; color:#fff; word-break:break-word; }
-.race-hero-sub { margin-top:4px; font-size:11px; color:rgba(220,232,246,.6); letter-spacing:.2px; }
-.race-hero-metrics { display:flex; margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,.10); }
+  letter-spacing:.3px; color:#0E2545; word-break:break-word; }
+.race-hero-sub { margin-top:4px; font-size:11px; color:rgba(14,37,69,.55); letter-spacing:.2px; }
+.race-hero-metrics { display:flex; margin-top:14px; padding-top:12px; border-top:1px solid rgba(14,37,69,.12); }
 .race-hero-cell { flex:1 1 0; min-width:0; }
-.race-hero-cell + .race-hero-cell { margin-left:13px; padding-left:13px; border-left:1px solid rgba(255,255,255,.10); }
+.race-hero-cell + .race-hero-cell { margin-left:13px; padding-left:13px; border-left:1px solid rgba(14,37,69,.12); }
 .race-hero-cell em { display:block; font-style:normal; font-size:10px; letter-spacing:.9px;
-  color:rgba(220,232,246,.52); margin-bottom:3px; }
-.race-hero-cell b { display:block; font-size:15.5px; font-weight:700; color:#fff; letter-spacing:.2px;
+  color:rgba(14,37,69,.55); margin-bottom:3px; }
+.race-hero-cell b { display:block; font-size:15.5px; font-weight:700; color:#0E2545; letter-spacing:.2px;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .race-hero-cell b u { text-decoration:none; font-size:10.5px; font-weight:600;
-  color:rgba(220,232,246,.66); margin-left:3px; letter-spacing:0; }
+  color:rgba(14,37,69,.62); margin-left:3px; letter-spacing:0; }
 .race-hero-time { display:flex; align-items:center; gap:9px; margin-top:14px; }
-.race-hero-time span { flex:0 0 auto; font-size:10.5px; color:rgba(220,232,246,.62);
+.race-hero-time span { flex:0 0 auto; font-size:10.5px; color:rgba(14,37,69,.58);
   font-variant-numeric:tabular-nums; letter-spacing:.1px; }
 .race-hero-track { position:relative; flex:1 1 auto; min-width:22px; height:2px; border-radius:2px;
-  background:rgba(255,255,255,.13); }
+  background:rgba(14,37,69,.14); }
 .race-hero-fill { position:absolute; left:0; top:0; bottom:0; border-radius:2px;
-  background:linear-gradient(90deg,rgba(143,180,221,.9),#C3D6EE); }
+  background:linear-gradient(90deg,rgba(212,160,74,.85),#b7791f); }
 .race-hero-mark { position:absolute; top:50%; width:7px; height:7px; margin-left:-3.5px; border-radius:50%;
-  transform:translateY(-50%); background:#fff; box-shadow:0 0 0 3px rgba(195,214,238,.22); }
-.race-hero-note { margin-top:9px; font-size:10.5px; color:rgba(220,232,246,.48); letter-spacing:.1px; }
+  transform:translateY(-50%); background:#fff; box-shadow:0 0 0 3px rgba(183,121,31,.28); }
+.race-hero-note { margin-top:9px; font-size:10.5px; color:rgba(14,37,69,.48); letter-spacing:.1px; }
 
 /* ===== 答题赛倒计时：贴在「⏱ 60s ｜ 已答 N」矩形下沿的色块，随时间从满格缩到空 ===== */
 .exam-info.race-timer-box { display:block; padding:12px 16px 0; overflow:hidden; }
@@ -4759,7 +4763,7 @@ var I18N = {
   race_hero_kicker: {cn:'本期赛事', en:'Season'},
   race_hero_section: {cn:'参赛板块', en:'Section'},
   race_hero_pool: {cn:'题目池', en:'Pool'},
-  race_hero_sub_choice: {cn:'开赛时自选板块，按答对题数排名', en:'Pick a section when you start · ranked by correct answers'},
+  race_hero_sub_choice: {cn:'每轮任选一个板块开赛，各板块相互独立、均可分别挑战', en:'Pick a section each round · all sections are independently playable'},
   race_hero_spare: {cn:'答完后自动补充通用知识 {m} 题', en:'{m} general questions added after the pool runs out'},
   badge_admin_rid_cur: {cn:'当前届', en:'Current round'},
   race_badge_theme_ended: {cn:'本期已结束', en:'Round closed'},
@@ -11978,14 +11982,14 @@ function raceHeroCardHtml(c, st, mode) {
   else if (st === 'ended') { pillTxt = en ? 'Ended' : '已结束'; }
   else if (st === 'closed') { pillTxt = en ? 'Closed' : '已关闭'; }
 
-  // 第 2 格：参赛板块。管理员指定就报板块名，自由选则报「任选 + 可选数量」
+  // 第 2 格：参赛板块。管理员指定就报板块名；自由选则报「N 板块 · 均可挑战」——
+  // 2026-11-05：旧文案「任选 N 选 1」让员工误以为只能挑一个板块玩，其实各板块互相独立都能打。
   var secVal = '', secUnit = '', allow = raceAllowedList(conf), i;
   if (mode === 'admin') {
     secVal = raceSecIcon(conf.section || 'all') + ' ' + raceSecName(conf.section || 'all');
   } else {
-    // 英文用 "Any · of 9"（"Your pick" 在三格并排时会被省略号吃掉）
-    secVal = en ? 'Any' : '任选';
-    secUnit = en ? 'of ' + allow.length : allow.length + ' 选 1';
+    secVal = allow.length + ' ' + (en ? 'sec' : '板块');
+    secUnit = en ? 'all open' : '均可挑战';
   }
   // 第 3 格：题目池。自由选时把各板块可答题数加起来，给一个「量很足」的直觉
   var poolN = 0;
