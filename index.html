@@ -4654,7 +4654,9 @@ var I18N = {
   race_new_season_confirm: {cn:'确认开启新一季赛事？\n\n本届榜单（个人总榜 / 板块榜 / 部门榜 / 打卡天数榜）将清空重新开始；历史最佳榜保留。', en:'Start a new season?\n\nThe current boards (overall / section / department / check-in days) will reset and start from zero; the all-time best board is kept.'},
   race_season_id_label: {cn:'本届 ID', en:'Season ID'},
   race_badge_tap_hint: {cn:'👆 点名字旁的徽章可以查看它的含义', en:'Tap a badge to see what it means'},
-  race_badge_promo: {cn:'每一枚都靠真本事挣来 —— 条件就写在上面，达到就能解锁，下一个挂上它的就是你！', en:'Every badge is earned, not given — the goal is right above. Hit it and the next one is yours!'},
+  race_badge_promo: {cn:'不看资历，只看数据 —— 条件就摆在上头，达标自动点亮 ✨ 下一枚归你', en:'Data decides, not seniority — the bar is right above. Clear it and it lights up ✨ Next one is yours'},
+  race_badge_past_tag: {cn:'🏛 往期荣耀 · 不是本期排名', en:'🏛 Past glory · not this round\'s ranking'},
+  race_badge_promo_past: {cn:'这是那一届的纪念，新赛季开始也不会收走。新榜从零起步，想再添一枚，随时开抢 🏁', en:'A souvenir from a past round — it stays even when a new season starts. New board starts at zero: go grab another one 🏁'},
   race_badge_ok: {cn:'知道了', en:'Got it'},
   race_cloud_fail: {cn:'❌ 没有同步到云端，学员端看不到这场答题赛。请检查网络后重新点「发布」。', en:'❌ Not synced to the cloud — student devices cannot see this race. Check the network, then press Publish again.'},
   race_syncing: {cn:'正在从云端重新同步…', en:'Re-syncing from the cloud…'},
@@ -10411,9 +10413,9 @@ function raceBadgeDesc(b, lang) {
     if (rule === BADGE_RULE_DEPT_TOP) {
       var secEn = badgeSecValid(def && def.sec);
       return 'Top ' + n + ' on the ' + (secEn ? raceSecMeta(secEn).en : 'any single-section')
-        + ' board \u2014 final standings once the round ends';
+        + ' board in a past round \u2014 settled when that round ended';
     }
-    if (rule === BADGE_RULE_ALL_TOP) return 'Top ' + n + ' on the all-question board this round';
+    if (rule === BADGE_RULE_ALL_TOP) return 'Top ' + n + ' on the all-question board in a past round';
     if (rule === BADGE_RULE_WRONG) return n + ' wrong answers redone';
     if (rule === BADGE_RULE_FAV) return n + ' questions saved';
     if (rule === BADGE_RULE_PRACTICE) return n + ' practice answers';
@@ -10433,10 +10435,10 @@ function raceBadgeDesc(b, lang) {
   if (rule === BADGE_RULE_NEWBIE) return '首次打卡 7 天内打卡满 ' + n + ' 天';
   if (rule === BADGE_RULE_DEPT_TOP) {
     var secCn = badgeSecValid(def && def.sec);
-    return (secCn ? ('「' + raceSecMeta(secCn).cn + '」速答榜当期前 ' + n + ' 名')
-                  : ('任一板块速答榜当期前 ' + n + ' 名')) + '，赛季结束后结算';
+    return (secCn ? ('「' + raceSecMeta(secCn).cn + '」速答榜某一届前 ' + n + ' 名')
+                  : ('任一板块速答榜某一届前 ' + n + ' 名')) + '（赛季结束结算）';
   }
-  if (rule === BADGE_RULE_ALL_TOP) return '全题库速答榜当期前 ' + n + ' 名';
+  if (rule === BADGE_RULE_ALL_TOP) return '全题库速答榜某一届前 ' + n + ' 名（赛季结束结算）';
   if (rule === BADGE_RULE_WRONG) return '累计重做错题 ' + n + ' 道';
   if (rule === BADGE_RULE_FAV) return '累计收藏题目 ' + n + ' 道';
   if (rule === BADGE_RULE_PRACTICE) return '练习模式累计答题 ' + n + ' 道';
@@ -10448,6 +10450,12 @@ function raceBadgeDesc(b, lang) {
   }
   return rule === BADGE_RULE_STREAK ? ('连续打卡 ' + n + ' 天')
     : rule === BADGE_RULE_PERIOD ? ('单期累计打卡 ' + n + ' 天') : ('累计打卡 ' + n + ' 天');
+}
+// 竞速榜徽章（板块榜 / 全题库榜）是"赛季结算"的荣誉：拿到手那一刻，那一届已经结束了。
+// 所以本期没进前十、榜上却还挂着它，不是数据错 —— 统一标成「往期」，让围观的人一看就懂。
+function raceBadgeIsPastHonor(def) {
+  var r = def && def.rule;
+  return r === BADGE_RULE_DEPT_TOP || r === BADGE_RULE_ALL_TOP;
 }
 // 当前进度（徽章墙 / 徽章集锦的"还差多少"）
 function raceBadgeProgressOf(rec, def) {
@@ -12642,6 +12650,8 @@ function raceBadgeInfoShow(rawId) {
   if (!def || typeof document === 'undefined' || !document.body || !document.body.appendChild) return;
   var en = state.lang === 'en';
   var c1 = def.c1 || '#ffcf6b', c2 = def.c2 || '#d99a00';
+  // 往期荣耀（板块/全题库榜）：单独一枚小标签 + 换一句说明，免得"本期没进前十却有这枚"被误解。
+  var past = raceBadgeIsPastHonor(def);
   var overlay = document.createElement('div');
   overlay.className = 'confirm-overlay';
   overlay.innerHTML =
@@ -12649,8 +12659,9 @@ function raceBadgeInfoShow(rawId) {
       '<div style="width:64px;height:64px;margin:4px auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;line-height:1;background:linear-gradient(135deg,' + c1 + ',' + c2 + ');box-shadow:0 2px 8px rgba(200,140,0,.35);">' + raceBadgeIcon(def) + '</div>' +
       '<div class="confirm-title" style="margin-bottom:4px;">' + escapeHtml(raceBadgeName(def)) + '</div>' +
       '<div style="font-size:11px;color:#b7791f;font-weight:600;margin-bottom:4px;">' + badgeCatLabel(badgeCatOf(def.rule)) + '</div>' +
+      (past ? '<div style="display:inline-block;margin:0 0 7px;padding:2px 9px;border-radius:999px;font-size:10.5px;font-weight:700;color:#8a5a00;background:#fff4d6;border:1px solid #f2d69a;">' + escapeHtml(t('race_badge_past_tag')) + '</div>' : '') +
       '<div class="confirm-body" style="text-align:center;">' + escapeHtml(raceBadgeDesc(def)) + '</div>' +
-      '<div style="font-size:11.5px;color:#1a3a5c;background:#eef4fa;border-radius:8px;padding:7px 10px;margin-top:10px;line-height:1.5;">' + t('race_badge_promo') + '</div>' +
+      '<div style="font-size:11.5px;color:#1a3a5c;background:#eef4fa;border-radius:8px;padding:7px 10px;margin-top:10px;line-height:1.5;">' + t(past ? 'race_badge_promo_past' : 'race_badge_promo') + '</div>' +
       '<div class="confirm-actions"><button class="confirm-btn primary" data-act="ok">' + t('race_badge_ok') + '</button></div>' +
     '</div>';
   function close() {
@@ -12675,7 +12686,10 @@ function raceBadgeChipHtml(def, got, date, prog, count) {  if (def && !def.rule 
     + (got && count > 1 ? ' <span style="font-size:11px;color:#b7791f;">×' + count + '</span>' : '') + '</div>';
   s += '<div style="font-size:10.5px;color:#9aa3ad;margin-top:1px;line-height:1.3;">' + escapeHtml(raceBadgeDesc(d)) + '</div>';
   s += '<div style="font-size:10.5px;color:' + (got ? '#b7791f' : '#9aa3ad') + ';margin-top:2px;">'
-    + (got ? ('✓ ' + escapeHtml(String(date))) : escapeHtml(String(prog))) + '</div>';
+    + (got
+        // 竞速榜徽章标「往期」：达成日后面不加解释，很多人会以为那是"本期排名"
+        ? ('✓ ' + (raceBadgeIsPastHonor(d) ? (state.lang === 'en' ? 'past \u00b7 ' : '往期 \u00b7 ') : '') + escapeHtml(String(date)))
+        : escapeHtml(String(prog))) + '</div>';
   s += '</div></div>';
   return s;
 }
@@ -13381,7 +13395,10 @@ function renderRaceBoard() {
           + 'background:linear-gradient(135deg,' + (myBadge.def.c1 || '#ffcf6b') + ',' + (myBadge.def.c2 || '#d99a00') + ');'
           + 'color:#fff;font-size:10.5px;font-weight:700;text-shadow:0 1px 1px rgba(0,0,0,.18);">'
           + raceBadgeIcon(myBadge) + ' ' + escapeHtml(raceBadgeName(myBadge))
-          + (myBCount > 1 ? ' ×' + myBCount : '') + '</span>' : '';
+          + (myBCount > 1 ? ' ×' + myBCount : '')
+          // 竞速榜徽章是赛季结算的荣誉：榜上标一句「往期」，别人一看就知道跟本期排名无关。
+          + (raceBadgeIsPastHonor(myBadge.def) ? ' <span style="font-weight:600;opacity:.8;">· ' + (state.lang === 'en' ? 'past' : '往期') + '</span>' : '')
+          + '</span>' : '';
       html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#1a3a5c;font-size:12px;">' + t('race_you') + '</span>' : '') + bdgTag + '</div>';
       // 下沉过的部门显示「大部门 · 小部门」（房务部 · 客房部），一眼看出他属于哪个大部门；
       // 没下沉的（人力资源部等）只显示大部门，不重复同一个词。
