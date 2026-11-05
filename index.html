@@ -4024,6 +4024,10 @@ function loadUserData() {
   state.wrongAnswers = JSON.parse(localStorage.getItem(uk + 'wrongAnswers') || '{}');
   state.collectedQuestions = JSON.parse(localStorage.getItem(uk + 'collectedQuestions') || '[]');
   state.practiceProgress = JSON.parse(localStorage.getItem(uk + 'practiceProgress') || '{}');
+  try { state.mastered = JSON.parse(localStorage.getItem(uk + 'mastered') || '{}') || {}; } catch (e) { state.mastered = {}; }
+  try { state.reviewTask = JSON.parse(localStorage.getItem(uk + 'reviewTask') || 'null'); } catch (e2) { state.reviewTask = null; }
+  if (!state.mastered || typeof state.mastered !== 'object') state.mastered = {};
+  wrongNormAll();   // 老版本存的错题条目没有掌握阶，这里补齐（st=0 立即到期）
   state.profile = loadProfile();
   // Push the latest cumulative snapshot to the admin cloud view on every login /
   // app open. Silent + throttled; retried on the next trigger if offline.
@@ -4136,6 +4140,16 @@ const state = {
   profile: null,        // {empNo, cnName, enName, division:{en,cn}, dept:{en,cn}} per employee
   wrongAnswers: {},
   collectedQuestions: [],
+  // 复习闭环（2026-11-05）：毕业的题号 → 毕业时间。错题本只留"还没掌握"的，
+  // 毕业记录单独存，掌握度要数它；否则一道题毕业后掌握度反而会掉。
+  mastered: {},
+  reviewTask: null,   // 本周复习任务 {wk,tag,ids,target,done,doneIds,skippedList}
+  paperSession: null, // 专项练习卷 / 错题重做的本轮会话 {kind,title,ids,total,ok,graduated,promoted}
+  wrongTab: 'due',    // 错题本页签：'due' 到期 | 'all' 全部 | 'tag' 按知识点
+  wrongTag: '',       // 错题本按知识点筛选的当前标签
+  wrongSec: '',       // 错题本按章节筛选的当前章节
+  paperSource: 'due', // 专项卷弹层里选中的来源
+  paperCount: 10,     // 专项卷题量档位
   practiceProgress: {},
   requireProfile: false, // true after login when profile is incomplete; forces profile page
   pendingProfile: false, // true after the access code is verified; the identity was already resolved by the login flow
@@ -5007,6 +5021,51 @@ var I18N = {
   result_greet: {cn:'{name}，你本次考试得分是 {score} 分', en:'{name}, your score in this exam is {score}'},
   // Misc
   answered: {cn:'已答', en:'Answered'},
+  // ===== 复习闭环（2026-11-05）=====
+  rv_due_now: {cn:'现在可复习', en:'Due now'},
+  rv_due_in: {cn:'{n} 天后再练', en:'in {n}d'},
+  rv_due_n: {cn:'{n} 道到期', en:'{n} due'},
+  rv_tab_due: {cn:'到期', en:'Due'},
+  rv_tab_all: {cn:'全部', en:'All'},
+  rv_tab_tag: {cn:'按知识点', en:'By topic'},
+  rv_no_due: {cn:'今天没有到期错题，明天再来巩固一次。', en:'Nothing due today — come back tomorrow.'},
+  rv_stage_hint: {cn:'答对一次升一阶：1 天 → 3 天 → 7 天，走满三阶才移出错题本。同一天里重复答对不算，所以没法一局刷掉。', en:'Each correct answer moves a question up one stage: 1d → 3d → 7d, then it graduates. Same-day repeats do not count.'},
+  rv_stage_n: {cn:'掌握 {n}/{m} 阶', en:'Stage {n}/{m}'},
+  rv_wrong_times: {cn:'错过 {n} 次', en:'{n} misses'},
+  rv_redo_due: {cn:'重做到期（{n}）', en:'Review due ({n})'},
+  rv_redo_one: {cn:'重做', en:'Redo'},
+  rv_make_paper: {cn:'生成专项卷', en:'Build a paper'},
+  rv_paper_title: {cn:'专项练习卷', en:'Focused practice'},
+  rv_paper_sub: {cn:'只刷你该刷的', en:'Only what you need'},
+  rv_pick_src: {cn:'选择练习来源', en:'Pick a source'},
+  rv_pick_count: {cn:'选择题量', en:'Pick a length'},
+  rv_src_due: {cn:'到期错题', en:'Due mistakes'},
+  rv_src_all: {cn:'全部错题', en:'All mistakes'},
+  rv_src_fav: {cn:'收藏题', en:'Saved questions'},
+  rv_src_tag: {cn:'薄弱知识点', en:'Weak topics'},
+  rv_all_q: {cn:'全部', en:'All'},
+  rv_paper_take: {cn:'本轮会出这么多题，答完给掌握阶小结', en:'Questions in this paper — you get a stage summary at the end'},
+  rv_start_paper: {cn:'开始练习', en:'Start practising'},
+  rv_paper_done: {cn:'本轮完成', en:'Paper complete'},
+  rv_paper_line: {cn:'答对 {ok} / {total} 道', en:'{ok} / {total} correct'},
+  rv_paper_gain: {cn:'推进 {p} 道掌握阶 · 毕业 {g} 道', en:'{p} advanced · {g} graduated'},
+  rv_back_wrong: {cn:'返回错题本', en:'Back to mistakes'},
+  rv_again_paper: {cn:'再组一卷', en:'New paper'},
+  rv_strip: {cn:'答对 {ok} · 推进 {p} · 毕业 {g}', en:'{ok} ok · {p} advanced · {g} graduated'},
+  rv_no_weak: {cn:'还没有足够数据判断薄弱知识点，先练几道再来。', en:'Not enough data yet — practise a few questions first.'},
+  rv_task_title: {cn:'今日复习', en:"Today's review"},
+  rv_task_desc: {cn:'近一周你在「{tag}」错得最多。把 {n} 道到期错题各推进一阶，这个任务就算完成。', en:'"{tag}" is your weakest topic this week. Move {n} due questions up one stage to finish.'},
+  rv_task_go: {cn:'开始复习', en:'Start review'},
+  rv_task_skip: {cn:'换一个', en:'Swap'},
+  rv_task_done: {cn:'本周已完成', en:'Done this week'},
+  rv_task_none: {cn:'暂无到期错题，去练几道新题保持手感。', en:'Nothing due — practise some new questions.'},
+  rv_task_progress: {cn:'已完成 {d}/{n}', en:'{d}/{n} done'},
+  rv_mastery: {cn:'错题掌握率', en:'Mistake mastery'},
+  rv_mastery_sub: {cn:'已掌握 {g} 题 · 错题本还剩 {n} 题', en:'{g} mastered · {n} still on the list'},
+  rv_mastery_none: {cn:'还没有错题记录，先练几道再来。', en:'No mistakes recorded yet.'},
+  rv_cal_redo_run: {cn:'重做本次错题（{n}）', en:'Redo this run\'s mistakes ({n})'},
+  rv_cal_redo_one: {cn:'重做', en:'Redo'},
+  rv_cal_redo_none: {cn:'本次全对，没有需要重做的题', en:'No mistakes in this run'},
 };
 
 function t(key) {
@@ -5030,6 +5089,11 @@ function saveState() {
   localStorage.setItem(uk + 'wrongAnswers', JSON.stringify(state.wrongAnswers));
   localStorage.setItem(uk + 'collectedQuestions', JSON.stringify(state.collectedQuestions));
   localStorage.setItem(uk + 'practiceProgress', JSON.stringify(state.practiceProgress));
+  // 掌握度靠这两个才成立：错题本毕业名单 + 本周复习任务
+  try {
+    localStorage.setItem(uk + 'mastered', JSON.stringify(state.mastered || {}));
+    localStorage.setItem(uk + 'reviewTask', JSON.stringify(state.reviewTask || null));
+  } catch (e) {}
 }
 
 // ===== Learning-data cloud sync (student → admin) =====
@@ -5127,7 +5191,37 @@ function collectSyncSnapshot() {
       }
       return out;
     })(),
-    collectedIds: (state.collectedQuestions || []).slice(0, 150)
+    collectedIds: (state.collectedQuestions || []).slice(0, 150),
+    // 复习闭环（2026-11-05）：管理端要看「错题掌握率 / 本周复习任务完成度」，
+    // 只带三个短字段，不带题号明细（题号已经在 wrongIds 里）。
+    mt: (function () { try { var m = masteryOf(); return m < 0 ? null : m; } catch (e) { return null; } })(),
+    mas: (function () { try { return masteredCount(); } catch (e) { return 0; } })(),
+    rt: (function () {
+      try {
+        var tk = reviewTaskOf();
+        return (tk && tk.target) ? [tk.done || 0, tk.target] : null;
+      } catch (e) { return null; }
+    })(),
+    // 掌握阶（只传已经推进过的题，st=0 的新错题不必传）+ 毕业名单。
+    // 换设备/清缓存后靠这两个把"复习到第几阶"接回来，否则掌握率会凭空归零。
+    ws: (function () {
+      var o = {}, n = 0;
+      try {
+        for (var bk in state.wrongAnswers) {
+          if (!Object.prototype.hasOwnProperty.call(state.wrongAnswers, bk)) continue;
+          var book = state.wrongAnswers[bk] || {};
+          for (var qid in book) {
+            if (!Object.prototype.hasOwnProperty.call(book, qid)) continue;
+            if (book[qid] && book[qid].st > 0) { o[qid] = book[qid].st; n++; }
+            if (n >= 150) return o;
+          }
+        }
+      } catch (e) { return o; }
+      return o;
+    })(),
+    mg: (function () {
+      try { return Object.keys(state.mastered || {}).slice(0, 200); } catch (e) { return []; }
+    })()
   };
 }
 function buildSyncMessages() {
@@ -5281,10 +5375,33 @@ function pushStudentSnapshotToKv() {
         })
         .catch(function() { enqueuePendingOp('student', body); return false; });
     }
+    function sbPush() {
+      return sbUpsertSnapshot(rowKey, rec, rec.ts)
+        .then(function() { clearPendingOp('student'); return true; })
+        .catch(legacyPush);
+    }
     if (!SB_ON || !rec) return legacyPush();
-    return sbUpsertSnapshot(rowKey, rec, rec.ts)
-      .then(function() { clearPendingOp('student'); return true; })
-      .catch(legacyPush);
+    // 🔴 空 race 保护（2026-11-05）：快照是整条覆盖写，本地 race 为空（新设备 /
+    // 清缓存 / 刚登录还没回填）时直接推会把云端的徽章与答题历史抹掉。
+    // 先拉云端行，有数据就并进本机再推 —— 推出去的一定是合并后的完整记录。
+    if (raceRecIsEmpty(rec.race)) {
+      return sbJson('/rest/v1/student_snapshots?select=record&phone=eq.' + encodeURIComponent(rowKey) + '&limit=1',
+        null, SB_SNAPSHOT_TIMEOUT_MS, 'sb-race-guard')
+        .then(function (rows) {
+          var cRace = (Array.isArray(rows) && rows[0] && rows[0].record && rows[0].record.race) || null;
+          if (cRace && !raceRecIsEmpty(cRace)) {
+            var merged = raceMergeCloudRace(raceLocalRecord(), cRace);
+            raceSaveLocalRecord(merged);
+            var nb = buildStudentBody();
+            if (nb) {
+              body = nb;
+              try { rec = JSON.parse(nb); } catch (e2) {}   // rec 仍是旧对象也不至于推坏数据
+            }
+          }
+          return sbPush();
+        }, function () { return sbPush(); });
+    }
+    return sbPush();
   } catch (e) { return Promise.resolve(false); }
 }
 
@@ -5684,9 +5801,10 @@ function fetchCloudAccountByPhone(phone) {
 // the question text, so we rehydrate them from the question banks; the typed
 // answer itself was never synced, so it restores as empty (question + correct
 // answer + explanation still render fine in the wrong-answer book).
-function rebuildWrongFromIds(wrongIds) {
+function rebuildWrongFromIds(wrongIds, stages) {
   var out = {};
   if (!wrongIds || typeof wrongIds !== 'object') return out;
+  var stMap = (stages && typeof stages === 'object') ? stages : {};
   for (var bank in wrongIds) {
     var ids = wrongIds[bank];
     if (!Array.isArray(ids)) continue;
@@ -5694,9 +5812,16 @@ function rebuildWrongFromIds(wrongIds) {
     for (var i = 0; i < ids.length; i++) {
       var q = findByIdAllBanks(ids[i]);
       if (!q) continue;
+      // 换设备时把掌握阶一起接回来：否则一道已经升到第 2 阶的题回到第 0 阶，
+      // 学员会觉得"我明明复习过"。last 设成昨天，保证今天就能再通过一次。
+      var st = parseInt(stMap[ids[i]], 10);
+      if (!(st >= 0)) st = 0;
+      st = Math.min(st, 3);
       m[ids[i]] = {
         question: q.question, section: q.section, section_en: q.section_en,
-        type: q.type, userAnswer: null, timestamp: Date.now()
+        type: q.type, userAnswer: null, timestamp: Date.now(),
+        st: st, due: st > 0 ? (Date.now() + (WRONG_INTERVALS[st - 1] || 1) * WRONG_DAY_MS) : 0,
+        n: 1, last: Date.now() - WRONG_DAY_MS
       };
     }
     if (Object.keys(m).length) out[bank] = m;
@@ -5777,8 +5902,16 @@ function applyCloudAccountData(key, rec) {
   } catch (e) {}
   try {
     if (localStorage.getItem(key + '_wrongAnswers') == null) {
-      var w = rebuildWrongFromIds(snap.wrongIds);
+      var w = rebuildWrongFromIds(snap.wrongIds, snap.ws);
       localStorage.setItem(key + '_wrongAnswers', JSON.stringify(w));
+    }
+  } catch (e) {}
+  // 毕业名单：换设备后掌握率不能凭空归零，本机没有就从快照接回来
+  try {
+    if (localStorage.getItem(key + '_mastered') == null && Array.isArray(snap.mg)) {
+      var mgObj = {}, mt0 = (snap.ts || Date.now());
+      for (var mi = 0; mi < snap.mg.length; mi++) mgObj[snap.mg[mi]] = mt0;
+      localStorage.setItem(key + '_mastered', JSON.stringify(mgObj));
     }
   } catch (e) {}
   try {
@@ -5809,6 +5942,26 @@ function applyCloudAccountData(key, rec) {
       if (faDirty) saveFormalAttempts(faLocal, key);
     }
   } catch (e) {}
+  try {
+    // 🔴 竞速记录回填（2026-11-05）：换设备 / 清缓存登录时，把云端的答题赛
+    // 数据（徽章 / 打卡 / 成绩 / 流水）并集合并进**该账号**的本机记录。
+    // 旧版只推不拉：新设备登录后立刻 syncNow 推送，本地空 race 会把云端的
+    // 徽章与历史整条抹掉（Andrea 的题库征服者 / 全题库大师就是这样消失的）。
+    // 注意写入键必须是**目标账号**的（此时 state.currentUser 可能还没切过来）。
+    // key 就是登录账号键（如 'e3825'），与 raceRecStoreKey()（userKey() 去尾部下划线）同源。
+    if (rec.race && typeof rec.race === 'object') {
+      var rkRace = raceRecStoreKeyFor(key);
+      var raceRaw = null;
+      try { raceRaw = JSON.parse(localStorage.getItem(rkRace) || 'null'); } catch (eR2) { raceRaw = null; }
+      if (raceRaw && typeof raceRaw !== 'object') raceRaw = null;
+      // raceMergeCloudRace 会就地改写本机对象（返回同一引用），所以这里不看引用
+      // 是否变化，云端有数据就无条件落盘。
+      var mergedRace = raceMergeCloudRace(raceRaw, rec.race);
+      if (mergedRace) {
+        try { localStorage.setItem(rkRace, JSON.stringify(mergedRace)); } catch (eR3) {}
+      }
+    }
+  } catch (eRace) {}
   return true;
 }
 // Enter the cloud-restored account: switch user, load data, land on home
@@ -8334,6 +8487,10 @@ function renderHome() {
   html += '<div class="stat-card" style="cursor:pointer;" onclick="navigate(\'wrongAll\')"><div class="num" style="color:var(--danger)">'+totalWrong+'</div><div class="label">'+t('home_wrong')+'</div></div>';
   html += '<div class="stat-card" style="cursor:pointer;" onclick="navigate(\'collectedList\')"><div class="num">'+state.collectedQuestions.length+'</div><div class="label">'+t('home_collected')+'</div></div>';
   html += '</div>';
+
+  // 复习闭环：今日任务摆在题库入口之前 —— 先复习该复习的，再刷新的。
+  html += reviewTaskCardHtml();
+  html += masteryCardHtml();
   
   for (var i=0; i<banks.length; i++) {
     var b = banks[i];
@@ -8428,11 +8585,57 @@ function raceQuestionsOf(key) {
   }
   return out;
 }
+// 答题赛交卷 → 把「答了但答错」的题写进酒店产品知识错题本（2026-11-05）
+// 三点必须守住：
+//   1. 题池全部取自 QUESTION_DATA.manual ⇒ 落 manual 桶。21 天培训和三步法的
+//      错题本按需求保持不变，不会被竞赛污染；
+//   2. 选项每局现洗 ⇒ 落库前用 _optOrder 换回题库顺序（recordAttempt 里做），
+//      否则「你的作答」会串成别的选项；
+//   3. 没来得及作答的题不算错题 —— 那是速度问题，不是知识问题。
+function raceRecordStudy(r) {
+  if (!r || !Array.isArray(r.pool) || !Array.isArray(r.answers)) return 0;
+  var n = 0;
+  for (var i = 0; i < r.answers.length; i++) {
+    var a = r.answers[i], q = r.pool[i];
+    if (!a || !a.ans || !a.ans.length || !q || !q.id) continue;
+    var res = recordAttempt(q, a.ans, { ok: raceGrade(q, a.ans), skey: 'manual', src: 'race' });
+    if (res && res !== 'early') n++;
+  }
+  if (n) { try { saveState(); } catch (e) {} }
+  return n;
+}
+// 板块内错题优先（2026-11-05）：判过期的错题在**同一个板块池**里往前插，
+// 前 8 题插 2 道（员工 60 秒里真正能答到的就是前几题），之后每 4 题插 1 道。
+// 绝不跨板块：为了让错题出现而把厨房的题塞进餐饮板块，等于教错知识；
+// 也不改题池总量 —— 满分上限不变，排名口径不变。
+function racePrioritizeWrong(list) {
+  try {
+    var book = (state.wrongAnswers && state.wrongAnswers.manual) || {};
+    var due = [], rest = [], i;
+    for (i = 0; i < list.length; i++) {
+      var e = book[list[i].id];
+      if (e && wrongIsDue(e)) due.push(list[i]);
+      else rest.push(list[i]);
+    }
+    if (!due.length || !rest.length) return list;
+    due.sort(function (a, b) { return wrongDueOf(book[a.id]) - wrongDueOf(book[b.id]); });
+    var out = [], di = 0, ri = 0, idx = 0;
+    while (ri < rest.length || di < due.length) {
+      var wantWrong = (idx < 8) ? (idx === 1 || idx === 4) : (idx % 4 === 2);
+      if (wantWrong && di < due.length) out.push(due[di++]);
+      else if (ri < rest.length) out.push(rest[ri++]);
+      else if (di < due.length) out.push(due[di++]);
+      else break;
+      idx++;
+    }
+    return out;
+  } catch (e2) { return list; }
+}
 // 题池：**只放本板块的题目**。通用知识不再一开始就掺进来（2026-10-28 改），
 // 改成挂在 state.race.spare 上做备胎，等本板块题目真的答完了、限时还没到才补。
 function racePoolOf(key) {
   var pool = raceQuestionsOf(key);
-  return shuffleArray(prepareQuestions(pool));
+  return racePrioritizeWrong(shuffleArray(prepareQuestions(pool)));
 }
 // 备胎池：通用知识里剔除本板块已有的题目。all / general 本身就是全量，不需要备胎。
 function raceSparePoolOf(key, main) {
@@ -8884,9 +9087,135 @@ function raceEntryBetter(a, b) {
   return false;
 }
 // ---- 本地成绩记录（会随快照上传） ----
+// 🔴 按**账号**隔离存取（2026-11-05）：旧版全局单键 'raceRecord'，同一台设备换账号
+// 登录会互相污染徽章/成绩（管理端多账号测试的重灾区），且与其它按用户键的资料
+// （profile / wrongAnswers / practiceProgress）口径不一致。用户键 = userKey() + 'raceRecord'；
+// 未登录上下文（管理端渲染等）回落到旧的 'raceRecord'，老测试不受影响。
+// ⚠️ 旧全局键不自动迁移：真实用户的完整数据都在云端，登录/推送时由
+// raceMergeCloudRace 从云端并回来（见 applyCloudAccountData + pushStudentSnapshotToKv）；
+// 盲目继承旧键反而会把同设备多账号攒下的测试徽章带进新账号（Andrea 案例的根源）。
+function raceRecStoreKeyFor(baseKey) {
+  baseKey = String(baseKey || '');
+  return baseKey ? baseKey + '_raceRecord' : 'raceRecord';
+}
+function raceRecStoreKey() {
+  var uk = '';
+  try { uk = (typeof userKey === 'function') ? userKey() : ''; } catch (e) { uk = ''; }
+  return raceRecStoreKeyFor(String(uk || '').replace(/_$/, ''));
+}
+// 记录是否"实质为空"（没有任何流水 / 打卡 / 徽章 / 成绩）——空记录不允许覆盖云端。
+function raceBadgesNonEmpty(b) {
+  if (!b || typeof b !== 'object') return false;
+  for (var pk in b) {
+    if (!Object.prototype.hasOwnProperty.call(b, pk)) continue;
+    var box = b[pk];
+    if (!box || typeof box !== 'object') continue;
+    for (var id in box) if (Object.prototype.hasOwnProperty.call(box, id)) return true;
+  }
+  return false;
+}
+function raceRecIsEmpty(rec) {
+  if (!rec || typeof rec !== 'object') return true;
+  if (Array.isArray(rec.log) && rec.log.length) return false;
+  if (rec.days && typeof rec.days === 'object' && Object.keys(rec.days).length) return false;
+  if (raceBadgesNonEmpty(rec.badges)) return false;
+  if (rec.byRound && typeof rec.byRound === 'object' && Object.keys(rec.byRound).length) return false;
+  if (rec.best && typeof rec.best === 'object') return false;
+  return true;
+}
+// 云端 race → 本机并集合并（登录回填 / 推送前对齐共用）。返回 merged；没合并返回 local 本身。
+//   log 按 ts+id+sec 去重升序（截 RACE_LOG_MAX）；days 同天取次数大的；
+//   badges 只加不减（同一枚取更早达成日）；成绩各处取更优（raceEntryBetter）。
+function raceMergeCloudRace(local, cloud) {
+  if (!cloud || typeof cloud !== 'object' || raceRecIsEmpty(cloud)) return local;
+  if (raceRecIsEmpty(local)) {
+    var adopted = JSON.parse(JSON.stringify(cloud));
+    if (!adopted.byRound || typeof adopted.byRound !== 'object') adopted.byRound = {};
+    if (!adopted.byRoundSec || typeof adopted.byRoundSec !== 'object') adopted.byRoundSec = {};
+    if (!adopted.bestSec || typeof adopted.bestSec !== 'object') adopted.bestSec = {};
+    if (!Array.isArray(adopted.log)) adopted.log = [];
+    if (!adopted.days || typeof adopted.days !== 'object') adopted.days = {};
+    if (!adopted.badges || typeof adopted.badges !== 'object') adopted.badges = {};
+    return adopted;
+  }
+  var a = local, i;
+  var seen = {}, mergedLog = [];
+  for (i = 0; i < (a.log || []).length; i++) {
+    var le = a.log[i];
+    if (!le || !le.ts) continue;
+    seen[le.ts + '|' + (le.id || '') + '|' + (le.sec || '')] = 1;
+    mergedLog.push(le);
+  }
+  for (i = 0; i < (cloud.log || []).length; i++) {
+    var ce = cloud.log[i];
+    if (!ce || !ce.ts) continue;
+    if (!seen[ce.ts + '|' + (ce.id || '') + '|' + (ce.sec || '')]) mergedLog.push(ce);
+  }
+  mergedLog.sort(function (x, y) { return (x.ts || 0) - (y.ts || 0); });
+  if (mergedLog.length > RACE_LOG_MAX) mergedLog = mergedLog.slice(mergedLog.length - RACE_LOG_MAX);
+  a.log = mergedLog;
+  a.days = (a.days && typeof a.days === 'object') ? a.days : {};
+  var cd = cloud.days || {};
+  for (var dk in cd) {
+    if (!Object.prototype.hasOwnProperty.call(cd, dk)) continue;
+    var cv = cd[dk], lv = a.days[dk];
+    if (!lv || (cv && ((cv[0] || 0) > (lv[0] || 0)))) a.days[dk] = JSON.parse(JSON.stringify(cv));
+  }
+  a.badges = (a.badges && typeof a.badges === 'object') ? a.badges : {};
+  var cb = cloud.badges || {};
+  for (var pk in cb) {
+    if (!Object.prototype.hasOwnProperty.call(cb, pk)) continue;
+    var cbox = cb[pk];
+    if (!cbox || typeof cbox !== 'object' || cbox.s || cbox.m) continue;
+    var lbox = a.badges[pk];
+    if (!lbox || typeof lbox !== 'object' || lbox.s || lbox.m) lbox = a.badges[pk] = {};
+    for (var id in cbox) {
+      if (!Object.prototype.hasOwnProperty.call(cbox, id)) continue;
+      if (!lbox[id]) lbox[id] = cbox[id];
+      else if (String(cbox[id]) < String(lbox[id])) lbox[id] = cbox[id];
+    }
+  }
+  var secMaps = [['byRoundSec', cloud.byRoundSec], ['byRound', cloud.byRound]];
+  for (var m = 0; m < secMaps.length; m++) {
+    var mkey = secMaps[m][0], cmap = secMaps[m][1];
+    if (!cmap || typeof cmap !== 'object') continue;
+    a[mkey] = (a[mkey] && typeof a[mkey] === 'object') ? a[mkey] : {};
+    for (var rid in cmap) {
+      if (!Object.prototype.hasOwnProperty.call(cmap, rid)) continue;
+      var cEntry = cmap[rid];
+      if (!cEntry || typeof cEntry !== 'object') continue;
+      if (cmap === cloud.byRoundSec) {
+        a[mkey][rid] = (a[mkey][rid] && typeof a[mkey][rid] === 'object') ? a[mkey][rid] : {};
+        for (var sec in cEntry) {
+          if (!Object.prototype.hasOwnProperty.call(cEntry, sec)) continue;
+          var ce2 = cEntry[sec];
+          if (!ce2 || typeof ce2 !== 'object') continue;
+          if (raceEntryBetter(ce2, a[mkey][rid][sec])) a[mkey][rid][sec] = JSON.parse(JSON.stringify(ce2));
+        }
+      } else if (raceEntryBetter(cEntry, a[mkey][rid])) {
+        a[mkey][rid] = JSON.parse(JSON.stringify(cEntry));
+      }
+    }
+  }
+  if (cloud.bestSec && typeof cloud.bestSec === 'object') {
+    a.bestSec = (a.bestSec && typeof a.bestSec === 'object') ? a.bestSec : {};
+    for (var bsec in cloud.bestSec) {
+      if (!Object.prototype.hasOwnProperty.call(cloud.bestSec, bsec)) continue;
+      var bce = cloud.bestSec[bsec];
+      if (!bce || typeof bce !== 'object') continue;
+      if (raceEntryBetter(bce, a.bestSec[bsec])) a.bestSec[bsec] = JSON.parse(JSON.stringify(bce));
+    }
+  }
+  if (cloud.best && typeof cloud.best === 'object' && raceEntryBetter(cloud.best, a.best)) {
+    a.best = JSON.parse(JSON.stringify(cloud.best));
+  }
+  if (!a.name && cloud.name) a.name = cloud.name;
+  if (!a.dept && cloud.dept) a.dept = cloud.dept;
+  return a;
+}
 function raceLocalRecord() {
   var o = null;
-  try { var s = localStorage.getItem('raceRecord'); o = s ? JSON.parse(s) : null; } catch (e) { o = null; }
+  try { var s = localStorage.getItem(raceRecStoreKey()); o = s ? JSON.parse(s) : null; } catch (e) { o = null; }
   if (!o || typeof o !== 'object') o = {};
   if (!o.byRound || typeof o.byRound !== 'object') o.byRound = {};
   if (!o.byRoundSec || typeof o.byRoundSec !== 'object') o.byRoundSec = {};
@@ -8941,7 +9270,7 @@ function raceLocalRecord() {
   raceSyncBadges(o);
   return o;
 }
-function raceSaveLocalRecord(rec) { try { localStorage.setItem('raceRecord', JSON.stringify(rec)); } catch (e) {} }
+function raceSaveLocalRecord(rec) { try { localStorage.setItem(raceRecStoreKey(), JSON.stringify(rec)); } catch (e) {} }
 
 // ===== 打卡（check-in）=====
 // 打卡按**本地日期**算：跨时区 / 晚上 11 点交卷都不会错位到前一天。
@@ -10034,7 +10363,7 @@ function raceBadgeDesc(b, lang) {
   if (L === 'en') {
     if (rule === BADGE_RULE_NIGHT) return 'Check in after 10 PM';
     if (rule === BADGE_RULE_WEEKEND) return n + ' weekend days all-time';
-    if (rule === BADGE_RULE_PERFECT) return n + '+ correct answers in one run';
+    if (rule === BADGE_RULE_PERFECT) return n + '+ correct answers in a single race run';
     if (rule === BADGE_RULE_FAST) return 'Avg \u2264 ' + n + ' sec per question';
     if (rule === BADGE_RULE_NEWBIE) return n + ' days in your first week';
     if (rule === BADGE_RULE_DEPT_TOP) {
@@ -10057,7 +10386,7 @@ function raceBadgeDesc(b, lang) {
   }
   if (rule === BADGE_RULE_NIGHT) return '22:00 后打卡（凌晨 5 点前也算）';
   if (rule === BADGE_RULE_WEEKEND) return '累计周末打卡 ' + n + ' 天';
-  if (rule === BADGE_RULE_PERFECT) return '单次答对 ' + n + ' 题以上';
+  if (rule === BADGE_RULE_PERFECT) return '单场竞速答对 ' + n + ' 题以上';
   if (rule === BADGE_RULE_FAST) return '单期平均每题不超过 ' + n + ' 秒（至少答 5 题）';
   if (rule === BADGE_RULE_NEWBIE) return '首次打卡 7 天内打卡满 ' + n + ' 天';
   if (rule === BADGE_RULE_DEPT_TOP) {
@@ -10104,16 +10433,23 @@ function raceBadgeProgressOf(rec, def) {
     for (q = 0; q < lg.length; q++) if (lg[q] && lg[q].ts && raceIsNightTs(lg[q].ts)) { hitN = true; break; }
     return { cur: hitN ? 1 : 0, max: def.n };
   }
-  if (def.rule === BADGE_RULE_PERFECT || def.rule === BADGE_RULE_FAST) {
-    var runs = raceRoundEntriesOf(rec || {}), hitP = false, r;
-    for (r = 0; r < runs.length; r++) {
-      var e = runs[r].entry;
-      if (!e) continue;
-      if (def.rule === BADGE_RULE_PERFECT) {
-        if ((e.correct || 0) >= def.n && (e.answered || 0) > 0) { hitP = true; break; }
-      } else if ((e.answered || 0) >= 5 && typeof e.secs === 'number' && e.secs > 0 && (e.secs / e.answered) <= def.n) { hitP = true; break; }
+  if (def.rule === BADGE_RULE_PERFECT) {
+    // 真实进度：历史上**单场**最佳答对数（2026-11-05）——旧版只报 0/1，
+    // 学员"平时做对了很多题"却看不到差多少，会以为徽章坏了（Andrea 反馈）。
+    var runsP = raceRoundEntriesOf(rec || {}), bestC = 0, rp;
+    for (rp = 0; rp < runsP.length; rp++) {
+      var eP = runsP[rp].entry;
+      if (eP && (eP.correct || 0) > bestC) bestC = eP.correct || 0;
     }
-    return { cur: hitP ? 1 : 0, max: def.n };
+    return { cur: Math.min(bestC, def.n), max: def.n };
+  }
+  if (def.rule === BADGE_RULE_FAST) {
+    var runsF = raceRoundEntriesOf(rec || {}), hitF = false, rf;
+    for (rf = 0; rf < runsF.length; rf++) {
+      var eF = runsF[rf].entry;
+      if ((eF.answered || 0) >= 5 && typeof eF.secs === 'number' && eF.secs > 0 && (eF.secs / eF.answered) <= def.n) { hitF = true; break; }
+    }
+    return { cur: hitF ? 1 : 0, max: def.n };
   }
   // 学习沉淀：真实进度（练习答题数 / 错题重做数 / 收藏数），看得见才追得动
   if (def.rule === BADGE_RULE_WRONG || def.rule === BADGE_RULE_FAV || def.rule === BADGE_RULE_PRACTICE) {
@@ -11025,6 +11361,9 @@ function raceEnd(reason) {
     if (raceGrade(r.pool[i], a.ans)) correct++;
   }
   r.correct = correct; r.answered = answered;
+  // 先把答错的题写进错题本，再交成绩 —— 交成绩会推快照，顺序反了这次错题就要
+  // 等到下一场才会出现在管理端。
+  r.studyN = raceRecordStudy(r);
   raceSubmitScore();
   raceArmResultLock();
   navigate('raceResult');
@@ -12492,6 +12831,7 @@ function renderRaceCalendar() {
       html += '</div>';
       if (hasQ) {
         if (ok[okey]) {
+          var runWrong = [];
           html += '<div style="margin-top:10px;">';
           for (var qi = 0; qi < it.q.length; qi++) {
             var trip = it.q[qi];
@@ -12504,6 +12844,7 @@ function renderRaceCalendar() {
             // 串成别的选项（偶尔碰巧对也是运气）。既然无从还原，就一律不显示"你的作答"，
             // 只给判定 + 正确答案，免得学员以为自己选了另一个选项。
             var lost = !trip[3];
+            if (!good) runWrong.push(String(trip[0]));
             html += '<div style="border-left:3px solid ' + (good ? '#27ae60' : '#c0392b') + ';padding:8px 0 8px 10px;margin-bottom:8px;">';
             html += '<div style="font-size:13px;font-weight:600;">' + (qi + 1) + '. ' + escapeHtml(raceQText(q)).replace(/\n/g, '<br>') + '</div>';
             if (lost) {
@@ -12517,15 +12858,32 @@ function renderRaceCalendar() {
             }
             var exp = en ? (q.explanation_en || q.explanation || '') : (q.explanation_cn || q.explanation || '');
             if (exp) html += '<div style="font-size:11px;color:#666;margin-top:4px;line-height:1.6;">📖 ' + escapeHtml(exp).replace(/\n/g, '<br>') + '</div>';
+            // 一键重做这道（2026-11-05）：复盘完紧接着练，比"关掉日历再进错题本找"短得多
+            if (!good) {
+              html += '<button class="action-btn secondary" style="margin-top:6px;font-size:12px;padding:4px 12px;" onclick="startWrongRedoIds([\'' + trip[0] + '\'],{kind:\'cal\',title:\'' + t('rv_cal_redo_one') + '\'})">🔁 ' + t('rv_cal_redo_one') + '</button>';
+            }
             html += '</div>';
           }
           html += '</div>';
+          if (runWrong.length) {
+            html += '<button class="action-btn primary" style="width:100%;margin-top:4px;" onclick="startWrongRedoIds([' + runWrong.map(function (x) { return "'" + x + "'"; }).join(',') + '],{kind:\'cal\',title:\'' + t('rv_cal_redo_run') + '\'})">'
+              + '🔁 ' + t('rv_cal_redo_run').replace('{n}', String(runWrong.length)) + '</button>';
+          } else {
+            html += '<div style="font-size:12px;color:#27ae60;text-align:center;margin:2px 0 6px;">✓ ' + t('rv_cal_redo_none') + '</div>';
+          }
           html += '<button class="action-btn secondary" style="width:100%;margin-top:4px;" onclick="raceCalToggleRun(\'' + okey + '\')">' + t('race_cal_hide_q') + '</button>';
         } else {
           html += '<button class="action-btn secondary" style="width:100%;margin-top:8px;" onclick="raceCalToggleRun(\'' + okey + '\')">' + t('race_cal_show_q') + '</button>';
         }
       } else {
         html += '<div style="font-size:11px;color:#999;margin-top:6px;">' + t('race_cal_no_detail') + '</div>';
+        // 老记录（超过 30 场）没有逐题明细：用错题本里"那天进的错题"兜底，
+        // 至少还能一键重做，而不是只剩一句"没有明细"。
+        var dayIds = wrongIdsOnDay(day);
+        if (dayIds.length) {
+          html += '<button class="action-btn primary" style="width:100%;margin-top:6px;" onclick="startWrongRedoIds(wrongIdsOnDay(\'' + day + '\'),{kind:\'cal\',title:\'' + t('rv_cal_redo_run') + '\'})">'
+            + '🔁 ' + t('rv_cal_redo_run').replace('{n}', String(dayIds.length)) + '</button>';
+        }
       }
       html += '</div>';
     }
@@ -13446,7 +13804,7 @@ function adminBadgeRuleText(b, en) {
   if (!b) return '';
   if (b.rule === BADGE_RULE_NIGHT) return en ? 'night owl' : '夜猫子';
   if (b.rule === BADGE_RULE_WEEKEND) return en ? ('weekend ' + b.n + 'd') : ('周末 ' + b.n + ' 天');
-  if (b.rule === BADGE_RULE_PERFECT) return en ? (b.n + '+ correct in a run') : ('单次答对 ' + b.n + ' 题');
+  if (b.rule === BADGE_RULE_PERFECT) return en ? (b.n + '+ correct in a race run') : ('单场竞速答对 ' + b.n + ' 题');
   if (b.rule === BADGE_RULE_FAST) return en ? ('\u2264' + b.n + 's/q') : ('每题\u2264' + b.n + ' 秒');
   if (b.rule === BADGE_RULE_NEWBIE) return en ? ('first week ' + b.n + 'd') : ('首周 ' + b.n + ' 天');
   if (b.rule === BADGE_RULE_DEPT_TOP) {
@@ -14111,6 +14469,8 @@ function renderProfile() {
     html += raceTierStripHtml();
     // 个人主页露一排徽章：身份感 + 点进去看完整集锦（打卡日历 / 排行榜也能看到）
     html += raceMyBadgesCardHtml();
+    // 错题掌握率（2026-11-05）：排行榜比的是速度，这个比的是"错的题以后还会不会错"。
+    html += '<div style="margin-bottom:12px;">' + masteryCardHtml() + '</div>';
     html += '<div class="q-card"><div class="profile-form">';
   }
 
@@ -14638,6 +14998,17 @@ function renderQuestion() {
   html += '<div class="page">';
   
   html += '<div class="progress-bar"><div class="progress-fill" style="width:'+progressPct+'%"></div></div>';
+
+  // 专项卷 / 错题重做：顶部一条会话条。让员工看到「这一卷已经在产出什么」——
+  // 答对几道、几道题推进了掌握阶、几道彻底毕业，比只给个进度条更有反馈。
+  if (state.paperSession && state.currentMode === 'wrong') {
+    var ps0 = state.paperSession;
+    html += '<div style="display:flex;gap:10px;align-items:center;background:#eef6f0;border:1px solid #cfe6d6;'
+      + 'border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#2c6b45;line-height:1.5;">'
+      + '<span style="font-weight:700;">🎯 ' + escapeHtml(ps0.title || t('rv_paper_title')) + '</span>'
+      + '<span style="margin-left:auto;">' + t('rv_strip').replace('{ok}', String(ps0.ok || 0)).replace('{p}', String(ps0.promoted || 0)).replace('{g}', String(ps0.graduated || 0)) + '</span>'
+      + '</div>';
+  }
   
   if (state.currentMode === 'exam' || state.currentMode === 'formal') {
     var elapsed = state.examStartTime ? Math.floor((Date.now() - state.examStartTime) / 1000) : 0;
@@ -14765,23 +15136,17 @@ function renderQuestion() {
     }
     html += '</div>';
     
-    if (!isCorrect && state.currentMode !== 'exam' && state.currentMode !== 'formal') {
-      var wsk = bankStateKey();
-      if (!state.wrongAnswers[wsk]) state.wrongAnswers[wsk] = {};
-      state.wrongAnswers[wsk][q.id] = {
-        question: q.question,
-        section: q.section,
-        section_en: q.section_en,
-        type: q.type,
-        userAnswer: state.selectedAnswers[idx],
-        timestamp: Date.now()
-      };
-      saveState();
-    } else if (isCorrect && state.currentMode !== 'exam' && state.currentMode !== 'formal') {
-      var wsk2 = bankStateKey();
-      if (state.wrongAnswers[wsk2] && state.wrongAnswers[wsk2][q.id]) {
-        delete state.wrongAnswers[wsk2][q.id];
+    // 练习 / 错题重做模式：答错进错题本，答对推进一阶（不再"对一次就删"——
+    // 那等于给"第二次猜对"开绿灯，正是记答案能奏效的原因）。
+    if (state.currentMode !== 'exam' && state.currentMode !== 'formal') {
+      var passRes = recordAttempt(q, state.selectedAnswers[idx], { ok: isCorrect, skey: paperSkeyFor(q.id) });
+      if (passRes) {
         saveState();
+        if (state.paperSession) {
+          if (passRes === 'graduated') state.paperSession.graduated++;
+          if (passRes === 'promoted') state.paperSession.promoted++;
+          if (isCorrect) state.paperSession.ok++;
+        }
       }
     }
   }
@@ -14807,10 +15172,14 @@ function renderQuestion() {
     }
     html += '</div>';
     if (idx === total - 1 && state.showAnswer) {
-      html += '<div class="restart-banner">';
-      html += '<div>🎉 '+t('completed')+'</div>';
-      html += '<button class="restart-btn" onclick="restartPractice()">'+t('restart')+'</button>';
-      html += '</div>';
+      if (state.paperSession) {
+        html += wrongPaperSummaryHtml();
+      } else {
+        html += '<div class="restart-banner">';
+        html += '<div>🎉 '+t('completed')+'</div>';
+        html += '<button class="restart-btn" onclick="restartPractice()">'+t('restart')+'</button>';
+        html += '</div>';
+      }
     }
   }
   
@@ -14902,6 +15271,475 @@ function renderWrongList() {
   return html;
 }
 
+// ============================================================================
+//  复习闭环（2026-11-05）：记忆曲线错题调度 + 知识点标签 + 复习任务 + 掌握度
+//  ---------------------------------------------------------------------------
+//  为什么要有这一层：限时答题赛按「答对题数」排名，员工的最优策略就是快速点选、
+//  记答案而不记知识。光多开练习入口没用，必须让答错的题自己回来找他，而且只有
+//  隔天再答对才算数。于是：
+//    · 每道错题带一个掌握阶 st(0..3) 和下次到期时间 due；
+//    · 答对一次升一阶（1 天 / 3 天 / 7 天后再考），走满三阶才毕业；
+//    · 同一局 / 同一天里重复答对不算（防连点刷掉），且间隔至少 4 小时；
+//    · 到期错题会优先出现在练习、模拟考、答题赛里，但永远只在本板块内 ——
+//      为了让错题出现而把题塞进不属于它的板块，等于教错知识。
+//  老数据没有 st/due → 视为 st=0、立即到期，绝不会被误判成「已掌握」。
+// ============================================================================
+
+// ---- 知识点标签：跨章节的「考点」维度 ----
+// 规则表直接跑在题干 + 解析全文上，所以题库换版、后台新增的题也会自动带上标签，
+// 不用给 503 道题逐条手写。管理端可以逐题覆盖（adminState.tags[qid] = [...]）。
+var REVIEW_TAG_RULES = [
+  ['过敏原', /(过敏|allerg)/i],
+  ['食品安全', /(食品安全|food safety|HACCP|交叉污染|交叉感染|食源性|food ?borne)/i],
+  ['保质期与储存', /(保质期|shelf ?life|expir|先进先出|FIFO|冷藏|冷冻|储存温度|解冻)/i],
+  ['清洁与消毒', /(消毒|清洁剂|sanitiz|disinfect|化学品)/i],
+  ['服务信念与黄金标准', /(服务信念|service value|黄金标准|gold standard|信条|credo|座右铭|motto|第六颗钻石|sixth diamond)/i],
+  ['品牌与情境主题', /(情境主题|scenograph|优雅绿洲|oasis|丽思卡尔顿|Ritz-Carlton)/i],
+  ['常客计划', /(旅享家|Bonvoy|会员等级|万豪礼赏)/i],
+  ['酒店设施与产品', /(餐厅|酒吧|泳池|健身|水疗|spa|酒廊|宴会厅|总房间数|营业时间)/i],
+  ['消防与应急', /(消防|fire |疏散|evacuat|灭火|应急|emergency|急救)/i],
+  ['服务补救与投诉', /(投诉|complaint|service recovery|补救|LEARN)/i],
+  ['收银与账务', /(收银|结账|invoice|账单|挂账|payment)/i],
+  ['前厅与房务流程', /(房态|room status|入住|退房|check-?in|check-?out|预订|reservation|客房清洁)/i],
+  ['酒水与饮品', /(酒水|葡萄酒|wine|鸡尾酒|cocktail|威士忌|香槟|啤酒|beer|咖啡|coffee|茶饮)/i],
+  ['餐饮与菜品', /(菜品|烹饪|食材|配料|牛排|菜单|menu|dish)/i],
+  ['布草与洗衣', /(布草|linen|洗衣|laundry|干洗|熨烫)/i],
+  ['员工制度与福利', /(考勤|请假|加班|福利|薪资|绩效|员工手册|年假|病假)/i],
+  ['财务与采购', /(报销|采购|预算|成本控制|审计|应收|应付|盘点)/i],
+  ['工程与设备', /(维修|maintenance|空调|电梯|能耗|设备保养)/i],
+  ['销售与渠道', /(协议价|OTA|渠道|团队房|报价|销售策略|sales strategy)/i],
+  ['宴会与会务', /(宴会|banquet|会议|会务|会场)/i],
+  ['礼宾与接送', /(礼宾|concierge|行李|接送机|机场)/i],
+  ['系统与工具', /(Opera|PMS|信息系统|操作路径|系统录入)/i],
+  ['沟通与语言', /(英文|翻译|translate|拼写|礼貌用语)/i]
+];
+var REVIEW_TAG_EN = {
+  '过敏原': 'Allergens',
+  '食品安全': 'Food Safety',
+  '保质期与储存': 'Shelf Life & Storage',
+  '清洁与消毒': 'Cleaning & Sanitising',
+  '服务信念与黄金标准': 'Service Values & Gold Standards',
+  '品牌与情境主题': 'Brand & Scenography',
+  '常客计划': 'Marriott Bonvoy',
+  '酒店设施与产品': 'Hotel Facilities',
+  '消防与应急': 'Fire & Emergency',
+  '服务补救与投诉': 'Service Recovery',
+  '收银与账务': 'Cashiering & Billing',
+  '前厅与房务流程': 'Front Office & Rooms',
+  '酒水与饮品': 'Beverages',
+  '餐饮与菜品': 'Culinary & Menu',
+  '布草与洗衣': 'Linen & Laundry',
+  '员工制度与福利': 'HR Policies & Benefits',
+  '财务与采购': 'Finance & Purchasing',
+  '工程与设备': 'Engineering & Equipment',
+  '销售与渠道': 'Sales & Channels',
+  '宴会与会务': 'Banquet & Events',
+  '礼宾与接送': 'Concierge & Transfers',
+  '系统与工具': 'Systems & Tools',
+  '沟通与语言': 'Communication'
+};
+var _tagCache = {};
+function reviewTagClearCache() { _tagCache = {}; }
+function questionTagsOf(q) {
+  if (!q || !q.id) return [];
+  var ov = null;
+  try {
+    if (typeof adminState !== 'undefined' && adminState && adminState.tags) ov = adminState.tags[q.id];
+  } catch (e) { ov = null; }
+  if (Object.prototype.toString.call(ov) === '[object Array]') return ov;
+  if (_tagCache[q.id]) return _tagCache[q.id];
+  var hay = [q.question, q.question_cn, q.question_en, q.explanation, q.explanation_cn, q.explanation_en].join('\n');
+  var out = [];
+  for (var i = 0; i < REVIEW_TAG_RULES.length; i++) {
+    if (REVIEW_TAG_RULES[i][1].test(hay)) out.push(REVIEW_TAG_RULES[i][0]);
+  }
+  // 一条都没打上的（多为纯制度 / 流程题）退回章节名，保证复习任务永远有分组可依
+  if (!out.length && q.section) out.push(q.section);
+  if (out.length > 3) out = out.slice(0, 3);
+  _tagCache[q.id] = out;
+  return out;
+}
+function reviewTagName(tag) {
+  if (state.lang !== 'en') return tag;
+  return REVIEW_TAG_EN[tag] || tag;
+}
+
+// ---- 掌握阶与到期调度 ----
+var WRONG_STAGE_MAX = 3;                       // 走满三阶（1/3/7 天）= 毕业
+var WRONG_INTERVALS = [1, 3, 7];               // 第 1/2/3 阶通过后的复习间隔（天）
+var WRONG_DAY_MS = 86400000;
+var WRONG_MIN_GAP_MS = 4 * 3600 * 1000;        // 同一天里刷两次不算通过，至少隔 4 小时
+var WRONG_MASTER_CAP = 400;                    // 毕业名单上限（只影响掌握度精度）
+
+function wrongStageOf(e) {
+  var st = parseInt(e && e.st, 10);
+  if (!(st >= 0)) st = 0;
+  return Math.min(WRONG_STAGE_MAX, st);
+}
+function wrongDueOf(e) {
+  var due = parseInt(e && e.due, 10);
+  return (due > 0) ? due : 0;                  // 0 = 立即到期
+}
+function wrongIsDue(e, now) { return wrongDueOf(e) <= (now || Date.now()); }
+function wrongDueInDays(e) {
+  var due = wrongDueOf(e);
+  if (!due) return 0;
+  return Math.max(0, Math.ceil((due - Date.now()) / WRONG_DAY_MS));
+}
+// 补字段而不是重建对象：老版本存的条目只有 timestamp，直接补 st=0 / due=0
+function wrongNormEntry(e) {
+  if (!e || typeof e !== 'object') return null;
+  if (typeof e.st !== 'number' || e.st < 0) e.st = 0;
+  if (typeof e.due !== 'number' || e.due < 0) e.due = 0;
+  if (typeof e.n !== 'number' || e.n < 1) e.n = 1;
+  if (typeof e.last !== 'number') e.last = e.timestamp || 0;
+  return e;
+}
+function wrongNormAll() {
+  var banks = state.wrongAnswers || {};
+  for (var sk in banks) {
+    if (!Object.prototype.hasOwnProperty.call(banks, sk)) continue;
+    var book = banks[sk];
+    if (!book || typeof book !== 'object') continue;
+    for (var qid in book) if (Object.prototype.hasOwnProperty.call(book, qid)) wrongNormEntry(book[qid]);
+  }
+}
+// 选项是每局现洗的：state.selectedAnswers 里存的是**界面下标**，落库必须换回
+// 题库顺序，否则「你的作答」会串成别的选项（日历那次已经踩过这个坑）。
+function ansToBankOrder(q, ans) {
+  if (!q || q.type === 'fill' || !Array.isArray(ans)) return ans;
+  var ord = q._optOrder;
+  if (!ord) return ans.slice();
+  return ans.map(function (x) { return (typeof ord[x] === 'number') ? ord[x] : x; });
+}
+// 同一道题可能同时挂在 day21 和 day21_kitchen 两个桶里 —— 作答是对这道题的，
+// 两个桶都要推进，否则「厨房版错题永远毕业不了」。
+function wrongSkeysForQid(qid) {
+  var out = [], banks = state.wrongAnswers || {};
+  for (var sk in banks) {
+    if (!Object.prototype.hasOwnProperty.call(banks, sk)) continue;
+    if (banks[sk] && banks[sk][qid]) out.push(sk);
+  }
+  return out;
+}
+function wrongTrimMastered() {
+  var m = state.mastered;
+  if (!m || typeof m !== 'object') { state.mastered = {}; return; }
+  var ids = Object.keys(m);
+  if (ids.length <= WRONG_MASTER_CAP) return;
+  ids.sort(function (a, b) { return (m[a] || 0) - (m[b] || 0); });
+  for (var i = 0; i < ids.length - WRONG_MASTER_CAP; i++) delete m[ids[i]];
+}
+
+// 记一道错题（已有的话打回第一阶并累加错误次数）
+function wrongAdd(skey, q, ans, opts) {
+  opts = opts || {};
+  if (!skey || !q || !q.id) return null;
+  if (!state.wrongAnswers) state.wrongAnswers = {};
+  var book = state.wrongAnswers[skey] || (state.wrongAnswers[skey] = {});
+  var now = opts.now || Date.now();
+  var e = book[q.id];
+  if (e) {
+    wrongNormEntry(e);
+    e.n = (e.n || 1) + 1;
+    e.st = 0;
+    e.due = now;
+    e.last = now;
+    e.timestamp = now;
+  } else {
+    e = book[q.id] = {
+      question: q.question, section: q.section, section_en: q.section_en, type: q.type,
+      timestamp: now, st: 0, due: now, n: 1, last: now, src: opts.src || ''
+    };
+  }
+  if (Array.isArray(ans) && ans.length) { e.userAnswer = ans; e.ua = ans; e.uok = 1; }
+  return e;
+}
+// 答对一次 → 推进一阶；同一自然日 / 间隔不足 4 小时不算（防一局连点刷掉）
+// 返回 'graduated' | 'promoted' | 'early' | 'none'
+function wrongPass(skey, qid, opts) {
+  opts = opts || {};
+  var book = state.wrongAnswers && state.wrongAnswers[skey];
+  var e = book && book[qid];
+  if (!e) return 'none';
+  wrongNormEntry(e);
+  var now = opts.now || Date.now();
+  var last = e.last || e.timestamp || 0;
+  if (last && (now - last) < WRONG_MIN_GAP_MS) return 'early';
+  if (last && raceDayKey(last) === raceDayKey(now)) return 'early';
+  e.last = now;
+  if (wrongStageOf(e) >= WRONG_STAGE_MAX) {
+    delete book[qid];
+    if (!state.mastered || typeof state.mastered !== 'object') state.mastered = {};
+    state.mastered[qid] = now;
+    wrongTrimMastered();
+    reviewTaskNotePass(qid);
+    return 'graduated';
+  }
+  e.st = wrongStageOf(e) + 1;
+  e.due = now + (WRONG_INTERVALS[e.st - 1] || 1) * WRONG_DAY_MS;
+  reviewTaskNotePass(qid);
+  return 'promoted';
+}
+// 统一作答入口：答错写进错题本，答对推进掌握阶（练习 / 考试 / 重做共用）
+// 返回 'added' | 'graduated' | 'promoted' | 'early' | ''
+function recordAttempt(q, ans, opts) {
+  opts = opts || {};
+  if (!q || !q.id) return '';
+  var keys = wrongSkeysForQid(q.id);
+  var ua = ansToBankOrder(q, ans);
+  if (opts.ok) {
+    if (!keys.length) return '';
+    var best = '';
+    for (var i = 0; i < keys.length; i++) {
+      var r = wrongPass(keys[i], q.id, opts);
+      if (r === 'graduated') best = 'graduated';
+      else if (r === 'promoted' && best !== 'graduated') best = 'promoted';
+      else if (r === 'early' && !best) best = 'early';
+    }
+    return best;
+  }
+  var skey = opts.skey || bankStateKey();
+  var targets = keys.length ? keys : [skey];
+  for (var j = 0; j < targets.length; j++) wrongAdd(targets[j], q, ua, opts);
+  return 'added';
+}
+
+// ---- 错题汇总（带到期排序）----
+function wrongRowsAll(opts) {
+  opts = opts || {};
+  var rows = [], now = opts.now || Date.now();
+  var banks = state.wrongAnswers || {};
+  for (var sk in banks) {
+    if (!Object.prototype.hasOwnProperty.call(banks, sk)) continue;
+    if (opts.skey && sk !== opts.skey) continue;
+    if (opts.bank && wrongBankOfKey(sk) !== opts.bank) continue;
+    var book = banks[sk];
+    if (!book || typeof book !== 'object') continue;
+    for (var qid in book) {
+      if (!Object.prototype.hasOwnProperty.call(book, qid)) continue;
+      var e = wrongNormEntry(book[qid]);
+      if (!e) continue;
+      if (opts.section && (e.section || '') !== opts.section) continue;
+      if (opts.dueOnly && !wrongIsDue(e, now)) continue;
+      if (opts.tag) {
+        var q0 = findByIdAllBanks(qid);
+        if (!q0 || questionTagsOf(q0).indexOf(opts.tag) < 0) continue;
+      }
+      rows.push({ skey: sk, qid: qid, e: e });
+    }
+  }
+  // 到期早的排前面（负值 = 已逾期），同到期按错误次数多的优先
+  rows.sort(function (a, b) {
+    var da = wrongDueOf(a.e), db = wrongDueOf(b.e);
+    if (da !== db) return da - db;
+    return (b.e.n || 0) - (a.e.n || 0);
+  });
+  return rows;
+}
+function wrongDueCount(bank) {
+  var rows = wrongRowsAll({ bank: bank });
+  var n = 0;
+  for (var i = 0; i < rows.length; i++) if (wrongIsDue(rows[i].e)) n++;
+  return n;
+}
+// 顺序练习：把到期错题排到本板块最前面。**只在新开一轮时用** —— 进度是按位置
+// 记的，中途重排会让「练到哪儿」错位。
+function wrongPriorityPracticeList(rawQuestions) {
+  if (state.currentBank !== 'manual') return rawQuestions;
+  var book = (state.wrongAnswers && state.wrongAnswers.manual) || {};
+  var due = [], rest = [], i;
+  for (i = 0; i < rawQuestions.length; i++) {
+    var e = book[rawQuestions[i].id];
+    if (e && wrongIsDue(e)) due.push(rawQuestions[i]);
+    else rest.push(rawQuestions[i]);
+  }
+  if (!due.length) return rawQuestions;
+  due.sort(function (a, b) { return wrongDueOf(book[a.id]) - wrongDueOf(book[b.id]); });
+  return due.concat(rest);
+}
+// 模拟考试：在同一批抽题里用到期错题换掉最多 30%（21 天 / 三步法是整卷，不动）
+function wrongPriorityExamSet(rawQuestions, picked) {
+  if (state.currentBank !== 'manual' || !picked.length) return picked;
+  var book = (state.wrongAnswers && state.wrongAnswers.manual) || {};
+  var duePool = [], i, id;
+  for (i = 0; i < rawQuestions.length; i++) {
+    var e = book[rawQuestions[i].id];
+    if (e && wrongIsDue(e)) duePool.push(rawQuestions[i]);
+  }
+  if (!duePool.length) return picked;
+  var quota = Math.max(1, Math.floor(picked.length * 0.3));
+  var inject = shuffleArray(duePool).slice(0, Math.min(quota, duePool.length));
+  var out = [], used = {};
+  for (i = 0; i < inject.length; i++) { out.push(inject[i]); used[inject[i].id] = 1; }
+  for (i = 0; i < picked.length && out.length < picked.length; i++) {
+    if (!used[picked[i].id]) { out.push(picked[i]); used[picked[i].id] = 1; }
+  }
+  var spare = shuffleArray(rawQuestions);
+  for (i = 0; i < spare.length && out.length < picked.length; i++) {
+    if (!used[spare[i].id]) { out.push(spare[i]); used[spare[i].id] = 1; }
+  }
+  return shuffleArray(out).slice(0, picked.length);
+}
+// 薄弱知识点排行：按「到期题数 → 错误次数」排，给复习任务和看板用
+function reviewWeakTags(bank) {
+  var rows = wrongRowsAll({ bank: bank });
+  var agg = {}, order = [];
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i], q = findByIdAllBanks(row.qid);
+    var tags = q ? questionTagsOf(q) : [(row.e.section || '未分类')];
+    var due = wrongIsDue(row.e) ? 1 : 0;
+    for (var ti = 0; ti < tags.length; ti++) {
+      var tg = tags[ti];
+      if (!agg[tg]) { agg[tg] = { tag: tg, due: 0, total: 0, wrong: 0, ids: [] }; order.push(tg); }
+      agg[tg].total++;
+      agg[tg].due += due;
+      agg[tg].wrong += (row.e.n || 1);
+      agg[tg].ids.push(row.qid);
+    }
+  }
+  var out = [];
+  for (var k = 0; k < order.length; k++) out.push(agg[order[k]]);
+  out.sort(function (a, b) {
+    if (b.due !== a.due) return b.due - a.due;
+    if (b.wrong !== a.wrong) return b.wrong - a.wrong;
+    return b.total - a.total;
+  });
+  return out;
+}
+
+// ---- 错题掌握率：脱离排名的第二维度 ----
+// 定义 = (毕业题数 + Σ掌握阶/4) ÷ (毕业题数 + 错题本现有题数)。
+// 为什么不用"503 道题做分母"：平台没有逐题正确历史，答对过的题根本不留痕，
+// 用全量做分母会让练了 100 题的人显示 0% —— 那是个假指标。
+// 只算产品知识：21 天培训和三步法的错题本按需求保持不变，不参与这个口径。
+// 没有任何错题时返回 -1（页面上显示「—」），而不是 0%。
+function masteryOf() {
+  var book = (state.wrongAnswers && state.wrongAnswers.manual) || {};
+  var grad = masteredCount(), sum = grad, left = 0;
+  for (var qid in book) {
+    if (!Object.prototype.hasOwnProperty.call(book, qid)) continue;
+    sum += wrongStageOf(book[qid]) / (WRONG_STAGE_MAX + 1);
+    left++;
+  }
+  var denom = grad + left;
+  if (!denom) return -1;
+  return Math.round(sum / denom * 1000) / 10;
+}
+function masteredCount() {
+  var mas = state.mastered || {}, n = 0;
+  for (var k in mas) if (Object.prototype.hasOwnProperty.call(mas, k) && mas[k]) n++;
+  return n;
+}
+
+// ---- 个性化复习任务 ----
+// 每周一个任务，目标不是「做 N 道」，而是「把 N 道到期错题推进一阶」——
+// 后者只有在隔天答对时才成立，乱点交不了差。
+function reviewWeekKey(now) {
+  var d = new Date(now || Date.now());
+  var dow = (d.getDay() + 6) % 7;             // 0 = 周一
+  var monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow);
+  return raceDayKey(monday.getTime());
+}
+function reviewTaskOf() { return state.reviewTask && typeof state.reviewTask === 'object' ? state.reviewTask : null; }
+function reviewTaskBuild(force) {
+  var wk = reviewWeekKey();
+  var cur = reviewTaskOf();
+  if (!force && cur && cur.wk === wk && !cur.retired) return cur;
+  var skipped = (cur && cur.wk === wk && cur.skippedList) ? cur.skippedList.slice() : [];
+  var tags = reviewWeakTags('manual');
+  var pick = null;
+  for (var i = 0; i < tags.length; i++) {
+    if (tags[i].due <= 0) continue;
+    if (skipped.indexOf(tags[i].tag) >= 0) continue;
+    pick = tags[i];
+    break;
+  }
+  var task;
+  if (!pick) {
+    task = { wk: wk, tag: '', ids: [], target: 0, done: 0, doneIds: {}, skippedList: skipped, ts: Date.now(), empty: true };
+  } else {
+    var ids = pick.ids.slice(0, Math.max(1, Math.min(5, pick.due)));
+    task = {
+      wk: wk, tag: pick.tag, ids: ids, target: ids.length, done: 0, doneIds: {},
+      skippedList: skipped, ts: Date.now(), empty: false
+    };
+  }
+  state.reviewTask = task;
+  saveState();
+  return task;
+}
+function reviewTaskSkip() {
+  var cur = reviewTaskOf();
+  var wk = reviewWeekKey();
+  var skipped = (cur && cur.wk === wk && cur.skippedList) ? cur.skippedList.slice() : [];
+  if (cur && cur.tag && skipped.indexOf(cur.tag) < 0) skipped.push(cur.tag);
+  state.reviewTask = { wk: wk, tag: '', ids: [], target: 0, done: 0, doneIds: {}, skippedList: skipped, ts: Date.now(), empty: true };
+  return reviewTaskBuild(true);
+}
+// 在 wrongPass 里回调：只认本任务清单里的题，且一题只记一次
+function reviewTaskNotePass(qid) {
+  var task = reviewTaskOf();
+  if (!task || !task.ids || !task.ids.length) return;
+  if (task.ids.indexOf(String(qid)) < 0) return;
+  if (!task.doneIds || typeof task.doneIds !== 'object') task.doneIds = {};
+  if (task.doneIds[qid]) return;
+  task.doneIds[qid] = 1;
+  task.done = (task.done || 0) + 1;
+  if (task.done >= task.target) task.finishedAt = Date.now();
+}
+function reviewTaskDone() {
+  var task = reviewTaskOf();
+  return !!(task && task.target > 0 && (task.done || 0) >= task.target);
+}
+
+// ---- 首页两张卡：今日复习（主）+ 错题掌握率（次）----
+function reviewTaskCardHtml() {
+  var task = null;
+  try { task = reviewTaskBuild(false); } catch (e) { task = null; }
+  if (!task || !task.target) {
+    return '<div class="bank-card" style="cursor:pointer;" onclick="navigate(\'wrongAll\')">'
+      + '<h3>🔥 ' + t('rv_task_title') + '</h3>'
+      + '<div class="desc">' + t('rv_task_none') + '</div></div>';
+  }
+  var done = Math.min(task.done || 0, task.target);
+  var pct = task.target ? Math.round(done / task.target * 100) : 0;
+  var finished = done >= task.target;
+  var html = '<div class="bank-card" style="border-color:#1a3a5c;">';
+  html += '<h3>🔥 ' + t('rv_task_title') + ' <span style="font-size:11px;font-weight:400;color:#7b8896;">' + t('rv_task_progress').replace('{d}', String(done)).replace('{n}', String(task.target)) + '</span></h3>';
+  html += '<div class="desc" style="line-height:1.6;">' + escapeHtml(t('rv_task_desc').replace('{tag}', reviewTagName(task.tag)).replace('{n}', String(task.target))) + '</div>';
+  html += '<div style="height:8px;background:#eceff1;border-radius:4px;overflow:hidden;margin:4px 0 10px;">'
+    + '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#1a3a5c,#4a7ba7);transition:width .3s;"></div></div>';
+  if (finished) {
+    html += '<div style="font-size:13px;font-weight:700;color:#27ae60;">✓ ' + t('rv_task_done') + '</div>';
+  } else {
+    var ids = (task.ids || []).filter(function (x) { return !(task.doneIds && task.doneIds[x]); });
+    var idsLit = '[' + ids.map(function (x) { return "'" + x + "'"; }).join(',') + ']';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="nav-btn primary" style="flex:1;" onclick="startWrongRedoIds(' + idsLit + ',{kind:\'task\',title:\'' + t('rv_task_title') + '\'})">▶ ' + t('rv_task_go') + '</button>';
+    html += '<button class="nav-btn secondary" style="flex:0 0 auto;" onclick="reviewTaskSwap()">' + t('rv_task_skip') + '</button>';
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+function reviewTaskSwap() { reviewTaskSkip(); render(); }
+function masteryCardHtml() {
+  var m = masteryOf();
+  var html = '<div class="bank-card" style="cursor:default;">';
+  if (m < 0) {
+    html += '<h3>📈 ' + t('rv_mastery') + '</h3><div class="desc" style="margin:0;">' + t('rv_mastery_none') + '</div></div>';
+    return html;
+  }
+  var left = wrongRowsAll({ bank: 'manual' }).length;
+  html += '<h3>📈 ' + t('rv_mastery') + ' <span style="font-size:18px;color:#1a3a5c;">' + m + '%</span></h3>';
+  html += '<div style="height:8px;background:#eceff1;border-radius:4px;overflow:hidden;margin:8px 0 6px;">'
+    + '<div style="height:100%;width:' + Math.max(0, Math.min(100, m)) + '%;background:linear-gradient(90deg,#27ae60,#7bc96f);"></div></div>';
+  html += '<div class="desc" style="margin:0;">' + t('rv_mastery_sub').replace('{g}', String(masteredCount())).replace('{n}', String(left)) + '</div>';
+  html += '</div>';
+  return html;
+}
+
 // ============ 错题汇总（跨题库）与收藏列表 (2026-11-02) ============
 // 首页「错题数 / 收藏数」统计卡点击进入；每条可点开该题练习，也可单独移除。
 function wrongBankOfKey(skey) {
@@ -14914,6 +15752,7 @@ function wrongBankLabel(skey) {
   return name;
 }
 function openWrongFromKey(skey, qid) {
+  state.paperSession = null;
   var bank = wrongBankOfKey(skey);
   if (bank !== 'day21' && bank !== 'tsos' && bank !== 'manual') return;
   state.currentBank = bank;
@@ -14946,40 +15785,265 @@ function removeFromWrong(skey, qid) {
   saveState();
   render();
 }
-function renderWrongAll() {
-  var rows = [];
-  var keys = Object.keys(state.wrongAnswers || {});
-  for (var ki = 0; ki < keys.length; ki++) {
-    var data = state.wrongAnswers[keys[ki]] || {};
-    var ids = Object.keys(data);
-    for (var ii = 0; ii < ids.length; ii++) {
-      rows.push({ skey: keys[ki], id: ids[ii], w: data[ids[ii]] });
-    }
+// 掌握阶小圆点：●●●○○ 这种一眼能看懂的形式，比写「2/3」更像进度
+function wrongStageDotsHtml(e) {
+  var st = wrongStageOf(e), out = '';
+  for (var i = 0; i < WRONG_STAGE_MAX; i++) {
+    out += '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:2px;'
+      + 'background:' + (i < st ? '#27ae60' : '#dfe4ea') + ';"></span>';
   }
-  rows.sort(function (a, b) { return (b.w.timestamp || 0) - (a.w.timestamp || 0); });
-  var html = renderAppHeader({ title: '❌ ' + t('wrong_title'), subtitle: rows.length + t('questions_unit') });
+  return out;
+}
+function wrongDueLabel(e) {
+  if (wrongIsDue(e)) return t('rv_due_now');
+  var d = wrongDueInDays(e);
+  return t('rv_due_in').replace('{n}', String(d));
+}
+function renderWrongAll() {
+  var tab = state.wrongTab || 'due';
+  var rows = wrongRowsAll({});
+  var dueRows = [];
+  for (var di = 0; di < rows.length; di++) if (wrongIsDue(rows[di].e)) dueRows.push(rows[di]);
+  var shown = (tab === 'due') ? dueRows : rows;
+  if (tab === 'tag' && state.wrongTag) {
+    var keep = [];
+    for (var ti = 0; ti < shown.length; ti++) {
+      var qt = findByIdAllBanks(shown[ti].qid);
+      if (qt && questionTagsOf(qt).indexOf(state.wrongTag) >= 0) keep.push(shown[ti]);
+    }
+    shown = keep;
+  }
+  var html = renderAppHeader({
+    title: '❌ ' + t('wrong_title'),
+    subtitle: rows.length + t('questions_unit') + ' · ' + t('rv_due_n').replace('{n}', String(dueRows.length))
+  });
   html += '<div class="page">';
-  if (rows.length === 0) {
-    html += '<div class="empty-state"><div class="icon">🎉</div><p>' + t('wrong_empty') + '</p></div>';
+
+  // 两个动作入口：重做到期 / 生成专项卷。都放在最上面 —— 员工打开错题本的目的
+  // 就是"练"，不是为了浏览清单。
+  html += '<div style="display:flex;gap:8px;margin-bottom:10px;">';
+  html += '<button class="nav-btn primary" style="flex:1;" ' + (dueRows.length ? '' : 'disabled ')
+    + ' onclick="startWrongRedoIds(wrongIdsFor(\'due\'),{kind:\'due\',title:\'' + t('rv_src_due') + '\'})">▶ '
+    + t('rv_redo_due').replace('{n}', String(dueRows.length)) + '</button>';
+  html += '<button class="nav-btn secondary" style="flex:1;" onclick="navigate(\'wrongPaper\')">🎯 ' + t('rv_make_paper') + '</button>';
+  html += '</div>';
+
+  // 页签：到期 / 全部 / 按知识点
+  html += '<div class="section-chips" style="margin-bottom:10px;">';
+  html += '<div class="chip ' + (tab === 'due' ? 'active' : '') + '" onclick="wrongTabSet(\'due\')">⏰ ' + t('rv_tab_due') + ' (' + dueRows.length + ')</div>';
+  html += '<div class="chip ' + (tab === 'all' ? 'active' : '') + '" onclick="wrongTabSet(\'all\')">📚 ' + t('rv_tab_all') + ' (' + rows.length + ')</div>';
+  html += '<div class="chip ' + (tab === 'tag' ? 'active' : '') + '" onclick="wrongTabSet(\'tag\')">🏷 ' + t('rv_tab_tag') + '</div>';
+  html += '</div>';
+
+  if (tab === 'tag') {
+    var weak = reviewWeakTags('manual');
+    html += '<div class="section-chips" style="margin-bottom:10px;">';
+    html += '<div class="chip ' + (!state.wrongTag ? 'active' : '') + '" onclick="wrongTagSet(\'\')">' + t('section_all') + '</div>';
+    for (var wi = 0; wi < weak.length && wi < 12; wi++) {
+      html += '<div class="chip ' + (state.wrongTag === weak[wi].tag ? 'active' : '') + '" onclick="wrongTagSet(\'' + escapeHtml(weak[wi].tag).replace(/'/g, "\\'") + '\')">'
+        + escapeHtml(reviewTagName(weak[wi].tag)) + ' (' + weak[wi].total + ')</div>';
+    }
+    html += '</div>';
+  }
+
+  if (shown.length === 0) {
+    html += '<div class="empty-state"><div class="icon">🎉</div><p>' + (tab === 'due' ? t('rv_no_due') : t('wrong_empty')) + '</p></div>';
   } else {
+    html += '<div style="font-size:11.5px;color:#8b98a3;line-height:1.6;margin-bottom:8px;">' + t('rv_stage_hint') + '</div>';
     html += '<div class="wrong-list">';
-    for (var r = 0; r < rows.length; r++) {
-      var row = rows[r];
-      var q = findByIdAllBanks(row.id);
-      var preview = q ? qTextOf(q) : (row.w.question || '');
-      var sectionDisplay = state.lang === 'en' ? (row.w.section_en || row.w.section || '') : (row.w.section || '');
-      html += '<div class="wrong-item" onclick="openWrongFromKey(\'' + row.skey + '\',\'' + row.id + '\')">';
+    for (var r = 0; r < shown.length; r++) {
+      var row = shown[r];
+      var q = findByIdAllBanks(row.qid);
+      var preview = q ? qTextOf(q) : (row.e.question || '');
+      var sectionDisplay = state.lang === 'en' ? (row.e.section_en || row.e.section || '') : (row.e.section || '');
+      var dueNow = wrongIsDue(row.e);
+      html += '<div class="wrong-item" style="' + (dueNow ? 'border-left-color:#e67e22;' : '') + '" onclick="openWrongFromKey(\'' + row.skey + '\',\'' + row.qid + '\')">';
       html += '<div class="q-preview">' + escapeHtml(preview ? preview.substring(0, 100) : '') + '</div>';
       html += '<div class="q-meta">';
-      html += '<span>' + escapeHtml(wrongBankLabel(row.skey)) + (sectionDisplay ? ' · ' + escapeHtml(sectionDisplay) : '') + ' · ' + getTypeShort(row.w.type) + '</span>';
-      html += '<span>' + (row.w.timestamp ? new Date(row.w.timestamp).toLocaleDateString() : '') + '</span>';
+      html += '<span>' + escapeHtml(wrongBankLabel(row.skey)) + (sectionDisplay ? ' · ' + escapeHtml(sectionDisplay) : '') + ' · ' + getTypeShort(row.e.type) + '</span>';
+      html += '<span>' + (dueNow
+        ? '<b style="color:#e67e22;">⏰ ' + t('rv_due_now') + '</b>'
+        : '⏳ ' + t('rv_due_in').replace('{n}', String(wrongDueInDays(row.e)))) + '</span>';
       html += '</div>';
-      html += '<div style="text-align:right;margin-top:8px;"><button class="nav-btn secondary" style="font-size:12px;padding:4px 12px;" onclick="event.stopPropagation();removeFromWrong(\'' + row.skey + '\',\'' + row.id + '\')">🗑 ' + t('remove_one') + '</button></div>';
+      html += '<div class="q-meta" style="margin-top:4px;">';
+      html += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(wrongStageOf(row.e))).replace('{m}', String(WRONG_STAGE_MAX)) + '</span>';
+      html += '<span>' + t('rv_wrong_times').replace('{n}', String(row.e.n || 1)) + '</span>';
+      html += '</div>';
+      var qtags = q ? questionTagsOf(q) : [];
+      if (qtags.length) {
+        html += '<div style="margin-top:5px;font-size:11px;color:#5b6b7a;">🏷 ' + escapeHtml(qtags.map(reviewTagName).join(' · ')) + '</div>';
+      }
+      html += '<div style="text-align:right;margin-top:8px;">';
+      html += '<button class="nav-btn secondary" style="font-size:12px;padding:4px 12px;" onclick="event.stopPropagation();startWrongRedoIds([\'' + row.qid + '\'],{kind:\'one\'})">🔁 ' + t('rv_redo_one') + '</button> ';
+      html += '<button class="nav-btn secondary" style="font-size:12px;padding:4px 12px;" onclick="event.stopPropagation();removeFromWrong(\'' + row.skey + '\',\'' + row.qid + '\')">🗑 ' + t('remove_one') + '</button>';
+      html += '</div>';
+      if (row.e.ua && row.e.uok) {
+        var qq = findByIdAllBanks(row.qid);
+        if (qq && qq.type !== 'fill' && Array.isArray(row.e.ua)) {
+          var txt = row.e.ua.map(function (x) { return qOptText(qq, x); }).join(' / ');
+          if (txt) html += '<div style="font-size:11.5px;color:#c0392b;margin-top:6px;">✗ ' + t('your_answer') + escapeHtml(txt) + '</div>';
+        }
+      }
       html += '</div>';
     }
     html += '</div>';
   }
   html += '</div>';
+  return html;
+}
+function wrongTabSet(tab) { state.wrongTab = tab; render(); }
+function wrongTagSet(tag) { state.wrongTag = tag; state.wrongTab = 'tag'; render(); }
+// 给内联 onclick 用的题号清单（到期 / 全部 / 某个知识点）
+function wrongIdsFor(kind, arg) {
+  var rows = wrongRowsAll({});
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (kind === 'due' && !wrongIsDue(rows[i].e)) continue;
+    if (kind === 'tag' && arg) {
+      var q = findByIdAllBanks(rows[i].qid);
+      if (!q || questionTagsOf(q).indexOf(arg) < 0) continue;
+    }
+    out.push(rows[i].qid);
+  }
+  return out;
+}
+
+// 日历兜底：某一天进错题本的题号（老记录没有逐题明细时用）
+function wrongIdsOnDay(day) {
+  var rows = wrongRowsAll({ bank: 'manual' });
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    var ts = rows[i].e.timestamp || rows[i].e.last || 0;
+    if (ts && raceDayKey(ts) === day) out.push(rows[i].qid);
+  }
+  return out;
+}
+
+// ============ 专项练习卷（2026-11-05）============
+// 错题卷 / 收藏卷 / 薄弱知识点卷共用一套组卷：先把题号清单拼好，再交给
+// startWrongRedoIds 起一个「重做会话」。会话自带算术，本轮小结就地给结果。
+function paperSourceIds(kind, arg) {
+  if (kind === 'fav') return (state.collectedQuestions || []).slice();
+  if (kind === 'tag' && arg) return wrongIdsFor('tag', arg);
+  if (kind === 'all') return wrongIdsFor('all');
+  return wrongIdsFor('due');
+}
+function renderWrongPaper() {
+  var src = state.paperSource || 'due';
+  var ids = paperSourceIds(src, state.wrongTag);
+  var dueN = wrongIdsFor('due').length, allN = wrongIdsFor('all').length, favN = (state.collectedQuestions || []).length;
+  var weak = reviewWeakTags('manual');
+  var html = renderAppHeader({ title: '🎯 ' + t('rv_paper_title'), subtitle: t('rv_paper_sub') });
+  html += '<div class="page">';
+
+  html += '<div style="font-size:12px;font-weight:700;color:#5b6b7a;margin:2px 0 6px;">① ' + t('rv_pick_src') + '</div>';
+  html += '<div class="section-chips" style="margin-bottom:10px;">';
+  html += '<div class="chip ' + (src === 'due' ? 'active' : '') + '" onclick="setPaperSource(\'due\')">⏰ ' + t('rv_src_due') + ' (' + dueN + ')</div>';
+  html += '<div class="chip ' + (src === 'all' ? 'active' : '') + '" onclick="setPaperSource(\'all\')">📚 ' + t('rv_src_all') + ' (' + allN + ')</div>';
+  html += '<div class="chip ' + (src === 'fav' ? 'active' : '') + '" onclick="setPaperSource(\'fav\')">⭐ ' + t('rv_src_fav') + ' (' + favN + ')</div>';
+  html += '<div class="chip ' + (src === 'tag' ? 'active' : '') + '" onclick="setPaperSource(\'tag\')">🏷 ' + t('rv_src_tag') + '</div>';
+  html += '</div>';
+
+  if (src === 'tag') {
+    if (!weak.length) {
+      html += '<div class="empty-state" style="padding:16px;"><p>' + t('rv_no_weak') + '</p></div>';
+    } else {
+      html += '<div class="section-chips" style="margin-bottom:10px;">';
+      for (var i = 0; i < weak.length && i < 12; i++) {
+        html += '<div class="chip ' + (state.wrongTag === weak[i].tag ? 'active' : '') + '" onclick="wrongTagSet2(\'' + escapeHtml(weak[i].tag).replace(/'/g, "\\'") + '\')">'
+          + escapeHtml(reviewTagName(weak[i].tag)) + ' (' + weak[i].total + ')</div>';
+      }
+      html += '</div>';
+    }
+  }
+
+  html += '<div style="font-size:12px;font-weight:700;color:#5b6b7a;margin:2px 0 6px;">② ' + t('rv_pick_count') + '</div>';
+  html += '<div class="section-chips" style="margin-bottom:14px;">';
+  var counts = [10, 20, 0];
+  for (var ci = 0; ci < counts.length; ci++) {
+    var cn2 = counts[ci] === 0 ? t('rv_all_q') : String(counts[ci]) + t('questions_unit');
+    html += '<div class="chip ' + ((state.paperCount || 10) === counts[ci] ? 'active' : '') + '" onclick="setPaperCount(' + counts[ci] + ')">' + cn2 + '</div>';
+  }
+  html += '</div>';
+
+  var cnt = state.paperCount || 10;
+  var take = (cnt === 0 || cnt > ids.length) ? ids.length : cnt;
+  html += '<div class="q-card" style="text-align:center;padding:18px 14px;">';
+  html += '<div style="font-size:30px;font-weight:700;color:#1a3a5c;">' + take + '</div>';
+  html += '<div style="font-size:12.5px;color:#7b8896;margin-top:4px;line-height:1.6;">' + t('rv_paper_take') + '</div>';
+  html += '</div>';
+
+  html += '<button class="action-btn primary" style="width:100%;" ' + (ids.length ? '' : 'disabled ')
+    + 'onclick="startWrongPaper()">▶ ' + t('rv_start_paper') + '</button>';
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'wrongAll\')">← ' + t('rv_back_wrong') + '</button>';
+  html += '</div>';
+  return html;
+}
+function setPaperSource(kind) { state.paperSource = kind; render(); }
+function setPaperCount(n) { state.paperCount = n; render(); }
+function wrongTagSet2(tag) { state.wrongTag = tag; state.paperSource = 'tag'; render(); }
+function startWrongPaper() {
+  var src = state.paperSource || 'due';
+  var ids = paperSourceIds(src, state.wrongTag);
+  if (!ids.length) { alert(t('wrong_none_alert')); return; }
+  var cnt = state.paperCount || 10;
+  startWrongRedoIds(ids, {
+    kind: src,
+    count: (cnt > 0 && cnt < ids.length) ? cnt : 0,
+    title: src === 'fav' ? t('rv_src_fav') : (src === 'tag' ? reviewTagName(state.wrongTag) : (src === 'all' ? t('rv_src_all') : t('rv_src_due')))
+  });
+}
+// 起一个「重做会话」：ids 可以是任意题库的题号（收藏卷会跨库），每题都记住自己
+// 属于哪个桶，答错/答对时写回正确的错题本，不会把 21 天的题记进产品知识里。
+function startWrongRedoIds(ids, opts) {
+  opts = opts || {};
+  var want = {}, i;
+  for (i = 0; i < (ids || []).length; i++) want[String(ids[i])] = 1;
+  var list = [], skeyOf = {};
+  var order = ['manual', 'day21', 'tsos'];
+  for (var b = 0; b < order.length; b++) {
+    var arr = QUESTION_DATA[order[b]] || [];
+    for (var j = 0; j < arr.length; j++) {
+      if (!want[arr[j].id]) continue;
+      list.push(arr[j]);
+      skeyOf[arr[j].id] = order[b];
+    }
+  }
+  if (!list.length) { alert(t('wrong_none_alert')); return; }
+  if (opts.count && opts.count > 0 && opts.count < list.length) list = shuffleArray(list).slice(0, opts.count);
+  list = shuffleArray(list);
+  state.currentBank = 'manual';
+  state.currentSection = 'all';
+  state.currentPaper = 'all';
+  state.currentMode = 'wrong';
+  state.questions = prepareQuestions(list);
+  state.currentIndex = 0;
+  state.selectedAnswers = {};
+  state.showAnswer = false;
+  state.paperSession = {
+    kind: opts.kind || 'redo', title: opts.title || '', total: list.length,
+    ok: 0, promoted: 0, graduated: 0,
+    ids: list.map(function (q) { return q.id; }), skeyOf: skeyOf
+  };
+  navigate('question');
+}
+function paperSkeyFor(qid) {
+  var ps = state.paperSession;
+  if (ps && ps.skeyOf && ps.skeyOf[qid]) return ps.skeyOf[qid];
+  return bankStateKey();
+}
+function wrongPaperSummaryHtml() {
+  var ps = state.paperSession || {};
+  var html = '<div class="restart-banner" style="display:block;">';
+  html += '<div style="font-weight:700;margin-bottom:6px;">🎉 ' + t('rv_paper_done') + '</div>';
+  html += '<div style="font-size:13px;line-height:1.85;">'
+    + t('rv_paper_line').replace('{ok}', String(ps.ok || 0)).replace('{total}', String(ps.total || 0)) + '<br>'
+    + t('rv_paper_gain').replace('{p}', String(ps.promoted || 0)).replace('{g}', String(ps.graduated || 0))
+    + '</div>';
+  html += '<div style="display:flex;gap:8px;margin-top:12px;">';
+  html += '<button class="restart-btn" style="flex:1;" onclick="navigate(\'wrongAll\')">' + t('rv_back_wrong') + '</button>';
+  html += '<button class="restart-btn" style="flex:1;" onclick="navigate(\'wrongPaper\')">' + t('rv_again_paper') + '</button>';
+  html += '</div></div>';
   return html;
 }
 function collectedBankOf(qid) {
@@ -15022,6 +16086,7 @@ function renderCollectedList() {
   return html;
 }
 function openCollectedQuestion(qid) {
+  state.paperSession = null;
   var bank = collectedBankOf(qid);
   var allQuestions = QUESTION_DATA[bank] || [];
   var idx = -1;
@@ -15145,7 +16210,9 @@ function renderExamResult() {
     state.lastExamReplay = localEvt;
   } catch (e) {}
 
-  // Record wrong answers
+  // Record wrong answers — 考试答错进错题本，答对也推进掌握阶（考到就是复习到，
+  // 不然员工只靠练习模式养错题，考试那条路等于白走）。
+  var examSkey = bankStateKey();
   for (var i=0; i<total; i++) {
     var q = state.questions[i];
     var ans = state.examAnswers[i];
@@ -15157,14 +16224,7 @@ function renderExamResult() {
       var correctIdx2 = q.correct_answer || [];
       isCorrect2 = ans.length === correctIdx2.length && ans.every(function(i){ return correctIdx2.indexOf(i) >= 0; });
     }
-    if (!isCorrect2) {
-      var esk = bankStateKey();
-      if (!state.wrongAnswers[esk]) state.wrongAnswers[esk] = {};
-      state.wrongAnswers[esk][q.id] = {
-        question: q.question, section: q.section, section_en: q.section_en, type: q.type,
-        userAnswer: ans, timestamp: Date.now()
-      };
-    }
+    recordAttempt(q, ans, { ok: isCorrect2, skey: examSkey, src: 'exam' });
   }
   saveState();
 
@@ -15379,6 +16439,7 @@ function exitPractice() {
 function startPractice(bank) {
   state.currentBank = bank;
   state.currentMode = 'practice';
+  state.paperSession = null;
   var rawQuestions = getBankQuestions(bank, state.currentSection);
   if (rawQuestions.length === 0) { alert(t('no_questions')); return; }
 
@@ -15389,7 +16450,9 @@ function startPractice(bank) {
     progress = 0;
     saveState();
   }
-  
+  // 新开一轮：到期错题先出现（本板块内，不跨章节）。中途续练保持原顺序。
+  if (progress === 0) rawQuestions = wrongPriorityPracticeList(rawQuestions);
+
   state.questions = prepareQuestions(rawQuestions);
   state.currentIndex = (state.currentSection === 'all' && progress > 0) 
     ? Math.min(progress, state.questions.length - 1) : 0;
@@ -15550,11 +16613,14 @@ function startFormalExam(paperKey, opts) {
 function startExam(bank) {
   state.currentBank = bank;
   state.currentMode = 'exam';
+  state.paperSession = null;
   state.formalSession = null;
   var rawQuestions = getBankQuestions(bank, state.currentSection);
   if (rawQuestions.length === 0) { alert(t('no_questions')); return; }
   var examCount = (bank === 'day21' || bank === 'tsos') ? rawQuestions.length : manualExamCount(state.currentSection);
   var shuffled = shuffleArray(rawQuestions).slice(0, examCount);
+  // 模拟考试：用同章节的到期错题换掉最多 30% 的抽题（整卷试卷不动）
+  shuffled = wrongPriorityExamSet(rawQuestions, shuffled);
   state.questions = prepareQuestions(shuffled);
   state.currentIndex = 0;
   state.selectedAnswers = {};
@@ -15587,6 +16653,7 @@ function startExam(bank) {
 function startWrongReview(bank) {
   state.currentBank = bank;
   state.currentMode = 'wrong';
+  state.paperSession = null;
   var wrongData = state.wrongAnswers[bankStateKey(bank)] || {};
   var wrongIds = Object.keys(wrongData);
   if (wrongIds.length === 0) { alert(t('wrong_none_alert')); return; }
@@ -16871,6 +17938,153 @@ function adminRecomputeSizeBadge(pk) {
     badge.style.fontWeight = sz > 3800 ? '600' : (sz > 3000 ? '500' : '400');
   } catch (e) {}
 }
+// ============================================================================
+//  教学看板（2026-11-05）：全店高频错题榜 + 薄弱章节 + 复习任务完成率
+//  ---------------------------------------------------------------------------
+//  数据全部来自学员快照里**已经存在**的字段（wrongIds / collectedIds / mt / rt），
+//  不新增上报接口，也不给学员端增加流量。看得见「谁错在哪」，才谈得上培训目标
+//  有没有落地 —— 否则闭环只有入口没有出口。
+//  「题目体检」标记：错的人多 + 被收藏得多，通常不是员工笨，而是题干表述含糊或
+//  解析没讲清。这类题优先改写解析，比让员工多刷十遍有效。
+// ============================================================================
+function adminTeachingAgg() {
+  var recs = adminStudentRecords();
+  var qMap = {}, divMap = {}, secMap = {};
+  var taskTotal = 0, taskDone = 0, mtSum = 0, mtN = 0;
+  for (var i = 0; i < recs.length; i++) {
+    var snap = recs[i].snap || {};
+    var div = snap.div || (state.lang === 'en' ? 'Unassigned' : '未填部门');
+    var wi = snap.wrongIds || {};
+    var seen = {};
+    for (var bk in wi) {
+      if (!Object.prototype.hasOwnProperty.call(wi, bk)) continue;
+      var ids = wi[bk] || [];
+      for (var j = 0; j < ids.length; j++) {
+        var id = String(ids[j]);
+        if (seen[id]) continue;
+        seen[id] = 1;
+        var q = findByIdAllBanks(id);
+        var sec = (q && q.section) || (state.lang === 'en' ? 'Unclassified' : '未分类');
+        if (!qMap[id]) qMap[id] = { id: id, q: q, students: 0, favs: 0, sec: sec };
+        qMap[id].students++;
+        divMap[div] = divMap[div] || {};
+        divMap[div][sec] = (divMap[div][sec] || 0) + 1;
+        secMap[sec] = (secMap[sec] || 0) + 1;
+      }
+    }
+    var ci = snap.collectedIds || [];
+    for (var c = 0; c < ci.length; c++) {
+      var cid = String(ci[c]);
+      if (!qMap[cid]) {
+        var qc = findByIdAllBanks(cid);
+        qMap[cid] = { id: cid, q: qc, students: 0, favs: 0, sec: (qc && qc.section) || (state.lang === 'en' ? 'Unclassified' : '未分类') };
+      }
+      qMap[cid].favs++;
+    }
+    if (snap.rt && snap.rt.length === 2 && snap.rt[1] > 0) {
+      taskTotal++;
+      if ((snap.rt[0] || 0) >= snap.rt[1]) taskDone++;
+    }
+    if (typeof snap.mt === 'number' && snap.mt >= 0) { mtSum += snap.mt; mtN++; }
+  }
+  var list = [];
+  for (var k in qMap) if (Object.prototype.hasOwnProperty.call(qMap, k)) list.push(qMap[k]);
+  list.sort(function (a, b) { return (b.students - a.students) || (b.favs - a.favs); });
+  var secs = [];
+  for (var s in secMap) if (Object.prototype.hasOwnProperty.call(secMap, s)) secs.push({ sec: s, n: secMap[s] });
+  secs.sort(function (a, b) { return b.n - a.n; });
+  var pairs = [];
+  for (var d in divMap) {
+    if (!Object.prototype.hasOwnProperty.call(divMap, d)) continue;
+    for (var s2 in divMap[d]) if (Object.prototype.hasOwnProperty.call(divMap[d], s2)) pairs.push({ div: d, sec: s2, n: divMap[d][s2] });
+  }
+  pairs.sort(function (a, b) { return b.n - a.n; });
+  return {
+    students: recs.length, top: list.slice(0, 30), list: list, secs: secs.slice(0, 15), pairs: pairs.slice(0, 15),
+    taskTotal: taskTotal, taskDone: taskDone,
+    mtAvg: mtN ? Math.round(mtSum / mtN * 10) / 10 : -1
+  };
+}
+function renderAdminTeaching() {
+  if (!adminState.authenticated) return renderAdminLogin();
+  var en = state.lang === 'en';
+  var agg = adminTeachingAgg();
+  var html = '<div class="app-header">';
+  html += '<button class="back-btn" onclick="navigate(\'adminDashboard\')">←</button>';
+  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
+  html += '<h1>🧭 ' + (en ? 'Teaching Board' : '教学看板') + '</h1>';
+  html += '<div class="subtitle">' + (en ? 'Where the whole hotel gets it wrong' : '全店错在哪：高频错题 · 薄弱章节 · 复习任务完成率') + '</div>';
+  html += '</div><div class="page">';
+
+  if (SERVER_AVAILABLE && !adminCloudFetching && Date.now() - (renderAdminTeaching._lastKick || 0) > 60000) {
+    renderAdminTeaching._lastKick = Date.now();
+    adminFetchCloudStudents();
+  }
+
+  var taskPct = agg.taskTotal ? Math.round(agg.taskDone / agg.taskTotal * 100) : -1;
+  html += '<div class="stats-summary">';
+  html += '<div class="stat-card"><div class="num">' + agg.students + '</div><div class="label">' + (en ? 'Students' : '有记录学员') + '</div></div>';
+  html += '<div class="stat-card"><div class="num">' + (agg.mtAvg < 0 ? '—' : agg.mtAvg + '%') + '</div><div class="label">' + (en ? 'Avg mastery' : '平均错题掌握率') + '</div></div>';
+  html += '<div class="stat-card"><div class="num">' + (taskPct < 0 ? '—' : taskPct + '%') + '</div><div class="label">' + (en ? 'Review done' : '本周复习完成率') + '</div></div>';
+  html += '</div>';
+
+  if (!agg.list.length) {
+    html += '<div class="empty-state"><div class="icon">📭</div><p>' + (en ? 'No wrong-answer data synced yet.' : '还没有同步到错题数据，学员下次打开小程序后这里就会有内容。') + '</p></div>';
+    html += '</div>';
+    return html;
+  }
+
+  // 1. 全店高频错题榜
+  html += '<div class="q-card" style="margin-bottom:12px;">';
+  html += '<div style="font-size:14px;font-weight:700;margin-bottom:8px;">🎯 ' + (en ? 'Most-missed questions' : '全店高频错题（前 30）') + '</div>';
+  html += '<div style="font-size:11.5px;color:#7b8896;line-height:1.6;margin-bottom:10px;">'
+    + (en ? 'Ranked by how many students got it wrong. A ⚠️ flag means many missed it AND many saved it — usually a wording or explanation problem, not a knowledge problem.'
+      : '按「错过的学员人数」排序。带 ⚠️ 标记的题同时被大量收藏 —— 大概率是题干表述或解析不清楚，先改解析，比让员工多刷十遍有效。')
+    + '</div>';
+  for (var i = 0; i < agg.top.length; i++) {
+    var it = agg.top[i];
+    var q = it.q;
+    var txt = q ? qTextOf(q) : (en ? '(question missing)' : '(题库里找不到这道题)');
+    var flag = (it.students >= 3 && it.favs >= 2);
+    html += '<div style="border-left:3px solid ' + (flag ? '#e67e22' : '#dfe4ea') + ';padding:8px 0 8px 10px;margin-bottom:8px;">';
+    html += '<div style="font-size:12.5px;line-height:1.5;">' + (i + 1) + '. ' + escapeHtml(String(txt).slice(0, 80)) + '</div>';
+    html += '<div style="font-size:11.5px;color:#7b8896;margin-top:4px;">'
+      + '❌ <b style="color:#c0392b;">' + it.students + '</b> ' + (en ? 'students' : '人错')
+      + ' · ⭐ ' + it.favs + (en ? ' saved' : ' 人收藏')
+      + ' · ' + escapeHtml(it.sec)
+      + (flag ? ' · <b style="color:#e67e22;">⚠️ ' + (en ? 'check the explanation' : '建议核对解析') + '</b>' : '')
+      + '</div>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // 2. 薄弱章节 / 部门
+  html += '<div class="q-card" style="margin-bottom:12px;">';
+  html += '<div style="font-size:14px;font-weight:700;margin-bottom:8px;">📚 ' + (en ? 'Weakest sections' : '最薄弱的章节') + '</div>';
+  for (var s = 0; s < agg.secs.length; s++) {
+    var sv = agg.secs[s];
+    var w = Math.min(100, Math.round(sv.n / Math.max(1, agg.secs[0].n) * 100));
+    html += '<div style="margin-bottom:7px;">';
+    html += '<div style="display:flex;font-size:12px;"><span style="flex:1;">' + escapeHtml(sv.sec) + '</span><span style="color:#c0392b;font-weight:700;">' + sv.n + '</span></div>';
+    html += '<div style="height:6px;background:#eceff1;border-radius:3px;overflow:hidden;margin-top:3px;"><div style="height:100%;width:' + w + '%;background:linear-gradient(90deg,#e67e22,#f0b357);"></div></div>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  html += '<div class="q-card" style="margin-bottom:12px;">';
+  html += '<div style="font-size:14px;font-weight:700;margin-bottom:8px;">🏢 ' + (en ? 'Weakest department × section' : '部门 × 章节 最薄弱组合') + '</div>';
+  for (var p = 0; p < agg.pairs.length; p++) {
+    html += '<div style="display:flex;gap:8px;font-size:12px;padding:5px 0;' + (p ? 'border-top:1px dashed #eef1f4;' : '') + ';">';
+    html += '<span style="flex:0 0 42%;color:#1a3a5c;font-weight:600;">' + escapeHtml(agg.pairs[p].div) + '</span>';
+    html += '<span style="flex:1;color:#5b6b7a;">' + escapeHtml(agg.pairs[p].sec) + '</span>';
+    html += '<span style="color:#c0392b;font-weight:700;">' + agg.pairs[p].n + '</span>';
+    html += '</div>';
+  }
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
 function renderAdminDashboard() {
   if (!adminState.authenticated) return renderAdminLogin();
 
@@ -16997,6 +18211,14 @@ function renderAdminDashboard() {
   html += '<div class="admin-hub-icon">📊</div>';
   html += '<div class="admin-hub-body"><div class="admin-hub-title">' + t('dash_hub') + '</div>';
   html += '<div class="admin-hub-desc">' + t('dash_hub_desc') + '</div></div>';
+  html += '<div class="admin-hub-arrow">›</div></div>';
+
+  // 教学看板（2026-11-05）：高频错题 / 薄弱章节 / 复习任务完成率。
+  // 和数据中心的区别：数据中心看"谁在学"，这里看"哪里没学会"。
+  html += '<div class="admin-hub-card" onclick="navigate(\'adminTeaching\')">';
+  html += '<div class="admin-hub-icon">🧭</div>';
+  html += '<div class="admin-hub-body"><div class="admin-hub-title">' + (state.lang === 'en' ? 'Teaching Board' : '教学看板') + '</div>';
+  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Most-missed questions, weak sections, review completion' : '高频错题·薄弱章节·复习完成率·题目体检') + '</div></div>';
   html += '<div class="admin-hub-arrow">›</div></div>';
 
   if (hasLocalChanges) {
@@ -22704,6 +23926,7 @@ function render() {
       case 'adminRace': app.innerHTML = renderAdminRace(); return;
       case 'adminBadges': app.innerHTML = renderAdminBadges(); return;
       case 'adminDash': app.innerHTML = renderAdminDash(); return;
+      case 'adminTeaching': app.innerHTML = renderAdminTeaching(); return;
     }
   }
   if (!state.currentUser) {
@@ -22749,6 +23972,7 @@ function render() {
     case 'search': app.innerHTML = renderSearch(); break;
     case 'wrongList': app.innerHTML = renderWrongList(); break;
     case 'wrongAll': app.innerHTML = renderWrongAll(); break;
+    case 'wrongPaper': app.innerHTML = renderWrongPaper(); break;
     case 'collectedList': app.innerHTML = renderCollectedList(); break;
     case 'examResult': app.innerHTML = renderExamResult(); break;
     case 'examReplay': app.innerHTML = renderExamReplay(); break;
