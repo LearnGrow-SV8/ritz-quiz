@@ -4026,6 +4026,10 @@ function loadUserData() {
   state.practiceProgress = JSON.parse(localStorage.getItem(uk + 'practiceProgress') || '{}');
   try { state.mastered = JSON.parse(localStorage.getItem(uk + 'mastered') || '{}') || {}; } catch (e) { state.mastered = {}; }
   try { state.reviewTask = JSON.parse(localStorage.getItem(uk + 'reviewTask') || 'null'); } catch (e2) { state.reviewTask = null; }
+  // 复习账本：积分制的唯一数据源，必须跟错题本一起载入/保存
+  try { state.reviewLog = JSON.parse(localStorage.getItem(uk + 'reviewLog') || '[]') || []; } catch (e3) { state.reviewLog = []; }
+  try { state.reviewStats = JSON.parse(localStorage.getItem(uk + 'reviewStats') || 'null'); } catch (e4) { state.reviewStats = null; }
+  if (!Array.isArray(state.reviewLog)) state.reviewLog = [];
   if (!state.mastered || typeof state.mastered !== 'object') state.mastered = {};
   wrongNormAll();   // 老版本存的错题条目没有掌握阶，这里补齐（st=0 立即到期）
   state.profile = loadProfile();
@@ -4144,6 +4148,10 @@ const state = {
   // 毕业记录单独存，掌握度要数它；否则一道题毕业后掌握度反而会掉。
   mastered: {},
   reviewTask: null,   // 本周复习任务 {wk,tag,ids,target,done,doneIds,skippedList}
+  // 复习行为账本（积分制地基）：事件流 + 去重计数器。
+  // 积分将来只读这两项，不在别处另算次数，否则同一道题会被算两次。
+  reviewLog: [],      // [{k:去重键, q:题号, t:时间, r:'p'|'g'|'f', s:阶, w:来源}]
+  reviewStats: null,  // {rv:复习作答次数, ps:推进阶次, gr:毕业题数, fl:复习答错次数, ts:最近时间}
   paperSession: null, // 专项练习卷 / 错题重做的本轮会话 {kind,title,ids,total,ok,graduated,promoted}
   recGuards: {},      // 本轮已记账的「题号@位置」——防止重绘把错误次数/小结重复累加
   wrongTab: 'due',    // 错题本页签：'due' 到期 | 'all' 全部 | 'tag' 按知识点
@@ -5056,8 +5064,23 @@ var I18N = {
   rv_strip: {cn:'答对 {ok} · 推进 {p} · 毕业 {g}', en:'{ok} ok · {p} advanced · {g} graduated'},
   rv_no_weak: {cn:'还没有足够数据判断薄弱知识点，先练几道再来。', en:'Not enough data yet — practise a few questions first.'},
   rv_task_title: {cn:'今日复习', en:"Today's review"},
-  rv_task_desc: {cn:'近一周你在「{tag}」错得最多。把 {n} 道到期错题各推进一阶，这个任务就算完成。', en:'"{tag}" is your weakest topic this week. Move {n} due questions up one stage to finish.'},
+  rv_task_desc: {cn:'近一周你的错题集中在「{tag}」，点开复习巩固一下。', en:'Most of your recent mistakes are in "{tag}" — review them now.'},
   rv_task_go: {cn:'开始复习', en:'Start review'},
+  rv_task_go_n: {cn:'开始复习（{n} 题）', en:'Start review ({n})'},
+  rv_redo_all: {cn:'重做错题', en:'Review mistakes'},
+  rv_hub_title: {cn:'复习中心', en:'Review centre'},
+  rv_hub_browse: {cn:'错题本', en:'Mistake book'},
+  rv_hub_mastery_short: {cn:'掌握度', en:'Mastery'},
+  rv_hub_sub: {cn:'已掌握 {g} 题 · 错题本 {n} 题', en:'{g} mastered · {n} on the list'},
+  rv_hub_empty: {cn:'还没有错题记录，去练几道新题吧。', en:'No mistakes yet — start practising.'},
+  rv_hub_due: {cn:'今天到期 {n} 题', en:'{n} due today'},
+  rv_hub_hint: {cn:'近一周你的错题集中在「{tag}」，点开复习巩固一下。', en:'Most of your recent mistakes are in "{tag}" — review them now.'},
+  rv_hub_none: {cn:'本周没有到期错题，可以自己挑几道错题巩固，或者练几道新题。', en:'Nothing due this week — review any mistake you like, or practise new questions.'},
+  rv_stat_line: {cn:'累计复习 {rv} 次 · 推进 {p} 阶 · 已掌握 {g} 题', en:'{rv} reviews · {p} stages advanced · {g} mastered'},
+  race_goto_wrong: {cn:'去错题本复习（本次答错已收录）', en:'Review mistakes (this run saved)'},
+  rv_book_ledger: {cn:'我的学习记录', en:'My learning record'},
+  rv_hub_go_practice: {cn:'去练新题', en:'Practise questions'},
+  rv_week_line: {cn:'近 7 天推进 {p} 阶 · 毕业 {g} 题', en:'Last 7 days: {p} advanced · {g} graduated'},
   rv_task_skip: {cn:'换一个', en:'Swap'},
   rv_task_done: {cn:'本周已完成', en:'Done this week'},
   rv_task_none: {cn:'暂无到期错题，去练几道新题保持手感。', en:'Nothing due — practise some new questions.'},
@@ -5097,6 +5120,8 @@ function saveState() {
   try {
     localStorage.setItem(uk + 'mastered', JSON.stringify(state.mastered || {}));
     localStorage.setItem(uk + 'reviewTask', JSON.stringify(state.reviewTask || null));
+    localStorage.setItem(uk + 'reviewLog', JSON.stringify(state.reviewLog || []));
+    localStorage.setItem(uk + 'reviewStats', JSON.stringify(state.reviewStats || null));
   } catch (e) {}
 }
 
@@ -5225,6 +5250,11 @@ function collectSyncSnapshot() {
     })(),
     mg: (function () {
       try { return Object.keys(state.mastered || {}).slice(0, 200); } catch (e) { return []; }
+    })(),
+    // 复习账本计数（积分制的地基）：只带四个数字，不带事件流（太大）。
+    // 换设备时**取较大值**，不累加 —— 宁可少给分，绝不重复给分。
+    rvs: (function () {
+      try { var st = reviewStatsEnsure(); return [st.rv || 0, st.ps || 0, st.gr || 0, st.fl || 0]; } catch (e) { return null; }
     })()
   };
 }
@@ -5910,6 +5940,14 @@ function applyCloudAccountData(key, rec) {
       localStorage.setItem(key + '_wrongAnswers', JSON.stringify(w));
     }
   } catch (e) {}
+  // 复习账本：本机没有就从云端接回来（计数取较大值，绝不累加 —— 两台设备各练一半
+  // 时，最大值至少不会重复计分；等积分上线再换成服务端合并）。
+  try {
+    if (localStorage.getItem(key + '_reviewStats') == null && Array.isArray(snap.rvs)) {
+      var rv0 = { rv: snap.rvs[0] || 0, ps: snap.rvs[1] || 0, gr: snap.rvs[2] || 0, fl: snap.rvs[3] || 0, ts: snap.ts || 0 };
+      localStorage.setItem(key + '_reviewStats', JSON.stringify(rv0));
+    }
+  } catch (eRV) {}
   // 毕业名单：换设备后掌握率不能凭空归零，本机没有就从快照接回来
   try {
     if (localStorage.getItem(key + '_mastered') == null && Array.isArray(snap.mg)) {
@@ -8492,9 +8530,9 @@ function renderHome() {
   html += '<div class="stat-card" style="cursor:pointer;" onclick="navigate(\'collectedList\')"><div class="num">'+state.collectedQuestions.length+'</div><div class="label">'+t('home_collected')+'</div></div>';
   html += '</div>';
 
-  // 复习闭环：今日任务摆在题库入口之前 —— 先复习该复习的，再刷新的。
-  html += reviewTaskCardHtml();
-  html += masteryCardHtml();
+  // 复习闭环：复习中心摆在题库入口之前 —— 先复习该复习的，再刷新的。
+  // 2026-11-05 改：今日复习 + 错题掌握率合并成一张卡，整卡可点进错题本。
+  html += reviewHubCardHtml();
   
   for (var i=0; i<banks.length; i++) {
     var b = banks[i];
@@ -13110,6 +13148,8 @@ function renderRaceResult() {
     html += '</div>';
   }
   html += '<button class="action-btn primary" style="width:100%;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
+  // 赛后第一件事应该是"把错的弄懂"，而不是马上再打一局。入口给在成绩单下面。
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'wrongAll\')">❌ ' + t('race_goto_wrong') + '</button>';
   if (raceStateOf(raceConfOf()) === 'open') {
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceAgain()">⚡ ' + t('race_again') + '</button>';
   }
@@ -14927,7 +14967,10 @@ function renderBank(bank) {
   html += '<button class="menu-btn" onclick="startPractice(\''+bank+'\')"><span class="icon">📖</span><div class="label">'+t('menu_practice')+'</div><div class="count">'+t('practice_done')+' '+progress+'/'+sectionCount+'</div></button>';
   var examBtnLabel = (bank === 'day21' || bank === 'tsos') ? t('exam_all').replace('{n}', getBankQuestions(bank, 'all').length) : t('randomN').replace('{n}', manualExamCount(state.currentSection));
   html += '<button class="menu-btn" onclick="startExam(\''+bank+'\')"><span class="icon">📝</span><div class="label">'+t('menu_exam')+'</div><div class="count">'+examBtnLabel+'</div></button>';
-  html += '<button class="menu-btn" onclick="navigate(\'wrongList\')"><span class="icon">❌</span><div class="label">'+t('menu_wrong')+'</div><div class="count">'+wrongCount+t('questions_unit')+'</div></button>';
+  // 2026-11-05 改：统一进「错题本汇总页」。旧的按试卷分列表页（wrongList）既不带
+  // 掌握阶，也看不到别的试卷的错题，员工从不同入口进去看到的东西不一样，容易以为
+  // 错题丢了。所有入口现在都指向同一个页。
+  html += '<button class="menu-btn" onclick="navigate(\'wrongAll\')"><span class="icon">❌</span><div class="label">'+t('menu_wrong')+'</div><div class="count">'+wrongCount+t('questions_unit')+'</div></button>';
   html += '<button class="menu-btn" onclick="startSearch(\''+bank+'\')"><span class="icon">🔍</span><div class="label">'+t('menu_search')+'</div><div class="count">'+t('kw_search')+'</div></button>';
   html += '<button class="menu-btn" onclick="openExamHistory()"><span class="icon">📊</span><div class="label">'+t('result_history')+'</div><div class="count">'+(state.lang==='en'?'Past attempts':'历史成绩')+'</div></button>';
   if (isPaperBank(bank)) {
@@ -15513,6 +15556,18 @@ function wrongPass(skey, qid, opts) {
   reviewTaskNotePass(qid);
   return 'promoted';
 }
+// 这次作答发生在哪儿 —— 事件账本要记来源，将来算分可以区分
+// 「主动重做」和「考试顺手碰到」。
+function reviewSourceOf() {
+  try {
+    if (state.paperSession && state.paperSession.kind) return state.paperSession.kind;
+  } catch (e) {}
+  var m = state.currentMode;
+  if (m === 'exam') return 'exam';
+  if (m === 'formal') return 'formal';
+  if (m === 'wrong') return 'redo';
+  return 'practice';
+}
 // 统一作答入口：答错写进错题本，答对推进掌握阶（练习 / 考试 / 重做共用）
 // 返回 'added' | 'graduated' | 'promoted' | 'early' | ''
 function recordAttempt(q, ans, opts) {
@@ -15520,6 +15575,7 @@ function recordAttempt(q, ans, opts) {
   if (!q || !q.id) return '';
   var keys = wrongSkeysForQid(q.id);
   var ua = ansToBankOrder(q, ans);
+  var where = opts.src || reviewSourceOf();
   if (opts.ok) {
     if (!keys.length) return '';
     var best = '';
@@ -15529,11 +15585,17 @@ function recordAttempt(q, ans, opts) {
       else if (r === 'promoted' && best !== 'graduated') best = 'promoted';
       else if (r === 'early' && !best) best = 'early';
     }
+    // 只有真正推进/毕业才入账：'early'（当天连点、间隔不足 4 小时）不给分，
+    // 这是"记答案刷分"唯一的缺口，必须堵死。
+    if (best === 'graduated') reviewLogAdd(q.id, 'g', WRONG_STAGE_MAX, where, opts.now);
+    else if (best === 'promoted') reviewLogAdd(q.id, 'p', wrongStageOf((state.wrongAnswers[keys[0]] || {})[q.id]), where, opts.now);
     return best;
   }
   var skey = opts.skey || bankStateKey();
   var targets = keys.length ? keys : [skey];
   for (var j = 0; j < targets.length; j++) wrongAdd(targets[j], q, ua, opts);
+  // 只有"本来就在错题本里的题又答错"才算复习失败；第一次错的新题不算。
+  if (keys.length) reviewLogAdd(q.id, 'f', 0, where, opts.now);
   return 'added';
 }
 
@@ -15561,11 +15623,15 @@ function wrongRowsAll(opts) {
       rows.push({ skey: sk, qid: qid, e: e });
     }
   }
-  // 到期早的排前面（负值 = 已逾期），同到期按错误次数多的优先
+  // 到期早的排前面（0 = 立即到期），同到期按错误次数多的优先，再按最近一次错的时间倒序。
+  // 第三个 tiebreak 不能省：到期和次数都相同时若不比时间，顺序就取决于对象键的插入顺序，
+  // 同一批数据在两次渲染里可能翻个身，学员会以为记录错乱。
   rows.sort(function (a, b) {
     var da = wrongDueOf(a.e), db = wrongDueOf(b.e);
     if (da !== db) return da - db;
-    return (b.e.n || 0) - (a.e.n || 0);
+    var na = a.e.n || 0, nb = b.e.n || 0;
+    if (na !== nb) return nb - na;
+    return (b.e.timestamp || b.e.last || 0) - (a.e.timestamp || a.e.last || 0);
   });
   return rows;
 }
@@ -15664,6 +15730,74 @@ function masteredCount() {
   return n;
 }
 
+// ---- 复习行为账本（2026-11-05）：积分制的唯一取数口 ----
+// 为什么不在错题本上直接数条数：领导要的是「刷错题次数 / 掌握错题数量」，直接数
+// 条数等于奖励"点开就关"——同一道题一天点五次会被算五次。所以记**事件**，并且
+// 带唯一键（题号 + 北京时间日期 + 结果）：同一道题同一天同一结果只入账一次。
+// 以后接积分，只读 reviewCreditSummary / reviewPointsOf，别在页面里另写一遍。
+var REVIEW_LOG_CAP = 400;
+function reviewStatsEnsure() {
+  if (!state.reviewStats || typeof state.reviewStats !== 'object') state.reviewStats = {};
+  var st = state.reviewStats;
+  var k = ['rv', 'ps', 'gr', 'fl'];
+  for (var i = 0; i < k.length; i++) if (typeof st[k[i]] !== 'number' || st[k[i]] < 0) st[k[i]] = 0;
+  return st;
+}
+// 记一条复习事件。res: 'p' 推进一阶 | 'g' 毕业 | 'f' 复习答错
+// 返回 true 表示这次真的入账（去重没过返回 false，界面不受影响）
+function reviewLogAdd(qid, res, stage, where, now) {
+  if (!qid || !res) return false;
+  var t = now || Date.now();
+  var day = raceDayKey(t);                      // 北京时间，跨时区不串天
+  var log = Array.isArray(state.reviewLog) ? state.reviewLog : (state.reviewLog = []);
+  var key = qid + '|' + day + '|' + res;
+  for (var i = log.length - 1; i >= 0; i--) {
+    if (log[i] && log[i].k === key) return false;
+  }
+  log.push({ k: key, q: qid, t: t, r: res, s: stage || 0, w: where || '' });
+  while (log.length > REVIEW_LOG_CAP) log.shift();
+  var st = reviewStatsEnsure();
+  st.rv++;
+  if (res === 'p') st.ps++;
+  if (res === 'g') { st.ps++; st.gr++; }
+  if (res === 'f') st.fl++;
+  st.ts = t;
+  return true;
+}
+// 近 N 天的复习统计（默认 7 天）。积分、徽章、任务结算都从这里取数。
+function reviewCreditSummary(days, now) {
+  var t = now || Date.now();
+  var from = t - (days || 7) * WRONG_DAY_MS;
+  var out = { reviewed: 0, promoted: 0, graduated: 0, failed: 0, dayCount: 0 };
+  var log = Array.isArray(state.reviewLog) ? state.reviewLog : [];
+  var seen = {};
+  for (var i = 0; i < log.length; i++) {
+    var e = log[i];
+    if (!e || !(e.t >= from)) continue;
+    out.reviewed++;
+    if (e.r === 'p') out.promoted++;
+    else if (e.r === 'g') out.graduated++;
+    else if (e.r === 'f') out.failed++;
+    seen[raceDayKey(e.t)] = 1;
+  }
+  out.dayCount = Object.keys(seen).length;
+  return out;
+}
+// 分值表：以后要调价只改这里。刻意做到"答错不给分、同一题同一天不重复给分"，
+// 否则刷错题就变成刷分手段，培训目标又要落空。
+var REVIEW_POINTS_RULES = { reviewed: 1, promoted: 5, graduated: 20 };
+function reviewPointsOf(days, now) {
+  var c = reviewCreditSummary(days, now);
+  return c.reviewed * REVIEW_POINTS_RULES.reviewed
+    + c.promoted * REVIEW_POINTS_RULES.promoted
+    + c.graduated * REVIEW_POINTS_RULES.graduated;
+}
+// 累计口径（不按天截断）：错题本页 / 个人页要显示"我一共复习了多少"
+function reviewTotalsOf() {
+  var st = reviewStatsEnsure();
+  return { reviewed: st.rv || 0, promoted: st.ps || 0, graduated: st.gr || 0, failed: st.fl || 0, last: st.ts || 0 };
+}
+
 // ---- 个性化复习任务 ----
 // 每周一个任务，目标不是「做 N 道」，而是「把 N 道到期错题推进一阶」——
 // 后者只有在隔天答对时才成立，乱点交不了差。
@@ -15725,50 +15859,112 @@ function reviewTaskDone() {
   return !!(task && task.target > 0 && (task.done || 0) >= task.target);
 }
 
-// ---- 首页两张卡：今日复习（主）+ 错题掌握率（次）----
-function reviewTaskCardHtml() {
-  var task = null;
-  try { task = reviewTaskBuild(false); } catch (e) { task = null; }
-  if (!task || !task.target) {
-    return '<div class="bank-card" style="cursor:pointer;" onclick="navigate(\'wrongAll\')">'
-      + '<h3>🔥 ' + t('rv_task_title') + '</h3>'
-      + '<div class="desc">' + t('rv_task_none') + '</div></div>';
-  }
-  var done = Math.min(task.done || 0, task.target);
-  var pct = task.target ? Math.round(done / task.target * 100) : 0;
-  var finished = done >= task.target;
-  var html = '<div class="bank-card" style="border-color:#1a3a5c;">';
-  html += '<h3>🔥 ' + t('rv_task_title') + ' <span style="font-size:11px;font-weight:400;color:#7b8896;">' + t('rv_task_progress').replace('{d}', String(done)).replace('{n}', String(task.target)) + '</span></h3>';
-  html += '<div class="desc" style="line-height:1.6;">' + escapeHtml(t('rv_task_desc').replace('{tag}', reviewTagName(task.tag)).replace('{n}', String(task.target))) + '</div>';
-  html += '<div style="height:8px;background:#eceff1;border-radius:4px;overflow:hidden;margin:4px 0 10px;">'
-    + '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#1a3a5c,#4a7ba7);transition:width .3s;"></div></div>';
-  if (finished) {
-    html += '<div style="font-size:13px;font-weight:700;color:#27ae60;">✓ ' + t('rv_task_done') + '</div>';
-  } else {
-    var ids = (task.ids || []).filter(function (x) { return !(task.doneIds && task.doneIds[x]); });
-    var idsLit = '[' + ids.map(function (x) { return "'" + x + "'"; }).join(',') + ']';
-    html += '<div style="display:flex;gap:8px;">';
-    html += '<button class="nav-btn primary" style="flex:1;" onclick="startWrongRedoIds(' + idsLit + ',{kind:\'task\',title:\'' + t('rv_task_title') + '\'})">▶ ' + t('rv_task_go') + '</button>';
-    html += '<button class="nav-btn secondary" style="flex:0 0 auto;" onclick="reviewTaskSwap()">' + t('rv_task_skip') + '</button>';
-    html += '</div>';
-  }
+// ---- 首页「复习中心」：今日复习 + 掌握率 + 错题本入口三合一 ----
+// 原来是两张卡（今日复习 / 错题掌握率），实际用起来有两个问题：
+//   ① 任务完成后卡片变成不可点的一块字，员工想"再去错题本看看"就没路可走；
+//   ② "掌握率"孤零零一个百分比，看不出下一步该干什么。
+// 合并成一张：上面给身份感（环形掌握度 + 错题本入口），下面给行动（一句话建议
+// + 进度 + 一个按钮）。整张卡都能点进错题本，按钮只是把动作做得更明确。
+function reviewRingHtml(pct, size, label) {
+  var p = Math.max(0, Math.min(100, pct || 0));
+  var inner = size - 12;
+  var html = '<div style="position:relative;width:' + size + 'px;height:' + size + 'px;flex:0 0 auto;">';
+  html += '<div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(#27ae60 0% ' + p + '%, #e6ebef ' + p + '% 100%);"></div>';
+  html += '<div style="position:absolute;left:6px;top:6px;width:' + inner + 'px;height:' + inner + 'px;border-radius:50%;background:#fff;'
+    + 'display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;">'
+    + '<div style="font-size:15px;font-weight:800;color:#1a3a5c;">' + (pct < 0 ? '—' : p + '%') + '</div>'
+    + '<div style="font-size:9px;color:#8a97a4;">' + label + '</div></div>';
   html += '</div>';
   return html;
 }
-function reviewTaskSwap() { reviewTaskSkip(); render(); }
-function masteryCardHtml() {
-  var m = masteryOf();
-  var html = '<div class="bank-card" style="cursor:default;">';
-  if (m < 0) {
-    html += '<h3>📈 ' + t('rv_mastery') + '</h3><div class="desc" style="margin:0;">' + t('rv_mastery_none') + '</div></div>';
-    return html;
+function reviewHubCardHtml() {
+  var task = null;
+  try { task = reviewTaskBuild(false); } catch (e) { task = null; }
+  var m = -1, left = 0, grad = 0;
+  try { m = masteryOf(); left = wrongRowsAll({ bank: 'manual' }).length; grad = masteredCount(); } catch (e) {}
+  var dueN = 0;
+  try { dueN = wrongDueCount('manual'); } catch (e) { dueN = 0; }
+  var hasTask = !!(task && task.target);
+  var done = hasTask ? Math.min(task.done || 0, task.target) : 0;
+  var pct = hasTask ? Math.round(done / task.target * 100) : 0;
+  var finished = hasTask && done >= task.target;
+
+  var html = '<div class="bank-card" style="padding:0;overflow:hidden;cursor:pointer;border-color:#dbe3ea;" onclick="navigate(\'wrongAll\')">';
+  // 上半：身份感（掌握度环 + 错题本存量）
+  html += '<div style="display:flex;align-items:center;gap:14px;padding:14px 14px 12px;">';
+  html += reviewRingHtml(m, 66, t('rv_hub_mastery_short'));
+  html += '<div style="flex:1;min-width:0;">';
+  html += '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">'
+    + '<div style="font-size:15px;font-weight:800;color:#1a3a5c;">🔥 ' + t('rv_hub_title') + '</div>'
+    + '<div style="font-size:12px;font-weight:600;color:#1a3a5c;white-space:nowrap;">' + t('rv_hub_browse') + ' ›</div></div>';
+  html += '<div style="font-size:12px;color:#65727f;margin-top:5px;line-height:1.5;">'
+    + (left > 0 ? escapeHtml(t('rv_hub_sub').replace('{g}', String(grad)).replace('{n}', String(left)))
+                : escapeHtml(t('rv_hub_empty'))) + '</div>';
+  if (dueN > 0) {
+    html += '<div style="margin-top:6px;display:inline-block;background:#fdecea;color:#c0392b;font-size:11px;'
+      + 'font-weight:700;padding:2px 8px;border-radius:999px;">⏰ ' + escapeHtml(t('rv_hub_due').replace('{n}', String(dueN))) + '</div>';
   }
-  var left = wrongRowsAll({ bank: 'manual' }).length;
-  html += '<h3>📈 ' + t('rv_mastery') + ' <span style="font-size:18px;color:#1a3a5c;">' + m + '%</span></h3>';
-  html += '<div style="height:8px;background:#eceff1;border-radius:4px;overflow:hidden;margin:8px 0 6px;">'
-    + '<div style="height:100%;width:' + Math.max(0, Math.min(100, m)) + '%;background:linear-gradient(90deg,#27ae60,#7bc96f);"></div></div>';
-  html += '<div class="desc" style="margin:0;">' + t('rv_mastery_sub').replace('{g}', String(masteredCount())).replace('{n}', String(left)) + '</div>';
-  html += '</div>';
+  html += '</div></div>';
+
+  // 下半：行动（一句话建议 + 进度 + 按钮）
+  html += '<div style="border-top:1px solid #eef2f5;padding:12px 14px 14px;background:#fcfdfe;">';
+  if (!hasTask) {
+    html += '<div style="font-size:12.5px;color:#5a6874;line-height:1.6;">' + escapeHtml(t('rv_hub_none')) + '</div>';
+    html += '<div style="display:flex;gap:8px;margin-top:10px;">';
+    if (left > 0) {
+      // 还有错题但暂时没到期：让他自己挑一批，不能出现"点了没反应"的按钮
+      html += '<button class="nav-btn primary" style="flex:1;" onclick="event.stopPropagation();startWrongRedoIds(wrongIdsFor(\'all\'),{kind:\'all\',title:\'' + t('rv_src_all') + '\'})">▶ ' + t('rv_redo_all') + '</button>';
+      html += '<button class="nav-btn secondary" style="flex:0 0 auto;" onclick="event.stopPropagation();navigate(\'wrongPaper\')">🎯 ' + t('rv_make_paper') + '</button>';
+    } else {
+      html += '<button class="nav-btn primary" style="flex:1;" onclick="event.stopPropagation();goToBank(\'manual\')">📖 ' + t('rv_hub_go_practice') + '</button>';
+    }
+    html += '</div>';
+  } else {
+    html += '<div style="font-size:12.5px;color:#3c4b59;line-height:1.6;">'
+      + escapeHtml(t('rv_hub_hint').replace('{tag}', reviewTagName(task.tag))) + '</div>';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;">';
+    html += '<div style="flex:1;height:7px;background:#e8edf2;border-radius:4px;overflow:hidden;">'
+      + '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#1a3a5c,#4a7ba7);transition:width .3s;"></div></div>';
+    html += '<div style="font-size:11px;font-weight:700;color:#65727f;">' + done + '/' + task.target + '</div></div>';
+    if (finished) {
+      html += '<div style="margin-top:10px;font-size:12.5px;font-weight:700;color:#1f8a4c;">✓ ' + t('rv_task_done') + '</div>';
+    } else {
+      var ids = (task.ids || []).filter(function (x) { return !(task.doneIds && task.doneIds[x]); });
+      var idsLit = '[' + ids.map(function (x) { return "'" + x + "'"; }).join(',') + ']';
+      html += '<div style="display:flex;gap:8px;margin-top:10px;">';
+      html += '<button class="nav-btn primary" style="flex:1;" onclick="event.stopPropagation();startWrongRedoIds(' + idsLit + ',{kind:\'task\',title:\'' + t('rv_task_title') + '\'})">▶ '
+        + escapeHtml(t('rv_task_go_n').replace('{n}', String(ids.length))) + '</button>';
+      html += '<button class="nav-btn secondary" style="flex:0 0 auto;" onclick="event.stopPropagation();reviewTaskSwap()">' + t('rv_task_skip') + '</button>';
+      html += '</div>';
+    }
+  }
+  html += '</div></div>';
+  return html;
+}
+function reviewTaskSwap() { reviewTaskSkip(); render(); }
+
+// 个人页用的紧凑版掌握卡：和首页复习中心同一个口径，但只讲"我的学习账"。
+// 点进去就是错题合集 —— 领导问"我的错题在哪"时，这一下就能到。
+function masteryCardHtml() {
+  var m = -1;
+  try { m = masteryOf(); } catch (e) {}
+  var total = { reviewed: 0, promoted: 0, graduated: 0, failed: 0 };
+  try { total = reviewTotalsOf(); } catch (e2) {}
+  var grad = 0, left = 0;
+  try { grad = masteredCount(); left = wrongRowsAll({ bank: 'manual' }).length; } catch (e3) {}
+  var html = '<div class="bank-card" style="cursor:pointer;display:flex;align-items:center;gap:14px;" onclick="navigate(\'wrongAll\')">';
+  html += reviewRingHtml(m, 58, t('rv_hub_mastery_short'));
+  html += '<div style="flex:1;min-width:0;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;">'
+    + '<div style="font-size:14px;font-weight:800;color:#1a3a5c;">📈 ' + t('rv_mastery') + '</div>'
+    + '<div style="font-size:12px;font-weight:600;color:#1a3a5c;">' + t('rv_hub_browse') + ' ›</div></div>';
+  html += '<div style="font-size:12px;color:#65727f;margin-top:5px;line-height:1.5;">'
+    + escapeHtml(t('rv_hub_sub').replace('{g}', String(grad)).replace('{n}', String(left))) + '</div>';
+  if (total.reviewed > 0) {
+    html += '<div style="font-size:11px;color:#8a97a4;margin-top:4px;">'
+      + escapeHtml(t('rv_stat_line').replace('{rv}', String(total.reviewed)).replace('{p}', String(total.promoted)).replace('{g}', String(total.graduated))) + '</div>';
+  }
+  html += '</div></div>';
   return html;
 }
 
@@ -15851,6 +16047,19 @@ function renderWrongAll() {
     subtitle: rows.length + t('questions_unit') + ' · ' + t('rv_due_n').replace('{n}', String(dueRows.length))
   });
   html += '<div class="page">';
+
+  // 顶部一条"学习记录"：掌握度 + 累计复习量。错题本不只是一张清单，它还是
+  // 员工自己的学习凭证（以后积分就从这里取数），所以先给数字，再给操作。
+  var _m = -1, _tot = { reviewed: 0, promoted: 0, graduated: 0 };
+  var _wk = { promoted: 0, graduated: 0 };
+  try { _m = masteryOf(); _tot = reviewTotalsOf(); _wk = reviewCreditSummary(7); } catch (e0) {}
+  html += '<div class="q-card" style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:10px;background:#fbfcfd;">';
+  html += reviewRingHtml(_m, 46, t('rv_hub_mastery_short'));
+  html += '<div style="flex:1;min-width:0;font-size:11.5px;color:#65727f;line-height:1.7;">';
+  html += '<div style="font-size:12.5px;font-weight:700;color:#1a3a5c;">' + t('rv_book_ledger') + '</div>';
+  html += '<div>' + escapeHtml(t('rv_stat_line').replace('{rv}', String(_tot.reviewed)).replace('{p}', String(_tot.promoted)).replace('{g}', String(_tot.graduated))) + '</div>';
+  html += '<div>' + escapeHtml(t('rv_week_line').replace('{p}', String(_wk.promoted)).replace('{g}', String(_wk.graduated))) + '</div>';
+  html += '</div></div>';
 
   // 两个动作入口：重做到期 / 生成专项卷。都放在最上面 —— 员工打开错题本的目的
   // 就是"练"，不是为了浏览清单。
@@ -16376,6 +16585,10 @@ function goBack() {
   if (!state.navStack) state.navStack = [];
   var target = state.navStack.length ? state.navStack.pop() : 'home';
   if (!target || target === from) target = 'home';
+  // 从上一次答题赛的结果页退出去之后再回来，那一局已经结算完毕（state.race 被清空），
+  // 再渲染只会得到一张空白页 —— 直接送回答题赛首页/首页，别让人卡在空白里。
+  if ((target === 'raceResult' || target === 'racePlay') && !state.race) target = 'race';
+  if (target === 'examResult' && !state.lastExamReplay) target = 'home';
   navigate(target, { replace: true });
 }
 // 🏠 One-tap "back to home", shown next to the language toggle on every inner
