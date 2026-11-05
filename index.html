@@ -5232,7 +5232,11 @@ var I18N = {
 function t(key) {
   var entry = I18N[key];
   if (!entry) return key;
-  return entry[state.lang] || entry.cn || key;
+  // 注意：有些键的英文值故意留空（如 rv_paper_unit 的单位），空串是合法译文，
+  // 不能用 || 回落到中文 —— 否则英文界面会冒出「8 道」这种混排。
+  var v = entry[state.lang];
+  if (v === undefined || v === null) v = entry.cn;
+  return (v === undefined || v === null) ? key : v;
 }
 
 function setLang(lang) {
