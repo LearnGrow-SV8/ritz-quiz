@@ -15999,32 +15999,16 @@ function reviewHubCardHtml() {
   // 两张卡，不是一个卡里的上下两段（2026-11-05 二版）。
   // 上次把"看我的错题"和"今天该练什么"塞进同一张卡，虽然少了一个卡片框，但员工
   // 读起来仍是一坨：不知道上半是身份、下半是任务。这次直接拆成两张：
-  //   卡 A：白底 —— 状态与入口（我的错题 / 掌握度）
-  //   卡 B：浅蓝底 —— 今天要做的事（任务 + 进度 + 按钮）
-  // （2026-11-05 追记：原来的"黑左边 / 蓝左边"彩色左边条已按用户要求整体移除，
+  //   卡 1：浅蓝底 —— 今天要做的事（任务 + 进度 + 按钮）
+  //   卡 2：白底 —— 状态与入口（我的错题 / 掌握度）
+  // （2026-11-05 追记一：原来的"黑左边 / 蓝左边"彩色左边条已按用户要求整体移除，
   //   两卡现在靠底色区分。）
+  // （2026-11-05 追记二：顺序对调 —— 今日复习提前（用户要求），先看到"现在该做什么"，
+  //   再看错题总账。）
   var html = '';
 
-  // ---------- 卡 A：我的错题（状态 + 入口） ----------
-  html += '<div class="bank-card" style="padding:0;overflow:hidden;cursor:pointer;margin-bottom:10px;" onclick="navigate(\'wrongAll\')">';
-  html += '<div style="display:flex;align-items:center;gap:14px;padding:14px;">';
-  html += reviewRingHtml(m, 68, t('rv_hub_mastery_short'));
-  html += '<div style="flex:1;min-width:0;">';
-  html += '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">'
-    + '<div style="font-size:15px;font-weight:800;color:#1a1a1a;">📕 ' + t('rv_hub_title') + '</div>'
-    + '<div style="font-size:11.5px;font-weight:600;color:#5a6473;white-space:nowrap;background:#EDF2F9;padding:3px 9px;border-radius:999px;">'
-    + t('rv_hub_browse') + ' ›</div></div>';
-  html += '<div style="font-size:12.5px;color:#5a6473;margin-top:6px;line-height:1.5;">'
-    + (left > 0 ? escapeHtml(t('rv_hub_sub').replace('{g}', String(grad)).replace('{n}', String(left)))
-                : escapeHtml(t('rv_hub_empty'))) + '</div>';
-  if (dueN > 0) {
-    html += '<div style="margin-top:7px;display:inline-block;background:#FDECEA;color:#c62828;font-size:11px;'
-      + 'font-weight:700;padding:3px 9px;border-radius:999px;">⏰ ' + escapeHtml(t('rv_hub_due').replace('{n}', String(dueN))) + '</div>';
-  }
-  html += '</div></div></div>';
-
-  // ---------- 卡 B：今日复习（任务 + 行动） ----------
-  html += '<div class="bank-card" style="padding:0;overflow:hidden;cursor:default;margin-bottom:14px;">';
+  // ---------- 卡 1：今日复习（任务 + 行动） ----------
+  html += '<div class="bank-card" style="padding:0;overflow:hidden;cursor:default;margin-bottom:10px;">';
   html += '<div style="padding:12px 14px 11px;background:linear-gradient(135deg,#EDF4FC,#F8FBFF);border-bottom:1px solid #e3ecf7;">';
   html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
   html += '<div style="font-size:14.5px;font-weight:800;color:#1a1a1a;">🔥 ' + t('rv_task_title') + '</div>';
@@ -16052,16 +16036,32 @@ function reviewHubCardHtml() {
       html += '<button class="nav-btn secondary" style="width:100%;margin-top:10px;" onclick="wrongStartAllRedo()">🔁 ' + t('rv_redo_all') + '</button>';
     } else {
       var ids = (task.ids || []).filter(function (x) { return !(task.doneIds && task.doneIds[x]); });
-      var idsLit = '[' + ids.map(function (x) { return "'" + x + "'"; }).join(',') + ']';
       html += '<div style="display:flex;gap:8px;margin-top:10px;">';
       html += '<button class="nav-btn primary" style="flex:1;" onclick="wrongStartTaskRedo()">▶ '
-        + escapeHtml(t('rv_task_go_n').replace('{n}', String(wrongTaskTodoIds().length))) + '</button>';
         + escapeHtml(t('rv_task_go_n').replace('{n}', String(ids.length))) + '</button>';
       html += '<button class="nav-btn secondary" style="flex:0 0 auto;" onclick="reviewTaskSwap()">' + t('rv_task_skip') + '</button>';
       html += '</div>';
     }
   }
   html += '</div></div>';
+
+  // ---------- 卡 2：我的错题（状态 + 入口） ----------
+  html += '<div class="bank-card" style="padding:0;overflow:hidden;cursor:pointer;margin-bottom:14px;" onclick="navigate(\'wrongAll\')">';
+  html += '<div style="display:flex;align-items:center;gap:14px;padding:14px;">';
+  html += reviewRingHtml(m, 68, t('rv_hub_mastery_short'));
+  html += '<div style="flex:1;min-width:0;">';
+  html += '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">'
+    + '<div style="font-size:15px;font-weight:800;color:#1a1a1a;">📕 ' + t('rv_hub_title') + '</div>'
+    + '<div style="font-size:11.5px;font-weight:600;color:#5a6473;white-space:nowrap;background:#EDF2F9;padding:3px 9px;border-radius:999px;">'
+    + t('rv_hub_browse') + ' ›</div></div>';
+  html += '<div style="font-size:12.5px;color:#5a6473;margin-top:6px;line-height:1.5;">'
+    + (left > 0 ? escapeHtml(t('rv_hub_sub').replace('{g}', String(grad)).replace('{n}', String(left)))
+                : escapeHtml(t('rv_hub_empty'))) + '</div>';
+  if (dueN > 0) {
+    html += '<div style="margin-top:7px;display:inline-block;background:#FDECEA;color:#c62828;font-size:11px;'
+      + 'font-weight:700;padding:3px 9px;border-radius:999px;">⏰ ' + escapeHtml(t('rv_hub_due').replace('{n}', String(dueN))) + '</div>';
+  }
+  html += '</div></div></div>';
   return html;
 }
 function reviewTaskSwap() { reviewTaskSkip(); render(); }
