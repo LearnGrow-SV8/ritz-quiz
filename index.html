@@ -11522,6 +11522,20 @@ function raceRowNameOf(raw, race) {
 // 榜单计算的纯函数版本：吃一份快照记录数组，不碰 state。学员端排行榜和管理端
 // 导出都走这里，保证两边口径永远一致（以前导出另写一套，容易出现"榜上是 30、
 // 导出是 20"这种对不上的情况）。
+// 头像三件套的唯一入口：所有榜单行都从这里取，保证"同一个人在哪张榜上头像都一样"。
+// 2026-11-05 修：打卡天数榜 / 进步之星榜的行对象忘了带 cn/en/av/frame，头像只好回退成
+// 工号后两位的数字（'e12345' → '45'），同一人在分数榜是 emoji、在这两张榜是数字。
+function raceAvatarFieldsOf(raw, race) {
+  var snap = (raw && raw.snap) || {};
+  var frame = null;
+  try { frame = raceTopFrame(race); } catch (e) { frame = null; }
+  return {
+    av: String(snap.av || ''),
+    cn: String(snap.cn || ''),
+    en: String(snap.en || ''),
+    frame: frame
+  };
+}
 function raceBoardRowsFrom(list, scope, secFilter, rid) {
   list = list || [];
   secFilter = secFilter || '';
@@ -11534,15 +11548,10 @@ function raceBoardRowsFrom(list, scope, secFilter, rid) {
     // 很多学员为空，用它会让「（我）」高亮永远匹配不上。
     var it = { key: String((raw && (raw.akey || raw.key || raw.phone)) || ''), race: race, raw: raw };
     it.name = raceRowNameOf(raw, race);
-    // 头像三件套在行构建时算一次：头像存档值、英文名（算首字母用）、已解锁的头像框。
+    // 头像三件套在行构建时算一次：头像存档值、姓名（算首字母用）、已解锁的头像框。
     // 放到渲染循环里算会让 500 行各自重跑一遍徽章统计，没必要。
-    var _snapA = (raw && raw.snap) || {};
-    it.av = String(_snapA.av || '');
-    it.en = String(_snapA.en || '');
-    it.cn = String(_snapA.cn || '');
-    var _frameA = null;
-    try { _frameA = raceTopFrame(race); } catch (eFA) { _frameA = null; }
-    it.frame = _frameA;
+    var _avF = raceAvatarFieldsOf(raw, race);
+    it.av = _avF.av; it.en = _avF.en; it.cn = _avF.cn; it.frame = _avF.frame;
     if (scope === 'best') {
       // 历史最佳：切了板块就看**该板块**的历届最佳（同一个人可以在多张板块榜上
       // 各有一条成绩）；不切板块每人只出现一次，取他各板块里最好的那条。
@@ -11716,6 +11725,7 @@ function raceDaysRowsFrom(list, scope, rid) {
     // 以前这里传的是 filter（本届榜只取本届徽章），导致同一个人在本届打卡天数榜和
     // 分数榜上挂的徽章不一样 —— 学员会以为是 bug。现在一律历届全部。
     var blD = raceBadgeListOf(race, '');
+    var _avD = raceAvatarFieldsOf(raw, race);
     rows.push({
       key: String((raw && (raw.akey || raw.key || raw.phone)) || ''),
       name: raceRowNameOf(raw, race),
@@ -11724,6 +11734,8 @@ function raceDaysRowsFrom(list, scope, rid) {
       days: days,
       runs: raceDaysRuns(race, filter),
       last: raceDaysLastTs(race, filter),
+      // 头像三件套：必须跟分数榜同源，否则这张榜的头像会退化成工号数字
+      av: _avD.av, cn: _avD.cn, en: _avD.en, frame: _avD.frame,
       // 打卡天数榜上带徽章：一律历届全部（见上方说明）
       badges: blD,
       show: raceDisplayBadgeOf(race, blD),
@@ -12094,11 +12106,14 @@ function raceMoverRowsFrom(list, rid) {
     var gain = (cur.correct || 0) - (prev.correct || 0);
     if (gain <= 0) continue;
     var bl = raceBadgeListOf(race, '');
+    var _avM = raceAvatarFieldsOf(raw, race);
     rows.push({
       key: String((raw && (raw.akey || raw.key || raw.phone)) || ''),
       name: raceRowNameOf(raw, race),
       dept: raceDeptUnitOfRow(raw, race),
       div: raceDeptOfRow(raw, race),
+      // 头像三件套：跟分数榜 / 打卡天数榜同源（缺了就会显示工号数字）
+      av: _avM.av, cn: _avM.cn, en: _avM.en, frame: _avM.frame,
       gain: gain,
       prev: prev.correct || 0,
       correct: cur.correct || 0,
