@@ -670,6 +670,52 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .save-status { font-size:13px; padding:8px 14px; border-radius:8px; margin-top:8px; text-align:center; }
 .save-status.synced { background:#e8f5e9; color:#2e7d32; }
 .save-status.local { background:#fff3e0; color:#e65100; }
+
+/* ===== 管理端桌面外壳（重构一期 2026-11-06）：黑侧边栏 + 丽思蓝 C7DDF3 =====
+   仅在已登录管理端时包住内容区；≤860px 自动回落旧版手机布局。 */
+.adm-root { display:flex; align-items:stretch; width:100vw; max-width:100vw; min-height:100vh; margin-left:calc(50% - 50vw); background:var(--bg); }
+.adm-side { flex:0 0 212px; display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto;
+  background:linear-gradient(rgba(0,0,0,0.9),rgba(0,0,0,0.9)),url('assets/brand/pattern-white.jpg') center/240px repeat; color:#fff; }
+.adm-side-brand { padding:18px 16px 14px; border-bottom:1px solid rgba(255,255,255,0.12); display:flex; align-items:center; gap:10px; }
+.adm-side-brand img { height:26px; width:auto; display:block; }
+.adm-brand-name { font-size:14px; font-weight:700; color:#C7DDF3; line-height:1.3; }
+.adm-brand-sub { font-size:11px; color:rgba(255,255,255,0.55); }
+.adm-nav { flex:1; padding:10px 8px; display:flex; flex-direction:column; gap:2px; }
+.adm-nav-item { display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:9px; font-size:13.5px;
+  color:rgba(255,255,255,0.72); cursor:pointer; border:none; background:transparent; text-align:left; width:100%;
+  font-family:inherit; transition:background .12s ease,color .12s ease; }
+.adm-nav-item:hover { background:rgba(255,255,255,0.08); color:#fff; }
+.adm-nav-item.active { background:#C7DDF3; color:#000; font-weight:600; }
+.adm-nav-ico { width:18px; text-align:center; flex:0 0 18px; }
+.adm-nav-badge { margin-left:auto; background:#d85a30; color:#fff; font-size:10.5px; border-radius:9px; padding:1px 7px; font-weight:600; }
+.adm-nav-item.active .adm-nav-badge { background:#000; }
+.adm-side-foot { border-top:1px solid rgba(255,255,255,0.12); padding:12px; font-size:12px; color:rgba(255,255,255,0.75); }
+.adm-cloud-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:#9aa4b0; vertical-align:middle; }
+.adm-cloud-dot.on { background:#3fae6a; }
+.adm-cloud-dot.off { background:#d8a13a; }
+.adm-logout-btn { margin-top:8px; width:100%; padding:8px 0; border-radius:8px; border:1px solid rgba(255,255,255,0.25);
+  background:transparent; color:rgba(255,255,255,0.85); font-size:12.5px; cursor:pointer; font-family:inherit; }
+.adm-logout-btn:hover { background:rgba(255,255,255,0.1); color:#fff; }
+.adm-main { flex:1; min-width:0; display:flex; flex-direction:column; }
+.adm-topbar { position:sticky; top:0; z-index:90; min-height:52px; background:#fff; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:12px; padding:0 22px; }
+.adm-title { font-size:15px; font-weight:600; color:var(--text); }
+.adm-spacer { flex:1; }
+.adm-sync { font-size:12px; color:var(--text-light); display:flex; align-items:center; gap:2px; }
+.adm-content { flex:1; padding:20px 22px 60px; }
+.adm-content .app-header { display:none; }
+.adm-content .page { padding:0; max-width:none; padding-bottom:20px; }
+@media (max-width:860px) {
+  .adm-root { display:block; margin-left:0; width:100%; }
+  .adm-side { display:none; }
+  .adm-topbar { display:none; }
+  .adm-content { padding:0; }
+  .adm-content .app-header { display:block; }
+  .adm-content .page { padding:16px; padding-bottom:80px; }
+}
+/* 登录页：丽思蓝狮冠纹理背景 */
+.admin-login { background:#E8F0FA url('assets/brand/pattern-light.jpg') center/cover no-repeat; }
+.admin-login-card { border-top:3px solid #C7DDF3; }
 </style>
 </head>
 <body>
@@ -24933,6 +24979,88 @@ function adminResetDataContinue() {
 
 }
 
+// ===== 管理端桌面外壳（重构一期 2026-11-06）：侧边栏 + 顶栏，包住既有页面 =====
+// 只动皮不动逻辑：内容区仍由各 renderAdminXxx() 产出，≤860px 自动回落旧手机布局。
+function adminShellRoutes() {
+  var en = state.lang === 'en';
+  return [
+    { key:'adminDashboard', ico:'📊', label: en ? 'Overview' : '总览',     match:['adminDashboard'] },
+    { key:'adminBankHub',   ico:'📚', label: en ? 'Question Bank' : '题库管理', match:['adminBankHub','adminBank','adminEdit','adminPaper','adminPaperPicker'] },
+    { key:'adminExamHub',   ico:'📌', label: en ? 'Exams' : '考试管理',    match:['adminExamHub','adminExams','adminQReports','adminReports','adminGrading'] },
+    { key:'adminStudents',  ico:'👥', label: en ? 'Students' : '学员管理',  match:['adminStudents','adminVerify'] },
+    { key:'adminRace',      ico:'⚡', label: en ? 'Quiz Race' : '答题赛',   match:['adminRace','adminBadges'] },
+    { key:'adminDash',      ico:'📈', label: en ? 'Data Board' : '数据看板', match:['adminDash','adminTeaching'] }
+  ];
+}
+
+function adminPageTitleOf(page) {
+  var en = state.lang === 'en';
+  var map = {
+    adminDashboard:  en ? 'Overview' : '总览',
+    adminBankHub:    en ? 'Question Bank' : '题库管理',
+    adminBank:       en ? 'Question Bank · Questions' : '题库管理 · 题目列表',
+    adminEdit:       en ? 'Question Bank · Edit Question' : '题库管理 · 编辑题目',
+    adminPaper:      en ? 'Question Bank · Paper Composer' : '题库管理 · 试卷编排',
+    adminPaperPicker:en ? 'Question Bank · Pick Questions' : '题库管理 · 试卷挑题',
+    adminExamHub:    en ? 'Exams' : '考试管理',
+    adminExams:      en ? 'Exams · Publish' : '考试管理 · 发布考试',
+    adminQReports:   en ? 'Question Reports' : '题目报错记录',
+    adminReports:    en ? 'Exams · Score Reports' : '考试管理 · 成绩报告',
+    adminGrading:    en ? 'Exams · Grading' : '考试管理 · 评分',
+    adminStudents:   en ? 'Students' : '学员管理',
+    adminVerify:     en ? 'Students · Registration Review' : '学员管理 · 注册核查',
+    adminRace:       en ? 'Quiz Race' : '答题赛管理',
+    adminBadges:     en ? 'Quiz Race · Badges' : '答题赛 · 徽章管理',
+    adminDash:       en ? 'Data Board' : '数据看板',
+    adminTeaching:   en ? 'Teaching Board' : '教学看板'
+  };
+  return map[page] || (en ? 'Admin' : '管理后台');
+}
+
+// 侧边栏「学员管理」角标：未处理报错 + 待核查注册 + 待同步修正（口径与旧首页告警一致）
+function adminShellTodoCount() {
+  try {
+    var n = 0, recs = adminStudentRecords() || [];
+    var cache = adminStudentCache();
+    for (var i = 0; i < recs.length; i++) {
+      var rl = recs[i].reports || [];
+      for (var j = 0; j < rl.length; j++) {
+        if (!cache.handled[recs[i].key + '|' + rl[j]._hid]) { n++; }
+      }
+    }
+    n += adminPendingVerifyStudents().length;
+    n += adminPendingFixCount();
+    return n;
+  } catch (e) { return 0; }
+}
+
+function adminShellHtml(page, inner) {
+  var en = state.lang === 'en';
+  var routes = adminShellRoutes();
+  var todo = adminShellTodoCount();
+  var nav = '';
+  for (var i = 0; i < routes.length; i++) {
+    var r = routes[i];
+    var act = r.match.indexOf(page) >= 0;
+    var badge = (r.key === 'adminStudents' && todo > 0) ? '<span class="adm-nav-badge">' + todo + '</span>' : '';
+    nav += '<button class="adm-nav-item' + (act ? ' active' : '') + '" onclick="navigate(\'' + r.key + '\')">' +
+      '<span class="adm-nav-ico">' + r.ico + '</span><span>' + r.label + '</span>' + badge + '</button>';
+  }
+  var cloud = !!SERVER_AVAILABLE;
+  var html = '<div class="adm-root">';
+  html += '<aside class="adm-side">';
+  html += '<div class="adm-side-brand"><img src="assets/logo.webp" alt=""><div><div class="adm-brand-name">' + (en ? 'Ritz Quiz' : '丽思刷题平台') + '</div><div class="adm-brand-sub">' + (en ? 'Admin Console' : '管理后台') + '</div></div></div>';
+  html += '<nav class="adm-nav">' + nav + '</nav>';
+  html += '<div class="adm-side-foot"><div><span class="adm-cloud-dot ' + (cloud ? 'on' : 'off') + '"></span>' + (cloud ? (en ? 'Cloud connected' : '云端已连接') : (en ? 'Cloud pending' : '云端待连接')) + '</div>';
+  html += '<button class="adm-logout-btn" onclick="adminLogout()">🚪 ' + (en ? 'Sign out' : '退出管理端') + '</button></div>';
+  html += '</aside>';
+  html += '<div class="adm-main">';
+  html += '<div class="adm-topbar"><span class="adm-title">' + adminPageTitleOf(page) + '</span><span class="adm-spacer"></span><span class="adm-sync"><span class="adm-cloud-dot ' + (cloud ? 'on' : 'off') + '"></span>' + (en ? (cloud ? 'Synced' : 'Local only') : (cloud ? '已同步' : '仅本地')) + '</span></div>';
+  html += '<div class="adm-content">' + inner + '</div>';
+  html += '</div></div>';
+  return html;
+}
+
 function render() {
   var app = document.getElementById('app');
   // Admin pages accessible without employee login
@@ -24942,23 +25070,23 @@ function render() {
   }
   if (adminState.authenticated) {
     switch(state.currentPage) {
-      case 'adminDashboard': app.innerHTML = renderAdminDashboard(); return;
-      case 'adminBankHub': app.innerHTML = renderAdminBankHub(); return;
-      case 'adminExamHub': app.innerHTML = renderAdminExamHub(); return;
-      case 'adminBank': app.innerHTML = renderAdminBank(); return;
-      case 'adminEdit': app.innerHTML = renderAdminEdit(); adminAutoGrowAll(app); return;
-      case 'adminPaper': app.innerHTML = renderAdminPaper(); adminAttachPaperHeaderInputs(document.getElementById('paperGradingCard'), document.getElementById('adminPaperList')); return;
-      case 'adminPaperPicker': app.innerHTML = renderAdminPaperPicker(); return;
-      case 'adminStudents': app.innerHTML = renderAdminStudents(); return;
-      case 'adminVerify': app.innerHTML = renderAdminVerify(); return;
-      case 'adminExams': app.innerHTML = renderAdminExams(); return;
-      case 'adminQReports': app.innerHTML = renderAdminQReports(); return;
-      case 'adminReports': app.innerHTML = renderAdminReports(); return;
-      case 'adminGrading': app.innerHTML = renderAdminGrading(); return;
-      case 'adminRace': app.innerHTML = renderAdminRace(); return;
-      case 'adminBadges': app.innerHTML = renderAdminBadges(); return;
-      case 'adminDash': app.innerHTML = renderAdminDash(); return;
-      case 'adminTeaching': app.innerHTML = renderAdminTeaching(); return;
+      case 'adminDashboard': app.innerHTML = adminShellHtml('adminDashboard', renderAdminDashboard()); return;
+      case 'adminBankHub': app.innerHTML = adminShellHtml('adminBankHub', renderAdminBankHub()); return;
+      case 'adminExamHub': app.innerHTML = adminShellHtml('adminExamHub', renderAdminExamHub()); return;
+      case 'adminBank': app.innerHTML = adminShellHtml('adminBank', renderAdminBank()); return;
+      case 'adminEdit': app.innerHTML = adminShellHtml('adminEdit', renderAdminEdit()); adminAutoGrowAll(app); return;
+      case 'adminPaper': app.innerHTML = adminShellHtml('adminPaper', renderAdminPaper()); adminAttachPaperHeaderInputs(document.getElementById('paperGradingCard'), document.getElementById('adminPaperList')); return;
+      case 'adminPaperPicker': app.innerHTML = adminShellHtml('adminPaperPicker', renderAdminPaperPicker()); return;
+      case 'adminStudents': app.innerHTML = adminShellHtml('adminStudents', renderAdminStudents()); return;
+      case 'adminVerify': app.innerHTML = adminShellHtml('adminVerify', renderAdminVerify()); return;
+      case 'adminExams': app.innerHTML = adminShellHtml('adminExams', renderAdminExams()); return;
+      case 'adminQReports': app.innerHTML = adminShellHtml('adminQReports', renderAdminQReports()); return;
+      case 'adminReports': app.innerHTML = adminShellHtml('adminReports', renderAdminReports()); return;
+      case 'adminGrading': app.innerHTML = adminShellHtml('adminGrading', renderAdminGrading()); return;
+      case 'adminRace': app.innerHTML = adminShellHtml('adminRace', renderAdminRace()); return;
+      case 'adminBadges': app.innerHTML = adminShellHtml('adminBadges', renderAdminBadges()); return;
+      case 'adminDash': app.innerHTML = adminShellHtml('adminDash', renderAdminDash()); return;
+      case 'adminTeaching': app.innerHTML = adminShellHtml('adminTeaching', renderAdminTeaching()); return;
     }
   }
   if (!state.currentUser) {
