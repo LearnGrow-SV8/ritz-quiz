@@ -7156,202 +7156,6 @@ function adminRosterTemplateDl() {
     alert('下载失败：' + ((e && e.message) || e));
   }
 }
-// ⑦ 重复账号检测：同一个工号挂在多个账号键下（Stage 9 之前的 name_emp 老键、
-//    换名残留等）。canon 一律优先取 Stage 9 规范键（'e'+工号），否则取最新活跃。
-function adminRosterDupGroups() {
-  var recs = adminStudentRecords(), byEmp = {};
-  for (var i = 0; i < recs.length; i++) {
-    var e = adminStudentEmp(recs[i]);
-    if (!e) continue;
-    (byEmp[e] = byEmp[e] || []).push(recs[i]);
-  }
-  var out = [];
-  for (var emp in byEmp) {
-    if (byEmp[emp].length < 2) continue;
-    var recs2 = byEmp[emp].slice().sort(function (a, b) { return (b.snap && b.snap.ts || 0) - (a.snap && a.snap.ts || 0); });
-    var canon = recs2[0];
-    for (var j = 0; j < recs2.length; j++) if (recs2[j].key === empKeyFor(emp)) { canon = recs2[j]; break; }
-    var same = true, base = recs2[0].snap || {};
-    for (var k = 1; k < recs2.length; k++) {
-      var s2 = recs2[k].snap || {};
-      if (String(base.cn || '') !== String(s2.cn || '') || String(base.en || '') !== String(s2.en || '')
-        || String(base.div || '') !== String(s2.div || '') || String(base.dept || '') !== String(s2.dept || '')) { same = false; break; }
-    }
-    out.push({ emp: emp, recs: recs2, canon: canon.key, consistent: same });
-  }
-  out.sort(function (a, b) {
-    var x = parseInt(a.emp, 10), y = parseInt(b.emp, 10);
-    if (isFinite(x) && isFinite(y) && x !== y) return x - y;
-    return a.emp < b.emp ? -1 : (a.emp > b.emp ? 1 : 0);
-  });
-  return out;
-}
-function adminRosterDupHtml() {
-  var en = state.lang === 'en';
-  var dups = adminRosterDupGroups();
-  var html = '';
-  html += '<h4 style="margin:18px 0 8px;">🔁 ' + (en ? 'Duplicate accounts' : '重复账号') + ' (' + dups.length + ')</h4>';
-  if (!dups.length) {
-    html += '<div class="sync-note">' + (en ? 'No employee ID is shared by more than one account.' : '没有同一个工号挂在多个账号下的情况。') + '</div>';
-    return html;
-  }
-  html += '<div class="sync-note" style="font-size:11.5px;">' + (en
-    ? 'One employee ID under several account keys (legacy rows). Merging keeps the ★ account and combines all exams / reports into it; the other rows are retired, not deleted.'
-    : '同一个工号挂在多个账号下（历史遗留键）。合并后保留 ★ 账号，考试/报错记录全部并进去；其余账号行退役（打标记，不删数据）。') + '</div>';
-  for (var i = 0; i < dups.length; i++) {
-    var g = dups[i];
-    html += '<div class="stu-row" style="cursor:default;">';
-    html += '<div class="stu-name">🔁 <b>' + escapeHtml(g.emp) + '</b> <span style="font-weight:400;font-size:13px;color:#8a8f96;">· '
-      + g.recs.length + (en ? ' accounts · ' : ' 个账号 · ')
-      + (g.consistent ? (en ? 'info consistent' : '信息一致') : (en ? '⚠️ info differs' : '⚠️ 信息不一致')) + '</span></div>';
-    for (var j = 0; j < g.recs.length; j++) {
-      var rj = g.recs[j], sj = rj.snap || {};
-      html += '<div style="font-size:12px;color:#5b6472;margin:3px 0 0 14px;">'
-        + (rj.key === g.canon ? '★ <b>' : '· ') + '<span style="font-family:monospace;">' + escapeHtml(rj.key) + '</span>'
-        + (rj.key === g.canon ? '</b>' : '')
-        + '　' + escapeHtml(sj.cn || sj.name || '—') + (sj.en ? ' / ' + escapeHtml(sj.en) : '')
-        + '　' + escapeHtml(sj.div || '') + (sj.dept ? ' · ' + escapeHtml(sj.dept) : '')
-        + '　<span style="color:#a7adb6;">' + fmtSyncTime(sj.ts) + '</span></div>';
-    }
-    html += '<div class="action-row" style="margin-top:8px;">';
-    html += '<button class="action-btn nav-btn primary" style="flex:1;" onclick="adminMergeAccounts(\'' + jsKey(g.emp) + '\')">🔗 '
-      + (en ? 'Merge into ' + g.canon : '合并（保留 ' + g.canon + '）') + '</button>';
-    html += '</div></div>';
-  }
-  return html;
-}
-// 读单个学员快照行（{ts, record} 或 null）。合并专用：失败一律按"没有这行"
-// 处理，不让单行读失败卡死整个合并。
-function adminSnapRowOf(stuKey) {
-  if (!SB_ON || typeof sbJson !== 'function') return Promise.resolve(null);
-  var path = '/rest/v1/student_snapshots?select=phone,record,ts&phone=eq.' + encodeURIComponent(stuKey) + '&limit=1';
-  return sbJson(path, null, SB_SNAPSHOT_TIMEOUT_MS, 'sb-snap-read-one').then(function (rows) {
-    if (!Array.isArray(rows) || !rows.length || !rows[0] || !rows[0].record) return null;
-    return { ts: rows[0].ts || 0, record: rows[0].record };
-  }, function () { return null; });
-}
-// 一个旧账号 → 规范账号的云端合并（快照 + 账户目录）。任何一步失败返回 false。
-function adminMergeOne(canonKey, oldKey) {
-  return Promise.all([
-    adminSnapRowOf(canonKey), adminSnapRowOf(oldKey),
-    (SB_ON ? sbGetAccountJson(canonKey).then(function (j) { return (j && j.hit) ? j : null; }, function () { return null; })
-           : Promise.resolve(null)),
-    (SB_ON ? sbGetAccountJson(oldKey).then(function (j) { return (j && j.hit) ? j : null; }, function () { return null; })
-           : Promise.resolve(null))
-  ]).then(function (rs) {
-    var cRow = rs[0], oRow = rs[1], cAcc = rs[2], oAcc = rs[3];
-    var jobs = [];
-    // —— 快照合并：events/details 并集（canon 优先），snap 取较新者、旧者补缺 ——
-    var cRec = cRow ? JSON.parse(JSON.stringify(cRow.record)) : { snap: {}, events: {}, details: {} };
-    if (!cRec.events || typeof cRec.events !== 'object') cRec.events = {};
-    if (!cRec.details || typeof cRec.details !== 'object') cRec.details = {};
-    if (oRow) {
-      var oRec = oRow.record || {};
-      var oe = (oRec.events && typeof oRec.events === 'object') ? oRec.events : {};
-      for (var id in oe) if (!cRec.events[id]) cRec.events[id] = oe[id];
-      var od = (oRec.details && typeof oRec.details === 'object') ? oRec.details : {};
-      for (var id2 in od) if (!cRec.details[id2]) cRec.details[id2] = od[id2];
-      var oSnap = oRec.snap || {}, cSnap = cRec.snap || {};
-      var newer = ((oSnap.ts || 0) > (cSnap.ts || 0)) ? oSnap : cSnap;
-      var older = (newer === oSnap) ? cSnap : oSnap;
-      var merged = JSON.parse(JSON.stringify(newer));
-      for (var f in older) {
-        if (merged[f] === undefined || merged[f] === null || merged[f] === '') merged[f] = older[f];
-      }
-      delete merged.superseded;
-      cRec.snap = merged;
-      // 旧行退役：打 superseded，不删数据（与改工号的退役同口径）
-      var oRetired = JSON.parse(JSON.stringify(oRec));
-      if (!oRetired.snap || typeof oRetired.snap !== 'object') oRetired.snap = {};
-      oRetired.snap.superseded = canonKey;
-      jobs.push(sbUpsertSnapshot(oldKey, oRetired, oRow.ts || Date.now()));
-    }
-    jobs.push(sbUpsertSnapshot(canonKey, cRec, Date.now()));
-    // —— 账户目录合并：旧行 neutralize（清 key 释放），规范行确保存在 ——
-    //    同工号 ⇒ pinHash 盐相同 ⇒ PIN 哈希可直接搬给规范行。
-    var pin = (cAcc && cAcc.pin) ? cAcc.pin : ((oAcc && oAcc.pin) || '');
-    var pinSetAt = (cAcc && cAcc.pinSetAt) ? cAcc.pinSetAt : ((oAcc && oAcc.pinSetAt) || 0);
-    if (oAcc) {
-      var oldRecA = { key: '', akey: oldKey, pin: '', pinSetAt: 0, snap: oAcc.snap || {}, events: [], details: {}, fa: oAcc.fa || {} };
-      if (oldRecA.snap && typeof oldRecA.snap === 'object') oldRecA.snap.superseded = canonKey;
-      jobs.push(sbUpsertAccount(oldKey, oldRecA, Date.now()).then(function () { return true; }, function () { return false; }));
-    }
-    var canRec = {
-      key: canonKey, akey: canonKey, pin: pin, pinSetAt: pinSetAt,
-      snap: (cRec.snap || {}),
-      events: Array.isArray(cAcc && cAcc.events) ? cAcc.events : [],
-      details: (cAcc && cAcc.details && typeof cAcc.details === 'object') ? cAcc.details : {},
-      fa: (cAcc && cAcc.fa) || {}
-    };
-    jobs.push(sbUpsertAccount(canonKey, canRec, Date.now()).then(function () { return true; }, function () { return false; }));
-    return Promise.all(jobs).then(function (rs2) {
-      for (var q = 0; q < rs2.length; q++) if (rs2[q] === false) return false;
-      return true;
-    });
-  });
-}
-// ⑦ 一键合并一个工号下的全部账号（确认框列出每个账号，★ 为保留者）。
-function adminMergeAccounts(emp) {
-  var en = state.lang === 'en';
-  var e = normEmpNo(emp);
-  var groups = adminRosterDupGroups(), g = null;
-  for (var i = 0; i < groups.length; i++) if (groups[i].emp === e) { g = groups[i]; break; }
-  if (!g || g.recs.length < 2) {
-    adminToast(en ? 'No duplicate accounts for this ID.' : '该工号没有重复账号。', false);
-    return;
-  }
-  var canon = g.canon, olds = [];
-  for (var j = 0; j < g.recs.length; j++) if (g.recs[j].key !== canon) olds.push(g.recs[j]);
-  var lines = [e + (en ? '  (' : '  （') + g.recs.length + (en ? ' accounts)' : ' 个账号）')];
-  for (var k = 0; k < g.recs.length; k++) {
-    var s = g.recs[k].snap || {};
-    lines.push((g.recs[k].key === canon ? '★ ' : '· ') + g.recs[k].key + '  '
-      + (s.cn || s.name || '') + (s.en ? ' / ' + s.en : '') + '  ' + (s.div || '') + (s.dept ? ' · ' + s.dept : ''));
-  }
-  if (!g.consistent) lines.push(en ? '⚠️ Names / departments differ — the newest snapshot wins.' : '⚠️ 各账号姓名/部门不一致 —— 以最新快照为准。');
-  var msg = en
-    ? 'Merge these accounts?\n\n' + lines.join('\n')
-      + '\n\nAll exams / reports are combined into the ★ account; the other rows are retired (marked superseded, never deleted). This cannot be undone.'
-    : '确认合并这些账号？\n\n' + lines.join('\n')
-      + '\n\n考试/报错记录全部并入 ★ 账号；其余账号行退役（打标记，不删数据）。合并不可撤销。';
-  if (!confirm(msg)) return;
-  if (!SB_ON) {
-    adminToast(en ? 'Cloud is off — cannot merge right now.' : '云端当前断开，暂时无法合并。', false);
-    return;
-  }
-  adminRosterMsg(en ? 'Merging…' : '正在合并…');
-  var jobs = [];
-  for (var m = 0; m < olds.length; m++) jobs.push(adminMergeOne(canon, olds[m].key));
-  Promise.all(jobs).then(function (res) {
-    var okAll = true;
-    for (var r = 0; r < res.length; r++) if (!res[r]) okAll = false;
-    // 本地缓存同步合并（视图立刻反映，不用等重新拉云端）
-    var cache = adminStudentCache();
-    if (!cache.students[canon]) cache.students[canon] = { snap: {}, events: {} };
-    var cRec2 = cache.students[canon];
-    if (!cRec2.events || typeof cRec2.events !== 'object') cRec2.events = {};
-    for (var o = 0; o < olds.length; o++) {
-      var oldKey2 = olds[o].key;
-      var oRec2 = cache.students[oldKey2];
-      if (!oRec2) continue;
-      for (var id3 in oRec2.events) if (!cRec2.events[id3]) cRec2.events[id3] = oRec2.events[id3];
-      if (oRec2.details) {
-        cRec2.details = cRec2.details || {};
-        for (var id4 in oRec2.details) if (!cRec2.details[id4]) cRec2.details[id4] = oRec2.details[id4];
-      }
-      if (!cRec2.snap || ((oRec2.snap && oRec2.snap.ts) || 0) > (cRec2.snap.ts || 0)) cRec2.snap = oRec2.snap;
-      delete cache.students[oldKey2];
-      if (adminState.studentListLastKey === oldKey2) adminState.studentListLastKey = canon;
-      if (adminState.studentDetail === oldKey2) adminState.studentDetail = canon;
-    }
-    adminSaveStudentCache(cache);
-    adminRosterMsg('');
-    adminToast(okAll
-      ? (en ? '✅ Accounts merged into ' + canon + '.' : '✅ 已合并，保留账号 ' + canon + '。')
-      : (en ? '⚠️ Merge partially failed — retry.' : '⚠️ 合并部分失败，请重试一次。'), okAll);
-    render();
-  });
-}
 // ④ 学员详情 →「该员工已离职」：工号移出有效工号名册 + 拦截原因标「已离职」，
 //    学员端 90 秒内生效（isEmpBlocked 走名册口径）。
 function adminMarkStudentLeft(stuKey) {
@@ -14085,7 +13889,7 @@ function renderAdminRace() {
       }, function () {});
     } catch (e0) {}
   }
-  var html = renderAppHeader({ title: '⚡ ' + t('race_admin_hub'), subtitle: t('race_admin_hub_desc') });
+  var html = renderAppHeader({ title: '⚡ ' + t('race_admin_hub'), subtitle: t('race_admin_hub_desc'), onBack: 'adminBack(\'adminDashboard\')' });
   html += '<div class="page">';
   html += '<div class="q-card">';
   html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">' + (en ? 'Round settings' : '本期赛事设置') + '</div>';
@@ -14374,7 +14178,7 @@ function adminBadgeById(id) {
 function renderAdminBadges() {
   var en = state.lang === 'en';
   var list = adminBadgeDraft();
-  var html = renderAppHeader({ title: '🏅 ' + t('badge_admin_title'), subtitle: t('badge_admin_desc') });
+  var html = renderAppHeader({ title: '🏅 ' + t('badge_admin_title'), subtitle: t('badge_admin_desc'), onBack: 'adminBack(\'adminDashboard\')' });
   html += '<div class="page">';
   if (adminState.badgeDirty) {
     html += '<div style="margin-bottom:10px;padding:8px 12px;border-radius:8px;background:#fff7e6;border:1px solid #ffd591;'
@@ -17554,9 +17358,10 @@ function renderAppHeader(opt) {
   var showHome = o.showHome !== false;
   var showLang = o.showLang !== false;
   var langShort = o.langShort !== false;
+  var backCall = o.onBack || 'goBack()';
   var html = '<div class="app-header' + (showBack ? ' has-back' : '') + '">';
   if (showBack) {
-    html += '<button class="back-btn wide" onclick="goBack()" title="' + t('nav_back_hint') + '" aria-label="' + t('nav_back') + '">←<span class="back-label">' + t('nav_back') + '</span></button>';
+    html += '<button class="back-btn wide" onclick="' + backCall + '" title="' + t('nav_back_hint') + '" aria-label="' + t('nav_back') + '">←<span class="back-label">' + t('nav_back') + '</span></button>';
   }
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>' + (o.title || '') + '</h1>';
@@ -18746,6 +18551,31 @@ function adminLogout() {
   navigate('home');
 }
 
+// ===== 管理端统一返回（2026-11-06）=====================================
+// 跟学员端同一套页面栈 state.navStack：navigate() 每进一个新页面就把上一页压栈，
+// 所以管理端每个「←」都走 adminBack()，点一下精确回到「来到这一页之前」的界面。
+// 以前每个页面写死一个上级页面，从试卷编排点进题目编辑器，返回却被丢回题库首页，
+// 得重新点一遍才能回到刚才的编排进度。
+// fallback 只在栈空时兜底（刷新后直接落在深层页 / 从书签打开，没有历史可退）。
+function adminBack(fallback) {
+  var from = state.currentPage || '';
+  if (!state.navStack) state.navStack = [];
+  var target = '';
+  while (state.navStack.length) {
+    var c = state.navStack.pop();
+    // 跳过空值与「自己」：同一页面重复入栈时不该原地打转
+    if (!c || c === from || c === 'login') continue;
+    target = c;
+    break;
+  }
+  if (!target) target = fallback || 'adminDashboard';
+  // 页内二级视图跟着收起来，免得回到上一页还挂着空详情壳
+  adminState.studentDetail = '';
+  adminState.editStudent = '';
+  adminState.dashDrawer = null;
+  navigate(target, { replace: true });
+}
+
 function adminGoToBank(bank) {
   adminState.bank = bank;
   adminState.section = 'all';
@@ -18770,7 +18600,7 @@ function renderAdminLogin() {
   html += '<input type="password" id="adminPwd" placeholder="' + (state.lang === 'en' ? 'Enter password' : '\u8bf7\u8f93\u5165\u7ba1\u7406\u5bc6\u7801') + '" onkeypress="if(event.key===\'Enter\')adminLoginAttempt()" autofocus>';
   html += '<div class="admin-error" id="adminError"></div>';
   html += '<button class="login-btn" onclick="adminLoginAttempt()">' + (state.lang === 'en' ? 'Login' : '\u767b\u5f55') + '</button>';
-  html += '<button class="back-btn-text" onclick="navigate(\'home\')">' + (state.lang === 'en' ? 'Back' : '\u8fd4\u56de') + '</button>';
+  html += '<button class="back-btn-text" onclick="adminBack(\'home\')">' + (state.lang === 'en' ? 'Back' : '\u8fd4\u56de') + '</button>';
   html += '</div></div>';
   return html;
 }
@@ -18814,7 +18644,7 @@ function renderAdminExams() {
   if (!adminState.authenticated) return renderAdminLogin();
   var cfg = autoCloseExpiredExams(); // 过了截止时间的已发布考试 → 自动关闭
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'adminExamHub\')">←</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminExamHub\')">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>📌 ' + (state.lang === 'en' ? 'Formal Exams' : '正式考试管理') + '</h1>';
   html += '<div class="subtitle">' + (state.lang === 'en' ? 'Publish timed exams to student devices' : '发布限时正式考试到学员端') + '</div>';
@@ -19204,7 +19034,7 @@ function renderAdminTeaching() {
   var en = state.lang === 'en';
   var agg = adminTeachingAgg();
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'adminDashboard\')">←</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminDashboard\')">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>🧭 ' + (en ? 'Teaching Board' : '教学看板') + '</h1>';
   html += '<div class="subtitle">' + (en ? 'Where the whole hotel gets it wrong' : '全店错在哪：高频错题 · 薄弱章节 · 复习任务完成率') + '</div>';
@@ -19291,7 +19121,7 @@ function renderAdminDashboard() {
   var totalQ = banks[0].count + banks[1].count + banks[2].count;
 
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminLogout()">\u2190</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'home\')">\u2190</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>\u2699\ufe0f ' + (state.lang === 'en' ? 'Admin Panel' : '\u7ba1\u7406\u540e\u53f0') + '</h1>';
   html += '<div class="subtitle">' + (state.lang === 'en' ? 'Choose a workspace' : '\u8bf7\u9009\u62e9\u7ba1\u7406\u6a21\u5757') + '</div>';
@@ -19422,6 +19252,10 @@ function renderAdminDashboard() {
   html += '<button class="admin-export-btn" onclick="adminExportJSON()">\uD83D\uDCE5 ' + (state.lang === 'en' ? 'Export JSON Data' : '\u5bfc\u51faJSON\u6570\u636e') + '</button>';
   html += '<button class="admin-reset-btn" onclick="adminResetData()">\uD83D\uDD04 ' + (state.lang === 'en' ? 'Reset to Original Data' : '\u6062\u590d\u539f\u59cb\u6570\u636e') + '</button>';
 
+  // 左上角「←」改成通用返回（回到进管理端之前的界面），退出登录挪到这里 ——
+  // 一个箭头不该悄悄把人踢出管理端。
+  html += '<button class="nav-btn secondary" style="width:100%;margin-top:10px;" onclick="adminLogout()">🚪 ' + (state.lang === 'en' ? 'Sign out of admin' : '退出管理端') + '</button>';
+
   html += '</div>';
   return html;
 }
@@ -19437,7 +19271,7 @@ function renderAdminBankHub() {
   ];
 
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'adminDashboard\')">←</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminDashboard\')">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>📚 ' + (state.lang === 'en' ? 'Question Management' : '题目管理') + '</h1>';
   html += '<div class="subtitle">' + (state.lang === 'en' ? 'Banks & paper composer' : '题库与试卷编排') + '</div>';
@@ -19508,7 +19342,7 @@ function renderAdminGrading() {
     });
   }
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'adminExamHub\')">←</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminExamHub\')">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>🎯 ' + (en ? 'Exam Grading' : '评分设置') + '</h1>';
   html += '<div class="subtitle">' + (en ? 'Points per question · Passing score' : '每题分值 · 及格分') + '</div>';
@@ -20028,7 +19862,7 @@ function renderAdminVerify() {
   var en = state.lang === 'en';
   var list = adminPendingVerifyStudents();
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'adminDashboard\')">\u2190</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminDashboard\')">\u2190</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>\u23f3 ' + (en ? 'Registrations to Verify' : '注册待核查') + '</h1>';
   html += '<div class="subtitle">' + (en ? 'Reserved IDs / IDs not on the name roster' : '预留工号注册 · 工号不在员工名册') + '</div>';
@@ -20064,7 +19898,7 @@ function renderAdminQReports() {
   if (!adminState.authenticated) return renderAdminLogin();
   var en = state.lang === 'en';
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'adminBankHub\')">←</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminBankHub\')">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>🚩 ' + (en ? 'Question Reports' : '题目报错记录') + '</h1>';
   html += '<div class="subtitle">' + (en ? 'Answer-key / explanation objections' : '学员提交的答案与解析异议') + '</div>';
@@ -20121,7 +19955,7 @@ function renderAdminExamHub() {
   if (!adminState.authenticated) return renderAdminLogin();
   var en = state.lang === 'en';
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'adminDashboard\')">←</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminDashboard\')">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>📌 ' + (en ? 'Exam Management' : '考试管理') + '</h1>';
   html += '<div class="subtitle">' + (en ? 'Publishing & reports' : '发布与报告') + '</div>';
@@ -20979,7 +20813,7 @@ function renderAdminDash() {
   var from = rb ? rb.from : 0, to = rb ? rb.to : 0;
 
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminState.dashDrawer=null;navigate(\'adminDashboard\')">\u2190</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminDashboard\')">\u2190</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>\ud83d\udcca ' + t('dash_title') + '</h1>';
   html += '<div class="subtitle">' + t('dash_sub') + '</div>';
@@ -21358,7 +21192,7 @@ function renderAdminReports() {
   if (adminState.reportDetail) return renderAdminReportReplay();
 
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'adminExamHub\')">←</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminExamHub\')">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>📊 ' + (en ? 'Report Center' : '考试报告中心') + '</h1>';
   html += '<div class="subtitle">' + (en ? 'Scores, replays & export' : '成绩总表 · 答题回放 · 导出') + '</div>';
@@ -22284,7 +22118,7 @@ function renderAdminStudents() {
   if (!adminState.authenticated) return renderAdminLogin();
   var en = state.lang === 'en';
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="' + (adminState.studentDetail ? 'adminBackFromStudent()' : 'navigate(\'adminDashboard\')') + '">←</button>';
+  html += '<button class="back-btn" onclick="' + (adminState.studentDetail ? 'adminBackFromStudent()' : 'adminBack(\'adminDashboard\')') + '">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>📊 ' + (en ? 'Student Learning Data' : '学员学习情况') + '</h1>';
   html += '<div class="subtitle">' + (en ? 'Cloud-synced' : '云端同步') + '</div>';
@@ -22862,7 +22696,7 @@ function renderAdminBank() {
   var questions = QUESTION_DATA[bank] || [];
 
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'adminBankHub\')">\u2190</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminBankHub\')">\u2190</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>\u2699\ufe0f ' + getBankName(bank) + '</h1>';
   html += '<div class="subtitle">' + questions.length + (state.lang === 'en' ? ' questions' : ' \u9898') + '</div>';
@@ -23284,7 +23118,7 @@ function renderAdminPaper() {
   paperGradingDraftGet(gradingKey);
 
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'adminBankHub\')">←</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminBankHub\')">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>\ud83d\udccb ' + (state.lang === 'en' ? 'Paper Composer' : '\u8bd5\u5377\u7f16\u6392') + '</h1>';
   html += '<div class="subtitle">' + escapeHtml(paperName) + '</div>';
@@ -23824,7 +23658,7 @@ function renderAdminPaperPicker() {
   var source = adminState.pickerSource || 'manual';
 
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'adminPaper\')">←</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminPaper\')">←</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>\ud83d\udd0d ' + (state.lang === 'en' ? 'Select Questions' : '\u9009\u62e9\u9898\u76ee') + '</h1>';
   html += '<div class="subtitle">' + escapeHtml(getBankName(bankKey)) + ' · ' + (isAll ? t('paper_all') : t('paper_kitchen')) + '</div>';
@@ -24587,7 +24421,7 @@ function renderAdminEdit() {
   }
 
   var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="navigate(\'adminBank\')">\u2190</button>';
+  html += '<button class="back-btn" onclick="adminBack(\'adminBank\')">\u2190</button>';
   html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
   html += '<h1>' + (adminState.isNew ? '\u2795 ' + (state.lang === 'en' ? 'Add' : '\u65b0\u589e') : '\u270f\ufe0f ' + (state.lang === 'en' ? 'Edit' : '\u7f16\u8f91')) + '</h1>';
   html += '<div class="subtitle">' + getBankName(bank) + '</div>';
@@ -24662,7 +24496,7 @@ function renderAdminEdit() {
     html += '<button class="admin-btn-copy" onclick="adminDuplicateFromEditor()">\uD83D\uDCCB ' + (state.lang === 'en' ? 'Save as New Copy (Ctrl+Enter)' : '\u590d\u5236\u4e3a\u65b0\u9898\uff08Ctrl+Enter\uff09') + '</button>';
     html += '<button class="admin-btn-delete" onclick="adminDeleteFromEdit()">\uD83D\uDDD1\ufe0f ' + (state.lang === 'en' ? 'Delete' : '\u5220\u9664') + '</button>';
   }
-  html += '<button class="admin-btn-cancel" onclick="navigate(\'adminBank\')">' + (state.lang === 'en' ? 'Cancel (Esc)' : '\u53d6\u6d88\uff08Esc\uff09') + '</button>';
+  html += '<button class="admin-btn-cancel" onclick="adminBack(\'adminBank\')">' + (state.lang === 'en' ? 'Cancel (Esc)' : '\u53d6\u6d88\uff08Esc\uff09') + '</button>';
 
   html += '</div></div>';
   return html;
@@ -24984,10 +24818,12 @@ function adminSaveQuestion() {
     } else {
       alert(state.lang === 'en' ? '\u2705 Saved successfully!' : '\u2705 \u4fdd\u5b58\u6210\u529f\uff01');
     }
-    // Batch-4: 从试卷编排/报错记录进来的编辑，保存后回到原页面而非题库列表。
+    // Batch-4: 从试卷编排/报错记录进来的编辑，保存后回到原页面。
+    // 走 adminBack（跟左上角「←」同一条页面栈路径），编辑器本身不留在历史里，
+    // 免得回到试卷编排后一按返回又跳回编辑器。
     var backPage = adminState.editReturnPage || 'adminBank';
     adminState.editReturnPage = '';
-    navigate(backPage);
+    adminBack(backPage);
     return true;
   }).catch(function() {
     adminSaveBtnBusy(false);
