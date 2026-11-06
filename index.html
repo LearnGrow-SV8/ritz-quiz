@@ -22175,6 +22175,11 @@ function adminStudentRecords() {
   var arr = [];
   for (var k in cache.students) {
     var rec = cache.students[k];
+    // 已退役行（合并 / 改工号后打了 snap.superseded）：云端行不删、每次全量同步
+    // 都会被 mergeCloudLines 重新塞回缓存 —— 不在这里过滤的话，合并完一刷新
+    // 列表旧账号就"复活"，重复账号组也永远消不掉。与 sbSnapshotRecordList
+    // （排行榜侧）同一口径，此处是名单/重复检测/部门统计等全部视图的唯一出口。
+    if (rec && rec.snap && rec.snap.superseded) continue;
     var exams = [], reports = [];
     for (var id in rec.events) {
       var ev = rec.events[id];
