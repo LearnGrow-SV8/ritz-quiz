@@ -4646,7 +4646,14 @@ var I18N = {
   race_view_board: {cn:'查看排行榜', en:'View leaderboard'},
   race_review: {cn:'查看答案解析', en:'Review answers'},
   race_submit_ok: {cn:'成绩已提交', en:'Score submitted'},
-  race_submit_fail: {cn:'成绩上传失败，将自动重试', en:'Upload failed, will retry automatically'},
+  // 成绩上传的四种终态（2026-11-06）：以前只有一句"上传失败，将自动重试"，
+  // 实际上既没重试也说不出原因。现在按真实原因分开说，且都是"成绩在本机、不会丢"。
+  race_submit_fail: {cn:'成绩已存在这台手机上，稍后会自动补传', en:'Saved on this device — it will upload automatically later.'},
+  race_sync_queued: {cn:'成绩已存在这台手机上，联网后会自动补传，可以直接退出', en:'Saved on this device. It uploads automatically once you are back online, so you can close the app.'},
+  race_sync_nologin: {cn:'当前未登录，这次成绩只算本机练习，不计入排行榜', en:'You are not signed in, so this attempt stays on this device and is not counted on the leaderboard.'},
+  race_sync_noprofile: {cn:'资料里缺工号或姓名，成绩暂时上报不了；到「我的」补全后会自动补传', en:'Your profile is missing an employee ID or name. Complete it under Me and this score uploads automatically.'},
+  race_need_login: {cn:'请先登录再参加答题赛，否则成绩无法计入排行榜', en:'Please sign in before taking the quiz — otherwise your score cannot be ranked.'},
+  race_need_profile: {cn:'请先在「我的」补全工号和姓名，再来参赛', en:'Please complete your employee ID and name under Me before taking the quiz.'},
   race_time_up: {cn:'时间到', en:'Time is up'},
   race_result_lock: {cn:'✅ 成绩已保存', en:'✅ Score saved'},
   race_result_lock_hint: {cn:'马上开放下方操作按钮（{n} 秒），先看看成绩单，不用急着点任何地方', en:'Action buttons unlock in {n}s — take a moment with your score sheet, no rush'},
@@ -5557,7 +5564,8 @@ function accountRowKeyForUser(key, profile, body) {
 // POST to the durable per-student store. Stage 8: Supabase first (no token,
 // no 12 h expiry), EdgeOne KV as the fallback. On failure the body is queued
 // for replay; on success any previously queued student body is discarded.
-function pushStudentSnapshotToKv() {
+function pushStudentSnapshotToKv(opt) {
+  opt = opt || {};
   try {
     var body = buildStudentBody();
     if (!body) return Promise.resolve(false);
@@ -5573,7 +5581,7 @@ function pushStudentSnapshotToKv() {
       }, NET_CLOUD_TIMEOUT_MS, 'student-snapshot')
         .then(function(r) { return r && r.json && r.json(); })
         .then(function(j) {
-          if (j && j.success) { clearPendingOp('student'); return true; }
+          if (j && j.success) { clearPendingOp('student'); raceSyncOnPushOk(); return true; }
           enqueuePendingOp('student', body);
           return false;
         })
@@ -5581,8 +5589,16 @@ function pushStudentSnapshotToKv() {
     }
     function sbPush() {
       return sbUpsertSnapshot(rowKey, rec, rec.ts)
-        .then(function() { clearPendingOp('student'); return true; })
-        .catch(legacyPush);
+        .then(function() { clearPendingOp('student'); raceSyncOnPushOk(); return true; })
+        .catch(function () {
+          // 🔴 先入队，再考虑兜底（2026-11-06）：旧顺序是"先打退役的 EdgeOne 通道，
+          // 它超时死了才入队"—— 那要等 15 秒，学员早把页面关了，队列里什么都没有。
+          // 入队是零成本的（成功后 clearPendingOp 会清掉），所以先保命。
+          try { enqueuePendingOp('student', body); } catch (eQ) {}
+          // 交卷重试链只要快：不再去碰已退役的通道，直接返回失败让上层退避重试。
+          if (opt && opt.fast) return false;
+          return legacyPush();
+        });
     }
     if (!SB_ON || !rec) return legacyPush();
     // 🔴 空 race 保护（2026-11-05）：快照是整条覆盖写，本地 race 为空（新设备 /
@@ -5632,10 +5648,13 @@ function replayStudentOp(op) {
       .then(function(j) { return !!(j && j.success); })
       .catch(function() { return false; });
   }
-  if (!SB_ON || !rec) return legacyReplay();
+  if (!SB_ON) return Promise.resolve(false);   // 断路器关闭中：等半开，别去打退役通道
+  if (!rec) return legacyReplay();             // body 坏了才退回老通道试试
   return sbUpsertSnapshot(rowKey, rec, rec.ts)
     .then(function() { return true; })
-    .catch(legacyReplay);
+    // 补传只认主库（2026-11-06）：EdgeOne 兜底已退役，去打它只会白等 15 秒超时，
+    // 还占住 20 秒一次的心跳。失败就把这份 body 留在队列里，等下一轮再试。
+    .catch(function() { return false; });
 }
 
 // Mirror the current profile+progress snapshot to the durable directory so
@@ -11521,6 +11540,15 @@ function raceBegin(sectionKey) {
 }
 // sectionKey 为空时按赛事配置推断：admin 模式用 conf.section；choice 模式必须先选板块。
 function raceStart(sectionKey) {
+  // 🔴 参赛门槛（2026-11-06）：成绩必须能落到**账号**上，才允许开赛。
+  // 未登录时交卷会把成绩写进匿名全局键，登录后按账号读不到 → 白答一场；
+  // 资料缺工号 / 姓名时 buildStudentBody() 直接返回 null，云端永远收不到。
+  // 这两种情况现场只说一句"上传失败"根本看不出病因，所以挡在开赛之前。
+  if (!state.currentUser) { alert(t('race_need_login')); return; }
+  if (typeof profileIsComplete === 'function' && !profileIsComplete()) {
+    alert(t('race_need_profile'));
+    return;
+  }
   var c = raceConfOf(), st = raceStateOf(c);
   if (st !== 'open') {
     alert(t(st === 'pending' ? 'race_pending' : st === 'ended' ? 'race_ended' : st === 'closed' ? 'race_closed' : 'race_no_conf'));
@@ -11674,6 +11702,124 @@ function raceRevealResult() {
   if (state.raceLockTick) { clearInterval(state.raceLockTick); state.raceLockTick = null; }
   if (typeof render === 'function') render();
 }
+// ===== 成绩上传：状态机 + 真重试 + 待补传循环（2026-11-06）=====
+// 事故：学员交卷后看到「成绩上传失败，将自动重试」，但成绩一直没上去。
+// 根因不是云端挂，而是这条链上有三个洞：
+//   1. 只有**一次**推送尝试，失败就再没人管（那句"自动重试"是空话）；
+//   2. 失败后要先去打已退役的 EdgeOne 通道，等它超时才入队 —— 页面早关了；
+//   3. 未登录 / 资料不全时 buildStudentBody() 直接返回 null，连队列都不进，
+//      学员永远不知道自己错在哪。
+// 现在的契约：
+//   · 交卷后立刻推，失败按 2s / 5s / 10s 退避重试，最多 4 次；
+//   · 每次失败都先把这一份 body 落进本机待补传队列（先进队列再谈重试）；
+//   · 页面开着时每 20 秒扫一次队列，联网 / 回到前台立刻补一次；
+//   · 结果页那行提示按**真实原因**显示，补传成功自动消失。
+var RACE_SYNC_BACKOFF = [0, 2000, 5000, 10000];
+var RACE_SYNC_TICK_MS = 20000;
+var raceSyncSeq = 0;
+var raceSyncTickTimer = null;
+
+// 提示行只在这些**终态**出现；pending / retry / ok 一律不打扰
+// （重试最多十几秒，中途闪一行红字只会让人更慌）。
+function raceSyncTipInner() {
+  var st = state.raceSyncState;
+  var msg = '', color = '#a14a00';
+  if (st === 'queued' || st === 'fail') { msg = t('race_sync_queued'); color = '#8a5a00'; }
+  else if (st === 'nologin') { msg = t('race_sync_nologin'); color = '#a14a00'; }
+  else if (st === 'noprofile') { msg = t('race_sync_noprofile'); color = '#a14a00'; }
+  else return '';
+  return '<div style="font-size:12px;line-height:1.55;color:' + color + ';">⚠️ ' + escapeHtml(msg) + '</div>';
+}
+// 容器常驻（内容可为空），补传成功时才有一个稳定的 DOM 节点可以就地清空，
+// 不必整页重画 —— 学员正在看成绩单，不能因为后台同步把他滚回顶部。
+function raceSyncTipHtml() {
+  return '<div id="raceSyncTip">' + raceSyncTipInner() + '</div>';
+}
+function raceSyncTipRefresh() {
+  if (state.currentPage !== 'raceResult') return;
+  try {
+    var el = document.getElementById('raceSyncTip');
+    if (el) el.innerHTML = raceSyncTipInner();
+  } catch (e) {}
+}
+// 任何一次快照推送成功都算"成绩上去了"——哪怕这次推送是打卡 / 补签 / 改资料
+// 顺带触发的。旧版本这里不会清状态位，于是补传成功之后结果页仍然挂着"失败"。
+function raceSyncOnPushOk() {
+  if (state.raceSyncState === 'ok' || !state.raceSyncState) return;
+  state.raceSyncState = 'ok';
+  state.raceSyncTry = 0;
+  raceSyncTipRefresh();
+}
+// 交卷专用：带退避重试。返回 Promise<boolean>（是否真的推到云端）。
+function racePushScoreWithRetry() {
+  var seq = ++raceSyncSeq;
+  state.raceSyncTry = 0;
+  function step(i) {
+    if (seq !== raceSyncSeq) return Promise.resolve(false);
+    state.raceSyncTry = i + 1;
+    state.raceSyncState = i === 0 ? 'pending' : 'retry';
+    raceSyncTipRefresh();
+    // fast = 只走 Supabase，不碰已退役的 EdgeOne（那条路要等 15 秒超时）
+    return Promise.resolve(pushStudentSnapshotToKv({ fast: true })).then(function (ok) {
+      if (seq !== raceSyncSeq) return !!ok;
+      if (ok) {
+        state.raceSyncState = 'ok';
+        state.raceSyncTry = 0;
+        raceSyncTipRefresh();
+        return true;
+      }
+      // 未登录 / 资料不全：再重试一万次也没用，直接给准确原因（成绩已在本机）
+      if (!state.currentUser) { state.raceSyncState = 'nologin'; raceSyncTipRefresh(); return false; }
+      if (typeof profileIsComplete === 'function' && !profileIsComplete()) {
+        state.raceSyncState = 'noprofile'; raceSyncTipRefresh(); return false;
+      }
+      if (i + 1 >= RACE_SYNC_BACKOFF.length) {
+        state.raceSyncState = 'queued';   // 已入队，页面开着就会自动补
+        raceSyncTipRefresh();
+        return false;
+      }
+      return new Promise(function (res) { setTimeout(res, RACE_SYNC_BACKOFF[i + 1]); })
+        .then(function () { return step(i + 1); });
+    });
+  }
+  return step(0);
+}
+function racePendingStudentCount() {
+  try {
+    var arr = loadPendingOps();
+    var n = 0;
+    for (var i = 0; i < arr.length; i++) { if (arr[i] && arr[i].kind === 'student') n++; }
+    return n;
+  } catch (e) { return 0; }
+}
+// 页面开着时的补传心跳：没有待补传就一次请求都不发。
+function raceSyncTick() {
+  if (!state.currentUser) return;
+  if (!racePendingStudentCount()) return;
+  if (typeof profileIsComplete === 'function' && !profileIsComplete()) return;
+  flushPendingOps().then(function (any) {
+    if (!any) return;
+    if (state.raceSyncState === 'queued' || state.raceSyncState === 'fail' || state.raceSyncState === 'retry') {
+      state.raceSyncState = 'ok';
+      state.raceSyncTry = 0;
+      raceSyncTipRefresh();
+    }
+  }).catch(function () {});
+}
+function raceSyncStartLoop() {
+  if (raceSyncTickTimer) return;
+  raceSyncTickTimer = setInterval(raceSyncTick, RACE_SYNC_TICK_MS);
+  try {
+    window.addEventListener('online', function () { raceSyncTick(); });
+    if (typeof document !== 'undefined' && document.addEventListener) {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') raceSyncTick();
+      });
+    }
+  } catch (e) {}
+  // 刚打开就补一次（延迟 3 秒，别跟开机那一串请求抢带宽）
+  try { setTimeout(raceSyncTick, 3000); } catch (e2) {}
+}
 function raceSubmitScore() {
   var r = state.race; if (!r || !r.conf) return Promise.resolve(false);
   var acc = r.answered ? Math.round(r.correct / r.answered * 1000) / 10 : 0;
@@ -11743,9 +11889,11 @@ function raceSubmitScore() {
   rec.dept = raceDeptName();
   raceSaveLocalRecord(rec);
   state.raceSyncState = 'pending';
-  return (typeof pushStudentSnapshotToKv === 'function')
-    ? pushStudentSnapshotToKv().then(function (ok) { state.raceSyncState = ok ? 'ok' : 'fail'; return ok; },
-                                     function () { state.raceSyncState = 'fail'; return false; })
+  state.raceSyncTry = 0;
+  // 真重试 + 落本机队列（见 racePushScoreWithRetry）。成绩已在上面写进本机，
+  // 所以无论这里成败，学员都不会丢成绩。
+  return (typeof racePushScoreWithRetry === 'function')
+    ? racePushScoreWithRetry()
     : Promise.resolve(false);
 }
 function raceExitRace() {
@@ -13338,7 +13486,7 @@ function renderRaceResult() {
     html += '<div style="flex:1;border-left:1px solid rgba(0,0,0,.12);"><div style="font-size:20px;font-weight:700;color:#000;">' + r.correct + '</div><div style="font-size:11px;color:rgba(0,0,0,.6);margin-top:2px;">' + t('race_correct') + '</div></div>';
     html += '<div style="flex:1;border-left:1px solid rgba(0,0,0,.12);"><div style="font-size:20px;font-weight:700;color:#000;">' + acc + '%</div><div style="font-size:11px;color:rgba(0,0,0,.6);margin-top:2px;">' + t('race_accuracy') + '</div></div>';
     html += '</div>';
-    if (state.raceSyncState === 'fail') html += '<div style="color:#ffd0a0;font-size:12px;margin-top:10px;">⚠️ ' + t('race_submit_fail') + '</div>';
+    html += raceSyncTipHtml();
     html += '</div>';
     // ③ 徽章照样当场点亮
     if (state.raceNewBadges && state.raceNewBadges.length) {
@@ -13377,7 +13525,7 @@ function renderRaceResult() {
   if (state.raceCelebrate) html += '<div class="race-confetti" style="position:absolute;inset:0;">' + raceConfettiHtml() + '</div>';
   html += '<div style="font-size:40px;font-weight:700;color:#1a3a5c;">' + r.correct + '</div>';
   html += '<div style="color:#666;font-size:13px;">' + t('race_correct') + ' · ' + t('race_answered') + ' ' + r.answered + ' · ' + t('race_accuracy') + ' ' + acc + '%</div>';
-  if (state.raceSyncState === 'fail') html += '<div style="color:#a14a00;font-size:12px;margin-top:8px;">⚠️ ' + t('race_submit_fail') + '</div>';
+  html += raceSyncTipHtml();
   html += '</div>';
   // 徽章要当场点亮才有激励感 —— 这是"我坚持下来了"的证据，别等他自己去日历翻。
   if (state.raceNewBadges && state.raceNewBadges.length) {
@@ -25038,6 +25186,9 @@ function examOpenSessionNames(exceptPk) {
 
 // 开机先看一眼有没有"赛季已结束、徽章还没结"的账，再渲染首屏
 try { raceSettleOnBoot(); } catch (eBoot) {}
+// 待补传心跳（2026-11-06）：队列里还有没传出去的成绩时，每 20 秒补一次；
+// 联网 / 回到前台立刻补一次；没有待补传就一次请求都不发。
+try { raceSyncStartLoop(); } catch (eLoop) {}
 render();
 </script>
 </body>
