@@ -6616,6 +6616,27 @@ function nameRosterNeedsVerify(verdict) {
   return verdict === 'ok-reserved' || verdict === 'ok-off';
 }
 
+// Stage 11c: 注册核验通过后，自动用名册姓名补全/校正注册姓名。
+// 典型场景：外国人注册只填了名（Andrea），名册里有完整写法（Andrea Liu）
+// → 直接采用名册写法，云端档案 / 账户目录 / 后台 / 排行榜从第一次上报起
+// 就是完整名字，管理员不再需要事后手动「用名册覆盖」。
+// 规则（只在 nameRosterCheck 通过之后调用，绝不放松核验本身）：
+//   · 名册是权威源：中英文名凡名册里写了的，一律以名册为准（trim 归一）；
+//   · 名册只填工号的预留行 / 工号不在名册 → 无从补全，保持注册原样（进待核查）；
+//   · 本函数只改内存里的注册草稿 d，落库走原有 finishEmpLogin → syncNow 链路。
+function rosterAutofillRegName(emp, d) {
+  d = d || {};
+  var r = loadNameRoster();
+  var row = (r && r.rows && r.rows[normEmpNo(emp)]) || null;
+  if (!row) return false;
+  var changed = false;
+  var ren = String(row.en || '').trim();
+  if (ren && String(d.en || '').trim() !== ren) { d.en = ren; changed = true; }
+  var rcn = String(row.cn || '').trim();
+  if (rcn && String(d.cn || '').trim() !== rcn) { d.cn = rcn; changed = true; }
+  return changed;
+}
+
 // ===== Stage 11: 名册控制台（Excel 一键导入 / 一览表 / 被拦截名单）=============
 // 管理端「有效工号」= 一份从 Excel/CSV 一键导入的员工名册（工号 + 中英文名）。
 // 导入后名册同时充当两件事：
@@ -8014,6 +8035,9 @@ function loginRegisterSubmit() {
   d.needsVerify = nameRosterNeedsVerify(verdict)
     ? { reason: (verdict === 'ok-reserved' ? 'reserved' : 'off-roster'), ts: Date.now() }
     : null;
+  // Stage 11c: 核验通过 → 用名册姓名自动补全注册姓名（英文名缺姓等），
+  // 之后 finishEmpLogin 落库的资料/快照/目录用的都是补全后的名字。
+  rosterAutofillRegName(emp, d);
   state.loginBusy = true;
   render();
   // Guardrail: re-check the directory before creating anything. If the ID was
@@ -8698,7 +8722,11 @@ function renderHome() {
   // 手机上左右一滑就拖着全部内容在白色底板上漂。包上之后宽度刚好贴合屏幕，
   // 通栏头图效果也才是设计本意。
   var html = '<div class="page">';
-  html += '<div class="home-hero"><img class="hero-logo" src="assets/logo.webp" alt="The Ritz-Carlton Shenzhen"><h2>' + t('app_title') + '</h2><p>' + t('app_subtitle') + '</p></div>';
+  // 首页 hero 右上角也放"我的头像"（2026-11-06）：跟各页 banner 同款同位置，
+  // 员工在任何一屏抬头都能看到自己；点击直达头像编辑页。
+  html += '<div class="home-hero"><img class="hero-logo" src="assets/logo.webp" alt="The Ritz-Carlton Shenzhen">'
+    + (state.currentUser ? '<div style="position:absolute;top:16px;right:16px;z-index:2;">' + headerAvatarHtml() + '</div>' : '')
+    + '<h2>' + t('app_title') + '</h2><p>' + t('app_subtitle') + '</p></div>';
 
   // Stage 9.2: surface a sync failure that happened during login / profile
   // save. The user can still use the app on this device (the local profile
@@ -17503,6 +17531,23 @@ function navHome() {
 }
 // Shared header for every student page: "← 返回" on the left, the title in the
 // middle and 语言切换 + 🏠首页 on the right. Pages pass only their own bits.
+// 「我的头像」右上角入口的唯一 HTML 出口：app-header 与首页 hero 共用（2026-11-06）。
+// 之前只有走 renderAppHeader 的页面才有头像，首页自己的 hero 头没有 —— 员工天天看的
+// 第一屏反而看不到自己。答题/结算/回放仍传 avatar:false 关掉，避免误触跳走。
+function headerAvatarHtml(size) {
+  var _hp = state.profile || {};
+  var _hk = '';
+  try {
+    _hk = (typeof accountRowKeyForUser === 'function')
+      ? accountRowKeyForUser(String(state.currentUser || ''), _hp) : String(state.currentUser || '');
+  } catch (eHk) { _hk = String(state.currentUser || ''); }
+  var _hf = null;
+  try { _hf = avatarMyFrame(); } catch (eHf) { _hf = null; }
+  return '<div class="header-avatar" onclick="navigate(\'avatar\')" title="' + t('avatar_title') + '">'
+    + raceAvatarHtml(_hp.cnName || '', _hp.enName || '', _hk, _hp.avatar || '', _hf, size || 38)
+    + '<span class="header-avatar-pen">✎</span></div>';
+}
+
 function renderAppHeader(opt) {
   var o = opt || {};
   var showBack = o.showBack !== false;
@@ -17533,17 +17578,7 @@ function renderAppHeader(opt) {
   // 都有头像，抬眼就能看到自己的 —— 带 ✎ 角标，点一下直达头像编辑页。
   // 答题/结算/回放等页面传 avatar:false 关掉，避免误触跳走。
   if (o.avatar !== false && state.currentUser) {
-    var _hp = state.profile || {};
-    var _hk = '';
-    try {
-      _hk = (typeof accountRowKeyForUser === 'function')
-        ? accountRowKeyForUser(String(state.currentUser || ''), _hp) : String(state.currentUser || '');
-    } catch (eHk) { _hk = String(state.currentUser || ''); }
-    var _hf = null;
-    try { _hf = avatarMyFrame(); } catch (eHf) { _hf = null; }
-    html += '<div class="header-avatar" onclick="navigate(\'avatar\')" title="' + t('avatar_title') + '">'
-      + raceAvatarHtml(_hp.cnName || '', _hp.enName || '', _hk, _hp.avatar || '', _hf, 38)
-      + '<span class="header-avatar-pen">✎</span></div>';
+    html += headerAvatarHtml();
   }
   html += '</div></div>';
   return html;
