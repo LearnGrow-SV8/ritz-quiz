@@ -11745,6 +11745,8 @@ function raceSyncTipRefresh() {
 // 任何一次快照推送成功都算"成绩上去了"——哪怕这次推送是打卡 / 补签 / 改资料
 // 顺带触发的。旧版本这里不会清状态位，于是补传成功之后结果页仍然挂着"失败"。
 function raceSyncOnPushOk() {
+  // 推成功 = 当前这份本机记录已经上云，记下这个时间点，开机补推据此判断要不要再推
+  raceMarkPushed();
   if (state.raceSyncState === 'ok' || !state.raceSyncState) return;
   state.raceSyncState = 'ok';
   state.raceSyncTry = 0;
@@ -11806,6 +11808,38 @@ function raceSyncTick() {
     }
   }).catch(function () {});
 }
+// 开机补推（2026-11-06）：成绩只写在本机、从来没推上去（旧页面交卷 / 断网 / 那次
+// 连队列都没进）时，打开 App 自动补一次。用"最近一笔成绩时间 vs 上次成功推送时间"
+// 判断，推成功就一直不再重复推 —— 不是每次开 App 都上传一遍。
+var RACE_PUSHED_KEY = 'racePushedAt';
+function raceLatestScoreTs() {
+  var rec = null;
+  try { rec = raceLocalRecord(); } catch (e) { return 0; }
+  if (!rec) return 0;
+  var t = (rec.best && rec.best.ts) || 0;
+  var log = rec.log || [];
+  if (log.length) {
+    var last = log[log.length - 1];
+    if (last && last.ts > t) t = last.ts;
+  }
+  return t;
+}
+function raceMarkPushed(ts) {
+  try { localStorage.setItem(RACE_PUSHED_KEY, String(ts || raceLatestScoreTs() || Date.now())); } catch (e) {}
+}
+function raceBootCatchUp() {
+  if (!state.currentUser) return;
+  if (typeof profileIsComplete === 'function' && !profileIsComplete()) return;
+  if (racePendingStudentCount()) { raceSyncTick(); return; }
+  var latest = raceLatestScoreTs();
+  if (!latest) return;
+  var pushed = 0;
+  try { pushed = parseInt(localStorage.getItem(RACE_PUSHED_KEY), 10) || 0; } catch (e) { pushed = 0; }
+  if (latest <= pushed) return;
+  Promise.resolve(pushStudentSnapshotToKv({ fast: true })).then(function (ok) {
+    if (ok) raceMarkPushed(latest);
+  }, function () {});
+}
 function raceSyncStartLoop() {
   if (raceSyncTickTimer) return;
   raceSyncTickTimer = setInterval(raceSyncTick, RACE_SYNC_TICK_MS);
@@ -11818,7 +11852,7 @@ function raceSyncStartLoop() {
     }
   } catch (e) {}
   // 刚打开就补一次（延迟 3 秒，别跟开机那一串请求抢带宽）
-  try { setTimeout(raceSyncTick, 3000); } catch (e2) {}
+  try { setTimeout(raceBootCatchUp, 3000); } catch (e2) {}
 }
 function raceSubmitScore() {
   var r = state.race; if (!r || !r.conf) return Promise.resolve(false);
