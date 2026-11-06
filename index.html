@@ -7156,6 +7156,202 @@ function adminRosterTemplateDl() {
     alert('下载失败：' + ((e && e.message) || e));
   }
 }
+// ⑦ 重复账号检测：同一个工号挂在多个账号键下（Stage 9 之前的 name_emp 老键、
+//    换名残留等）。canon 一律优先取 Stage 9 规范键（'e'+工号），否则取最新活跃。
+function adminRosterDupGroups() {
+  var recs = adminStudentRecords(), byEmp = {};
+  for (var i = 0; i < recs.length; i++) {
+    var e = adminStudentEmp(recs[i]);
+    if (!e) continue;
+    (byEmp[e] = byEmp[e] || []).push(recs[i]);
+  }
+  var out = [];
+  for (var emp in byEmp) {
+    if (byEmp[emp].length < 2) continue;
+    var recs2 = byEmp[emp].slice().sort(function (a, b) { return (b.snap && b.snap.ts || 0) - (a.snap && a.snap.ts || 0); });
+    var canon = recs2[0];
+    for (var j = 0; j < recs2.length; j++) if (recs2[j].key === empKeyFor(emp)) { canon = recs2[j]; break; }
+    var same = true, base = recs2[0].snap || {};
+    for (var k = 1; k < recs2.length; k++) {
+      var s2 = recs2[k].snap || {};
+      if (String(base.cn || '') !== String(s2.cn || '') || String(base.en || '') !== String(s2.en || '')
+        || String(base.div || '') !== String(s2.div || '') || String(base.dept || '') !== String(s2.dept || '')) { same = false; break; }
+    }
+    out.push({ emp: emp, recs: recs2, canon: canon.key, consistent: same });
+  }
+  out.sort(function (a, b) {
+    var x = parseInt(a.emp, 10), y = parseInt(b.emp, 10);
+    if (isFinite(x) && isFinite(y) && x !== y) return x - y;
+    return a.emp < b.emp ? -1 : (a.emp > b.emp ? 1 : 0);
+  });
+  return out;
+}
+function adminRosterDupHtml() {
+  var en = state.lang === 'en';
+  var dups = adminRosterDupGroups();
+  var html = '';
+  html += '<h4 style="margin:18px 0 8px;">🔁 ' + (en ? 'Duplicate accounts' : '重复账号') + ' (' + dups.length + ')</h4>';
+  if (!dups.length) {
+    html += '<div class="sync-note">' + (en ? 'No employee ID is shared by more than one account.' : '没有同一个工号挂在多个账号下的情况。') + '</div>';
+    return html;
+  }
+  html += '<div class="sync-note" style="font-size:11.5px;">' + (en
+    ? 'One employee ID under several account keys (legacy rows). Merging keeps the ★ account and combines all exams / reports into it; the other rows are retired, not deleted.'
+    : '同一个工号挂在多个账号下（历史遗留键）。合并后保留 ★ 账号，考试/报错记录全部并进去；其余账号行退役（打标记，不删数据）。') + '</div>';
+  for (var i = 0; i < dups.length; i++) {
+    var g = dups[i];
+    html += '<div class="stu-row" style="cursor:default;">';
+    html += '<div class="stu-name">🔁 <b>' + escapeHtml(g.emp) + '</b> <span style="font-weight:400;font-size:13px;color:#8a8f96;">· '
+      + g.recs.length + (en ? ' accounts · ' : ' 个账号 · ')
+      + (g.consistent ? (en ? 'info consistent' : '信息一致') : (en ? '⚠️ info differs' : '⚠️ 信息不一致')) + '</span></div>';
+    for (var j = 0; j < g.recs.length; j++) {
+      var rj = g.recs[j], sj = rj.snap || {};
+      html += '<div style="font-size:12px;color:#5b6472;margin:3px 0 0 14px;">'
+        + (rj.key === g.canon ? '★ <b>' : '· ') + '<span style="font-family:monospace;">' + escapeHtml(rj.key) + '</span>'
+        + (rj.key === g.canon ? '</b>' : '')
+        + '　' + escapeHtml(sj.cn || sj.name || '—') + (sj.en ? ' / ' + escapeHtml(sj.en) : '')
+        + '　' + escapeHtml(sj.div || '') + (sj.dept ? ' · ' + escapeHtml(sj.dept) : '')
+        + '　<span style="color:#a7adb6;">' + fmtSyncTime(sj.ts) + '</span></div>';
+    }
+    html += '<div class="action-row" style="margin-top:8px;">';
+    html += '<button class="action-btn nav-btn primary" style="flex:1;" onclick="adminMergeAccounts(\'' + jsKey(g.emp) + '\')">🔗 '
+      + (en ? 'Merge into ' + g.canon : '合并（保留 ' + g.canon + '）') + '</button>';
+    html += '</div></div>';
+  }
+  return html;
+}
+// 读单个学员快照行（{ts, record} 或 null）。合并专用：失败一律按"没有这行"
+// 处理，不让单行读失败卡死整个合并。
+function adminSnapRowOf(stuKey) {
+  if (!SB_ON || typeof sbJson !== 'function') return Promise.resolve(null);
+  var path = '/rest/v1/student_snapshots?select=phone,record,ts&phone=eq.' + encodeURIComponent(stuKey) + '&limit=1';
+  return sbJson(path, null, SB_SNAPSHOT_TIMEOUT_MS, 'sb-snap-read-one').then(function (rows) {
+    if (!Array.isArray(rows) || !rows.length || !rows[0] || !rows[0].record) return null;
+    return { ts: rows[0].ts || 0, record: rows[0].record };
+  }, function () { return null; });
+}
+// 一个旧账号 → 规范账号的云端合并（快照 + 账户目录）。任何一步失败返回 false。
+function adminMergeOne(canonKey, oldKey) {
+  return Promise.all([
+    adminSnapRowOf(canonKey), adminSnapRowOf(oldKey),
+    (SB_ON ? sbGetAccountJson(canonKey).then(function (j) { return (j && j.hit) ? j : null; }, function () { return null; })
+           : Promise.resolve(null)),
+    (SB_ON ? sbGetAccountJson(oldKey).then(function (j) { return (j && j.hit) ? j : null; }, function () { return null; })
+           : Promise.resolve(null))
+  ]).then(function (rs) {
+    var cRow = rs[0], oRow = rs[1], cAcc = rs[2], oAcc = rs[3];
+    var jobs = [];
+    // —— 快照合并：events/details 并集（canon 优先），snap 取较新者、旧者补缺 ——
+    var cRec = cRow ? JSON.parse(JSON.stringify(cRow.record)) : { snap: {}, events: {}, details: {} };
+    if (!cRec.events || typeof cRec.events !== 'object') cRec.events = {};
+    if (!cRec.details || typeof cRec.details !== 'object') cRec.details = {};
+    if (oRow) {
+      var oRec = oRow.record || {};
+      var oe = (oRec.events && typeof oRec.events === 'object') ? oRec.events : {};
+      for (var id in oe) if (!cRec.events[id]) cRec.events[id] = oe[id];
+      var od = (oRec.details && typeof oRec.details === 'object') ? oRec.details : {};
+      for (var id2 in od) if (!cRec.details[id2]) cRec.details[id2] = od[id2];
+      var oSnap = oRec.snap || {}, cSnap = cRec.snap || {};
+      var newer = ((oSnap.ts || 0) > (cSnap.ts || 0)) ? oSnap : cSnap;
+      var older = (newer === oSnap) ? cSnap : oSnap;
+      var merged = JSON.parse(JSON.stringify(newer));
+      for (var f in older) {
+        if (merged[f] === undefined || merged[f] === null || merged[f] === '') merged[f] = older[f];
+      }
+      delete merged.superseded;
+      cRec.snap = merged;
+      // 旧行退役：打 superseded，不删数据（与改工号的退役同口径）
+      var oRetired = JSON.parse(JSON.stringify(oRec));
+      if (!oRetired.snap || typeof oRetired.snap !== 'object') oRetired.snap = {};
+      oRetired.snap.superseded = canonKey;
+      jobs.push(sbUpsertSnapshot(oldKey, oRetired, oRow.ts || Date.now()));
+    }
+    jobs.push(sbUpsertSnapshot(canonKey, cRec, Date.now()));
+    // —— 账户目录合并：旧行 neutralize（清 key 释放），规范行确保存在 ——
+    //    同工号 ⇒ pinHash 盐相同 ⇒ PIN 哈希可直接搬给规范行。
+    var pin = (cAcc && cAcc.pin) ? cAcc.pin : ((oAcc && oAcc.pin) || '');
+    var pinSetAt = (cAcc && cAcc.pinSetAt) ? cAcc.pinSetAt : ((oAcc && oAcc.pinSetAt) || 0);
+    if (oAcc) {
+      var oldRecA = { key: '', akey: oldKey, pin: '', pinSetAt: 0, snap: oAcc.snap || {}, events: [], details: {}, fa: oAcc.fa || {} };
+      if (oldRecA.snap && typeof oldRecA.snap === 'object') oldRecA.snap.superseded = canonKey;
+      jobs.push(sbUpsertAccount(oldKey, oldRecA, Date.now()).then(function () { return true; }, function () { return false; }));
+    }
+    var canRec = {
+      key: canonKey, akey: canonKey, pin: pin, pinSetAt: pinSetAt,
+      snap: (cRec.snap || {}),
+      events: Array.isArray(cAcc && cAcc.events) ? cAcc.events : [],
+      details: (cAcc && cAcc.details && typeof cAcc.details === 'object') ? cAcc.details : {},
+      fa: (cAcc && cAcc.fa) || {}
+    };
+    jobs.push(sbUpsertAccount(canonKey, canRec, Date.now()).then(function () { return true; }, function () { return false; }));
+    return Promise.all(jobs).then(function (rs2) {
+      for (var q = 0; q < rs2.length; q++) if (rs2[q] === false) return false;
+      return true;
+    });
+  });
+}
+// ⑦ 一键合并一个工号下的全部账号（确认框列出每个账号，★ 为保留者）。
+function adminMergeAccounts(emp) {
+  var en = state.lang === 'en';
+  var e = normEmpNo(emp);
+  var groups = adminRosterDupGroups(), g = null;
+  for (var i = 0; i < groups.length; i++) if (groups[i].emp === e) { g = groups[i]; break; }
+  if (!g || g.recs.length < 2) {
+    adminToast(en ? 'No duplicate accounts for this ID.' : '该工号没有重复账号。', false);
+    return;
+  }
+  var canon = g.canon, olds = [];
+  for (var j = 0; j < g.recs.length; j++) if (g.recs[j].key !== canon) olds.push(g.recs[j]);
+  var lines = [e + (en ? '  (' : '  （') + g.recs.length + (en ? ' accounts)' : ' 个账号）')];
+  for (var k = 0; k < g.recs.length; k++) {
+    var s = g.recs[k].snap || {};
+    lines.push((g.recs[k].key === canon ? '★ ' : '· ') + g.recs[k].key + '  '
+      + (s.cn || s.name || '') + (s.en ? ' / ' + s.en : '') + '  ' + (s.div || '') + (s.dept ? ' · ' + s.dept : ''));
+  }
+  if (!g.consistent) lines.push(en ? '⚠️ Names / departments differ — the newest snapshot wins.' : '⚠️ 各账号姓名/部门不一致 —— 以最新快照为准。');
+  var msg = en
+    ? 'Merge these accounts?\n\n' + lines.join('\n')
+      + '\n\nAll exams / reports are combined into the ★ account; the other rows are retired (marked superseded, never deleted). This cannot be undone.'
+    : '确认合并这些账号？\n\n' + lines.join('\n')
+      + '\n\n考试/报错记录全部并入 ★ 账号；其余账号行退役（打标记，不删数据）。合并不可撤销。';
+  if (!confirm(msg)) return;
+  if (!SB_ON) {
+    adminToast(en ? 'Cloud is off — cannot merge right now.' : '云端当前断开，暂时无法合并。', false);
+    return;
+  }
+  adminRosterMsg(en ? 'Merging…' : '正在合并…');
+  var jobs = [];
+  for (var m = 0; m < olds.length; m++) jobs.push(adminMergeOne(canon, olds[m].key));
+  Promise.all(jobs).then(function (res) {
+    var okAll = true;
+    for (var r = 0; r < res.length; r++) if (!res[r]) okAll = false;
+    // 本地缓存同步合并（视图立刻反映，不用等重新拉云端）
+    var cache = adminStudentCache();
+    if (!cache.students[canon]) cache.students[canon] = { snap: {}, events: {} };
+    var cRec2 = cache.students[canon];
+    if (!cRec2.events || typeof cRec2.events !== 'object') cRec2.events = {};
+    for (var o = 0; o < olds.length; o++) {
+      var oldKey2 = olds[o].key;
+      var oRec2 = cache.students[oldKey2];
+      if (!oRec2) continue;
+      for (var id3 in oRec2.events) if (!cRec2.events[id3]) cRec2.events[id3] = oRec2.events[id3];
+      if (oRec2.details) {
+        cRec2.details = cRec2.details || {};
+        for (var id4 in oRec2.details) if (!cRec2.details[id4]) cRec2.details[id4] = oRec2.details[id4];
+      }
+      if (!cRec2.snap || ((oRec2.snap && oRec2.snap.ts) || 0) > (cRec2.snap.ts || 0)) cRec2.snap = oRec2.snap;
+      delete cache.students[oldKey2];
+      if (adminState.studentListLastKey === oldKey2) adminState.studentListLastKey = canon;
+      if (adminState.studentDetail === oldKey2) adminState.studentDetail = canon;
+    }
+    adminSaveStudentCache(cache);
+    adminRosterMsg('');
+    adminToast(okAll
+      ? (en ? '✅ Accounts merged into ' + canon + '.' : '✅ 已合并，保留账号 ' + canon + '。')
+      : (en ? '⚠️ Merge partially failed — retry.' : '⚠️ 合并部分失败，请重试一次。'), okAll);
+    render();
+  });
+}
 // ④ 学员详情 →「该员工已离职」：工号移出有效工号名册 + 拦截原因标「已离职」，
 //    学员端 90 秒内生效（isEmpBlocked 走名册口径）。
 function adminMarkStudentLeft(stuKey) {
