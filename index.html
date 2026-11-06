@@ -5166,6 +5166,12 @@ var I18N = {
   rv_paper_line: {cn:'答对 {ok} / {total} 道', en:'{ok} / {total} correct'},
   rv_paper_gain: {cn:'{p} 道进入下一阶 · {g} 道移出错题本', en:'{p} advanced · {g} cleared'},
   rv_back_wrong: {cn:'返回错题本', en:'Back to mistakes'},
+  // 小结页返回按钮：从哪来回哪去，按钮文案跟着入口变
+  rv_back_race_result: {cn:'返回本场解析', en:"Back to this run's review"},
+  rv_back_exam_result: {cn:'返回本卷解析', en:"Back to this paper's review"},
+  rv_back_calendar: {cn:'返回打卡日历', en:'Back to calendar'},
+  rv_back_fav: {cn:'返回收藏夹', en:'Back to favourites'},
+  rv_back_generic: {cn:'返回', en:'Back'},
   rv_again_paper: {cn:'再组一卷', en:'New paper'},
   rv_strip: {cn:'答对 {ok} · 推进 {p} · 移出 {g}', en:'{ok} ok · {p} advanced · {g} cleared'},
   rv_no_weak: {cn:'还没有足够数据找出薄弱知识点，先练几道再来。', en:'Not enough data yet — practise a few questions first.'},
@@ -16833,6 +16839,9 @@ function startWrongPaper() {
 // 属于哪个桶，答错/答对时写回正确的错题本，不会把 21 天的题记进产品知识里。
 function startWrongRedoIds(ids, opts) {
   opts = opts || {};
+  // 🔴 快照必须在动 state 之前拍：state.questions / examAnswers 马上会被本轮
+  // 重做题覆盖，晚了拍到的就是重做题自己，返回时解析页就废了。
+  var back = paperBackSnapshot();
   var want = {}, i;
   for (i = 0; i < (ids || []).length; i++) want[String(ids[i])] = 1;
   var list = [], skeyOf = {};
@@ -16860,9 +16869,20 @@ function startWrongRedoIds(ids, opts) {
   state.paperSession = {
     kind: opts.kind || 'redo', title: opts.title || '', total: list.length,
     ok: 0, promoted: 0, graduated: 0,
-    ids: list.map(function (q) { return q.id; }), skeyOf: skeyOf
+    ids: list.map(function (q) { return q.id; }), skeyOf: skeyOf,
+    back: back
   };
   navigate('question');
+}
+function paperBackSnapshot() {
+  return {
+    page: state.currentPage,
+    mode: state.currentMode, bank: state.currentBank,
+    section: state.currentSection, paper: state.currentPaper,
+    questions: state.questions, selectedAnswers: state.selectedAnswers,
+    examAnswers: state.examAnswers, currentIndex: state.currentIndex,
+    showAnswer: state.showAnswer
+  };
 }
 function paperSkeyFor(qid) {
   var ps = state.paperSession;
@@ -16928,7 +16948,7 @@ function renderPaperDone() {
     + '<div style="font-size:11px;color:#8a97a4;margin-top:2px;">' + t('rv_done_grad') + '</div></div>';
   html += '</div></div>';
   // ② 唯一出口：回错题本看这一轮把哪些题推进了 / 哪些该重练
-  html += '<button class="action-btn primary" style="width:100%;margin-top:12px;" onclick="paperDoneBack()">' + t('rv_back_wrong') + '</button>';
+  html += '<button class="action-btn primary" style="width:100%;margin-top:12px;" onclick="paperDoneBack()">' + escapeHtml(paperDoneBackLabel()) + '</button>';
   // ③ 逐题解析
   html += '<div style="margin-top:20px;font-size:13px;font-weight:600;">📖 ' + t('rv_done_review') + '</div>';
   for (var i = 0; i < qs.length; i++) {
@@ -16952,11 +16972,32 @@ function renderPaperDone() {
   return html;
 }
 function openPaperDone() { navigate('paperDone'); }
+// 返回按钮文案跟入口走：从答题赛解析进来就写「返回本场解析」，从错题本进来
+// 还是「返回错题本」，其余页面一律「返回」。
+function paperDoneBackLabel() {
+  var p = (state.paperSession && state.paperSession.back && state.paperSession.back.page) || '';
+  if (p === 'raceResult') return t('rv_back_race_result');
+  if (p === 'examResult') return t('rv_back_exam_result');
+  if (p === 'raceCalendar') return t('rv_back_calendar');
+  if (p === 'collectedList') return t('rv_back_fav');
+  if (!p || p === 'wrongAll') return t('rv_back_wrong');
+  return t('rv_back_generic');
+}
 function paperDoneBack() {
+  var b = (state.paperSession && state.paperSession.back) || {};
   state.paperSession = null;
-  state.currentMode = 'practice';
+  state.currentMode = b.mode || 'practice';
+  state.currentBank = b.bank || 'manual';
+  state.currentSection = b.section || 'all';
+  state.currentPaper = b.paper || 'all';
+  if (b.questions) state.questions = b.questions;
+  if (b.selectedAnswers) state.selectedAnswers = b.selectedAnswers;
+  if (b.examAnswers) state.examAnswers = b.examAnswers;
+  state.currentIndex = b.currentIndex || 0;
   state.showAnswer = false;
-  navigate('wrongAll');
+  var target = b.page;
+  if (!target || target === 'question' || target === 'paperDone') target = 'wrongAll';
+  navigate(target);
 }
 function collectedBankOf(qid) {
   var order = ['day21', 'tsos', 'manual'];
