@@ -671,155 +671,448 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .save-status.synced { background:#e8f5e9; color:#2e7d32; }
 .save-status.local { background:#fff3e0; color:#e65100; }
 
-/* ===== 管理端桌面外壳（重构一期 2026-11-06）：黑侧边栏 + 丽思蓝 C7DDF3 =====
-   仅在已登录管理端时包住内容区；≤860px 自动回落旧版手机布局。 */
-.adm-root { display:flex; align-items:stretch; width:100vw; max-width:100vw; min-height:100vh; margin-left:calc(50% - 50vw); background:var(--bg); }
-.adm-side { flex:0 0 212px; display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto;
-  background:linear-gradient(rgba(0,0,0,0.9),rgba(0,0,0,0.9)),url('assets/brand/pattern-white.jpg') center/240px repeat; color:#fff; }
-.adm-side-brand { padding:18px 16px 14px; border-bottom:1px solid rgba(255,255,255,0.12); display:flex; align-items:center; gap:10px; }
-.adm-side-brand img { height:26px; width:auto; display:block; }
-.adm-brand-name { font-size:14px; font-weight:700; color:#C7DDF3; line-height:1.3; }
-.adm-brand-sub { font-size:11px; color:rgba(255,255,255,0.55); }
-.adm-nav { flex:1; padding:10px 8px; display:flex; flex-direction:column; gap:2px; }
-.adm-nav-item { display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:9px; font-size:13.5px;
-  color:rgba(255,255,255,0.72); cursor:pointer; border:none; background:transparent; text-align:left; width:100%;
-  font-family:inherit; transition:background .12s ease,color .12s ease; }
-.adm-nav-item:hover { background:rgba(255,255,255,0.08); color:#fff; }
-.adm-nav-item.active { background:#C7DDF3; color:#000; font-weight:600; }
-.adm-nav-ico { width:18px; text-align:center; flex:0 0 18px; }
-.adm-nav-badge { margin-left:auto; background:#d85a30; color:#fff; font-size:10.5px; border-radius:9px; padding:1px 7px; font-weight:600; }
-.adm-nav-item.active .adm-nav-badge { background:#000; }
-.adm-side-foot { border-top:1px solid rgba(255,255,255,0.12); padding:12px; font-size:12px; color:rgba(255,255,255,0.75); }
-.adm-cloud-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:#9aa4b0; vertical-align:middle; }
-.adm-cloud-dot.on { background:#3fae6a; }
-.adm-cloud-dot.off { background:#d8a13a; }
-.adm-logout-btn { margin-top:8px; width:100%; padding:8px 0; border-radius:8px; border:1px solid rgba(255,255,255,0.25);
-  background:transparent; color:rgba(255,255,255,0.85); font-size:12.5px; cursor:pointer; font-family:inherit; }
-.adm-logout-btn:hover { background:rgba(255,255,255,0.1); color:#fff; }
-.adm-main { flex:1; min-width:0; display:flex; flex-direction:column; }
-.adm-topbar { position:sticky; top:0; z-index:90; min-height:52px; background:#fff; border-bottom:1px solid var(--border);
-  display:flex; align-items:center; gap:12px; padding:0 22px; }
-.adm-title { font-size:15px; font-weight:600; color:var(--text); }
-.adm-spacer { flex:1; }
-.adm-sync { font-size:12px; color:var(--text-light); display:flex; align-items:center; gap:2px; }
-.adm-content { flex:1; padding:20px 22px 60px; }
-.adm-content .app-header { display:none; }
-.adm-content .page { padding:0; max-width:none; padding-bottom:20px; }
-@media (max-width:860px) {
-  .adm-root { display:block; margin-left:0; width:100%; }
-  .adm-side { display:none; }
-  .adm-topbar { display:none; }
-  .adm-content { padding:0; }
-  .adm-content .app-header { display:block; }
-  .adm-content .page { padding:16px; padding-bottom:80px; }
+/* ===== 管理端设计系统 v2（2026-11-09 全面重做）=====
+   桌面后台的信息密度与层级；≤900px 回落手机布局。
+   配色只用 丽思蓝 #C7DDF3 / 纯黑 / 白 / 中性灰。 */
+.adm-root {
+  --a-blue:#C7DDF3; --a-blue-d:#8FB9DF; --a-blue-s:#F4F9FE;
+  --a-ink:#0E0E0E; --a-i2:#3D4145; --a-i3:#71767C; --a-i4:#9AA0A6;
+  --a-line:#E8EAED; --a-line2:#F0F2F5; --a-bg:#F6F7F9;
+  --a-warn:#C0392B; --a-ok:#1E8E5A;
+  display:flex; align-items:stretch; width:100vw; max-width:100vw; min-height:100vh;
+  margin-left:calc(50% - 50vw); background:var(--a-bg); color:var(--a-ink);
+  font-size:14px; line-height:1.55; text-align:left; letter-spacing:0;
 }
-/* ===== 三期：试卷编排双栏 + 拖拽 ===== */
+/* --- 侧边栏 --- */
+.adm-side {
+  flex:0 0 236px; display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow:hidden;
+  background:linear-gradient(rgba(0,0,0,.9),rgba(0,0,0,.9)),url('assets/brand/pattern-white.jpg') center/240px repeat;
+  color:#fff;
+}
+.adm-side-brand { display:flex; align-items:center; gap:10px; padding:20px 18px 18px; }
+.adm-side-brand img { height:26px; width:auto; display:block; }
+.adm-brand-name { font-size:13.5px; font-weight:600; color:#fff; letter-spacing:.2px; line-height:1.35; }
+.adm-brand-sub { font-size:11px; color:rgba(255,255,255,.42); margin-top:1px; }
+.adm-nav { flex:1; overflow-y:auto; padding:4px 10px 14px; }
+.adm-nav::-webkit-scrollbar { width:6px; }
+.adm-nav::-webkit-scrollbar-thumb { background:rgba(255,255,255,.14); border-radius:3px; }
+.adm-nav-grp { font-size:10.5px; letter-spacing:1.4px; color:rgba(255,255,255,.32); padding:15px 10px 7px; font-weight:600; }
+.adm-nav-item {
+  display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; font-size:13.5px;
+  color:rgba(255,255,255,.72); background:transparent; border:0; width:100%; text-align:left;
+  font-family:inherit; cursor:pointer; transition:background .14s ease,color .14s ease;
+}
+.adm-nav-item:hover { background:rgba(255,255,255,.07); color:#fff; }
+.adm-nav-item.active { background:var(--a-blue); color:#0E0E0E; font-weight:600; }
+.adm-nav-ico { width:16px; height:16px; flex:0 0 16px; display:flex; align-items:center; justify-content:center; opacity:.85; }
+.adm-nav-ico svg { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+.adm-nav-item.active .adm-nav-ico { opacity:1; }
+.adm-nav-badge { margin-left:auto; background:#d85a30; color:#fff; font-size:10.5px; font-weight:600; border-radius:20px; padding:1px 6px; min-width:18px; text-align:center; line-height:16px; }
+.adm-nav-item.active .adm-nav-badge { background:#0E0E0E; color:var(--a-blue); }
+.adm-side-foot { border-top:1px solid rgba(255,255,255,.09); padding:12px 14px 14px; font-size:11.5px; color:rgba(255,255,255,.5); }
+.adm-cloud-dot { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:6px; background:#9aa4b0; vertical-align:middle; }
+.adm-cloud-dot.on { background:#3fae6a; box-shadow:0 0 0 3px rgba(63,174,106,.18); }
+.adm-cloud-dot.off { background:#d8a13a; }
+.adm-logout-btn { margin-top:9px; width:100%; padding:7px 0; border-radius:8px; border:1px solid rgba(255,255,255,.18);
+  background:transparent; color:rgba(255,255,255,.78); font-size:12px; cursor:pointer; font-family:inherit; }
+.adm-logout-btn:hover { background:rgba(255,255,255,.1); color:#fff; }
+/* --- 顶栏 --- */
+.adm-main { flex:1; min-width:0; display:flex; flex-direction:column; }
+.adm-topbar { position:sticky; top:0; z-index:90; height:56px; background:#fff; border-bottom:1px solid var(--a-line);
+  display:flex; align-items:center; gap:14px; padding:0 26px; }
+.adm-crumb { font-size:13px; color:var(--a-i3); }
+.adm-crumb b { color:var(--a-ink); font-weight:600; }
+.adm-title { font-size:15px; font-weight:600; color:var(--a-ink); }
+.adm-spacer { flex:1; }
+.adm-sync { font-size:12px; color:var(--a-i3); display:flex; align-items:center; gap:2px; }
+.adm-gsearch { display:flex; align-items:center; gap:8px; background:#F4F6F8; border:1px solid transparent;
+  border-radius:8px; padding:0 10px; height:34px; width:250px; transition:.15s; }
+.adm-gsearch:focus-within { background:#fff; border-color:var(--a-blue-d); }
+.adm-gsearch svg { width:15px; height:15px; stroke:var(--a-i4); fill:none; stroke-width:1.7; }
+.adm-gsearch input { border:0; background:transparent; outline:none; font-size:13px; flex:1; color:var(--a-ink); font-family:inherit; }
+.adm-gsearch kbd { font-size:10.5px; color:var(--a-i4); border:1px solid var(--a-line); border-radius:4px; padding:0 4px; line-height:16px; background:#fff; }
+.adm-tb-btn { width:34px; height:34px; border-radius:8px; border:1px solid var(--a-line); background:#fff;
+  display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.adm-tb-btn:hover { background:#F7F9FB; border-color:var(--a-blue-d); }
+.adm-tb-btn svg { width:16px; height:16px; stroke:var(--a-i2); fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.adm-content { flex:1; padding:24px 26px 70px; }
+
+/* --- 页头 --- */
+.ap-head { display:flex; align-items:flex-start; gap:16px; margin-bottom:20px; }
+.ap-head-txt { min-width:0; }
+.ap-head-txt h1 { font-size:21px; font-weight:700; letter-spacing:-.2px; line-height:1.3; margin:0; color:var(--a-ink); }
+.ap-head-txt p { font-size:12.5px; color:var(--a-i3); margin-top:5px; }
+.ap-head-acts { margin-left:auto; display:flex; gap:8px; flex:0 0 auto; flex-wrap:wrap; }
+
+/* --- 按钮 --- */
+.ap-btn { height:34px; padding:0 14px; border-radius:8px; font-size:13px; font-weight:500; border:1px solid var(--a-line);
+  background:#fff; color:var(--a-i2); display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  font-family:inherit; transition:.14s; white-space:nowrap; }
+.ap-btn:hover { border-color:var(--a-blue-d); background:#FAFCFE; }
+.ap-btn.pri { background:var(--a-ink); border-color:var(--a-ink); color:#fff; }
+.ap-btn.pri:hover { background:#282828; border-color:#282828; }
+.ap-btn.blu { background:var(--a-blue); border-color:var(--a-blue); color:#0E0E0E; font-weight:600; }
+.ap-btn.blu:hover { background:var(--a-blue-d); border-color:var(--a-blue-d); }
+.ap-btn.danger { color:var(--a-warn); }
+.ap-btn.danger:hover { background:#FFF7F6; border-color:#E8B5B0; }
+.ap-btn.sm { height:28px; padding:0 10px; font-size:12px; border-radius:7px; }
+.ap-btn svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.ap-btn:disabled { opacity:.45; cursor:not-allowed; }
+
+/* --- 工具条 --- */
+.ap-bar { display:flex; align-items:center; gap:8px; margin:0 0 12px; flex-wrap:wrap; }
+.ap-search { display:flex; align-items:center; gap:7px; background:#fff; border:1px solid var(--a-line);
+  border-radius:8px; padding:0 10px; height:34px; width:260px; }
+.ap-search:focus-within { border-color:var(--a-blue-d); }
+.ap-search svg { width:14px; height:14px; stroke:var(--a-i4); fill:none; stroke-width:1.8; }
+.ap-search input { border:0; outline:none; background:transparent; font-size:13px; flex:1; font-family:inherit; color:var(--a-ink); }
+.ap-sel { height:34px; border:1px solid var(--a-line); border-radius:8px; background:#fff; padding:0 28px 0 11px;
+  font-size:13px; color:var(--a-i2); appearance:none; outline:none; font-family:inherit;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239AA0A6' stroke-width='2.4' stroke-linecap='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat:no-repeat; background-position:right 9px center; }
+.ap-sel:focus { border-color:var(--a-blue-d); }
+.ap-seg { display:inline-flex; background:#EFF1F4; border-radius:8px; padding:2px; gap:2px; }
+.ap-seg button { border:0; background:transparent; height:30px; padding:0 13px; border-radius:6px; font-size:12.5px;
+  color:var(--a-i3); cursor:pointer; font-family:inherit; }
+.ap-seg button.on { background:#fff; color:var(--a-ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.07); }
+.ap-count { margin-left:auto; font-size:12px; color:var(--a-i4); }
+
+/* --- 表格 --- */
+.ap-tbl-wrap { background:#fff; border:1px solid var(--a-line); border-radius:12px; overflow:hidden; }
+table.ap-tbl { width:100%; border-collapse:collapse; }
+.ap-tbl thead th { text-align:left; font-size:11.5px; font-weight:600; color:var(--a-i3); letter-spacing:.3px;
+  padding:11px 14px; background:#FAFBFC; border-bottom:1px solid var(--a-line); white-space:nowrap; }
+.ap-tbl tbody td { padding:12px 14px; font-size:13px; color:var(--a-i2); border-bottom:1px solid var(--a-line2); vertical-align:middle; }
+.ap-tbl tbody tr:last-child td { border-bottom:0; }
+.ap-tbl tbody tr:hover { background:#F8FBFE; }
+.ap-tbl .r { text-align:right; }
+.ap-qtext { color:var(--a-ink); font-weight:500; display:block; max-width:520px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ap-sub { font-size:11.5px; color:var(--a-i4); margin-top:3px; display:block; font-weight:400; }
+.ap-num { font-variant-numeric:tabular-nums; }
+
+/* --- 标签 --- */
+.ap-tag { display:inline-flex; align-items:center; height:20px; padding:0 8px; border-radius:5px; font-size:11.5px;
+  background:#F0F3F7; color:var(--a-i3); font-weight:500; white-space:nowrap; }
+.ap-tag.blu { background:var(--a-blue); color:#0E0E0E; }
+.ap-tag.grn { background:#E6F4EC; color:#1E8E5A; }
+.ap-tag.red { background:#FBEAE8; color:var(--a-warn); }
+.ap-tag.amb { background:#FDF3E3; color:#A9741B; }
+
+/* --- 行内操作 --- */
+.ap-rowact { display:flex; gap:4px; justify-content:flex-end; opacity:0; transition:.12s; }
+tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact { opacity:1; }
+.ap-mini { width:28px; height:28px; border-radius:6px; border:1px solid transparent; background:transparent;
+  display:inline-flex; align-items:center; justify-content:center; color:var(--a-i3); cursor:pointer; }
+.ap-mini:hover { background:#fff; border-color:var(--a-line); color:var(--a-ink); }
+.ap-mini svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+
+/* --- 卡片 / KPI --- */
+.ap-card { background:#fff; border:1px solid var(--a-line); border-radius:12px; }
+.ap-card-h { display:flex; align-items:center; gap:10px; padding:15px 18px 0; }
+.ap-card-h h3 { font-size:13.5px; font-weight:600; margin:0; color:var(--a-ink); }
+.ap-card-h .more { margin-left:auto; font-size:12px; color:var(--a-i3); cursor:pointer; }
+.ap-card-h .more:hover { color:var(--a-ink); }
+.ap-card-b { padding:16px 18px 18px; }
+.ap-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:16px; }
+.ap-kpi { background:#fff; border:1px solid var(--a-line); border-radius:12px; padding:16px 18px 15px; position:relative; overflow:hidden; }
+.ap-kpi .lb { font-size:12px; color:var(--a-i3); display:flex; align-items:center; gap:6px; }
+.ap-kpi .v { font-size:29px; font-weight:700; letter-spacing:-.8px; margin-top:8px; line-height:1; font-variant-numeric:tabular-nums; }
+.ap-kpi .v small { font-size:13px; font-weight:600; color:var(--a-i3); margin-left:2px; }
+.ap-kpi .d { font-size:11.5px; color:var(--a-i4); margin-top:8px; }
+.ap-kpi .d b { color:var(--a-ink); font-weight:600; }
+.ap-kpi.alert { border-color:#F3C9C4; background:#FFFCFB; }
+.ap-kpi.alert .v { color:var(--a-warn); }
+.ap-kpi .spark { position:absolute; right:14px; bottom:14px; opacity:.9; }
+.ap-grid-main { display:grid; grid-template-columns:1.62fr 1fr; gap:14px; margin-bottom:14px; }
+.ap-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+/* --- 图表 / 进度 / 待办 --- */
+.ap-chart { height:148px; display:flex; align-items:flex-end; gap:7px; }
+.ap-chart .col { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end; }
+.ap-chart .bar { width:100%; background:var(--a-blue); border-radius:4px 4px 2px 2px; min-height:3px; transition:.18s; }
+.ap-chart .col:hover .bar { background:var(--a-blue-d); }
+.ap-chart .col.today .bar { background:var(--a-ink); }
+.ap-xaxis { display:flex; gap:7px; margin-top:8px; }
+.ap-xaxis span { flex:1; text-align:center; font-size:10px; color:var(--a-i4); }
+.ap-prow { display:flex; align-items:center; gap:10px; padding:9px 0; font-size:13px; border-bottom:1px solid var(--a-line2); }
+.ap-prow:last-child { border-bottom:0; padding-bottom:0; }
+.ap-prow .nm { width:88px; flex:0 0 88px; color:var(--a-i2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ap-prow .tk { flex:1; height:7px; background:var(--a-line2); border-radius:4px; overflow:hidden; }
+.ap-prow .fl { height:100%; background:var(--a-blue); border-radius:4px; display:block; }
+.ap-prow .pc { width:44px; text-align:right; font-size:12px; color:var(--a-i3); font-variant-numeric:tabular-nums; }
+.ap-todo { display:flex; align-items:center; gap:11px; padding:11px 0; border-bottom:1px solid var(--a-line2); cursor:pointer; }
+.ap-todo:last-child { border-bottom:0; padding-bottom:0; }
+.ap-todo:hover .tl { color:var(--a-blue-d); }
+.ap-todo .ic { width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex:0 0 30px; }
+.ap-todo .ic svg { width:15px; height:15px; stroke-width:1.8; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+.ap-todo .tl { font-size:13px; color:var(--a-i2); transition:.14s; }
+.ap-todo .ts { font-size:11.5px; color:var(--a-i4); margin-top:2px; }
+.ap-todo .n { margin-left:auto; font-size:12.5px; font-weight:600; color:var(--a-ink); font-variant-numeric:tabular-nums; }
+.ap-act { display:flex; gap:10px; padding:9px 0; font-size:12.5px; color:var(--a-i2); border-bottom:1px solid var(--a-line2); }
+.ap-act:last-child { border-bottom:0; }
+.ap-act .t { margin-left:auto; color:var(--a-i4); font-size:11px; flex:0 0 auto; padding-left:8px; }
+.ap-act b { font-weight:600; }
+/* --- 空态 / 抽屉 --- */
+.adm-content .empty-state { text-align:center; padding:48px 20px; color:var(--a-i4); }
+.adm-content .empty-state .icon { font-size:34px; margin-bottom:10px; opacity:.55; }
+.adm-content .empty-state p { font-size:13px; }
+.ap-drawer-mask { position:fixed; inset:0; background:rgba(14,14,14,.28); opacity:0; pointer-events:none; transition:.2s; z-index:200; }
+.ap-drawer-mask.on { opacity:1; pointer-events:auto; }
+.ap-drawer { position:fixed; top:0; right:0; height:100vh; width:460px; max-width:92vw; background:#fff; z-index:201;
+  transform:translateX(100%); transition:transform .24s cubic-bezier(.3,.7,.3,1); display:flex; flex-direction:column;
+  box-shadow:-8px 0 40px rgba(0,0,0,.1); }
+.ap-drawer.on { transform:none; }
+.ap-dr-head { padding:18px 20px 14px; border-bottom:1px solid var(--a-line); display:flex; align-items:flex-start; gap:10px; }
+.ap-dr-head h3 { font-size:15px; font-weight:700; margin:0; }
+.ap-dr-head p { font-size:12px; color:var(--a-i4); margin-top:4px; }
+.ap-dr-head .x { margin-left:auto; width:28px; height:28px; border:0; background:#F4F6F8; border-radius:7px; color:var(--a-i3); font-size:15px; cursor:pointer; }
+.ap-dr-head .x:hover { background:#E8EAED; }
+.ap-dr-body { flex:1; overflow-y:auto; padding:18px 20px; }
+.ap-dr-foot { padding:14px 20px; border-top:1px solid var(--a-line); display:flex; gap:8px; background:#FAFBFC; }
+.ap-fld { margin-bottom:15px; }
+.ap-fld label { display:block; font-size:11.5px; color:var(--a-i3); margin-bottom:6px; font-weight:500; }
+.ap-fld input, .ap-fld textarea, .ap-fld select { width:100%; border:1px solid var(--a-line); border-radius:8px;
+  padding:9px 11px; font-size:13px; outline:none; background:#fff; color:var(--a-ink); font-family:inherit; }
+.ap-fld input:focus, .ap-fld textarea:focus, .ap-fld select:focus { border-color:var(--a-blue-d); box-shadow:0 0 0 3px rgba(199,221,243,.4); }
+.ap-fld textarea { resize:vertical; min-height:64px; line-height:1.55; }
+.ap-stat3 { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--a-line); border:1px solid var(--a-line);
+  border-radius:10px; overflow:hidden; margin-bottom:16px; }
+.ap-stat3 div { background:#fff; padding:12px 10px; text-align:center; }
+.ap-stat3 .n { font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; }
+.ap-stat3 .l { font-size:11px; color:var(--a-i4); margin-top:3px; }
+
+/* ===== 旧 class 兼容：统一接管为新皮肤（不改各页 HTML 结构）===== */
+.adm-content .page { padding:0; max-width:none; padding-bottom:0; }
+.adm-content .app-header { display:none; }
+.adm-content .chip { background:#fff; border:1px solid var(--a-line); padding:0 13px; height:32px; line-height:30px;
+  border-radius:8px; font-size:12.5px; cursor:pointer; color:var(--a-i3); transition:.14s; display:inline-block; }
+.adm-content .chip:hover { border-color:var(--a-blue-d); }
+.adm-content .chip.active { background:var(--a-ink); border-color:var(--a-ink); color:#fff; font-weight:600; }
+.adm-content .tab-bar { display:inline-flex; gap:2px; background:#EFF1F4; border-radius:8px; padding:2px; margin-bottom:12px; }
+.adm-content .tab-bar .chip { border:0; background:transparent; height:30px; line-height:30px; padding:0 13px;
+  border-radius:6px; flex:0 0 auto; text-align:center; }
+.adm-content .tab-bar .chip.active { background:#fff; color:var(--a-ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.07); }
+.adm-content .admin-section-chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.adm-content .search-box { position:relative; margin-bottom:12px; width:340px; max-width:100%; }
+.adm-content .search-box input { width:100%; padding:0 12px 0 34px; height:34px; border:1px solid var(--a-line);
+  border-radius:8px; font-size:13px; outline:none; background:#fff; font-family:inherit; }
+.adm-content .search-box input:focus { border-color:var(--a-blue-d); }
+.adm-content .search-box .search-icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); font-size:12px; color:var(--a-i4); }
+.adm-content .admin-mini-btn { border:1px solid var(--a-line); background:#fff; color:var(--a-i2); border-radius:7px;
+  padding:4px 10px; font-size:12px; cursor:pointer; font-family:inherit; }
+.adm-content .admin-mini-btn:hover { border-color:var(--a-blue-d); background:#FAFCFE; }
+.adm-content .sync-note { font-size:12px; color:var(--a-i4); margin:10px 0; line-height:1.7; text-align:left; }
+.adm-content .admin-tool-tabs { display:inline-flex; gap:2px; background:#EFF1F4; border-radius:8px; padding:2px; margin-bottom:12px; }
+.adm-content .admin-tool-tabs button { border:0; background:transparent; height:30px; padding:0 13px; border-radius:6px;
+  font-size:12.5px; color:var(--a-i3); cursor:pointer; font-family:inherit; }
+.adm-content .admin-tool-tabs button.active { background:#fff; color:var(--a-ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.07); }
+.adm-content .admin-tool-panel { border:1px solid var(--a-line); border-radius:12px; padding:16px 18px; margin-bottom:14px; background:#fff; }
+.adm-content .admin-tool-panel .panel-title { font-size:13.5px; font-weight:600; margin-bottom:4px; }
+.adm-content .admin-tool-panel .panel-hint { font-size:12px; color:var(--a-i4); margin-bottom:12px; line-height:1.7; }
+.adm-content .admin-sec-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--a-line2); }
+.adm-content .admin-sec-row:last-of-type { border-bottom:none; }
+.adm-content .admin-sec-row .sec-name { flex:1; font-size:13px; }
+.adm-content .admin-sec-row .sec-count { font-size:12px; color:var(--a-i4); min-width:52px; text-align:right; }
+.adm-content .admin-sec-row button { padding:4px 10px; border-radius:6px; border:1px solid var(--a-line); background:#fff;
+  font-size:12px; cursor:pointer; font-family:inherit; }
+.adm-content .admin-sec-row button:disabled { opacity:.35; cursor:default; }
+.adm-content .admin-sec-row input { width:76px; padding:5px 8px; border-radius:6px; border:1px solid var(--a-line); font-size:13px; text-align:center; font-family:inherit; }
+.adm-content .admin-sec-row .limit-cur { font-size:12px; color:var(--a-i4); }
+.adm-content .admin-btn-add { width:100%; padding:9px 16px; border:1px dashed #C8CCD2; border-radius:9px; background:#fff;
+  font-size:13px; cursor:pointer; color:var(--a-i3); font-family:inherit; }
+.adm-content .admin-btn-add:hover { border-color:var(--a-blue-d); color:var(--a-ink); background:#FAFCFE; }
+.adm-content .admin-export-btn { padding:10px 16px; border:1px solid var(--a-line); border-radius:9px; background:#fff;
+  color:var(--a-i2); font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; }
+.adm-content .admin-export-btn:hover { border-color:var(--a-blue-d); background:#FAFCFE; }
+.adm-content .stu-pill { background:#F0F3F7; border-radius:5px; padding:2px 8px; font-size:11.5px; color:var(--a-i3); }
+.adm-content .stu-pill b { font-weight:600; color:var(--a-ink); }
+.adm-content .report-item { background:#fff; border:1px solid var(--a-line); border-left:3px solid #E0A9A4; border-radius:10px;
+  padding:12px 14px; margin-bottom:10px; font-size:13px; }
+.adm-content .report-item.handled { opacity:.55; border-left-color:#8CC9A8; }
+.adm-content .report-head { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--a-i3); margin-bottom:6px; }
+.adm-content .report-q { font-size:13px; color:var(--a-ink); margin:6px 0; }
+.adm-content .report-detail { font-size:12px; color:var(--a-i3); margin-top:4px; line-height:1.65; }
+.adm-content .report-label { color:var(--a-i4); }
+.adm-content .exam-row { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:#fff;
+  border:1px solid var(--a-line); border-radius:9px; margin-bottom:8px; font-size:13px; }
+.adm-content .exam-row:hover { border-color:var(--a-blue-d); background:#FAFCFE; }
+.adm-content .admin-bank-card { background:#fff; border:1px solid var(--a-line); border-radius:12px; padding:16px 18px; margin-bottom:12px; }
+.adm-content .admin-bank-card h3 { font-size:14px; margin:0 0 4px; }
+.adm-content .admin-bank-card .count { font-size:12px; color:var(--a-i4); }
+.adm-content .admin-hub-card { display:flex; align-items:center; gap:14px; background:#fff; border:1px solid var(--a-line);
+  border-radius:12px; padding:16px 18px; cursor:pointer; }
+.adm-content .admin-hub-card:hover { border-color:var(--a-blue-d); }
+.adm-content .admin-hub-icon { font-size:20px; }
+.adm-content .admin-hub-title { font-size:13.5px; font-weight:600; }
+.adm-content .admin-hub-desc { font-size:12px; color:var(--a-i4); margin-top:2px; }
+.adm-content .admin-hub-arrow { margin-left:auto; color:var(--a-i4); }
+
+/* 题目列表：卡片 → 紧凑行 */
+.adm-content .admin-q-item { display:flex; align-items:center; gap:12px; background:#fff; border:0; border-bottom:1px solid var(--a-line2);
+  border-radius:0; padding:11px 14px; margin:0; box-shadow:none; border-left:0; }
+.adm-content .admin-q-item:last-child { border-bottom:0; }
+.adm-content .admin-q-item:hover { background:#F8FBFE; }
+.adm-content .admin-q-item .q-num { flex:0 0 104px; font-size:11.5px; color:var(--a-i4); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; white-space:nowrap; overflow:hidden; }
+.adm-content .admin-q-item .q-text { flex:1; min-width:0; font-size:13px; line-height:1.5; margin:0; color:var(--a-ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.adm-content .admin-q-item .q-en { display:none; }
+.adm-content .admin-q-item .q-ans { flex:0 0 auto; display:flex; gap:4px; margin:0; max-width:230px; overflow:hidden; white-space:nowrap; }
+.adm-content .admin-q-item .q-ans .q-ans-hit { background:#E6F4EC; color:#1E8E5A; border:1px solid rgba(30,142,90,.25);
+  border-radius:5px; padding:1px 7px; font-size:11.5px; line-height:1.6; font-weight:600; }
+.adm-content .admin-q-item .q-ans .q-ans-dim { color:var(--a-i4); border:1px solid var(--a-line); border-radius:5px;
+  padding:1px 7px; font-size:11.5px; line-height:1.6; }
+.adm-content .admin-q-item .q-ans-miss { display:none; }
+.adm-content .admin-q-item .q-actions { flex:0 0 auto; display:flex; gap:3px; margin:0; opacity:0; transition:.12s; }
+.adm-content .admin-q-item:hover .q-actions { opacity:1; }
+.adm-content .admin-q-item .q-actions button { padding:4px 9px; border-radius:6px; border:1px solid var(--a-line);
+  background:#fff; font-size:11.5px; cursor:pointer; font-family:inherit; color:var(--a-i2); white-space:nowrap; }
+.adm-content .admin-q-item .q-actions button:hover { border-color:var(--a-blue-d); background:#FAFCFE; }
+.adm-content .admin-q-item .q-actions .delete { color:var(--a-warn); border-color:#F0D6D2; }
+.adm-content .admin-q-item .q-actions .move { min-width:auto; color:var(--a-i4); }
+.adm-content .admin-q-item .q-actions button:disabled { opacity:.3; cursor:default; }
+.adm-content .admin-q-item[draggable="true"], .adm-content .admin-sec-row[draggable="true"] { cursor:grab; }
+.adm-content .admin-q-item.dragging, .adm-content .admin-sec-row.dragging { opacity:.35; }
+.adm-content .admin-q-item.drag-over, .adm-content .admin-sec-row.drag-over { outline:2px dashed var(--a-blue-d); outline-offset:-2px; }
+.adm-content #adminQList { background:#fff; border:1px solid var(--a-line); border-radius:12px; overflow:hidden; }
+
+/* 学员表微调 */
+.adm-content .stu-toolbar { display:flex; align-items:center; gap:10px; margin:0 0 12px; flex-wrap:wrap; }
+.adm-content .stu-toolbar input[type=text] { flex:0 0 300px; max-width:100%; padding:0 12px; height:34px;
+  border:1px solid var(--a-line); border-radius:8px; font-size:13px; font-family:inherit; outline:none; background:#fff; }
+.adm-content .stu-toolbar input[type=text]:focus { border-color:var(--a-blue-d); }
+.adm-content .stu-toolbar .st-count { font-size:12px; color:var(--a-i4); }
+.adm-content .stu-table-wrap { background:#fff; border:1px solid var(--a-line); border-radius:12px; overflow:hidden; }
+.adm-content table.stu-table { width:100%; border-collapse:collapse; font-size:13px; }
+.adm-content .stu-table thead th { text-align:left; font-size:11.5px; font-weight:600; color:var(--a-i3);
+  padding:11px 14px; background:#FAFBFC; border-bottom:1px solid var(--a-line); white-space:nowrap; }
+.adm-content .stu-table tbody td { padding:11px 14px; border-bottom:1px solid var(--a-line2); vertical-align:middle; color:var(--a-i2); }
+.adm-content .stu-table tbody tr:last-child td { border-bottom:0; }
+.adm-content .stu-table tbody tr.st-row:hover { background:#F8FBFE; }
+.adm-content .stu-table tbody tr.st-row { cursor:pointer; }
+.adm-content .stu-table .st-name { font-weight:600; color:var(--a-ink); white-space:nowrap; }
+.adm-content .stu-table .st-sub { font-size:11.5px; color:var(--a-i4); font-weight:400; }
+.adm-content .stu-table .st-muted { color:var(--a-i4); }
+.adm-content .stu-table .st-btn { font-size:12px; padding:4px 10px; border-radius:7px; border:1px solid var(--a-line);
+  background:#fff; cursor:pointer; font-family:inherit; white-space:nowrap; color:var(--a-i2); }
+.adm-content .stu-table .st-btn:hover { border-color:var(--a-blue-d); background:#FAFCFE; }
+.adm-content .stu-table .st-btn.primary { background:#fff; color:var(--a-ink); border-color:#C8CCD2; font-weight:600; }
+.adm-content .stu-table .st-btn.primary:hover { border-color:var(--a-ink); background:#F7F9FB; }
+.adm-content .stu-edit-tr td { background:#FBFDFF; border-bottom:2px solid var(--a-blue); cursor:default; }
+.adm-content .stu-edit-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 14px; }
+.adm-content .stu-edit-grid label { display:block; font-size:11.5px; color:var(--a-i3); margin-bottom:3px; }
+.adm-content .stu-edit-grid input, .adm-content .stu-edit-grid select { width:100%; padding:7px 9px; border:1px solid var(--a-line);
+  border-radius:7px; font-size:13px; font-family:inherit; background:#fff; outline:none; }
+.adm-content .stu-edit-actions { display:flex; gap:8px; margin-top:12px; align-items:center; }
+.adm-content .stu-edit-actions .st-btn { padding:7px 16px; font-size:13px; }
+.adm-content .stu-edit-err { color:var(--a-warn); font-size:12px; }
+
+/* 试卷编排 / 题目编辑：沿用双栏结构，换新皮肤 */
 .pc-grid { display:grid; grid-template-columns:1fr; gap:14px; align-items:start; }
-.pc-actions { display:flex; }
-.pc-left-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:4px 0 8px; flex-wrap:wrap; }
-.pc-left-head .pc-hint { font-size:12px; color:var(--text-light,#7b8896); }
-.pc-right { background:#fff; border:1px solid var(--border,#e3e8ef); border-radius:14px; padding:12px; align-self:start; }
-.pc-right-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
-.pc-right-head h3 { margin:0; font-size:14px; }
-.pc-sticky { position:sticky; top:0; z-index:5; background:#fff; padding-bottom:8px; margin-bottom:8px; border-bottom:1px solid var(--border,#e3e8ef); }
-#adminBankList { max-height:calc(100vh - 230px); overflow-y:auto; }
-.pc-bank-item { border:1px solid var(--border,#e3e8ef); border-radius:10px; padding:8px 10px; margin-bottom:8px; background:#fff; transition:box-shadow .15s ease, border-color .15s ease; }
-.pc-bank-item:hover { border-color:#C7DDF3; box-shadow:0 3px 12px rgba(0,0,0,0.07); }
-.pc-bank-item.pc-in { opacity:0.55; }
+.pc-left-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 10px; flex-wrap:wrap; }
+.pc-left-head .pc-hint { font-size:12px; color:var(--a-i4); }
+.pc-right { background:#fff; border:1px solid var(--a-line); border-radius:12px; padding:14px; align-self:start; }
+.pc-right-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.pc-right-head h3 { margin:0; font-size:13.5px; }
+.pc-sticky { position:sticky; top:0; z-index:5; background:#fff; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid var(--a-line2); }
+#adminBankList { max-height:calc(100vh - 250px); overflow-y:auto; }
+.pc-bank-item { border:1px solid var(--a-line); border-radius:9px; padding:9px 11px; margin-bottom:8px; background:#fff; transition:.15s; }
+.pc-bank-item:hover { border-color:var(--a-blue-d); box-shadow:0 3px 12px rgba(0,0,0,.06); }
+.pc-bank-item.pc-in { opacity:.5; }
 .pc-bank-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
-.pc-bank-meta { font-size:11px; color:var(--text-light,#7b8896); }
-.pc-add-btn { flex:0 0 auto; border:1px solid #C7DDF3; background:#C7DDF3; color:#000; border-radius:8px; padding:4px 12px; font-size:13px; cursor:pointer; font-weight:600; }
-.pc-add-btn:hover { filter:brightness(0.94); }
-.pc-add-btn[disabled] { opacity:0.45; cursor:not-allowed; }
-.pc-drag-handle { cursor:grab; font-size:13px; color:var(--text-light,#7b8896); padding:0 4px; user-select:none; }
-.pc-drag-handle:active { cursor:grabbing; }
-.admin-q-item.pc-dragging { opacity:0.45; }
-.admin-q-item.pc-ins-before { box-shadow:0 -3px 0 0 #C7DDF3; }
-.admin-q-item.pc-ins-after { box-shadow:0 3px 0 0 #C7DDF3; }
-#adminPaperList.pc-drop-end::after { content:''; display:block; height:3px; background:#C7DDF3; border-radius:2px; margin-top:4px; }
-/* ===== 三期：题目编辑双栏（左表单右预览）===== */
+.pc-bank-meta { font-size:11px; color:var(--a-i4); }
+.pc-add-btn { flex:0 0 auto; border:1px solid var(--a-blue); background:var(--a-blue); color:#0E0E0E; border-radius:7px;
+  padding:4px 12px; font-size:12.5px; cursor:pointer; font-weight:600; font-family:inherit; }
+.pc-add-btn:hover { background:var(--a-blue-d); border-color:var(--a-blue-d); }
+.pc-add-btn[disabled] { opacity:.45; cursor:not-allowed; }
+.pc-drag-handle { cursor:grab; font-size:13px; color:var(--a-i4); padding:0 4px; user-select:none; }
+.adm-content .admin-q-item.pc-dragging { opacity:.45; }
+.adm-content .admin-q-item.pc-ins-before { box-shadow:0 -3px 0 0 var(--a-blue); }
+.adm-content .admin-q-item.pc-ins-after { box-shadow:0 3px 0 0 var(--a-blue); }
+#adminPaperList.pc-drop-end::after { content:''; display:block; height:3px; background:var(--a-blue); border-radius:2px; margin-top:4px; }
 .ed-grid { display:grid; grid-template-columns:1fr; gap:14px; align-items:start; }
-.ed-preview { background:#fff; border:1px solid var(--border,#e3e8ef); border-radius:14px; padding:14px; position:sticky; top:12px; }
-.ed-preview h3 { margin:0 0 10px; font-size:14px; }
-.ed-pv-type { display:inline-block; font-size:11px; background:#C7DDF3; color:#000; border-radius:10px; padding:2px 10px; margin-bottom:8px; font-weight:600; }
-.ed-pv-stem { font-size:14px; line-height:1.6; margin-bottom:10px; white-space:pre-wrap; }
-.ed-pv-opt { display:flex; gap:8px; align-items:flex-start; padding:7px 10px; border:1px solid var(--border,#e3e8ef); border-radius:10px; margin-bottom:6px; font-size:13px; line-height:1.5; flex-wrap:wrap; }
-.ed-pv-opt.correct { border-color:#C7DDF3; background:rgba(199,221,243,0.4); font-weight:600; }
-.ed-pv-exp { margin-top:10px; padding-top:10px; border-top:1px dashed var(--border,#e3e8ef); font-size:12.5px; color:#3d4854; line-height:1.6; white-space:pre-wrap; }
-.ed-pv-lang { font-size:11.5px; color:var(--text-light,#7b8896); width:100%; font-weight:400; }
-@media (min-width:861px) {
-  .pc-grid { grid-template-columns:minmax(0,1.25fr) minmax(330px,1fr); }
-  .pc-actions { display:none !important; }
+.ed-preview { background:#fff; border:1px solid var(--a-line); border-radius:12px; padding:16px; position:sticky; top:76px; }
+.ed-preview h3 { margin:0 0 10px; font-size:13.5px; }
+.ed-pv-type { display:inline-block; font-size:11px; background:var(--a-blue); color:#0E0E0E; border-radius:5px;
+  padding:2px 9px; margin-bottom:9px; font-weight:600; }
+.ed-pv-stem { font-size:14px; line-height:1.65; margin-bottom:10px; white-space:pre-wrap; }
+.ed-pv-opt { display:flex; gap:8px; align-items:flex-start; padding:8px 11px; border:1px solid var(--a-line);
+  border-radius:9px; margin-bottom:6px; font-size:13px; line-height:1.5; flex-wrap:wrap; }
+.ed-pv-opt.correct { border-color:var(--a-blue); background:rgba(199,221,243,.42); font-weight:600; }
+.ed-pv-exp { margin-top:10px; padding-top:10px; border-top:1px dashed var(--a-line); font-size:12.5px; color:var(--a-i2); line-height:1.65; white-space:pre-wrap; }
+.ed-pv-lang { font-size:11.5px; color:var(--a-i4); width:100%; font-weight:400; }
+@media (min-width:901px) {
+  .pc-grid { grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr); }
   .ed-grid { grid-template-columns:minmax(0,1.15fr) minmax(340px,1fr); }
 }
-@media (max-width:860px) {
+@media (max-width:900px) {
   .pc-right, .ed-preview { display:none !important; }
 }
-/* 登录页：丽思蓝狮冠纹理背景 */
+/* 登录页 */
 .admin-login { background:#E8F0FA url('assets/brand/pattern-light.jpg') center/cover no-repeat; }
 .admin-login-card { border-top:3px solid #C7DDF3; }
 
-/* ===== 二期：总览仪表盘（KPI / 图表 / 待办） ===== */
-.adm-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
-.adm-kpi { background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
-.adm-kpi .k-label { font-size:12px; color:var(--text-light); }
-.adm-kpi .k-num { font-size:26px; font-weight:700; color:var(--text); margin-top:2px; line-height:1.2; }
-.adm-kpi .k-sub { font-size:11.5px; color:var(--text-light); margin-top:2px; }
-.adm-kpi.warn .k-num { color:#c62828; }
-.adm-grid2 { display:grid; grid-template-columns:1.5fr 1fr; gap:12px; margin-bottom:16px; }
-.adm-card { background:#fff; border:1px solid var(--border); border-radius:12px; padding:16px; }
-.adm-card h3 { font-size:14px; font-weight:600; margin:0 0 12px; color:var(--text); }
-.adm-bars { display:flex; align-items:flex-end; gap:6px; height:120px; }
-.adm-bars .bar { flex:1; background:#C7DDF3; border-radius:4px 4px 0 0; min-height:2px; }
-.adm-bars .bar.today { background:#1a1a1a; }
-.adm-bar-labels { display:flex; gap:6px; margin-top:6px; }
-.adm-bar-labels span { flex:1; text-align:center; font-size:10px; color:var(--text-light); }
-.adm-dept-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12.5px; }
-.adm-dept-row .nm { width:92px; flex:0 0 92px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.adm-dept-row .track { flex:1; height:8px; background:#eef2f7; border-radius:4px; overflow:hidden; }
-.adm-dept-row .fill { height:100%; background:#C7DDF3; border-radius:4px; }
-.adm-dept-row .n { width:32px; text-align:right; color:var(--text-light); font-size:12px; }
-.adm-todo-item { display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--border); font-size:13px; cursor:pointer; }
-.adm-todo-item:last-child { border-bottom:none; }
-.adm-todo-item:hover { color:#000; }
-.adm-todo-dot { width:7px; height:7px; border-radius:50%; flex:0 0 7px; }
-.adm-todo-arrow { color:var(--text-light); }
-.adm-quick { display:flex; gap:8px; flex-wrap:wrap; }
-.adm-quick button { font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:#fff; cursor:pointer; font-family:inherit; }
-.adm-quick button:hover { border-color:#C7DDF3; background:#f7fbff; }
-
-/* ===== 二期：学员宽屏表格（搜索 + 行内编辑） ===== */
-.stu-toolbar { display:flex; align-items:center; gap:10px; margin:2px 0 12px; flex-wrap:wrap; }
-.stu-toolbar input[type=text] { flex:1; max-width:420px; padding:9px 12px; border:1px solid var(--border); border-radius:9px; font-size:13px; font-family:inherit; }
-.stu-toolbar .st-count { font-size:12px; color:var(--text-light); }
-.stu-table-wrap { background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
-table.stu-table { width:100%; border-collapse:collapse; font-size:13px; table-layout:auto; }
-.stu-table thead th { text-align:left; font-size:11.5px; font-weight:600; color:var(--text-light); padding:10px 12px; background:#f8fafc; border-bottom:1px solid var(--border); white-space:nowrap; }
-.stu-table tbody td { padding:10px 12px; border-bottom:1px solid #f0f3f7; vertical-align:middle; }
-.stu-table tbody tr:hover { background:#fafcff; }
-.stu-table tbody tr.st-row { cursor:pointer; }
-.stu-table .st-name { font-weight:600; white-space:nowrap; }
-.stu-table .st-sub { font-size:11.5px; color:var(--text-light); font-weight:400; }
-.stu-table .st-muted { color:#a8b0ba; }
-.stu-table .st-btn { font-size:12px; padding:4px 10px; border-radius:7px; border:1px solid var(--border); background:#fff; cursor:pointer; font-family:inherit; white-space:nowrap; }
-.stu-table .st-btn:hover { border-color:#C7DDF3; background:#f4faff; }
-.stu-table .st-btn.primary { background:#1a1a1a; color:#fff; border-color:#1a1a1a; }
-.stu-edit-tr td { background:#fbfdff; border-bottom:2px solid #C7DDF3; cursor:default; }
-.stu-edit-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 14px; }
-.stu-edit-grid label { display:block; font-size:11.5px; color:var(--text-light); margin-bottom:3px; }
-.stu-edit-grid input, .stu-edit-grid select { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:7px; font-size:13px; font-family:inherit; background:#fff; }
-.stu-edit-actions { display:flex; gap:8px; margin-top:12px; align-items:center; }
-.stu-edit-actions .st-btn { padding:7px 16px; font-size:13px; }
-.stu-edit-err { color:#c62828; font-size:12px; }
-@media (min-width:861px) {
-  .adm-content .stu-cards { display:none; }
-  .adm-content .tab-bar { display:inline-flex; }
-  .adm-content .tab-bar .chip { flex:0 0 auto; padding:7px 16px; border-radius:9px; }
+@media (max-width:1180px) {
+  .ap-grid-main, .ap-grid2 { grid-template-columns:1fr; }
+  .ap-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
-@media (max-width:860px) {
-  .stu-table-wrap, .stu-toolbar { display:none; }
-  .adm-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .adm-grid2 { grid-template-columns:1fr; }
+@media (max-width:900px) {
+  .adm-root { display:block; margin-left:0; width:100%; }
+  .adm-side { display:none; }
+  .adm-topbar { display:none; }
+  .adm-content { padding:0 16px 80px; }
+  .adm-content .app-header { display:block; }
+  .adm-content .stu-table-wrap, .adm-content .stu-toolbar { display:none; }
+  .adm-content .adm-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .adm-content .tab-bar { display:flex; }
+  .ap-head { flex-wrap:wrap; }
+  .ap-head-acts { margin-left:0; width:100%; }
+}
+
+/* 顶栏全局搜索下拉 */
+.adm-gsearch { position:relative; }
+.adm-gdrop { position:absolute; top:40px; left:0; min-width:360px; background:#fff; border:1px solid var(--a-line);
+  border-radius:10px; box-shadow:0 10px 32px rgba(0,0,0,.12); padding:6px; display:none; z-index:300; max-height:360px; overflow-y:auto; }
+.adm-gdrop.on { display:block; }
+.adm-gitem { display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:7px; cursor:pointer; font-size:12.5px; }
+.adm-gitem:hover { background:#F4F9FE; }
+.adm-gitem .gi-ic { width:15px; height:15px; flex:0 0 15px; display:flex; align-items:center; justify-content:center; }
+.adm-gitem .gi-ic svg { width:15px; height:15px; stroke:#71767C; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.adm-gitem .gi-t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#0E0E0E; }
+.adm-gitem .gi-s { flex:0 0 auto; font-size:11px; color:#9AA0A6; }
+.adm-gempty { padding:14px 12px; font-size:12.5px; color:#9AA0A6; text-align:center; }
+
+/* ===== v2 追加：编辑表单 / 看板卡片 / 答题赛输入框统一 ===== */
+.adm-content .ed-form-col { background:#fff; border:1px solid var(--a-line); border-radius:12px; padding:18px 20px; }
+.adm-content .admin-edit-form label { display:block; font-size:12px; color:var(--a-i3); margin-bottom:6px; margin-top:14px; font-weight:500; }
+.adm-content .admin-edit-form input, .adm-content .admin-edit-form textarea, .adm-content .admin-edit-form select {
+  width:100%; padding:9px 11px; border:1px solid var(--a-line); border-radius:8px; font-size:13.5px; outline:none;
+  font-family:inherit; background:#fff; color:var(--a-ink); }
+.adm-content .admin-edit-form input:focus, .adm-content .admin-edit-form textarea:focus, .adm-content .admin-edit-form select:focus {
+  border-color:var(--a-blue-d); box-shadow:0 0 0 3px rgba(199,221,243,.4); }
+.adm-content .admin-edit-form textarea { resize:vertical; min-height:72px; line-height:1.6; }
+.adm-content #adminPaperList { background:#fff; border:1px solid var(--a-line); border-radius:12px; overflow-y:auto; max-height:calc(100vh - 320px); }
+.adm-content .dash-dept-card { background:#fff; border:1px solid var(--a-line); border-radius:10px; padding:12px 14px; margin-bottom:8px; cursor:pointer; }
+.adm-content .dash-dept-card:hover { border-color:var(--a-blue-d); background:#FAFCFE; }
+.adm-content .q-card { background:#fff; border:1px solid var(--a-line); border-radius:12px; padding:16px; margin-bottom:12px; }
+.adm-content .admin-input { border:1px solid var(--a-line) !important; border-radius:8px !important; font-family:inherit; color:var(--a-ink); font-size:13px; outline:none; }
+.adm-content .admin-input:focus { border-color:var(--a-blue-d) !important; box-shadow:0 0 0 3px rgba(199,221,243,.4); }
+
+/* ===== v2 追加 2：题库行答案胶囊不换行 / 试卷列表题卡恢复竖排 / 云端按钮瘦身 ===== */
+.adm-content .admin-q-item .q-ans { flex-wrap:nowrap; }
+.adm-content #adminPaperList .admin-q-item { display:block; padding:12px 14px; }
+.adm-content #adminPaperList .admin-q-item .q-num { font-size:11.5px; color:var(--a-i4); }
+.adm-content #adminPaperList .admin-q-item .q-text { white-space:normal; font-size:13px; line-height:1.55; margin:4px 0 2px; }
+.adm-content #adminPaperList .admin-q-item .q-ans { flex-wrap:wrap; max-width:none; margin-top:6px; }
+.adm-content #adminPaperList .admin-q-item .q-actions { opacity:1; margin-top:8px; flex-wrap:wrap; }
+.adm-content .admin-cloud-btn { height:34px; padding:0 14px !important; border-radius:8px !important; font-size:13px;
+  border:1px solid var(--a-line) !important; background:#fff !important; color:var(--a-i2) !important;
+  cursor:pointer; font-family:inherit; }
+.adm-content .admin-cloud-btn:hover { border-color:var(--a-blue-d) !important; background:#FAFCFE !important; }
+.adm-content #paperGradingCard, .adm-content #paperStatsCard { display:inline-block; width:calc(50% - 7px);
+  vertical-align:top; margin-bottom:12px; }
+.adm-content #paperStatsCard { margin-left:12px; }
+.adm-content #paperGradingCard input, .adm-content #paperStatsCard input { border:1px solid var(--a-line) !important; border-radius:8px !important; font-family:inherit; }
+@media (max-width:1180px) {
+  .adm-content #paperGradingCard, .adm-content #paperStatsCard { display:block; width:auto; margin-left:0; }
 }
 </style>
 </head>
@@ -19007,7 +19300,7 @@ function renderAdminExams() {
     } catch (e) {
       html += '<span style="align-self:center;font-size:11px;color:var(--text-light);">📏 —</span>';
     }
-    html += '<button class="nav-btn primary" style="flex:1;min-width:120px;padding:10px;font-size:13px;" onclick="adminPublishExam(\'' + pk + '\')">' + (sess ? '💾 ' + (state.lang === 'en' ? 'Save changes' : '保存修改') : '🚀 ' + (state.lang === 'en' ? 'Publish' : '发布')) + '</button>';
+    html += '<button class="ap-btn pri" style="min-width:140px;justify-content:center;" onclick="adminPublishExam(\'' + pk + '\')">' + (sess ? (state.lang === 'en' ? 'Save changes' : '保存修改') : (state.lang === 'en' ? 'Publish' : '发布')) + '</button>';
     if (sess && sess.status === 'published') {
       html += '<button class="nav-btn secondary" style="flex:1;min-width:100px;padding:10px;font-size:13px;" onclick="adminCloseExam(\'' + pk + '\')">🛑 ' + (state.lang === 'en' ? 'Close' : '关闭考试') + '</button>';
     }
@@ -19423,14 +19716,15 @@ function adminDashMetrics() {
 function adminDashBarsHtml(m, en) {
   var max = 1;
   for (var i = 0; i < m.trend.length; i++) if (m.trend[i].n > max) max = m.trend[i].n;
-  var bars = '', labels = '';
+  var cols = '', labels = '';
   for (var j = 0; j < m.trend.length; j++) {
     var p = m.trend[j];
     var pct = p.n ? Math.max(6, Math.round(p.n / max * 100)) : 2;
-    bars += '<div class="bar' + (p.today ? ' today' : '') + '" style="height:' + pct + '%;" title="' + p.label + ' · ' + p.n + '"></div>';
+    cols += '<div class="col' + (p.today ? ' today' : '') + '"><div class="bar" style="height:' + pct + '%;" title="'
+      + p.label + ' · ' + p.n + '"></div></div>';
     labels += '<span>' + (j % 2 === 0 ? p.label : '') + '</span>';
   }
-  return '<div class="adm-bars">' + bars + '</div><div class="adm-bar-labels">' + labels + '</div>';
+  return '<div class="ap-chart">' + cols + '</div><div class="ap-xaxis">' + labels + '</div>';
 }
 
 // 部门人数分布（前 6）
@@ -19439,40 +19733,43 @@ function adminDashDeptHtml(m, en) {
   for (var k in m.depts) if (m.depts.hasOwnProperty(k)) arr.push({ k: k, n: m.depts[k] });
   arr.sort(function (a, b) { return b.n - a.n; });
   arr = arr.slice(0, 6);
-  if (!arr.length) return '<div style="font-size:12.5px;color:var(--text-light);">' + (en ? 'No department data yet.' : '暂无部门数据。') + '</div>';
+  if (!arr.length) return '<div class="ap-sub" style="margin:0;">' + (en ? 'No department data yet.' : '暂无部门数据。') + '</div>';
   var max = arr[0].n || 1, h = '';
   for (var i = 0; i < arr.length; i++) {
-    h += '<div class="adm-dept-row">'
+    h += '<div class="ap-prow">'
       + '<span class="nm">' + escapeHtml(arr[i].k) + '</span>'
-      + '<span class="track"><span class="fill" style="width:' + Math.round(arr[i].n / max * 100) + '%;display:block;"></span></span>'
-      + '<span class="n">' + arr[i].n + '</span></div>';
+      + '<span class="tk"><span class="fl" style="width:' + Math.round(arr[i].n / max * 100) + '%;"></span></span>'
+      + '<span class="pc">' + arr[i].n + '</span></div>';
   }
   return h;
 }
 
 // 待办清单：报错 / 待核查 / 待同步 / 赛事状态
 function adminDashTodoHtml(m, en) {
+  function row(iconPaths, color, bg, title, sub, n, onclick) {
+    return '<div class="ap-todo" onclick="' + onclick + '">'
+      + '<div class="ic" style="background:' + bg + '"><svg viewBox="0 0 24 24" stroke="' + color + '">' + iconPaths + '</svg></div>'
+      + '<div><div class="tl">' + title + '</div>' + (sub ? '<div class="ts">' + sub + '</div>' : '') + '</div>'
+      + '<div class="n">' + n + '</div></div>';
+  }
   var h = '', any = false;
   if (m.reportOpen > 0) {
     any = true;
-    h += '<div class="adm-todo-item" onclick="adminState.reportFilter=\'open\';navigate(\'adminQReports\')">'
-      + '<span class="adm-todo-dot" style="background:#d85a30;"></span>'
-      + '<span style="flex:1;">' + m.reportOpen + (en ? ' question report(s) to review' : ' 条题目报错待处理') + '</span>'
-      + '<span class="adm-todo-arrow">›</span></div>';
+    h += row('<path d="M12 3l9 16H3z"/><path d="M12 9v4M12 16.5v.5"/>', '#C0392B', '#FBEAE8',
+      (en ? 'Question reports' : '题目报错待核实'), (en ? 'reported by students' : '由学员提交'),
+      m.reportOpen, 'adminState.reportFilter=\'open\';navigate(\'adminQReports\')');
   }
   if (m.verifyN > 0) {
     any = true;
-    h += '<div class="adm-todo-item" onclick="navigate(\'adminVerify\')">'
-      + '<span class="adm-todo-dot" style="background:#ba7517;"></span>'
-      + '<span style="flex:1;">' + m.verifyN + (en ? ' registration(s) to verify' : ' 位新注册学员待核查') + '</span>'
-      + '<span class="adm-todo-arrow">›</span></div>';
+    h += row('<circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/>', '#A9741B', '#FDF3E3',
+      (en ? 'Registrations to verify' : '注册信息待核查'), (en ? 'name / ID mismatch' : '姓名或工号与名册不符'),
+      m.verifyN, 'navigate(\'adminVerify\')');
   }
   if (m.fixN > 0) {
     any = true;
-    h += '<div class="adm-todo-item" onclick="adminFixFlush()">'
-      + '<span class="adm-todo-dot" style="background:#ba7517;"></span>'
-      + '<span style="flex:1;">' + m.fixN + (en ? ' profile fix(es) waiting for cloud' : ' 条资料修正待同步云端') + '</span>'
-      + '<span class="adm-todo-arrow">›</span></div>';
+    h += row('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>', '#71767C', '#EFF1F4',
+      (en ? 'Profile fixes pending' : '资料修正待同步'), (en ? 'retrying automatically' : '系统自动重试中'),
+      m.fixN, 'adminFixFlush()');
   }
   try {
     var c = raceConfOf();
@@ -19480,15 +19777,13 @@ function adminDashTodoHtml(m, en) {
     if (st === 'open') {
       any = true;
       var daysLeft = c.endTime ? Math.max(0, Math.ceil((Date.parse(c.endTime) - Date.now()) / 86400000)) : 0;
-      h += '<div class="adm-todo-item" onclick="navigate(\'adminRace\')">'
-        + '<span class="adm-todo-dot" style="background:#0f6e56;"></span>'
-        + '<span style="flex:1;">' + escapeHtml(c.title || (en ? 'Quiz race' : '答题赛')) + (en ? ' · ' + daysLeft + ' day(s) left' : ' · 还剩 ' + daysLeft + ' 天') + '</span>'
-        + '<span class="adm-todo-arrow">›</span></div>';
+      h += row('<path d="M13 2L4.5 13.5H11l-1 8.5 8.5-11.5H12z"/>', '#1E8E5A', '#E6F4EC',
+        escapeHtml(c.title || (en ? 'Quiz race' : '答题赛')), (en ? daysLeft + ' day(s) left' : '还剩 ' + daysLeft + ' 天'),
+        '›', 'navigate(\'adminRace\')');
     }
   } catch (e) {}
   if (!any) {
-    h += '<div style="font-size:12.5px;color:var(--text-light);padding:6px 0;">'
-      + (en ? 'All clear — nothing needs attention.' : '暂无待办，一切正常。') + '</div>';
+    h += '<div class="ap-sub" style="margin:4px 0;">' + (en ? 'All clear — nothing needs attention.' : '暂无待办，一切正常。') + '</div>';
   }
   return h;
 }
@@ -19497,7 +19792,6 @@ function renderAdminDashboard() {
   if (!adminState.authenticated) return renderAdminLogin();
   var en = state.lang === 'en';
   var m = adminDashMetrics();
-  var todoN = m.reportOpen + m.verifyN + m.fixN;
 
   // 打开首页时补拉一次云端学员数据（60 s 节流），拉完 3 秒后重画让新数据冒出来
   var _repInFlight = adminCloudFetching;
@@ -19515,60 +19809,79 @@ function renderAdminDashboard() {
   var avgScore = m.scoreN ? Math.round(m.scoreSum / m.scoreN) : null;
   var avgMt = m.mtN ? Math.round(m.mtSum / m.mtN) : null;
   var activePct = m.total ? Math.round(m.active7 / m.total * 100) : 0;
+  var todoN = m.reportOpen + m.verifyN + m.fixN;
 
-  var html = '<div class="adm-kpis">';
-  html += '<div class="adm-kpi"><div class="k-label">' + (en ? 'Registered students' : '注册学员') + '</div>'
-    + '<div class="k-num">' + m.total + '</div>'
-    + '<div class="k-sub">' + (en ? m.active7 + ' active · 7 days' : '近 7 日活跃 ' + m.active7 + ' 人 · ' + activePct + '%') + '</div></div>';
-  html += '<div class="adm-kpi"><div class="k-label">' + (en ? 'Questions' : '题库总量') + '</div>'
-    + '<div class="k-num">' + m.totalQ + '</div>'
-    + '<div class="k-sub">' + (en ? '3 banks' : '21天 · 三步法 · 手册') + '</div></div>';
-  html += '<div class="adm-kpi"><div class="k-label">' + (en ? 'Exams · 7 days' : '近 7 日考试') + '</div>'
-    + '<div class="k-num">' + m.exam7 + '</div>'
-    + '<div class="k-sub">' + (avgScore === null ? (en ? 'no scores yet' : '暂无成绩') : (en ? 'avg ' + avgScore + '%' : '平均分 ' + avgScore + ' 分')) + '</div></div>';
-  html += '<div class="adm-kpi"><div class="k-label">' + (en ? 'Mastery' : '平均掌握率') + '</div>'
-    + '<div class="k-num">' + (avgMt === null ? '—' : avgMt + '%') + '</div>'
-    + '<div class="k-sub">' + (m.mtN ? (en ? m.mtN + ' students' : m.mtN + ' 人有数据') : (en ? 'no data yet' : '暂无数据')) + '</div></div>';
-  html += '<div class="adm-kpi' + (todoN > 0 ? ' warn' : '') + '"><div class="k-label">' + (en ? 'To-do' : '待办事项') + '</div>'
-    + '<div class="k-num">' + todoN + '</div>'
-    + '<div class="k-sub">' + (en ? 'reports · verify · sync' : '报错 · 核查 · 同步') + '</div></div>';
-  html += '</div>';
+  var d = new Date();
+  var dateStr = en
+    ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    : (d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日');
+
+  var h = adminHead(
+    en ? 'Overview' : '总览',
+    dateStr + ' · ' + (en ? m.total + ' students registered' : '共 ' + m.total + ' 位学员'),
+    '<button class="ap-btn" onclick="navigate(\'adminDash\')">' + adminIco('chart') + (en ? 'Data board' : '数据看板') + '</button>'
+    + '<button class="ap-btn pri" onclick="navigate(\'adminExams\')">'
+    + '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>' + (en ? 'Publish exam' : '发布考试') + '</button>'
+  );
 
   if (adminState.cloudStatus === 'partial' || adminState.cloudStatus === 'error') {
-    html += '<div class="sync-note" style="margin-bottom:12px;">' + (en
-      ? '⚠️ Local list may be incomplete. '
-      : '⚠️ 本地列表可能不完整。 ')
-      + '<button class="admin-mini-btn" onclick="adminForceFullSync()">' + (en ? '↻ Full re-sync' : '↻ 立即全量重拉') + '</button></div>';
+    h += '<div class="sync-note" style="margin:-8px 0 14px;">'
+      + (en ? 'Local list may be incomplete. ' : '本地列表可能不完整。 ')
+      + '<button class="admin-mini-btn" onclick="adminForceFullSync()">' + (en ? 'Full re-sync' : '立即全量重拉') + '</button></div>';
   }
 
-  html += '<div class="adm-grid2">';
-  html += '<div class="adm-card"><h3>' + (en ? 'Exam submissions · last 14 days' : '近 14 日考试提交量') + '</h3>' + adminDashBarsHtml(m, en) + '</div>';
-  html += '<div class="adm-card"><h3>' + (en ? 'To-do' : '待办') + '</h3>' + adminDashTodoHtml(m, en) + '</div>';
-  html += '</div>';
+  h += '<div class="ap-kpis">';
+  h += '<div class="ap-kpi"><div class="lb">' + (en ? 'Registered students' : '注册学员') + '</div>'
+    + '<div class="v">' + m.total + '<small>' + (en ? '' : '人') + '</small></div>'
+    + '<div class="d">' + (en ? m.active7 + ' active · 7 days' : '近 7 日活跃 ' + m.active7 + ' 人 · ' + activePct + '%') + '</div>'
+    + '<svg class="spark" width="62" height="26" viewBox="0 0 62 26"><polyline points="0,20 10,17 20,18 30,12 40,13 52,6 62,4" fill="none" stroke="#C7DDF3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+  h += '<div class="ap-kpi"><div class="lb">' + (en ? 'Questions' : '题库总量') + '</div>'
+    + '<div class="v">' + m.totalQ + '</div>'
+    + '<div class="d">' + (en ? '3 banks' : '21 天 · 三步法 · 手册') + '</div>'
+    + '<svg class="spark" width="62" height="26" viewBox="0 0 62 26"><polyline points="0,18 10,16 20,17 30,13 40,12 52,9 62,7" fill="none" stroke="#C7DDF3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+  h += '<div class="ap-kpi"><div class="lb">' + (en ? 'Exams · 7 days' : '近 7 日考试') + '</div>'
+    + '<div class="v">' + m.exam7 + '</div>'
+    + '<div class="d">' + (avgScore === null ? (en ? 'no scores yet' : '暂无成绩') : (en ? 'avg <b>' + avgScore + '</b> pts' : '平均分 <b>' + avgScore + '</b>')) + '</div>'
+    + '<svg class="spark" width="62" height="26" viewBox="0 0 62 26"><polyline points="0,21 10,18 20,19 30,14 40,12 52,8 62,6" fill="none" stroke="#C7DDF3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+  h += '<div class="ap-kpi"><div class="lb">' + (en ? 'Mastery' : '平均掌握率') + '</div>'
+    + '<div class="v">' + (avgMt === null ? '—' : avgMt + '<small>%</small>') + '</div>'
+    + '<div class="d">' + (m.mtN ? (en ? m.mtN + ' students with data' : m.mtN + ' 人有数据') : (en ? 'no data yet' : '暂无数据')) + '</div>'
+    + '<svg class="spark" width="62" height="26" viewBox="0 0 62 26"><polyline points="0,21 10,18 20,19 30,14 40,12 52,8 62,5" fill="none" stroke="#C7DDF3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+  h += '</div>';
 
-  html += '<div class="adm-grid2">';
-  html += '<div class="adm-card"><h3>' + (en ? 'Students by division' : '学员部门分布') + '</h3>' + adminDashDeptHtml(m, en) + '</div>';
-  html += '<div class="adm-card"><h3>' + (en ? 'Quick actions' : '快捷操作') + '</h3><div class="adm-quick">'
-    + '<button onclick="navigate(\'adminBankHub\')">📚 ' + (en ? 'Question bank' : '题库管理') + '</button>'
-    + '<button onclick="navigate(\'adminExamHub\')">📌 ' + (en ? 'Publish exam' : '发布考试') + '</button>'
-    + '<button onclick="adminState.studentsTab=\'list\';navigate(\'adminStudents\')">👥 ' + (en ? 'Students' : '学员管理') + '</button>'
-    + '<button onclick="navigate(\'adminDash\')">📈 ' + (en ? 'Data board' : '数据看板') + '</button>'
-    + '<button onclick="navigate(\'adminRace\')">⚡ ' + (en ? 'Quiz race' : '答题赛') + '</button>'
+  h += '<div class="ap-grid-main">';
+  h += '<div class="ap-card"><div class="ap-card-h"><h3>' + (en ? 'Exam submissions · last 14 days' : '近 14 日考试提交量') + '</h3>'
+    + '<span class="more" onclick="navigate(\'adminDash\')">' + (en ? 'Details →' : '查看明细 →') + '</span></div>'
+    + '<div class="ap-card-b">' + adminDashBarsHtml(m, en) + '</div></div>';
+  h += '<div class="ap-card"><div class="ap-card-h"><h3>' + (en ? 'To-do' : '待处理') + '</h3>'
+    + '<span class="more">' + (todoN > 0 ? todoN + (en ? ' items' : ' 项') : '') + '</span></div>'
+    + '<div class="ap-card-b">' + adminDashTodoHtml(m, en) + '</div></div>';
+  h += '</div>';
+
+  h += '<div class="ap-grid2">';
+  h += '<div class="ap-card"><div class="ap-card-h"><h3>' + (en ? 'Students by division' : '学员部门分布') + '</h3></div>'
+    + '<div class="ap-card-b">' + adminDashDeptHtml(m, en) + '</div></div>';
+  h += '<div class="ap-card"><div class="ap-card-h"><h3>' + (en ? 'Shortcuts' : '快捷入口') + '</h3></div>'
+    + '<div class="ap-card-b">'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
+    + '<button class="ap-btn" onclick="navigate(\'adminBank\')">' + adminIco('book') + (en ? 'Bank' : '题库') + '</button>'
+    + '<button class="ap-btn" onclick="navigate(\'adminPaper\')">' + adminIco('file') + (en ? 'Papers' : '试卷编排') + '</button>'
+    + '<button class="ap-btn" onclick="navigate(\'adminStudents\')">' + adminIco('users') + (en ? 'Students' : '学员') + '</button>'
+    + '<button class="ap-btn" onclick="navigate(\'adminRace\')">' + adminIco('bolt') + (en ? 'Race' : '答题赛') + '</button>'
     + '</div>'
-    + '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;">'
-    + '<button class="admin-mini-btn" onclick="adminExportJSON()">📥 ' + (en ? 'Export JSON' : '导出 JSON 备份') + '</button>'
-    + '<button class="admin-mini-btn" style="color:#c62828;" onclick="adminResetData()">🔄 ' + (en ? 'Reset data' : '恢复原始数据') + '</button>'
+    + '<div style="padding-top:12px;border-top:1px solid var(--a-line2);display:flex;gap:8px;flex-wrap:wrap;">'
+    + '<button class="ap-btn sm" onclick="adminExportJSON()">' + (en ? 'Export backup' : '导出 JSON 备份') + '</button>'
+    + '<button class="ap-btn sm danger" onclick="adminResetData()">' + (en ? 'Reset data' : '恢复原始数据') + '</button>'
     + '</div>'
-    + '<div style="font-size:11.5px;color:var(--text-light);margin-top:10px;">' + (en
-      ? 'Sign out of the admin panel from the bottom of the sidebar.'
+    + '<div class="ap-sub" style="margin-top:10px;">' + (en
+      ? 'Sign out from the bottom of the sidebar.'
       : '退出管理端请用左下角侧边栏的「退出管理端」。') + '</div>'
-    + '</div>';
-  html += '</div>';
+    + '</div></div>';
+  h += '</div>';
 
-  return html;
+  return h;
 }
 
-// ===== Admin: question-management sub-hub (banks + paper composer) =====
 function renderAdminBankHub() {
   if (!adminState.authenticated) return renderAdminLogin();
 
@@ -22536,7 +22849,7 @@ function adminStuTableHtml(listRecs, en) {
     h += '<td>' + mtTxt + '</td>';
     h += '<td>' + adminStuStatusHtml(rec, en) + '</td>';
     h += '<td style="text-align:right;white-space:nowrap;">'
-      + '<button class="st-btn primary" onclick="event.stopPropagation();adminState.editStudent=\'' + jsKey(rec.key) + '\';render()">✏️ ' + (en ? 'Edit' : '编辑') + '</button> '
+      + '<button class="st-btn primary" onclick="event.stopPropagation();adminState.editStudent=\'' + jsKey(rec.key) + '\';render()">' + (en ? 'Edit' : '编辑') + '</button> '
       + '<button class="st-btn" onclick="event.stopPropagation();adminOpenStudentDetail(\'' + jsKey(rec.key) + '\')">' + (en ? 'Detail' : '详情') + '</button>'
       + '</td>';
     h += '</tr>';
@@ -22583,12 +22896,18 @@ function adminStuCardsHtml(listRecs, en) {
 function renderAdminStudents() {
   if (!adminState.authenticated) return renderAdminLogin();
   var en = state.lang === 'en';
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="' + (adminState.studentDetail ? 'adminBackFromStudent()' : 'adminBack(\'adminDashboard\')') + '">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>📊 ' + (en ? 'Student Learning Data' : '学员学习情况') + '</h1>';
-  html += '<div class="subtitle">' + (en ? 'Cloud-synced' : '云端同步') + '</div>';
-  html += '</div><div class="page">';
+  var _stuBack = adminState.studentDetail
+    ? '<button class="ap-btn" onclick="adminBackFromStudent()">← ' + (en ? 'Back to list' : '返回列表') + '</button>'
+    : '';
+  var html = adminHead(
+    adminState.studentDetail ? (en ? 'Student Profile' : '学员档案') : (en ? 'Student Roster' : '学员名册'),
+    adminState.studentDetail
+      ? (en ? 'Full profile, exam history and question reports' : '完整档案、考试记录与报错记录')
+      : (en ? 'Roster is the whitelist — only listed employee IDs can register. Click a row for the full profile.'
+            : '名册即白名单：只有名单内的工号才能注册。点击任意一行查看完整档案。'),
+    _stuBack + '<button class="ap-btn" onclick="adminForceFullSync()">' + (en ? '↻ Re-sync' : '↻ 立即全量重拉') + '</button>'
+  );
+  html += '<div class="page">';
 
   // Kick off (or re-kick) the cloud fetch; the placeholder below shows status.
   // 'partial' is informational (verified count > local). Don't re-trigger the
@@ -23091,58 +23410,74 @@ function adminSaveStudentEdit(stuKey) {
 
 function renderAdminBank() {
   if (!adminState.authenticated) return renderAdminLogin();
-
-  var bank = adminState.bank;
+  var en = state.lang === 'en';
+  var bank = adminState.bank || 'day21';
   var questions = QUESTION_DATA[bank] || [];
+  var filtered = adminFilteredQuestions(questions);
+  var isManual = bank === 'manual';
 
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminBankHub\')">\u2190</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>\u2699\ufe0f ' + getBankName(bank) + '</h1>';
-  html += '<div class="subtitle">' + questions.length + (state.lang === 'en' ? ' questions' : ' \u9898') + '</div>';
-  html += '</div><div class="page">';
-  html += adminCloudSyncBanner();
-
-  // Section filter for manual
-  if (bank === 'manual') {
-    var sections = getManualSections();
-    html += '<div class="admin-section-chips">';
-    html += '<div class="chip ' + (adminState.section === 'all' ? 'active' : '') + '" onclick="adminState.section=\'all\';render()">' + (state.lang === 'en' ? 'All' : '\u5168\u90e8') + '</div>';
-    for (var si = 0; si < sections.length; si++) {
-      var sname = sections[si].name.replace(/'/g, "\\'");
-      html += '<div class="chip ' + (adminState.section === sections[si].name ? 'active' : '') + '" onclick="adminState.section=\'' + sname + '\';render()">' + sections[si].name + ' (' + sections[si].count + ')</div>';
-    }
-    html += '</div>';
-
-    // Section tools: module order + question-count limits (sync to students)
-    var tabOrder = adminState.sectionPanel === 'order' ? '' : 'order';
-    var tabLimit = adminState.sectionPanel === 'limit' ? '' : 'limit';
-    html += '<div class="admin-tool-tabs">';
-    html += '<button class="' + (adminState.sectionPanel === 'order' ? 'active' : '') + '" onclick="adminState.sectionPanel=\'' + tabOrder + '\';render()">\uD83D\uDD00 ' + (state.lang === 'en' ? 'Section Order' : '\u677F\u5757\u6392\u5e8f') + '</button>';
-    html += '<button class="' + (adminState.sectionPanel === 'limit' ? 'active' : '') + '" onclick="adminState.sectionPanel=\'' + tabLimit + '\';render()">\uD83C\uDFAF ' + (state.lang === 'en' ? 'Mock Exam Count' : '\u6a21\u62df\u8003\u9898\u6570') + '</button>';
-    html += '</div>';
-    if (adminState.sectionPanel === 'order') html += adminRenderSectionOrderPanel();
-    if (adminState.sectionPanel === 'limit') html += adminRenderLimitPanel();
+  var banks = [
+    { key: 'day21', name: en ? '21-Day' : '21 天' },
+    { key: 'tsos', name: en ? 'Three Steps' : '三步法' },
+    { key: 'manual', name: en ? 'Handbook' : '手册' }
+  ];
+  var seg = '<div class="ap-seg">';
+  for (var bi = 0; bi < banks.length; bi++) {
+    var bk = banks[bi];
+    var cnt = (QUESTION_DATA[bk.key] || []).length;
+    seg += '<button class="' + (bank === bk.key ? 'on' : '') + '" onclick="adminGoToBank(\'' + bk.key + '\')">'
+      + bk.name + ' <span class="ap-num" style="opacity:.6">' + cnt + '</span></button>';
   }
+  seg += '</div>';
 
-  // Search
-  html += '<div class="search-box"><span class="search-icon">\uD83D\uDD0D</span>';
-  html += '<input type="text" id="adminSearch" placeholder="' + (state.lang === 'en' ? 'Search questions...' : '\u641c\u7d22\u9898\u76ee...') + '" value="' + escapeHtml(adminState.search) + '" oninput="adminState.search=this.value;adminUpdateList()">';
-  html += '</div>';
+  var acts = '';
+  if (isManual) {
+    acts += '<button class="ap-btn' + (adminState.sectionPanel === 'order' ? ' blu' : '') + '" onclick="adminState.sectionPanel='
+      + (adminState.sectionPanel === 'order' ? '\'\'' : '\'order\'') + ';render()">' + (en ? 'Section order' : '板块排序') + '</button>';
+    acts += '<button class="ap-btn' + (adminState.sectionPanel === 'limit' ? ' blu' : '') + '" onclick="adminState.sectionPanel='
+      + (adminState.sectionPanel === 'limit' ? '\'\'' : '\'limit\'') + ';render()">' + (en ? 'Mock exam count' : '模拟考题数') + '</button>';
+  }
+  acts += '<button class="ap-btn pri" onclick="adminAddNew()">'
+    + '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>' + (en ? 'New question' : '新建题目') + '</button>';
 
-  // Add new button
-  html += '<button class="admin-btn-add" onclick="adminAddNew()">\u2795 ' + (state.lang === 'en' ? 'Add New Question' : '\u65b0\u589e\u9898\u76ee') + '</button>';
-  html += '<div style="font-size:12px;color:var(--text-light);margin:8px 0 12px;line-height:1.6;">' + (state.lang === 'en'
-    ? 'Drag a question card directly onto another one to reorder (or use the \u2191/\u2193 buttons) \u2014 students see this exact order in sequential practice; changes sync to all devices automatically.'
-    : '\u53ef\u76f4\u63a5\u62d6\u52a8\u9898\u76ee\u5361\u7247\u8c03\u6574\u987a\u5e8f\uff08\u4e5f\u53ef\u7528 \u2191/\u2193 \u6309\u94ae\uff09\u2014\u2014\u5b66\u5458\u7aef\u987a\u5e8f\u7ec3\u4e60\u6309\u6b64\u987a\u5e8f\u51fa\u9898\uff0c\u8c03\u6574\u540e\u81ea\u52a8\u540c\u6b65\u5230\u6240\u6709\u5b66\u5458\u8bbe\u5907\u3002') + '</div>';
+  var sub = isManual
+    ? (en ? 'Product knowledge handbook · sections, order and mock-exam count are editable here'
+          : '酒店产品知识手册 · 板块、排序与模拟考题数在此维护')
+    : (en ? 'Questions below are also the source of this bank\u2019s papers — edit here or in the composer'
+          : '以下题目同时是本库试卷的来源，可直接在此修改，也可在试卷编排中调整');
 
-  // Question list
-  html += '<div id="adminQList">';
-  html += adminRenderQList(questions);
-  html += '</div>';
+  var h = adminHead((en ? 'Question Bank' : '题库') + ' <span class="ap-tag" style="vertical-align:middle">' + questions.length + (en ? ' Q' : ' 题') + '</span>', sub, acts);
+  h += adminCloudSyncBanner();
 
-  html += '</div>';
-  return html;
+  h += '<div class="ap-bar">';
+  h += seg;
+  if (isManual) {
+    var sections = getManualSections();
+    h += '<select class="ap-sel" onchange="adminState.section=this.value;render()">';
+    h += '<option value="all"' + (adminState.section === 'all' ? ' selected' : '') + '>' + (en ? 'All sections' : '全部板块') + '</option>';
+    for (var si = 0; si < sections.length; si++) {
+      h += '<option value="' + escapeHtml(sections[si].name) + '"' + (adminState.section === sections[si].name ? ' selected' : '') + '>'
+        + escapeHtml(sections[si].name) + ' (' + sections[si].count + ')</option>';
+    }
+    h += '</select>';
+  }
+  h += '<div class="ap-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>'
+    + '<input type="text" id="adminSearch" value="' + escapeHtml(adminState.search) + '" autocomplete="off" placeholder="'
+    + (en ? 'Search questions…' : '搜索题目…') + '" oninput="adminState.search=this.value;adminUpdateList()"></div>';
+  h += '<span class="ap-count">' + (en
+    ? filtered.length + ' / ' + questions.length + ' shown'
+    : (adminState.search ? '筛出 ' + filtered.length + ' / ' + questions.length + ' 题' : '共 ' + questions.length + ' 题')) + '</span>';
+  h += '</div>';
+
+  h += '<div class="ap-sub" style="margin:-4px 0 10px;">' + (en
+    ? 'Drag a row onto another to reorder — students see this exact order in sequential practice.'
+    : '直接拖动行可调整顺序（也可用行尾 ↑/↓ 按钮），学员端顺序练习按此顺序出题，调整后自动同步到所有设备。') + '</div>';
+
+  if (isManual && adminState.sectionPanel === 'order') h += adminRenderSectionOrderPanel();
+  if (isManual && adminState.sectionPanel === 'limit') h += adminRenderLimitPanel();
+
+  h += '<div id="adminQList">' + adminRenderQList(questions) + '</div>';
+  return h;
 }
 
 // ===== Section order + question-count tools (manual bank, admin) =====
@@ -23517,12 +23852,25 @@ function renderAdminPaper() {
   var g = paperGradingSnapshot(gradingKey);
   paperGradingDraftGet(gradingKey);
 
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminBankHub\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>\ud83d\udccb ' + (state.lang === 'en' ? 'Paper Composer' : '\u8bd5\u5377\u7f16\u6392') + '</h1>';
-  html += '<div class="subtitle">' + escapeHtml(paperName) + '</div>';
-  html += '</div><div class="page">';
+  var _enP = state.lang === 'en';
+  var html = adminHead(
+    _enP ? 'Paper Composer' : '试卷编排',
+    escapeHtml(paperName) + ' · ' + refs.length + (_enP ? ' questions' : ' 题'),
+    '<button class="ap-btn" onclick="adminExportPaperWord(\'' + escapeHtml(paperKey) + '\')">'
+      + (_enP ? 'Export Word' : '导出 Word') + '</button>'
+    + '<button class="ap-btn pri" onclick="adminPaperGradePublishClick()">' + (_enP ? 'Save & publish' : '保存并发布') + '</button>'
+  );
+  html += '<div class="page">';
+  if (bankKey === 'day21' || bankKey === 'tsos') {
+    var _aN = ((QUESTION_DATA.papers || {})[bankKey + '_all'] || []).length;
+    var _kN = ((QUESTION_DATA.papers || {})[bankKey + '_kitchen'] || []).length;
+    html += '<div class="ap-bar"><div class="ap-seg">'
+      + '<button class="' + (isAll ? 'on' : '') + '" onclick="adminGoToPaper(\'' + bankKey + '_all\')">'
+      + (_enP ? 'All-Employee' : '全员版') + ' <span class="ap-num" style="opacity:.6">' + _aN + '</span></button>'
+      + '<button class="' + (isKitchen ? 'on' : '') + '" onclick="adminGoToPaper(\'' + bankKey + '_kitchen\')">'
+      + (_enP ? 'Culinary' : '厨房版') + ' <span class="ap-num" style="opacity:.6">' + _kN + '</span></button>'
+      + '</div><span class="ap-count">' + escapeHtml(getBankName(bankKey)) + '</span></div>';
+  }
 
   html += adminCloudSyncBanner();
   html += adminPaperSaveBanner();
@@ -24448,35 +24796,32 @@ function adminAnswerPreviewHtml(q) {
 
 function adminRenderQList(questions) {
   var filtered = adminFilteredQuestions(questions);
-
+  var en = state.lang === 'en';
   var html = '';
   for (var i = 0; i < filtered.length; i++) {
     var q = filtered[i];
-    // Show the Chinese stem directly in the list (English as a dimmed second
-    // line) so the admin can scan content without opening the editor.
+    // 列表直接显示中文题干（英文作为第二行备用信息），管理员不用点进去就能扫内容
     var qCn = q.question_cn || legacyCnStem(q.question);
     var qEn = q.question_en || '';
-    var qText = qCn ? (qCn.length > 110 ? qCn.substring(0, 110) + '…' : qCn) : (state.lang === 'en' ? '(empty)' : '(空)');
-    var enText = qEn ? (qEn.length > 70 ? qEn.substring(0, 70) + '…' : qEn) : '';
-    var secTag = q.section ? ' \u00b7 ' + escapeHtml(q.section) : '';
+    var qText = qCn ? (qCn.length > 120 ? qCn.substring(0, 120) + '…' : qCn) : (en ? '(empty)' : '(空)');
+    var secTag = q.section ? ' · ' + escapeHtml(q.section) : '';
     html += '<div class="admin-q-item" draggable="true" data-qid="' + escapeHtml(q.id) + '">';
-    html += '<div class="q-num">\u2630 ' + escapeHtml(q.id) + ' \u00b7 ' + getTypeShort(q.type) + secTag + '</div>';
+    html += '<div class="q-num">' + escapeHtml(q.id) + '</div>';
     html += '<div class="q-text" title="' + escapeHtml(qCn || '') + '">' + escapeHtml(qText) + '</div>';
-    if (enText) html += '<div class="q-en" title="' + escapeHtml(qEn) + '">' + escapeHtml(enText) + '</div>';
-    // Batch-3: compact answer preview — correct options highlighted below the
-    // stem so a wrong setting is visible straight from the list.
+    html += '<span class="q-type" style="flex:0 0 auto;font-size:11.5px;color:#9AA0A6;white-space:nowrap;margin-right:2px;">'
+      + getTypeShort(q.type) + secTag + '</span>';
+    if (qEn) html += '<div class="q-en" title="' + escapeHtml(qEn) + '">' + escapeHtml(qEn) + '</div>';
     html += adminAnswerPreviewHtml(q);
     html += '<div class="q-actions">';
-    html += '<button class="move"' + (i === 0 ? ' disabled' : '') + ' onclick="adminMoveQuestion(\'' + q.id + '\',-1)" title="' + (state.lang === 'en' ? 'Move up' : '\u4e0a\u79fb') + '">\u2191</button>';
-    html += '<button class="move"' + (i === filtered.length - 1 ? ' disabled' : '') + ' onclick="adminMoveQuestion(\'' + q.id + '\',1)" title="' + (state.lang === 'en' ? 'Move down' : '\u4e0b\u79fb') + '">\u2193</button>';
-    html += '<button onclick="adminEdit(\'' + q.id + '\')">\u270f\ufe0f ' + (state.lang === 'en' ? 'Edit' : '\u7f16\u8f91') + '</button>';
-    html += '<button onclick="adminDuplicate(\'' + q.id + '\')">\uD83D\uDCCB ' + (state.lang === 'en' ? 'Copy' : '\u590d\u5236') + '</button>';
-    html += '<button class="delete" onclick="adminDelete(\'' + q.id + '\')">\uD83D\uDDD1\ufe0f ' + (state.lang === 'en' ? 'Delete' : '\u5220\u9664') + '</button>';
+    html += '<button class="move"' + (i === 0 ? ' disabled' : '') + ' onclick="adminMoveQuestion(\'' + q.id + '\',-1)" title="' + (en ? 'Move up' : '上移') + '">↑</button>';
+    html += '<button class="move"' + (i === filtered.length - 1 ? ' disabled' : '') + ' onclick="adminMoveQuestion(\'' + q.id + '\',1)" title="' + (en ? 'Move down' : '下移') + '">↓</button>';
+    html += '<button onclick="adminEdit(\'' + q.id + '\')">' + (en ? 'Edit' : '编辑') + '</button>';
+    html += '<button onclick="adminDuplicate(\'' + q.id + '\')">' + (en ? 'Copy' : '复制') + '</button>';
+    html += '<button class="delete" onclick="adminDelete(\'' + q.id + '\')">' + (en ? 'Delete' : '删除') + '</button>';
     html += '</div></div>';
   }
-
   if (filtered.length === 0) {
-    html += '<div class="empty-state"><div class="icon">\uD83D\uDCDD</div><p>' + (state.lang === 'en' ? 'No questions found' : '\u672a\u627e\u5230\u9898\u76ee') + '</p></div>';
+    html += '<div class="empty-state"><div class="icon">📝</div><p>' + (en ? 'No questions found' : '未找到题目') + '</p></div>';
   }
   return html;
 }
@@ -25588,15 +25933,49 @@ function adminResetDataContinue() {
 
 // ===== 管理端桌面外壳（重构一期 2026-11-06）：侧边栏 + 顶栏，包住既有页面 =====
 // 只动皮不动逻辑：内容区仍由各 renderAdminXxx() 产出，≤860px 自动回落旧手机布局。
+// ===== 管理端桌面外壳 v2（2026-11-09 重做）=====
+// 结构：左侧分组导航 + 顶栏（面包屑 / 全局搜索），内容区各页自带 .ap-head 页头。
+// 只负责容器与导航，业务逻辑仍由各 renderAdminXxx() 产出。
+// 统一页头：标题 + 一句说明 + 右侧主操作（各页自带，不再依赖被隐藏的 .app-header）
+function adminHead(title, sub, acts) {
+  return '<div class="ap-head"><div class="ap-head-txt"><h1>' + title + '</h1>'
+    + (sub ? '<p>' + sub + '</p>' : '') + '</div>'
+    + (acts ? '<div class="ap-head-acts">' + acts + '</div>' : '') + '</div>';
+}
+
+function adminIco(name) {
+  var m = {
+    grid: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+    book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v18H6.5A2.5 2.5 0 0 1 4 18.5z"/><path d="M8 7h7M8 11h7"/>',
+    file: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/>',
+    flag: '<path d="M5 21V4M5 4h11l-1.6 3.6L16 11H5"/>',
+    cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/>',
+    check: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/>',
+    users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M17 8.5a2.6 2.6 0 0 1 0 5M18 20c0-2.3-.8-4-2-5"/>',
+    shield: '<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',
+    bolt: '<path d="M13 2L4.5 13.5H11l-1 8.5 8.5-11.5H12z"/>',
+    medal: '<circle cx="12" cy="9" r="5"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/>',
+    chart: '<path d="M3 20h18"/><rect x="5" y="11" width="3.5" height="6" rx="1"/><rect x="10.5" y="7" width="3.5" height="10" rx="1"/><rect x="16" y="13" width="3.5" height="4" rx="1"/>',
+    layers: '<path d="M12 3l9 4.5-9 4.5-9-4.5z"/><path d="M21 12l-9 4.5L3 12"/><path d="M21 16.5L12 21l-9-4.5"/>'
+  }[name] || '';
+  return '<svg viewBox="0 0 24 24">' + m + '</svg>';
+}
+
 function adminShellRoutes() {
   var en = state.lang === 'en';
   return [
-    { key:'adminDashboard', ico:'📊', label: en ? 'Overview' : '总览',     match:['adminDashboard'] },
-    { key:'adminBankHub',   ico:'📚', label: en ? 'Question Bank' : '题库管理', match:['adminBankHub','adminBank','adminEdit','adminPaper','adminPaperPicker','adminQReports'] },
-    { key:'adminExamHub',   ico:'📌', label: en ? 'Exams' : '考试管理',    match:['adminExamHub','adminExams','adminReports','adminGrading'] },
-    { key:'adminStudents',  ico:'👥', label: en ? 'Students' : '学员管理',  match:['adminStudents','adminVerify'] },
-    { key:'adminRace',      ico:'⚡', label: en ? 'Quiz Race' : '答题赛',   match:['adminRace','adminBadges'] },
-    { key:'adminDash',      ico:'📈', label: en ? 'Data Board' : '数据看板', match:['adminDash','adminTeaching'] }
+    { grp: en ? 'OVERVIEW' : '概览', key: 'adminDashboard', label: en ? 'Overview' : '总览', ico: 'grid', match: ['adminDashboard'] },
+    { grp: en ? 'CONTENT' : '内容', key: 'adminBank', label: en ? 'Question Bank' : '题库', ico: 'book', match: ['adminBank', 'adminEdit', 'adminBankHub'] },
+    { key: 'adminPaper', label: en ? 'Paper Composer' : '试卷编排', ico: 'file', match: ['adminPaper', 'adminPaperPicker'] },
+    { key: 'adminQReports', label: en ? 'Question Reports' : '题目报错', ico: 'flag', match: ['adminQReports'], badge: 'report' },
+    { grp: en ? 'ASSESSMENT' : '考核', key: 'adminExams', label: en ? 'Exams' : '考试与场次', ico: 'cal', match: ['adminExams', 'adminExamHub'] },
+    { key: 'adminReports', label: en ? 'Scores & Grading' : '成绩与评分', ico: 'check', match: ['adminReports', 'adminGrading'] },
+    { grp: en ? 'PEOPLE' : '组织', key: 'adminStudents', label: en ? 'Students' : '学员名册', ico: 'users', match: ['adminStudents'], badge: 'fix' },
+    { key: 'adminVerify', label: en ? 'Registration Review' : '注册核查', ico: 'shield', match: ['adminVerify'], badge: 'verify' },
+    { grp: en ? 'MOTIVATION' : '激励', key: 'adminRace', label: en ? 'Quiz Race' : '答题赛', ico: 'bolt', match: ['adminRace'] },
+    { key: 'adminBadges', label: en ? 'Badges' : '徽章', ico: 'medal', match: ['adminBadges'] },
+    { grp: en ? 'INSIGHTS' : '洞察', key: 'adminDash', label: en ? 'Data Board' : '数据看板', ico: 'chart', match: ['adminDash'] },
+    { key: 'adminTeaching', label: en ? 'Teaching' : '教学分析', ico: 'layers', match: ['adminTeaching'] }
   ];
 }
 
@@ -25604,68 +25983,193 @@ function adminPageTitleOf(page) {
   var en = state.lang === 'en';
   var map = {
     adminDashboard:  en ? 'Overview' : '总览',
-    adminBankHub:    en ? 'Question Bank' : '题库管理',
-    adminBank:       en ? 'Question Bank · Questions' : '题库管理 · 题目列表',
-    adminEdit:       en ? 'Question Bank · Edit Question' : '题库管理 · 编辑题目',
-    adminPaper:      en ? 'Question Bank · Paper Composer' : '题库管理 · 试卷编排',
-    adminPaperPicker:en ? 'Question Bank · Pick Questions' : '题库管理 · 试卷挑题',
-    adminExamHub:    en ? 'Exams' : '考试管理',
-    adminExams:      en ? 'Exams · Publish' : '考试管理 · 发布考试',
-    adminQReports:   en ? 'Question Bank · Question Reports' : '题库管理 · 报错记录',
-    adminReports:    en ? 'Exams · Score Reports' : '考试管理 · 成绩报告',
-    adminGrading:    en ? 'Exams · Grading' : '考试管理 · 评分',
-    adminStudents:   en ? 'Students' : '学员管理',
-    adminVerify:     en ? 'Students · Registration Review' : '学员管理 · 注册核查',
-    adminRace:       en ? 'Quiz Race' : '答题赛管理',
-    adminBadges:     en ? 'Quiz Race · Badges' : '答题赛 · 徽章管理',
+    adminBankHub:    en ? 'Question Bank' : '题库',
+    adminBank:       en ? 'Question Bank' : '题库',
+    adminEdit:       en ? 'Question Bank · Edit' : '题库 · 编辑题目',
+    adminPaper:      en ? 'Paper Composer' : '试卷编排',
+    adminPaperPicker:en ? 'Paper Composer · Pick' : '试卷编排 · 挑题',
+    adminExamHub:    en ? 'Exams' : '考试与场次',
+    adminExams:      en ? 'Exams' : '考试与场次',
+    adminQReports:   en ? 'Question Reports' : '题目报错',
+    adminReports:    en ? 'Scores & Grading' : '成绩与评分',
+    adminGrading:    en ? 'Scores & Grading · Rules' : '成绩与评分 · 评分配置',
+    adminStudents:   en ? 'Students' : '学员名册',
+    adminVerify:     en ? 'Registration Review' : '注册核查',
+    adminRace:       en ? 'Quiz Race' : '答题赛',
+    adminBadges:     en ? 'Badges' : '徽章',
     adminDash:       en ? 'Data Board' : '数据看板',
-    adminTeaching:   en ? 'Teaching Board' : '教学看板'
+    adminTeaching:   en ? 'Teaching' : '教学分析'
   };
   return map[page] || (en ? 'Admin' : '管理后台');
 }
 
-// 侧边栏「学员管理」角标：未处理报错 + 待核查注册 + 待同步修正（口径与旧首页告警一致）
-function adminShellTodoCount() {
+// 每个页面一句说明（统一页头用）
+function adminSubOf(page) {
+  var en = state.lang === 'en';
+  var m = {
+    adminQReports:    en ? 'Student-submitted objections \u2014 verify, then fix the question directly' : '\u5b66\u5458\u63d0\u4ea4\u7684\u7b54\u6848\u4e0e\u89e3\u6790\u5f02\u8bae\uff0c\u6838\u5b9e\u540e\u53ef\u76f4\u63a5\u53bb\u4fee\u9898',
+    adminVerify:      en ? 'New registrations waiting for name / employee-ID verification' : '\u65b0\u6ce8\u518c\u5b66\u5458\u7684\u59d3\u540d\u4e0e\u5de5\u53f7\u6838\u5bf9',
+    adminExams:       en ? 'Create exam sessions, set the window and publish to students' : '\u521b\u5efa\u8003\u8bd5\u573a\u6b21\u3001\u8bbe\u5b9a\u5f00\u653e\u7a97\u53e3\u5e76\u53d1\u5e03',
+    adminReports:     en ? 'Participation, scores and question-level analysis' : '\u53c2\u4e0e\u60c5\u51b5\u3001\u6210\u7ee9\u4e0e\u9010\u9898\u5206\u6790',
+    adminGrading:     en ? 'Points per question and passing score \u2014 published to every device' : '\u6bcf\u9898\u5206\u503c\u4e0e\u53ca\u683c\u7ebf\uff0c\u53d1\u5e03\u540e\u540c\u6b65\u5230\u6240\u6709\u5b66\u5458\u7aef',
+    adminExamHub:     en ? 'Exams' : '\u8003\u8bd5',
+    adminRace:        en ? 'Quiz race config, roster and leaderboard' : '\u7b54\u9898\u8d5b\u914d\u7f6e\u3001\u53c2\u8d5b\u540d\u518c\u4e0e\u6392\u884c\u699c',
+    adminBadges:      en ? 'Badge catalog, thresholds and awards' : '\u5fbd\u7ae0\u76ee\u5f55\u3001\u95e8\u69db\u4e0e\u53d1\u653e',
+    adminDash:        en ? 'Activity, exam and quiz-race analytics' : '\u6d3b\u8dc3\u5ea6\u3001\u8003\u8bd5\u4e0e\u7b54\u9898\u8d5b\u5206\u6790',
+    adminTeaching:    en ? 'Where the cohort is weak, by division and module' : '\u6309\u90e8\u95e8\u4e0e\u6a21\u5757\u770b\u6574\u4f53\u8584\u5f31\u70b9',
+    adminEdit:        en ? 'Edit the question and preview exactly what students will see' : '\u7f16\u8f91\u9898\u76ee\u5e76\u9884\u89c8\u5b66\u5458\u7aef\u770b\u5230\u7684\u6837\u5b50',
+    adminPaperPicker: en ? 'Pick questions from the banks' : '\u4ece\u9898\u5e93\u52fe\u9009\u9898\u76ee',
+    adminBankHub:     en ? 'Question Bank' : '\u9898\u5e93'
+  };
+  return m[page] || '';
+}
+
+// 待办计数（侧边栏角标）：报错 / 待核查 / 待同步修正
+function adminOpenReportCount() {
   try {
-    var n = 0, recs = adminStudentRecords() || [];
-    var cache = adminStudentCache();
+    var recs = adminStudentRecords() || [], cache = adminStudentCache(), n = 0;
     for (var i = 0; i < recs.length; i++) {
       var rl = recs[i].reports || [];
       for (var j = 0; j < rl.length; j++) {
-        if (!cache.handled[recs[i].key + '|' + rl[j]._hid]) { n++; }
+        if (!cache.handled[recs[i].key + '|' + rl[j]._hid]) n++;
       }
     }
-    n += adminPendingVerifyStudents().length;
-    n += adminPendingFixCount();
     return n;
   } catch (e) { return 0; }
 }
+function adminPendingVerifyCount() {
+  try { return adminPendingVerifyStudents().length; } catch (e) { return 0; }
+}
+function adminPendingFixCountSafe() {
+  try { return adminPendingFixCount(); } catch (e) { return 0; }
+}
+function adminShellTodoCount() {
+  return adminOpenReportCount() + adminPendingVerifyCount() + adminPendingFixCountSafe();
+}
+function adminShellBadgeHtml(kind) {
+  var n = 0;
+  if (kind === 'report') n = adminOpenReportCount();
+  else if (kind === 'verify') n = adminPendingVerifyCount();
+  else if (kind === 'fix') n = adminPendingFixCountSafe();
+  return n > 0 ? '<span class="adm-nav-badge">' + n + '</span>' : '';
+}
+
+// --- 全局搜索（顶栏）：学员 + 题目，回车/点击直达 ---
+function adminGlobalSearchKey(e) {
+  if (e.key === 'Escape') { adminCloseGSearch(); e.target.blur(); }
+  else if (e.key === 'Enter') {
+    var first = document.querySelector('#admGSearchDrop .adm-gitem');
+    if (first) first.click();
+  }
+}
+function adminCloseGSearch() {
+  var box = document.getElementById('admGSearchDrop');
+  if (box) { box.innerHTML = ''; box.classList.remove('on'); }
+}
+function adminGlobalSearch(val) {
+  var box = document.getElementById('admGSearchDrop');
+  if (!box) return;
+  var q = String(val || '').trim();
+  if (!q) { adminCloseGSearch(); return; }
+  var en = state.lang === 'en';
+  var ql = q.toLowerCase();
+  var out = '', nStu = 0, nQ = 0;
+  try {
+    var recs = adminStudentRecords() || [];
+    for (var i = 0; i < recs.length && nStu < 4; i++) {
+      if (adminStuHay(recs[i]).indexOf(ql) < 0) continue;
+      var s = recs[i].snap || {};
+      out += '<div class="adm-gitem" onclick="adminCloseGSearch();adminOpenStudentDetail(\'' + jsKey(recs[i].key) + '\')">'
+        + '<span class="gi-ic">' + adminIco('users') + '</span>'
+        + '<span class="gi-t">' + escapeHtml(s.name || s.cn || recs[i].key) + '</span>'
+        + '<span class="gi-s">' + escapeHtml(adminStudentEmp(recs[i]) || '') + '</span></div>';
+      nStu++;
+    }
+    var banks = ['day21', 'tsos', 'manual'];
+    for (var b = 0; b < banks.length && nQ < 6; b++) {
+      var list = QUESTION_DATA[banks[b]] || [];
+      for (var k = 0; k < list.length && nQ < 6; k++) {
+        var qq = list[k];
+        var stem = qq.question_cn || legacyCnStem(qq.question) || '';
+        if (String(stem).toLowerCase().indexOf(ql) < 0) continue;
+        out += '<div class="adm-gitem" onclick="adminCloseGSearch();adminEdit(\'' + jsKey(qq.id) + '\')">'
+          + '<span class="gi-ic">' + adminIco('file') + '</span>'
+          + '<span class="gi-t">' + escapeHtml(String(stem).slice(0, 56)) + '</span>'
+          + '<span class="gi-s">' + escapeHtml(qq.id || '') + '</span></div>';
+        nQ++;
+      }
+    }
+  } catch (e) {}
+  box.innerHTML = out || '<div class="adm-gempty">' + (en ? 'No match' : '没有匹配结果') + '</div>';
+  box.classList.add('on');
+}
+function adminBindGlobalKeys() {
+  if (adminBindGlobalKeys._done) return;
+  adminBindGlobalKeys._done = true;
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+      var el = document.getElementById('admGSearch');
+      if (el) { e.preventDefault(); el.focus(); el.select(); }
+    }
+  });
+  document.addEventListener('click', function (e) {
+    var box = document.getElementById('admGSearchDrop');
+    if (!box || !box.classList.contains('on')) return;
+    if (e.target.closest && (e.target.closest('.adm-gsearch') || e.target.closest('#admGSearchDrop'))) return;
+    adminCloseGSearch();
+  });
+}
 
 function adminShellHtml(page, inner) {
+  try { adminBindGlobalKeys(); } catch (e) {}
   var en = state.lang === 'en';
   var routes = adminShellRoutes();
-  var todo = adminShellTodoCount();
+  var cloud = !!SERVER_AVAILABLE;
   var nav = '';
   for (var i = 0; i < routes.length; i++) {
     var r = routes[i];
+    if (r.grp) nav += '<div class="adm-nav-grp">' + r.grp + '</div>';
     var act = r.match.indexOf(page) >= 0;
-    var badge = (r.key === 'adminStudents' && todo > 0) ? '<span class="adm-nav-badge">' + todo + '</span>' : '';
-    nav += '<button class="adm-nav-item' + (act ? ' active' : '') + '" onclick="navigate(\'' + r.key + '\')">' +
-      '<span class="adm-nav-ico">' + r.ico + '</span><span>' + r.label + '</span>' + badge + '</button>';
+    nav += '<button class="adm-nav-item' + (act ? ' active' : '') + '" onclick="adminCloseGSearch();navigate(\'' + r.key + '\')">'
+      + '<span class="adm-nav-ico">' + adminIco(r.ico) + '</span><span>' + r.label + '</span>'
+      + (r.badge ? adminShellBadgeHtml(r.badge) : '') + '</button>';
   }
-  var cloud = !!SERVER_AVAILABLE;
-  var html = '<div class="adm-root">';
-  html += '<aside class="adm-side">';
-  html += '<div class="adm-side-brand"><img src="assets/brand/logo-reverse.png" alt=""><div><div class="adm-brand-name">' + (en ? 'Ritz Quiz' : '丽思刷题平台') + '</div><div class="adm-brand-sub">' + (en ? 'Admin Console' : '管理后台') + '</div></div></div>';
-  html += '<nav class="adm-nav">' + nav + '</nav>';
-  html += '<div class="adm-side-foot"><div><span class="adm-cloud-dot ' + (cloud ? 'on' : 'off') + '"></span>' + (cloud ? (en ? 'Cloud connected' : '云端已连接') : (en ? 'Cloud pending' : '云端待连接')) + '</div>';
-  html += '<button class="adm-logout-btn" onclick="adminLogout()">🚪 ' + (en ? 'Sign out' : '退出管理端') + '</button></div>';
-  html += '</aside>';
-  html += '<div class="adm-main">';
-  html += '<div class="adm-topbar"><span class="adm-title">' + adminPageTitleOf(page) + '</span><span class="adm-spacer"></span><span class="adm-sync"><span class="adm-cloud-dot ' + (cloud ? 'on' : 'off') + '"></span>' + (en ? (cloud ? 'Synced' : 'Local only') : (cloud ? '已同步' : '仅本地')) + '</span></div>';
-  html += '<div class="adm-content">' + inner + '</div>';
-  html += '</div></div>';
-  return html;
+  var h = '<div class="adm-root">';
+  h += '<aside class="adm-side">';
+  h += '<div class="adm-side-brand"><img src="assets/brand/logo-reverse.png" alt="">'
+    + '<div><div class="adm-brand-name">' + (en ? 'Ritz Quiz' : '丽思刷题平台') + '</div>'
+    + '<div class="adm-brand-sub">' + (en ? 'Admin Console' : '管理后台') + '</div></div></div>';
+  h += '<nav class="adm-nav">' + nav + '</nav>';
+  h += '<div class="adm-side-foot">'
+    + '<div><span class="adm-cloud-dot ' + (cloud ? 'on' : 'off') + '"></span>'
+    + (cloud ? (en ? 'Cloud connected' : '云端已连接') : (en ? 'Cloud pending' : '云端待连接')) + '</div>'
+    + '<button class="adm-logout-btn" onclick="adminLogout()">' + (en ? 'Sign out' : '退出管理端') + '</button></div>';
+  h += '</aside>';
+  h += '<div class="adm-main">';
+  h += '<div class="adm-topbar">';
+  h += '<div class="adm-crumb"><b>' + adminPageTitleOf(page) + '</b></div>';
+  h += '<div class="adm-gsearch">'
+    + '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>'
+    + '<input id="admGSearch" autocomplete="off" placeholder="' + (en ? 'Search questions, students…' : '搜索题目、学员…') + '"'
+    + ' oninput="adminGlobalSearch(this.value)" onkeydown="adminGlobalSearchKey(event)">'
+    + '<kbd>Ctrl K</kbd>'
+    + '<div class="adm-gdrop" id="admGSearchDrop"></div>'
+    + '</div>';
+  h += '<span class="adm-sync"><span class="adm-cloud-dot ' + (cloud ? 'on' : 'off') + '"></span>'
+    + (cloud ? (en ? 'Synced' : '已同步') : (en ? 'Local only' : '仅本地')) + '</span>';
+  h += '</div>';
+  var SELF_HEAD = { adminDashboard:1, adminBank:1, adminPaper:1, adminStudents:1 };
+  var subActs = '';
+  if (page === 'adminEdit') {
+    subActs = '<button class="ap-btn" onclick="adminBack(\'adminBank\')">← ' + (en ? 'Back' : '返回') + '</button>';
+  } else if (page === 'adminPaperPicker') {
+    subActs = '<button class="ap-btn" onclick="adminBack(\'adminPaper\')">← ' + (en ? 'Back' : '返回') + '</button>';
+  }
+  h += '<div class="adm-content">'
+    + (SELF_HEAD[page] ? '' : adminHead(adminPageTitleOf(page), adminSubOf(page), subActs))
+    + inner + '</div>';
+  h += '</div></div>';
+  return h;
 }
 
 function render() {
