@@ -14118,24 +14118,25 @@ function renderRaceBoard() {
           // 竞速榜徽章是赛季结算的荣誉：榜上标一句「往期」，别人一看就知道跟本期排名无关。
           + (raceBadgeIsPastHonor(myBadge.def) ? ' <span style="font-weight:600;opacity:.8;">· ' + (state.lang === 'en' ? 'past' : '往期') + '</span>' : '')
           + '</span>' : '';
-      html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#000;font-size:12px;">' + t('race_you') + '</span>' : '') + bdgTag + '</div>';
-      // 2026-11-09 排行榜信息分层 v2（初版双标签被反馈「全框起来显重」）：部门回归普通灰字（无框），
-      // 整行只框题库板块 = 白底黑描边空心标签（带「题库」前缀）；段位维持金色文字。
-      // 部门下沉时仍是「大部门 · 小部门」灰字，全行仅题库一个框，不会再与部门信息混淆。
-      // A3 段位（2026-11-03）：段位小标挂在同一行（按历届累计打卡天数），点击仍可看段位说明。
+      // 2026-11-09 排行榜信息分层 v3（终稿，用户定稿）：零边框零底色。
+      // 段位并入名字行（姓名 + 你 + 展示徽章之后），第二行 = 部门灰字 ｜ 题库灰字（浅灰竖线分隔），
+      // 整行最多两行，不会出现三行。板块筛选激活 / 天数榜 / 进步之星时不显示右侧题库段
+      // （天数榜改为「挑战 N 次」）。段位点击仍可看段位说明。
+      var tierTagHtml = rw.tier
+        ? ' <span onclick="raceTierInfoShow()" style="cursor:pointer;color:#8a5a00;font-weight:600;font-size:12px;">'
+          + rw.tier.icon + ' ' + (state.lang === 'en' ? rw.tier.en : rw.tier.cn) + '</span>'
+        : '';
+      html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#000;font-size:12px;">' + t('race_you') + '</span>' : '') + bdgTag + tierTagHtml + '</div>';
       var deptTagHtml = '<span style="color:#888;font-size:12px;">'
         + escapeHtml(deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept))) + '</span>';
       var secTagHtml = (!isDays && !isMoverTab && rw.section && !sec)
-        ? ' <span style="display:inline-block;border:1px solid #000;background:#fff;color:#000;font-size:11px;line-height:16px;padding:1px 7px;border-radius:9px;">'
-          + raceSecIcon(rw.section) + ' ' + escapeHtml(t('race_tag_bank')) + ' \u00b7 ' + escapeHtml(raceSecName(rw.section)) + '</span>'
+        ? '<span style="color:#c8cdd3;margin:0 3px;">\uff5c</span><span style="color:#888;font-size:12px;">'
+          + escapeHtml(t('race_tag_bank')) + ' ' + raceSecIcon(rw.section) + ' ' + escapeHtml(raceSecName(rw.section)) + '</span>'
         : '';
       var runsTagHtml = isDays
-        ? ' <span style="color:#888;font-size:12px;">' + (state.lang === 'en' ? 'runs ' : '挑战 ') + rw.runs + '</span>'
+        ? '<span style="color:#c8cdd3;margin:0 3px;">\uff5c</span><span style="color:#888;font-size:12px;">' + (state.lang === 'en' ? 'runs ' : '挑战 ') + rw.runs + '</span>'
         : '';
-      html += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:4px;">' + deptTagHtml + secTagHtml + runsTagHtml
-        + (rw.tier ? '<span onclick="raceTierInfoShow()" style="cursor:pointer;color:#8a5a00;font-weight:600;font-size:12px;">'
-            + rw.tier.icon + ' ' + (state.lang === 'en' ? rw.tier.en : rw.tier.cn) + '</span>' : '')
-        + '</div>';
+      html += '<div style="font-size:12px;color:#888;margin-top:4px;">' + deptTagHtml + secTagHtml + runsTagHtml + '</div>';
       html += '</div>';
       html += '<div style="text-align:right;">';
       if (isMoverTab) {
