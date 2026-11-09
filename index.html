@@ -25049,7 +25049,7 @@ function adminShellHtml(page, inner) {
   var cloud = !!SERVER_AVAILABLE;
   var html = '<div class="adm-root">';
   html += '<aside class="adm-side">';
-  html += '<div class="adm-side-brand"><img src="assets/logo.webp" alt=""><div><div class="adm-brand-name">' + (en ? 'Ritz Quiz' : '丽思刷题平台') + '</div><div class="adm-brand-sub">' + (en ? 'Admin Console' : '管理后台') + '</div></div></div>';
+  html += '<div class="adm-side-brand"><img src="assets/brand/logo-reverse.png" alt=""><div><div class="adm-brand-name">' + (en ? 'Ritz Quiz' : '丽思刷题平台') + '</div><div class="adm-brand-sub">' + (en ? 'Admin Console' : '管理后台') + '</div></div></div>';
   html += '<nav class="adm-nav">' + nav + '</nav>';
   html += '<div class="adm-side-foot"><div><span class="adm-cloud-dot ' + (cloud ? 'on' : 'off') + '"></span>' + (cloud ? (en ? 'Cloud connected' : '云端已连接') : (en ? 'Cloud pending' : '云端待连接')) + '</div>';
   html += '<button class="adm-logout-btn" onclick="adminLogout()">🚪 ' + (en ? 'Sign out' : '退出管理端') + '</button></div>';
