@@ -14131,7 +14131,7 @@ function renderRaceBoard() {
         + escapeHtml(deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept))) + '</span>';
       var secTagHtml = (!isDays && !isMoverTab && rw.section && !sec)
         ? '<span style="color:#c8cdd3;margin:0 3px;">\uff5c</span><span style="color:#888;font-size:12px;">'
-          + escapeHtml(t('race_tag_bank')) + ' ' + raceSecIcon(rw.section) + ' ' + escapeHtml(raceSecName(rw.section)) + '</span>'
+          + raceSecIcon(rw.section) + ' ' + escapeHtml(t('race_tag_bank')) + ' \u00b7 ' + escapeHtml(raceSecName(rw.section)) + '</span>'
         : '';
       var runsTagHtml = isDays
         ? '<span style="color:#c8cdd3;margin:0 3px;">\uff5c</span><span style="color:#888;font-size:12px;">' + (state.lang === 'en' ? 'runs ' : '挑战 ') + rw.runs + '</span>'
