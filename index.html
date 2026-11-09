@@ -14119,11 +14119,11 @@ function renderRaceBoard() {
           + (raceBadgeIsPastHonor(myBadge.def) ? ' <span style="font-weight:600;opacity:.8;">· ' + (state.lang === 'en' ? 'past' : '往期') + '</span>' : '')
           + '</span>' : '';
       html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#000;font-size:12px;">' + t('race_you') + '</span>' : '') + bdgTag + '</div>';
-      // 2026-11-09 排行榜信息分层（学员反馈：原来「部门 · 题库 · 段位」全靠「·」串联难辨认）：
-      // 部门 = 丽思蓝实底标签；题库板块 = 白底黑描边空心标签（带「题库」前缀）；段位维持金色文字。
-      // 下沉过的部门标签内仍显示「大部门 · 小部门」，标签形态本身已说明这是部门信息。
+      // 2026-11-09 排行榜信息分层 v2（初版双标签被反馈「全框起来显重」）：部门回归普通灰字（无框），
+      // 整行只框题库板块 = 白底黑描边空心标签（带「题库」前缀）；段位维持金色文字。
+      // 部门下沉时仍是「大部门 · 小部门」灰字，全行仅题库一个框，不会再与部门信息混淆。
       // A3 段位（2026-11-03）：段位小标挂在同一行（按历届累计打卡天数），点击仍可看段位说明。
-      var deptTagHtml = '<span style="display:inline-block;background:#C7DDF3;color:#000;font-size:11px;line-height:16px;padding:2px 7px;border-radius:9px;">'
+      var deptTagHtml = '<span style="color:#888;font-size:12px;">'
         + escapeHtml(deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept))) + '</span>';
       var secTagHtml = (!isDays && !isMoverTab && rw.section && !sec)
         ? ' <span style="display:inline-block;border:1px solid #000;background:#fff;color:#000;font-size:11px;line-height:16px;padding:1px 7px;border-radius:9px;">'
