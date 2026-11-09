@@ -4380,12 +4380,18 @@ const state = {
   raceLockUntil: 0,    // 结果页"成绩保护期"截止时刻：期间只给成绩单、不渲染任何按钮
   raceLockTick: null,  // 保护期倒计时的定时器（到点自动重画结果页）
   raceDeepLink: (function () {
+    try {
+      // 本次会话已经用过二维码深链 → 不再触发，即使地址栏还挂着参数。
+      // 员工扫"限时答题"码进来，回到首页后点刷新，不该又被拉回答题赛（2026-11-09）。
+      if (sessionStorage.getItem('__qzDlRace') === '1') return false;
+    } catch (eSess) {}
     try { return /[?&]page=race\b/.test((typeof location !== 'undefined' && location.search) || ''); }
     catch (e) { return false; }
   })(), // 二维码带 ?page=race → 登录后直达答题赛逐级回上一层，而不是一律回首页
   // 扫码直达正式考试：?exam=tsos_all / ?exam=tsos_kitchen
   // （也兼容 ?page=exam&paper=<key>）→ 登录 + 资料完整后自动开考，只触发一次
   examDeepLink: (function () {
+    try { if (sessionStorage.getItem('__qzDlExam') === '1') return ''; } catch (eSess) {}
     try {
       var s = (typeof location !== 'undefined' && location.search) || '';
       var m = s.match(/[?&]exam=([A-Za-z0-9_-]+)/);
@@ -25418,6 +25424,10 @@ function render() {
   if (state.raceDeepLink && !state.raceDeepLinkDone && state.currentPage === 'home') {
     state.raceDeepLinkDone = true;
     state.currentPage = 'race';
+    // 参数用掉就摘掉：不然员工在首页点刷新，地址栏还带着 ?page=race，
+    // 又被送回答题赛，想留在首页也留不住。
+    markDeepLinkUsed('race');
+    clearDeepLinkParams();
   }
   switch(state.currentPage) {
     case 'home': app.innerHTML = renderHome(); break;
@@ -25448,7 +25458,36 @@ function render() {
     case 'myBadges': app.innerHTML = renderMyBadges(); break;
     default: app.innerHTML = renderHome();
   }
+  // 深链可能刚把 home 改成了 race / profile：这里补记一次，刷新才知道员工
+  // 其实是在答题赛页，而不是首页。
+  try { routeSnapshotNow(); } catch (eSnap2) {}
   maybeExamDeepLink(); // ?exam=<key> 扫码直达：在首页就绪后自动开考
+}
+
+// 二维码深链（?page=race / ?exam=<key>）只生效一次：消费完就从地址栏摘掉。
+// 否则员工扫码进来后，在首页点刷新时地址栏还带着那个参数，又被送回扫码目标页，
+// 想留在首页也留不住（2026-11-09）。
+// 同时写一个会话标记兜底：个别内置浏览器不给 replaceState 改地址栏，标记能让
+// 刷新后不再二次触发。
+function markDeepLinkUsed(which) {
+  try { sessionStorage.setItem(which === 'exam' ? '__qzDlExam' : '__qzDlRace', '1'); } catch (eMU) {}
+}
+function clearDeepLinkParams() {
+  try {
+    var s = (typeof location !== 'undefined' && location.search) || '';
+    if (!/[?&](page|exam)=/.test(s)) return;
+    if (typeof history === 'undefined' || !history.replaceState) return;
+    var keep = [];
+    var parts = s.replace(/^\?/, '').split('&');
+    for (var i = 0; i < parts.length; i++) {
+      var kv = parts[i];
+      if (!kv) continue;
+      if (/^(page|exam)=/.test(kv)) continue;
+      keep.push(kv);
+    }
+    var url = (location.pathname || '') + (keep.length ? '?' + keep.join('&') : '') + (location.hash || '');
+    history.replaceState(null, '', url);
+  } catch (eDL) {}
 }
 
 // 扫码直达正式考试。必须在 switch 之后调用：startFormalExam 内部会 navigate('question')
@@ -25458,6 +25497,9 @@ function maybeExamDeepLink() {
   if (state.currentPage !== 'home') return;
   state.examDeepLinkDone = true;
   var pk = state.examDeepLink;
+  // 同上：考卷参数用掉就摘掉，免得员工交完卷回首页刷新又被拉进考场。
+  markDeepLinkUsed('exam');
+  clearDeepLinkParams();
   setTimeout(function () { examDeepLinkGo(pk, 2); }, 0);
 }
 function examDeepLinkGo(pk, retry) {
