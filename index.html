@@ -308,7 +308,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .rv-blk { background:#fff; border-radius:14px; box-shadow:0 1px 3px rgba(14,37,69,.07); padding:15px; margin-bottom:12px; max-width:100%; box-sizing:border-box; overflow:hidden; }
 .rv-blk.hl { background:linear-gradient(160deg,#F1F7FD,#fff 62%); border:1px solid #dfeaf7; }
 .rv-blk-h { display:flex; align-items:center; gap:7px; }
-.rv-blk-num { width:19px; height:19px; border-radius:6px; background:#000; color:#fff; font-size:11.5px; font-weight:800; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.rv-blk-num { width:22px; height:22px; border-radius:7px; background:#C7DDF3; color:#000; font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
 .rv-blk-eb { font-size:11px; font-weight:700; color:#91a0af; letter-spacing:.7px; }
 .rv-blk-t { font-size:15.5px; font-weight:800; color:#111; margin-top:7px; letter-spacing:.2px; }
 .rv-blk-d { font-size:12.5px; color:#5a6473; line-height:1.6; margin-top:4px; }
@@ -5587,9 +5587,9 @@ var I18N = {
   rv_tab_all_hint: {cn:'你在练习、模拟考、答题赛里做错过的全部题目。', en:'Every question you have got wrong in practice, exams and races.'},
   rv_tab_tag_hint: {cn:'选一个知识点，看看这一类你错了几道。', en:'Pick a topic to see how many you got wrong in it.'},
   rv_no_due: {cn:'现在没有该复习的题。等它到期再来，效果最好。', en:'Nothing due right now — come back when it is.'},
-  rv_stage_hint: {cn:'规则：每答对一次，下次复习的间隔就拉长一次（1 天 → 3 天 → 7 天）。三阶都通过后再答对一次，这道题就移出错题本。', en:'How it works: each correct answer stretches the next review gap (1 → 3 → 7 days). One more correct answer after the third stage and the question leaves your mistake book.'},
-  rv_stage_n: {cn:'已通过 {n}/{m} 阶', en:'Stage {n}/{m}'},
-  rv_stage_last: {cn:' · 再答对一次就移出', en:' · one more to clear'},
+  rv_stage_hint: {cn:'规则：每答对一次，这道题就巩固一次，下次复习的间隔也会拉长（1 天 → 3 天 → 7 天）。巩固满 3 次后再答对一次，就彻底掌握、不再出现。', en:'How it works: each correct answer consolidates the question and stretches the next gap (1 → 3 → 7 days). One more correct answer after the third round and it is mastered for good.'},
+  rv_stage_n: {cn:'已巩固 {n}/{m} 次', en:'{n} of {m} done'},
+  rv_stage_last: {cn:' · 再答对一次就掌握', en:' · one more to master'},
   rv_wrong_times: {cn:'您做错过 {n} 次', en:'{n} wrong attempts'},
   rv_redo_due: {cn:'复习这 {n} 道题', en:'Review these {n}'},
   rv_redo_due_sub: {cn:'复习时间已到，现在练记得最牢。', en:'Due now — the best time to review.'},
@@ -5610,18 +5610,18 @@ var I18N = {
   rv_src_tag_d: {cn:'挑一个错得最多的知识点，只练这一类', en:'Pick the topic you miss most'},
   rv_all_q: {cn:'全部', en:'All'},
   rv_paper_take: {cn:'道题', en:'questions'},
-  rv_paper_take_note: {cn:'答完会给你本轮小结：答对几道、几道进入下一阶、几道移出错题本。', en:'Afterwards you get a summary: correct count, stages advanced, and questions cleared.'},
+  rv_paper_take_note: {cn:'答完会给你本轮小结：答对几道、几道巩固了、几道已掌握。', en:'Afterwards you get a summary: correct count, questions consolidated, and questions mastered.'},
   rv_paper_none: {cn:'这一批暂时没有题，换一个批次试试。', en:'Nothing in this batch — try another.'},
   rv_start_paper: {cn:'开始练习', en:'Start practising'},
   rv_paper_done: {cn:'本轮完成', en:'Paper complete'},
   rv_done_ok: {cn:'答对（道）', en:'correct'},
-  rv_done_promote: {cn:'进入下一阶', en:'advanced'},
-  rv_done_grad: {cn:'移出错题本', en:'cleared'},
+  rv_done_promote: {cn:'巩固了（过几天再练）', en:'consolidated'},
+  rv_done_grad: {cn:'已掌握（不再出现）', en:'mastered'},
   rv_done_review: {cn:'本轮逐题解析', en:'Answers and explanations'},
-  rv_finish_bar_sub: {cn:'答对 {ok}/{n} · 推进 {p} · 移出 {g}', en:'{ok}/{n} correct · {p} advanced · {g} cleared'},
+  rv_finish_bar_sub: {cn:'答对 {ok}/{n} · 巩固 {p} 道 · 掌握 {g} 道', en:'{ok}/{n} correct · {p} revisits · {g} mastered'},
   rv_finish_bar_go: {cn:'查看小结', en:'See summary'},
   rv_paper_line: {cn:'答对 {ok} / {total} 道', en:'{ok} / {total} correct'},
-  rv_paper_gain: {cn:'{p} 道进入下一阶 · {g} 道移出错题本', en:'{p} advanced · {g} cleared'},
+  rv_paper_gain: {cn:'{p} 道巩固了 · {g} 道已掌握', en:'{p} revisits · {g} mastered'},
   rv_back_wrong: {cn:'返回错题本', en:'Back to mistakes'},
   // 小结页返回按钮：从哪来回哪去，按钮文案跟着入口变
   rv_back_race_result: {cn:'返回本场解析', en:"Back to this run's review"},
@@ -5630,7 +5630,7 @@ var I18N = {
   rv_back_fav: {cn:'返回收藏夹', en:'Back to favourites'},
   rv_back_generic: {cn:'返回', en:'Back'},
   rv_again_paper: {cn:'再组一卷', en:'New paper'},
-  rv_strip: {cn:'答对 {ok} · 推进 {p} · 移出 {g}', en:'{ok} ok · {p} advanced · {g} cleared'},
+  rv_strip: {cn:'答对 {ok} · 巩固 {p} 道 · 掌握 {g} 道', en:'{ok} correct · {p} revisits · {g} mastered'},
   rv_no_weak: {cn:'还没有足够数据找出薄弱知识点，先练几道再来。', en:'Not enough data yet — practise a few questions first.'},
   rv_task_title: {cn:'今日复习', en:"Today's review"},
   rv_task_desc: {cn:'近一周你的错题集中在「{tag}」，点开复习巩固一下。', en:'Most of your recent mistakes are in "{tag}" — review them now.'},
@@ -5645,13 +5645,13 @@ var I18N = {
   rv_hub_due: {cn:'今天该复习 {n} 道', en:'{n} due today'},
   rv_hub_hint: {cn:'近一周你的错题集中在「{tag}」，点开复习巩固一下。', en:'Most of your recent mistakes are in "{tag}" — review them now.'},
   rv_hub_none: {cn:'本周没有该复习的错题，可以自己挑几道错题巩固，或者练几道新题。', en:'Nothing due this week — review any mistake you like, or practise new questions.'},
-  rv_stat_line: {cn:'累计复习 {rv} 次 · 推进 {p} 阶 · 已掌握 {g} 道', en:'{rv} reviews · {p} stages advanced · {g} cleared'},
+  rv_stat_line: {cn:'累计复习 {rv} 次 · 巩固 {p} 道 · 已掌握 {g} 道', en:'{rv} reviews · {p} revisits · {g} mastered'},
   race_goto_wrong: {cn:'去错题本复习（本场答错已收录）', en:'Review mistakes (this run saved)'},
   race_goto_wrong_run: {cn:'一键重做本场错题（{n} 道）', en:'Redo all mistakes from this run ({n})'},
   exam_goto_wrong_run: {cn:'一键重做本卷错题（{n} 道）', en:'Redo all mistakes from this paper ({n})'},
   rv_book_ledger: {cn:'我的学习记录', en:'My learning record'},
   rv_hub_go_practice: {cn:'去练新题', en:'Practise questions'},
-  rv_week_line: {cn:'近 7 天：推进 {p} 阶 · 移出 {g} 道', en:'Last 7 days: {p} advanced · {g} cleared'},
+  rv_week_line: {cn:'近 7 天：巩固 {p} 道 · 已掌握 {g} 道', en:'Last 7 days: {p} revisits · {g} mastered'},
   rv_task_skip: {cn:'换一个', en:'Swap'},
   rv_task_done: {cn:'本周任务已完成', en:'Done this week'},
   rv_task_none: {cn:'暂无该复习的错题，去练几道新题保持手感。', en:'Nothing due — try some new questions.'},
@@ -5663,7 +5663,7 @@ var I18N = {
   rv_cal_redo_one: {cn:'再做一次', en:'Try again'},
   rv_cal_redo_none: {cn:'本次全对，没有需要重做的题', en:'No mistakes in this run'},
   rv_fav_paper: {cn:'刷一遍收藏题', en:'Practise saved questions'},
-  rv_fav_mastered: {cn:'已掌握，可移出', en:'Mastered — can remove'},
+  rv_fav_mastered: {cn:'已掌握，可移除', en:'Mastered — can remove'},
   // 来源筛选（领导问"能不能只复习某一场的错题"）
   rv_src_label: {cn:'看哪一批错题', en:'Which questions'},
   rv_src_all_opt: {cn:'全部来源', en:'All sources'},
@@ -5689,8 +5689,9 @@ var I18N = {
   rv_bk_task: {cn:'本周巩固任务 {d}/{n}', en:'This week {d}/{n}'},
   rv_bk_start: {cn:'开始复习（{n} 道）', en:'Start review ({n})'},
   rv_bk_none: {cn:'今天没有待复习的题', en:'Nothing due today'},
+  rv_bk_done_today: {cn:'今日复习已完成 ✓ 明天再来', en:"Today's review done ✓ see you tomorrow"},
   rv_bk_rules_sum: {cn:'复习规则', en:'How review works'},
-  rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。同一道错题：答对 1 次后隔 1 天再复习，答对 2 次后隔 3 天，答对 3 次后隔 7 天；第 4 次答对就移出错题本。', en:'Due mistakes come first, while the memory is still fresh. For each mistake: 1 correct answer brings it back in 1 day, then 3 days, then 7 days; a 4th correct answer moves it out of your mistake book.'},
+  rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。同一道错题：答对 1 次后隔 1 天再复习，答对 2 次后隔 3 天，答对 3 次后隔 7 天；第 4 次答对就彻底掌握，不再出现。', en:'Due mistakes come first, while the memory is still fresh. For each mistake: 1 correct answer brings it back in 1 day, then 3 days, then 7 days; a 4th correct answer masters it for good.'},
   rv_cat_all: {cn:'全部错题', en:'All incorrect questions'},
   rv_cat_due: {cn:'需要优先巩固', en:'For priority review'},
   rv_cat_fav: {cn:'收藏题目', en:'Saved favourites'},
@@ -17068,9 +17069,11 @@ function rvSrcChipsHtml() {
   h += '</div>';
   return h;
 }
-// 三块功能的统一头部：编号 + 英文分类名 + 中文标题 + 一句说明
-function rvBlkHeadHtml(num, eb, title, desc) {
-  var h = '<div class="rv-blk-h"><div class="rv-blk-num">' + num + '</div><div class="rv-blk-eb">' + escapeHtml(eb) + '</div></div>';
+// 三块功能的统一头部：图标 + 分类名 + 标题 + 一句说明。
+// 三块是并列关系（2026-11-09 领导要求：不是 1→2→3 的流程），所以不再编号，
+// 用图标区分，三张卡样式完全一致。
+function rvBlkHeadHtml(icon, eb, title, desc) {
+  var h = '<div class="rv-blk-h"><div class="rv-blk-num">' + icon + '</div><div class="rv-blk-eb">' + escapeHtml(eb) + '</div></div>';
   h += '<div class="rv-blk-t">' + escapeHtml(title) + '</div>';
   if (desc) h += '<div class="rv-blk-d">' + escapeHtml(desc) + '</div>';
   return h;
@@ -17156,9 +17159,9 @@ function renderWrongAll() {
   html += '<div class="rv-overview"><span>' + t('rv_mastery') + '</span><b>' + (m < 0 ? '—' : Math.round(m) + '%') + '</b>';
   html += '<span class="bar">|</span><span>' + escapeHtml(t('rv_hub_sub').replace('{g}', String(grad)).replace('{n}', String(allRows.length))) + '</span></div>';
 
-  // ---- ① 智能复习：今天该练什么，一键开练 ----
-  html += '<div class="rv-blk hl" id="rvBlkSmart">';
-  html += rvBlkHeadHtml(1, t('rv_bk_eb1'), t('rv_bk_t1'), t('rv_bk_d1'));
+  // ---- 智能复习：今天该练什么，一键开练（三块并列，无先后）----
+  html += '<div class="rv-blk" id="rvBlkSmart">';
+  html += rvBlkHeadHtml('⏰', t('rv_bk_eb1'), t('rv_bk_t1'), t('rv_bk_d1'));
   html += '<div style="display:flex;align-items:flex-end;gap:14px;margin:13px 0 12px;">';
   html += '<div style="flex:0 0 auto;"><span class="rv-due-num">' + dueTotal + '</span>'
     + '<span style="font-size:12px;color:#3c4b59;font-weight:700;margin-left:4px;">' + t('rv_bk_due_unit') + '</span></div>';
@@ -17178,7 +17181,16 @@ function renderWrongAll() {
     html += '<button class="nav-btn primary" style="width:100%;padding:13px;" onclick="wrongStartDueRedo()">▶ '
       + escapeHtml(t('rv_bk_start').replace('{n}', String(dueTotal))) + '</button>';
   } else {
-    html += '<button class="nav-btn primary" style="width:100%;padding:13px;" disabled>' + t('rv_bk_none') + '</button>';
+    // 到期清零后按钮变灰。分两种说法：今天确实复习过 → 「今日已完成」；
+    // 今天本来就没有到期的 → 「没有待复习的题」。
+    var _todayK = raceDayKey(Date.now());
+    var _didToday = false;
+    var _rlog = Array.isArray(state.reviewLog) ? state.reviewLog : [];
+    for (var _li = 0; _li < _rlog.length; _li++) {
+      if (_rlog[_li] && _rlog[_li].k && _rlog[_li].k.indexOf('|' + _todayK + '|') >= 0) { _didToday = true; break; }
+    }
+    html += '<button class="nav-btn primary" style="width:100%;padding:13px;" disabled>'
+      + escapeHtml(_didToday ? t('rv_bk_done_today') : t('rv_bk_none')) + '</button>';
   }
   html += '<details style="margin-top:11px;">'
     + '<summary style="font-size:11.5px;color:#8a97a4;cursor:pointer;font-weight:600;list-style:none;">▸ ' + t('rv_bk_rules_sum') + '</summary>'
@@ -17186,13 +17198,13 @@ function renderWrongAll() {
     + '</details>';
   html += '</div>';
 
-  // ---- ② 自主组卷：分类 + 题量 → 生成练习卷（不跳页，就在这一页） ----
+  // ---- 自主组卷：分类 + 题量 → 生成练习卷（不跳页，就在这一页）----
   var pSrc = state.paperSource || 'all';
   var pIds = paperSourceIds(pSrc, state.wrongTag);
   var pCnt = state.paperCount || 10;
   var pTake = (pCnt === 0 || pCnt > pIds.length) ? pIds.length : pCnt;
   html += '<div class="rv-blk" id="rvBlkPaper">';
-  html += rvBlkHeadHtml(2, t('rv_bk_eb2'), t('rv_bk_t2'), t('rv_bk_d2'));
+  html += rvBlkHeadHtml('📝', t('rv_bk_eb2'), t('rv_bk_t2'), t('rv_bk_d2'));
   html += '<div class="rv-blk-b">';
   html += '<div class="rv-label">' + t('rv_bk_pick_cat') + '</div>';
   html += rvCatGridHtml(pSrc, 'paper');
@@ -17213,9 +17225,9 @@ function renderWrongAll() {
   }
   html += '</div></div>';
 
-  // ---- ③ 错题归档：来源 + 分类 → 清单（来源在上：先定"哪一场"，再定"哪一类"） ----
+  // ---- 错题归档：来源 + 分类 → 清单（来源在上：先定"哪一场"，再定"哪一类"）----
   html += '<div class="rv-blk" id="rvBlkBank">';
-  html += rvBlkHeadHtml(3, t('rv_bk_eb3'), t('rv_bk_t3'), t('rv_bk_d3'));
+  html += rvBlkHeadHtml('📚', t('rv_bk_eb3'), t('rv_bk_t3'), t('rv_bk_d3'));
   html += '<div class="rv-blk-b">';
   html += '<div class="rv-label">' + t('rv_bk_src_title') + '</div>';
   html += rvSrcChipsHtml();
@@ -17333,7 +17345,12 @@ function startWrongRedoIds(ids, opts) {
   state.showAnswer = false;
   state.recGuards = {};
   state.paperSession = {
-    kind: opts.kind || 'redo', title: opts.title || '', total: list.length,
+    kind: opts.kind || 'redo',
+    // 🔴 标题里的 {n} 在这里统一替换成最终题数——调用方给的模板（如
+    // 「一键重做本次错题（{n} 道）」）如果原样存进来，答题页顶条和小结页
+    // 页头就会直接显示 "{n}"（2026-11-09 领导截图 bug）。
+    title: String(opts.title || '').replace(/\{n\}/g, String(list.length)),
+    total: list.length,
     ok: 0, promoted: 0, graduated: 0,
     ids: list.map(function (q) { return q.id; }), skeyOf: skeyOf,
     back: back
