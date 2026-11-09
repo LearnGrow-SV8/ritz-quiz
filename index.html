@@ -1114,6 +1114,80 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
 @media (max-width:1180px) {
   .adm-content #paperGradingCard, .adm-content #paperStatsCard { display:block; width:auto; margin-left:0; }
 }
+
+/* ===== 系统设置 / 部门目录 / 部门统计 ===== */
+.ap-note { font-size:12px; line-height:1.75; color:var(--a-i3); background:#F7FAFD;
+  border:1px solid #E3EEF9; border-left:3px solid var(--a-blue); border-radius:8px;
+  padding:10px 14px; margin-bottom:14px; }
+.ap-empty { padding:56px 20px; text-align:center; color:var(--a-i4); font-size:12.5px;
+  background:#fff; border:1px solid var(--a-line); border-radius:12px; }
+
+/* 设置页 */
+.set-row { display:flex; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap; }
+.set-row label { flex:0 0 84px; font-size:12.5px; color:var(--a-i3); }
+.set-row .admin-input { flex:1 1 200px; min-width:0; height:36px; padding:0 12px; font-size:13px; }
+.set-hint { font-size:11.5px; color:var(--a-i4); }
+.set-list { margin:8px 0 0; padding-left:18px; font-size:12.5px; line-height:1.85; color:var(--a-i2); }
+.set-list li { margin-bottom:5px; }
+.ap-card > .ap-sub { padding:6px 18px 0; margin:0; }
+
+/* 部门目录 */
+.dept-wrap { border:1px solid var(--a-line); border-radius:12px; overflow:hidden; background:#fff; }
+.dept-row + .dept-row { border-top:1px solid var(--a-line); }
+.dept-row.open { background:#FCFDFE; }
+.dept-main { display:flex; align-items:center; gap:8px; padding:9px 14px; }
+.dept-caret { flex:0 0 18px; width:18px; height:18px; border:0; background:transparent;
+  cursor:pointer; color:var(--a-i4); font-size:11px; line-height:1; padding:0; }
+.dept-caret:hover { color:var(--a-ink); }
+.dept-in { flex:1 1 0; min-width:0; height:32px; padding:0 10px; font-size:12.5px;
+  border:1px solid var(--a-line); border-radius:7px; background:#fff; color:var(--a-ink);
+  font-family:inherit; outline:none; }
+.dept-in:focus { border-color:var(--a-blue-d); box-shadow:0 0 0 3px rgba(199,221,243,.45); }
+.dept-cnt { flex:0 0 84px; font-size:11.5px; color:var(--a-i4); text-align:right; }
+.dept-acts { display:flex; gap:4px; opacity:.5; transition:opacity .12s; }
+.dept-row:hover .dept-acts, .dept-sub:hover .dept-acts { opacity:1; }
+.dept-acts .mini { width:24px; height:24px; border:1px solid var(--a-line); background:#fff;
+  border-radius:6px; cursor:pointer; font-size:11px; color:var(--a-i2); line-height:1; padding:0; }
+.dept-acts .mini:hover { border-color:var(--a-blue-d); background:#F6FAFE; }
+.dept-acts .mini.danger:hover { color:#C0392B; border-color:#E7C3BD; background:#FFF8F7; }
+.dept-subs { background:#FAFCFE; border-top:1px solid var(--a-line); padding:8px 14px 10px 40px; }
+.dept-sub { display:flex; align-items:center; gap:8px; padding:3px 0; }
+.dept-sub-add { padding-top:8px; }
+
+/* 部门统计 */
+.ds-wrap { border:1px solid var(--a-line); border-radius:12px; overflow:hidden; background:#fff; }
+.ds-tbl { width:100%; border-collapse:collapse; font-size:12.5px; }
+.ds-tbl thead th { text-align:left; font-size:11.5px; font-weight:600; color:var(--a-i3);
+  background:#FAFBFD; padding:9px 12px; border-bottom:1px solid var(--a-line); white-space:nowrap; }
+.ds-tbl thead th.num, .ds-tbl td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.ds-tbl td { padding:10px 12px; border-bottom:1px solid #F0F2F5; color:var(--a-i2); }
+.ds-tbl tr.ds-row { cursor:pointer; }
+.ds-tbl tr.ds-row:hover { background:#F6FAFE; }
+.ds-tbl tr.ds-row.open { background:#F2F8FD; }
+.ds-tbl tr.ds-row td:first-child { color:var(--a-ink); font-weight:600; }
+.ds-caret { display:inline-block; width:14px; color:var(--a-i4); font-size:10px; }
+.ds-bar { display:block; height:7px; background:#EDF1F5; border-radius:4px; overflow:hidden; }
+.ds-bar > span { display:block; height:100%; background:var(--a-blue); border-radius:4px; }
+.ds-detail > td { background:#FAFCFE !important; padding:0 !important; border-bottom:1px solid var(--a-line); }
+.ds-subwrap { padding:8px 14px 12px 26px; }
+.ds-subrow { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:7px;
+  cursor:pointer; font-size:12.5px; }
+.ds-subrow:hover { background:#EFF6FC; }
+.ds-subrow.open { background:#E8F2FB; }
+.ds-subname { flex:0 0 190px; color:var(--a-ink); }
+.ds-submeta { color:var(--a-i4); font-size:11.5px; }
+.ds-people { padding:2px 0 8px 20px; }
+.ds-person { display:flex; align-items:center; gap:10px; padding:5px 6px; font-size:12px;
+  border-bottom:1px dashed #EDF1F5; }
+.ds-person:last-child { border-bottom:0; }
+.ds-pname { flex:0 0 118px; color:var(--a-ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ds-pemp { flex:0 0 68px; color:var(--a-i4); font-variant-numeric:tabular-nums; }
+.ds-pstat { color:var(--a-i3); font-size:11.5px; }
+.ds-more { font-size:11.5px; color:var(--a-i4); padding:7px 6px 2px; }
+@media (max-width:900px) {
+  .ds-subname { flex:0 0 120px; }
+  .dept-cnt { display:none; }
+}
 </style>
 </head>
 <body>
@@ -1341,7 +1415,83 @@ function qExplanationOf(q) {
 }
 
 // Source: D:\※ The Ritz-Carlton, Shenzhen\2026 刷题平台\部门列表.xlsx
-var DEPARTMENTS = [{"en":"Culinary","cn":"厨房部","subs":[{"en":"Culinary Administration","cn":"厨房办公室"},{"en":"All Day Dining Kitchen","cn":"全日制厨房"},{"en":"Banquet Kitchen","cn":"宴会厨房"},{"en":"Chinese Kitchen","cn":"中厨房"},{"en":"Italian Kitchen","cn":"意大利厨房"},{"en":"Pastry","cn":"饼房"},{"en":"Stewarding","cn":"管事部"}]},{"en":"Engineering","cn":"工程部","subs":[{"en":"Engineering Administration","cn":"工程部办公室"},{"en":"Operations","cn":"运营"}]},{"en":"Executive Office","cn":"行政办公室","subs":[{"en":"Executive Office","cn":"行政办公室"}]},{"en":"F&B","cn":"餐饮部","subs":[{"en":"F&B Administration","cn":"餐饮部办公室"},{"en":"Banquet","cn":"宴会部"},{"en":"Curv","cn":"雪茄吧"},{"en":"Fix","cn":"美食屋"},{"en":"Flavorz","cn":"全日制餐厅"},{"en":"In Room Dining","cn":"送餐部"},{"en":"Onyx","cn":"大堂吧"},{"en":"Paletto","cn":"意大利餐厅"},{"en":"XingLi Restaurant","cn":"星丽中餐厅"}]},{"en":"Finance","cn":"财务部","subs":[{"en":"Finance Administration","cn":"财务部办公室"},{"en":"Accounting","cn":"会计部"},{"en":"Purchasing","cn":"采购部"},{"en":"IT","cn":"IT"}]},{"en":"Human Resources","cn":"人力资源部","subs":[{"en":"HR Administration","cn":"人力资源部办公室"},{"en":"Dormitory","cn":"员工宿舍"},{"en":"Employee Dining","cn":"员工餐厅"},{"en":"Learning","cn":"培训部"},{"en":"Personnel","cn":"人事部"}]},{"en":"Rooms","cn":"房务部","subs":[{"en":"Rooms Administration","cn":"房务部办公室"},{"en":"FD & DM","cn":"前台 & 值班经理"},{"en":"GR& GS","cn":"礼宾部 & 宾客关系部"},{"en":"Housekeeping","cn":"客房部"},{"en":"Laundry","cn":"洗衣房"},{"en":"Loss Prevention","cn":"防损部"},{"en":"PBX","cn":"总机"},{"en":"Ritz Club","cn":"行政酒廊"},{"en":"Spa & Fitness","cn":"水疗与健身中心"}]},{"en":"S & M","cn":"市场销售部","subs":[{"en":"S&M Administration","cn":"市场销售部办公室"},{"en":"Catering","cn":"宴会销售部"},{"en":"Public Relations","cn":"公关部"},{"en":"Reservation","cn":"预订部"},{"en":"Sales","cn":"销售部"}]}];
+var DEPARTMENTS = [{"en":"Culinary","cn":"厨房部","subs":[{"en":"Culinary Administration","cn":"厨房办公室"},{"en":"All Day Dining Kitchen","cn":"全日制厨房"},{"en":"Banquet Kitchen","cn":"宴会厨房"},{"en":"Chinese Kitchen","cn":"中厨房"},{"en":"Italian Kitchen","cn":"意大利厨房"},{"en":"Pastry","cn":"饼房"},{"en":"Stewarding","cn":"管事部"}]},{"en":"Engineering","cn":"工程部","subs":[{"en":"Engineering Administration","cn":"工程部办公室"},{"en":"Operations","cn":"运营"}]},{"en":"Executive Office","cn":"行政办公室","subs":[{"en":"Executive Office","cn":"行政办公室"}]},{"en":"F&B","cn":"餐饮部","subs":[{"en":"F&B Administration","cn":"餐饮部办公室"},{"en":"Banquet","cn":"宴会部"},{"en":"Curv","cn":"雪茄吧"},{"en":"Fix","cn":"美食屋"},{"en":"Flavorz","cn":"全日制餐厅"},{"en":"In Room Dining","cn":"送餐部"},{"en":"Onyx","cn":"大堂吧"},{"en":"Paletto","cn":"意大利餐厅"},{"en":"XingLi Restaurant","cn":"星丽中餐厅"}]},{"en":"Finance","cn":"财务部","subs":[{"en":"Finance Administration","cn":"财务部办公室"},{"en":"Accounting","cn":"会计部"},{"en":"Purchasing","cn":"采购部"},{"en":"IT","cn":"IT"}]},{"en":"Human Resources","cn":"人力资源部","subs":[{"en":"HR Administration","cn":"人力资源部办公室"},{"en":"Dormitory","cn":"员工宿舍"},{"en":"Employee Dining","cn":"员工餐厅"},{"en":"Learning","cn":"培训部"},{"en":"Personnel","cn":"人事部"}]},{"en":"Rooms","cn":"房务部","subs":[{"en":"Rooms Administration","cn":"房务部办公室"},{"en":"FD & DM","cn":"前台 & 值班经理"},{"en":"GR & GS","cn":"礼宾部 & 宾客关系部"},{"en":"Housekeeping","cn":"客房部"},{"en":"Laundry","cn":"洗衣房"},{"en":"Loss Prevention","cn":"防损部"},{"en":"PBX","cn":"总机"},{"en":"Ritz Club","cn":"行政酒廊"},{"en":"Spa & Fitness","cn":"水疗与健身中心"}]},{"en":"S & M","cn":"市场销售部","subs":[{"en":"S&M Administration","cn":"市场销售部办公室"},{"en":"Catering","cn":"宴会销售部"},{"en":"Public Relations","cn":"公关部"},{"en":"Reservation","cn":"预订部"},{"en":"Sales","cn":"销售部"}]}];
+
+// 部门英文名的统一写法（2026-11-09）：'&' 前后各留一个空格，如 "GR & GS"。
+// 历史快照 / 账号 / 云端部门目录里可能还存着旧写法（"GR& GS"），所以凡是要显示、
+// 比较或反查部门英文名的地方，一律先过 deptEnNorm / deptEnCanon。
+function deptEnNorm(v) {
+  return String(v == null ? '' : v).replace(/\s*&\s*/g, ' & ').replace(/\s+/g, ' ').trim();
+}
+// 规范写法按 DEPARTMENTS 目录取值（目录是唯一权威，改文案只动目录）；
+// 目录里查不到的值（管理员手填）只做空格规范化后原样返回。
+function deptEnCanon(v) {
+  var n = deptEnNorm(v);
+  if (!n) return '';
+  if (typeof DEPARTMENTS !== 'undefined' && DEPARTMENTS && DEPARTMENTS.length) {
+    for (var i = 0; i < DEPARTMENTS.length; i++) {
+      if (deptEnNorm(DEPARTMENTS[i].en) === n) return DEPARTMENTS[i].en;
+      var subs = DEPARTMENTS[i].subs || [];
+      for (var j = 0; j < subs.length; j++) {
+        if (deptEnNorm(subs[j].en) === n) return subs[j].en;
+      }
+    }
+  }
+  return n;
+}
+
+// ---- 部门目录（可云端覆盖 / 后台可编辑）----
+// DEPARTMENTS 是 var：运行时整体替换即可，所有读取点都在函数体内部，没有缓存引用。
+// 云端落点 admin_state.deptDir（和名单、赛事、徽章同一行，天然共用一次合并写）。
+// 铁律：结构非法一律丢弃并回落默认目录 —— 宁可用旧目录，也不能让注册页的空
+// 部门下拉把新员工挡在门外。
+var DEPT_DIR_KEY = 'deptDir';
+function deptDirClean(rows) {
+  if (!rows || !rows.length) return null;
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    var d = rows[i];
+    if (!d || typeof d !== 'object') continue;
+    var en = deptEnNorm(d.en);
+    var cn = String(d.cn == null ? '' : d.cn).trim();
+    if (!en && !cn) continue;
+    var subs = [], ss = (d.subs && d.subs.length) ? d.subs : [];
+    for (var j = 0; j < ss.length; j++) {
+      var u = ss[j];
+      if (!u || typeof u !== 'object') continue;
+      var ue = deptEnNorm(u.en);
+      var uc = String(u.cn == null ? '' : u.cn).trim();
+      if (!ue && !uc) continue;
+      subs.push({ en: ue || uc, cn: uc || ue });
+    }
+    if (!subs.length) subs.push({ en: en || cn, cn: cn || en });
+    out.push({ en: en || cn, cn: cn || en, subs: subs });
+  }
+  return out.length ? out : null;
+}
+function loadDeptDirLocal() {
+  try {
+    var d = JSON.parse(localStorage.getItem(DEPT_DIR_KEY) || 'null');
+    if (d && d.rows && d.rows.length) return d;
+  } catch (e) {}
+  return null;
+}
+function applyDeptDir(dd) {
+  if (!dd || typeof dd !== 'object') return false;
+  var rows = deptDirClean(dd.rows);
+  if (!rows) return false;
+  var cur = loadDeptDirLocal();
+  if (cur && (dd.ver || 0) <= (cur.ver || 0)) return false;
+  DEPARTMENTS = rows;
+  try {
+    localStorage.setItem(DEPT_DIR_KEY, JSON.stringify({ ver: dd.ver || 0, rows: rows, ts: dd.ts || 0 }));
+  } catch (e) { return false; }
+  return true;
+}
+function deptDirNow() { return DEPARTMENTS; }
+function deptDirVer() { var d = loadDeptDirLocal(); return d ? (d.ver || 0) : 0; }
+// 开机先套本地缓存：首屏的部门下拉不能等网络。
+try { var _deptBoot0 = loadDeptDirLocal(); if (_deptBoot0) DEPARTMENTS = deptDirClean(_deptBoot0.rows) || DEPARTMENTS; } catch (e) {}
 
 // Save original data for reset
 var ORIGINAL_DATA = JSON.parse(JSON.stringify({day21:QUESTION_DATA.day21, tsos:QUESTION_DATA.tsos, manual:QUESTION_DATA.manual, sections:QUESTION_DATA.sections||[], papers:QUESTION_DATA.papers, config:QUESTION_DATA.config||{}}));
@@ -4743,7 +4893,13 @@ const state = {
 };
 
 // ===== Admin Panel State =====
+// 默认管理端密码 = 恢复码：写死在包里的兜底口令，后台改过密码它依然有效，
+// 忘了新密码时用它进门。
+// 注意：Supabase channels 的 RLS guard 用的是同一个值，但**不随后台改密码变动**
+// —— policies 在数据库端写死了这个值，改了它所有云端写入会被拒。
 var ADMIN_PASSWORD = 'RCSZ20090315';
+// 默认访问码，同样永久有效（后台可以另设一个新码）。
+var DEFAULT_ACCESS_CODE = 'SZXRZ';
 // Stage-5: the admin session now survives a page refresh. Previously
 // `authenticated` lived only in memory, so ANY refresh (including one the admin
 // does precisely because a save looks stuck) dumped them back to the login
@@ -5807,8 +5963,8 @@ function collectSyncSnapshot() {
   return {
     name: profileDisplayName(), emp: (p.empNo || getProfileEmpNo() || ''),
     cn: (p.cnName || ''), en: (p.enName || ''),
-    div: p.division ? p.division.cn : '', divEn: p.division ? p.division.en : '',
-    dept: p.dept ? p.dept.cn : '', deptEn: p.dept ? p.dept.en : '',
+    div: p.division ? p.division.cn : '', divEn: p.division ? deptEnCanon(p.division.en) : '',
+    dept: p.dept ? p.dept.cn : '', deptEn: p.dept ? deptEnCanon(p.dept.en) : '',
     // Stage 2 added the bound phone here so the admin panel could identify a
     // student even when name/empNo changed. Stage 9 retired phones: the field
     // stays in the payload (old readers still parse it) but is now normally
@@ -6546,8 +6702,8 @@ function applyCloudAccountData(key, rec) {
     if (!prof.cnName && snap.cn) prof.cnName = snap.cn;
     if (!prof.enName && snap.en) prof.enName = snap.en;
     if (!prof.empNo && snap.emp) prof.empNo = snap.emp;
-    if (!prof.division && (snap.div || snap.divEn)) prof.division = { cn: snap.div || '', en: snap.divEn || '' };
-    if (!prof.dept && (snap.dept || snap.deptEn)) prof.dept = { cn: snap.dept || '', en: snap.deptEn || '' };
+    if (!prof.division && (snap.div || snap.divEn)) prof.division = { cn: snap.div || '', en: deptEnCanon(snap.divEn || '') };
+    if (!prof.dept && (snap.dept || snap.deptEn)) prof.dept = { cn: snap.dept || '', en: deptEnCanon(snap.deptEn || '') };
     // 头像与 PIN 相反：它不是安全相关的，也不是"本机独有"的，而是学员在某一台
     // 设备上主动选的展示偏好 —— 所以云端优先，换设备登录后头像跟着走。
     // 用 typeof 判断而不是真值判断：'' 是"明确设的首字母"，得能把旧的覆盖掉。
@@ -6563,8 +6719,8 @@ function applyCloudAccountData(key, rec) {
     prof = {
       empNo: snap.emp || empOfKey(key) || '', cnName: snap.cn || '', enName: snap.en || '',
       foreignNoCn: false,
-      division: (snap.div || snap.divEn) ? { cn: snap.div || '', en: snap.divEn || '' } : null,
-      dept: (snap.dept || snap.deptEn) ? { cn: snap.dept || '', en: snap.deptEn || '' } : null
+      division: (snap.div || snap.divEn) ? { cn: snap.div || '', en: deptEnCanon(snap.divEn || '') } : null,
+      dept: (snap.dept || snap.deptEn) ? { cn: snap.dept || '', en: deptEnCanon(snap.deptEn || '') } : null
     };
     if (typeof snap.av === 'string' && snap.av) prof.avatar = snap.av;
     if (rec.pin) { prof.pinHash = rec.pin; prof.pinSetAt = rec.pinSetAt || 0; }
@@ -6793,6 +6949,63 @@ var ROSTER_CACHE_KEY = 'cloudRoster';        // 学员端本地缓存
 var ROSTER_ADMIN_KEY = 'adminRoster';        // 管理端本地副本
 var ROSTER_MAX = 3000;
 
+// ---- 平台凭据（学员访问码 / 管理端密码）----
+// 云端落在 channels.admin_state.appCfg（该通道已在 RLS 白名单里，不用改 SQL）。
+// localStorage 只是缓存；拉不到就回落默认值 —— 绝不能因为一次网络抖动把管理员
+// 挡在门外，所以「默认码」永久有效，它同时充当恢复码。
+var APP_CFG_KEY = 'appCfg';
+var APP_CFG_VER = 0;
+function appCfgLocal() {
+  try {
+    var c = JSON.parse(localStorage.getItem(APP_CFG_KEY) || 'null');
+    if (c && typeof c === 'object') return c;
+  } catch (e) {}
+  return null;
+}
+function appCfgCached() { return !!appCfgLocal(); }
+function appAccessCode() {
+  var c = appCfgLocal();
+  var v = (c && typeof c.code === 'string') ? String(c.code).trim() : '';
+  return (v || DEFAULT_ACCESS_CODE).toUpperCase();
+}
+function appAdminPwd() {
+  var c = appCfgLocal();
+  var v = (c && typeof c.pwd === 'string') ? String(c.pwd) : '';
+  return v || ADMIN_PASSWORD;
+}
+function appCodeOk(v) {
+  var s = String(v == null ? '' : v).trim().toUpperCase();
+  return s !== '' && (s === appAccessCode() || s === DEFAULT_ACCESS_CODE);
+}
+// 新密码与默认口令都算通过 —— 默认口令就是恢复码。
+function appAdminPwdOk(v) {
+  var s = String(v == null ? '' : v);
+  return s !== '' && (s === appAdminPwd() || s === ADMIN_PASSWORD);
+}
+function applyAppCfg(cfg) {
+  if (!cfg || typeof cfg !== 'object') return false;
+  var cur = appCfgLocal() || { ver: 0 };
+  if ((cfg.ver || 0) <= (cur.ver || 0)) return false;
+  var next = {
+    code: String(cfg.code || DEFAULT_ACCESS_CODE),
+    pwd: String(cfg.pwd || ADMIN_PASSWORD),
+    ver: cfg.ver || 0, ts: cfg.ts || 0
+  };
+  try { localStorage.setItem(APP_CFG_KEY, JSON.stringify(next)); } catch (e) { return false; }
+  return true;
+}
+// 只拉凭据：登录页在还没有名单上下文时也能用（学员端首次打开就要验码）。
+function appCfgPull() {
+  if (typeof SB_ON === 'undefined' || !SB_ON) return Promise.resolve(false);
+  return sbGetChannelJson(ROSTER_CHANNEL).then(function (j) {
+    if (!(j && j.success && j.data)) return false;
+    var ch = false;
+    if (j.data.appCfg && applyAppCfg(j.data.appCfg)) ch = true;
+    if (j.data.deptDir && typeof applyDeptDir === 'function' && applyDeptDir(j.data.deptDir)) ch = true;
+    return ch;
+  }).catch(function () { return false; });
+}
+
 // admin_state 现在承载两样东西：有效工号名单（顶层 ids/ver/ts）和限时答题赛
 // 配置（race 键）。channels 是「一个 channel 一行」，所以任何一方写入都必须
 // **先读现有 → 合并自己的键 → 写回**，绝不能整体覆盖 —— 否则发名单会清掉
@@ -6842,6 +7055,9 @@ function refreshRoster() {
     if (j.data.badges && applyBadgeCatalog(j.data.badges)) changed = true;
     // Stage 10: 员工名册（工号+姓名）也搭这一班车 —— 注册核验要用。
     if (j.data.nameRoster && applyNameRoster(j.data.nameRoster)) changed = true;
+    // 访问码 / 管理密码 / 部门目录也搭这一班车：学员端拉到就能用新码与新部门表。
+    if (j.data.appCfg && applyAppCfg(j.data.appCfg)) changed = true;
+    if (j.data.deptDir && applyDeptDir(j.data.deptDir)) changed = true;
     // 管理员对姓名 / 工号 / 部门的更正也放在这一行里。原来只有中继一条路，
     // 中继不通就永远应用不上（改名后排行榜一直是旧名字）。
     if (j.data.pfFix && j.data.pfFix.list && typeof applyPfFixes === 'function') {
@@ -8132,7 +8348,27 @@ function loginSubmit() {
   loginErr('');
   // Access code first: no point complaining about a missing employee ID when
   // the code is wrong too (it gates the question bank).
-  if (!code || code.toUpperCase() !== 'SZXRZ') { loginErr(t('err_code')); return; }
+  if (!code) { loginErr(t('err_code')); return; }
+  if (!appCodeOk(code)) {
+    // 新设备第一次打开时本地还没有云端凭据：先拉一次再判，避免"刚改的码却进不去"。
+    if (!appCfgCached()) {
+      state.loginBusy = true;
+      render();
+      appCfgPull().then(function () {
+        state.loginBusy = false;
+        if (appCodeOk(code)) { loginSubmit(); return; }
+        loginErr(t('err_code'));
+        render();
+      }, function () {
+        state.loginBusy = false;
+        loginErr(t('err_code'));
+        render();
+      });
+      return;
+    }
+    loginErr(t('err_code'));
+    return;
+  }
   if (!emp) { loginErr(t('login_req_emp')); focusId('loginEmp'); return; }
   if (isEmpBlocked(emp)) { loginErr(empBlockMsg(emp)); return; }
   state.loginEmp = emp;
@@ -15329,7 +15565,7 @@ function renderProfile() {
   html += '<option value="">' + t('profile_division_ph') + '</option>';
   for (var i = 0; i < DEPARTMENTS.length; i++) {
     var d = DEPARTMENTS[i];
-    var sel = (p.division && p.division.en === d.en) ? ' selected' : '';
+    var sel = (p.division && deptEnNorm(p.division.en) === deptEnNorm(d.en)) ? ' selected' : '';
     var label = state.lang === 'en' ? d.en : d.cn;
     html += '<option value="' + i + '"' + sel + '>' + escapeHtml(label) + '</option>';
   }
@@ -15338,13 +15574,13 @@ function renderProfile() {
   html += '<label>' + t('profile_dept') + ' <span style="color:var(--danger);">*</span></label>';
   html += '<select id="pfDept">';
   var divIdx = -1;
-  for (var j = 0; j < DEPARTMENTS.length; j++) { if (p.division && p.division.en === DEPARTMENTS[j].en) divIdx = j; }
+  for (var j = 0; j < DEPARTMENTS.length; j++) { if (p.division && deptEnNorm(p.division.en) === deptEnNorm(DEPARTMENTS[j].en)) divIdx = j; }
   if (divIdx >= 0) {
     var subs = DEPARTMENTS[divIdx].subs;
     html += '<option value="">' + t('profile_dept_ph') + '</option>';
     for (var k = 0; k < subs.length; k++) {
       var s = subs[k];
-      var sel2 = (p.dept && p.dept.en === s.en) ? ' selected' : '';
+      var sel2 = (p.dept && deptEnNorm(p.dept.en) === deptEnNorm(s.en)) ? ' selected' : '';
       var label2 = state.lang === 'en' ? s.en : s.cn;
       html += '<option value="' + k + '"' + sel2 + '>' + escapeHtml(label2) + '</option>';
     }
@@ -17720,8 +17956,8 @@ function renderExamResult() {
   var empNo = (prof.empNo || getProfileEmpNo() || '').trim();
   var dispName = profileDisplayName();
   var en = state.lang === 'en';
-  var divLabel = en ? (divObj.en || '') : (divObj.cn || '');
-  var deptLabel = en ? (deptObj.en || '') : (deptObj.cn || '');
+  var divLabel = en ? deptEnCanon(divObj.en || '') : (divObj.cn || '');
+  var deptLabel = en ? deptEnCanon(deptObj.en || '') : (deptObj.cn || '');
 
   var html = renderAppHeader({ title: t('result_title'), subtitle: getBankName(state.currentBank), avatar: false });
   html += '<div class="page"><div class="q-card result-card">';
@@ -18398,8 +18634,8 @@ function renderExamReplay() {
   var fullScore = typeof snap.full === 'number' ? snap.full : (total * ppq);
   var prof = state.profile || {};
   var divObj = prof.division || {}, deptObj = prof.dept || {};
-  var divLabel = en ? (divObj.en || '') : (divObj.cn || '');
-  var deptLabel = en ? (deptObj.en || '') : (deptObj.cn || '');
+  var divLabel = en ? deptEnCanon(divObj.en || '') : (divObj.cn || '');
+  var deptLabel = en ? deptEnCanon(deptObj.en || '') : (deptObj.cn || '');
   var empNo = (prof.empNo || getProfileEmpNo() || '').trim();
   var dispName = profileDisplayName();
 
@@ -19129,7 +19365,7 @@ function adminCloudStatus(kind) {
 function adminLoginAttempt() {
   var pwd = document.getElementById('adminPwd').value;
   var errEl = document.getElementById('adminError');
-  if (pwd === ADMIN_PASSWORD) {
+  if (appAdminPwdOk(pwd)) {
     adminState.authenticated = true;
     adminAuthPersist(); // Stage-5: survive refresh for ADMIN_SESSION_HOURS
     navigate('adminDashboard');
@@ -19634,6 +19870,492 @@ function adminTeachingAgg() {
     mtAvg: mtN ? Math.round(mtSum / mtN * 10) / 10 : -1
   };
 }
+// ===== 系统设置：学员访问码 / 管理端密码 =====
+// 为什么默认码不能删：它是恢复码。后台把密码改成自己的以后，一旦忘记，
+// 用 DEFAULT 值还能进门 —— 代码本来就是公开可分发的，多留这一条不会降低安全，
+// 但能省掉"进不去后台只能改代码重发"这种事故。
+function adminCredSave(kind) {
+  var en = state.lang === 'en';
+  var cur = appCfgLocal() || {};
+  var code = appAccessCode();
+  var pwd = appAdminPwd();
+  if (kind === 'code') {
+    var el = document.getElementById('setCode');
+    var v = String(el && el.value ? el.value : '').trim().toUpperCase();
+    if (!v) { adminToast(en ? 'Access code cannot be empty.' : '访问码不能为空。', 'err'); return; }
+    if (v.length > 24) { adminToast(en ? 'Access code is too long (max 24).' : '访问码太长了（最多 24 个字符）。', 'err'); return; }
+    if (!/^[A-Z0-9_-]+$/.test(v)) { adminToast(en ? 'Use letters, digits only.' : '只能用字母、数字、- 和 _。', 'err'); return; }
+    code = v;
+  } else {
+    var p1 = String((document.getElementById('setPwd1') || {}).value || '');
+    var p2 = String((document.getElementById('setPwd2') || {}).value || '');
+    if (p1.length < 6) { adminToast(en ? 'Password must be at least 6 characters.' : '密码至少 6 位。', 'err'); return; }
+    if (p1 !== p2) { adminToast(en ? 'The two passwords do not match.' : '两次输入的密码不一致。', 'err'); return; }
+    pwd = p1;
+  }
+  var ver = Date.now();
+  var payload = { code: code, pwd: pwd, ver: ver, ts: ver };
+  var done = function (cloudOk) {
+    applyAppCfg(payload);
+    adminToast(cloudOk
+      ? (en ? 'Saved. Every device picks it up on next sync.' : '已保存，所有设备下次同步即生效。')
+      : (en ? 'Applied on this device, but cloud sync failed \u2014 retry when the network is back.'
+            : '已在本机生效，但云端同步失败——网络恢复后请再点一次保存。'),
+      cloudOk ? 'ok' : 'warn');
+    render();
+  };
+  sbMergeAdminState({ appCfg: payload }).then(function () { done(true); },
+    function () { done(false); });
+}
+
+function renderAdminSettings() {
+  if (!adminState.authenticated) return renderAdminLogin();
+  var en = state.lang === 'en';
+  var cfg = appCfgLocal() || {};
+  var code = appAccessCode();
+  var pwdChanged = !!(cfg.pwd && cfg.pwd !== ADMIN_PASSWORD);
+  var tsTxt = cfg.ts ? fmtSyncTime(cfg.ts) : (en ? 'never' : '从未');
+  var h = '<div class="page">';
+
+  h += '<div class="ap-grid2">';
+
+  h += '<div class="ap-card">'
+    + '<div class="ap-card-h"><h3>' + (en ? 'Student access code' : '学员访问码') + '</h3>'
+    + '<span class="ap-tag">' + escapeHtml(code) + '</span></div>'
+    + '<p class="ap-sub">' + (en
+      ? 'Students must type this code before they can enter the mini program. Keep it short and easy to dictate.'
+      : '学员进入平台前要输入这个码，建议用短、好念的字母组合，现场口头传达不会听错。')
+    + '</p>'
+    + '<div class="set-row"><label>' + (en ? 'New code' : '新的访问码') + '</label>'
+    + '<input id="setCode" class="admin-input" maxlength="24" placeholder="' + escapeHtml(code) + '" autocomplete="off"></div>'
+    + '<div class="set-row"><button class="ap-btn pri" onclick="adminCredSave(\'code\')">'
+    + (en ? 'Save access code' : '保存访问码') + '</button>'
+    + '<span class="set-hint">' + (en ? 'The default code ' : '默认码 ')
+    + '<b>' + escapeHtml(DEFAULT_ACCESS_CODE) + '</b>' + (en ? ' always works as a fallback.' : ' 永久有效，可作为兜底。') + '</span></div>'
+    + '</div>';
+
+  h += '<div class="ap-card">'
+    + '<div class="ap-card-h"><h3>' + (en ? 'Admin password' : '管理端密码') + '</h3>'
+    + '<span class="ap-tag' + (pwdChanged ? ' on' : '') + '">'
+    + (pwdChanged ? (en ? 'customised' : '已自定义') : (en ? 'default' : '默认')) + '</span></div>'
+    + '<p class="ap-sub">' + (en
+      ? 'Required to open the admin panel. At least 6 characters.'
+      : '进入管理后台需要输入，至少 6 位。改完请立刻记下来。')
+    + '</p>'
+    + '<div class="set-row"><label>' + (en ? 'New password' : '新密码') + '</label>'
+    + '<input id="setPwd1" class="admin-input" type="password" autocomplete="new-password"></div>'
+    + '<div class="set-row"><label>' + (en ? 'Repeat' : '再输一次') + '</label>'
+    + '<input id="setPwd2" class="admin-input" type="password" autocomplete="new-password"></div>'
+    + '<div class="set-row"><button class="ap-btn pri" onclick="adminCredSave(\'pwd\')">'
+    + (en ? 'Save password' : '保存密码') + '</button>'
+    + '<span class="set-hint">' + (en ? 'Last updated: ' : '上次更新：') + escapeHtml(tsTxt) + '</span></div>'
+    + '</div>';
+
+  h += '</div>';
+
+  h += '<div class="ap-card" style="margin-top:14px;">'
+    + '<div class="ap-card-h"><h3>' + (en ? 'Recovery & safety' : '恢复与安全') + '</h3></div>'
+    + '<ul class="set-list">'
+    + '<li>' + (en ? 'The bundled default password ' : '出厂默认密码 ')
+    + '<b>' + escapeHtml(ADMIN_PASSWORD) + '</b>'
+    + (en ? ' always opens the admin panel, even after you change it. It is the recovery key \u2014 keep it to yourself.'
+          : ' 永远能打开管理后台，即使你已经改过密码。它就是恢复码，只自己知道即可。') + '</li>'
+    + '<li>' + (en ? 'Same for the default access code ' : '默认访问码 ')
+    + '<b>' + escapeHtml(DEFAULT_ACCESS_CODE) + '</b>'
+    + (en ? ' \u2014 it keeps working as a fallback so a typo in a new code cannot lock everyone out.'
+          : ' 也一直有效，防止新码打错一个字把所有人挡在门外。') + '</li>'
+    + '<li>' + (en ? 'Codes live in the cloud (admin_state), so every device gets them on next sync \u2014 no need to redeploy.'
+                 : '访问码与密码存在云端（admin_state），所有设备下次同步自动生效，不用重新部署。') + '</li>'
+    + '<li>' + (en ? 'The database RLS guard is a separate fixed value. It does not change when you change the password, and it must not \u2014 otherwise every cloud write would be rejected.'
+                 : '数据库端的 RLS 校验值是单独固定的，不随这里改密码而变。这是刻意的：改了它，题目、名单、赛事的云端写入会全部被拒。') + '</li>'
+    + '</ul></div>';
+
+  h += '<div class="ap-card" style="margin-top:14px;">'
+    + '<div class="ap-card-h"><h3>' + (en ? 'Other platform data' : '平台其他配置') + '</h3></div>'
+    + '<p class="ap-sub">' + (en
+      ? 'Departments and units that students pick from at registration are edited in the department directory.'
+      : '学员注册时选择的大部门与子部门，在「部门目录」里维护。') + '</p>'
+    + '<button class="ap-btn" onclick="navigate(\'adminDepts\')">' + (en ? 'Open department directory' : '打开部门目录') + '</button>'
+    + '</div>';
+
+  h += '</div>';
+  return h;
+}
+
+// ===== 部门目录（编辑 + 发布）=====
+function adminDeptDraft() {
+  if (!adminState.deptDraft) {
+    adminState.deptDraft = JSON.parse(JSON.stringify(deptDirNow() || []));
+  }
+  return adminState.deptDraft;
+}
+function adminDeptDraftReset() {
+  adminState.deptDraft = null;
+  adminState.deptOpen = -1;
+  render();
+}
+function adminDeptToggle(i) {
+  adminState.deptOpen = (adminState.deptOpen === i) ? -1 : i;
+  render();
+}
+function adminDeptAdd() {
+  var d = adminDeptDraft();
+  d.push({ en: 'NEW DIVISION', cn: '新部门', subs: [{ en: 'NEW UNIT', cn: '新子部门' }] });
+  adminState.deptOpen = d.length - 1;
+  render();
+}
+function adminDeptDel(i) {
+  var d = adminDeptDraft();
+  var en = state.lang === 'en';
+  if (d.length <= 1) { adminToast(en ? 'At least one division is required.' : '至少要保留一个大部门。', 'err'); return; }
+  var gone = d[i];
+  d.splice(i, 1);
+  adminState.deptOpen = -1;
+  adminToast((en ? 'Removed ' : '已移除 ') + (gone ? gone.cn : '') + (en ? '' : '（发布后生效）'), 'warn');
+  render();
+}
+function adminDeptMove(i, dir) {
+  var d = adminDeptDraft();
+  var j = i + dir;
+  if (j < 0 || j >= d.length) return;
+  var t = d[i]; d[i] = d[j]; d[j] = t;
+  if (adminState.deptOpen === i) adminState.deptOpen = j;
+  else if (adminState.deptOpen === j) adminState.deptOpen = i;
+  render();
+}
+function adminDeptSubAdd(i) {
+  var d = adminDeptDraft();
+  if (!d[i]) return;
+  d[i].subs = d[i].subs || [];
+  d[i].subs.push({ en: 'NEW UNIT', cn: '新子部门' });
+  render();
+}
+function adminDeptSubDel(i, j) {
+  var d = adminDeptDraft();
+  var en = state.lang === 'en';
+  if (!d[i] || !d[i].subs) return;
+  if (d[i].subs.length <= 1) { adminToast(en ? 'Each division needs at least one unit.' : '每个大部门至少保留一个子部门。', 'err'); return; }
+  d[i].subs.splice(j, 1);
+  render();
+}
+function adminDeptSubMove(i, j, dir) {
+  var d = adminDeptDraft();
+  if (!d[i] || !d[i].subs) return;
+  var k = j + dir;
+  if (k < 0 || k >= d[i].subs.length) return;
+  var t = d[i].subs[j]; d[i].subs[j] = d[i].subs[k]; d[i].subs[k] = t;
+  render();
+}
+// 输入框只写回草稿，不重绘（重绘会把焦点踢掉）
+function adminDeptField(i, key, v) {
+  var d = adminDeptDraft();
+  if (d[i]) d[i][key] = v;
+}
+function adminDeptSubField(i, j, key, v) {
+  var d = adminDeptDraft();
+  if (d[i] && d[i].subs && d[i].subs[j]) d[i].subs[j][key] = v;
+}
+function adminDeptsDirty() {
+  if (!adminState.deptDraft) return false;
+  try { return JSON.stringify(adminState.deptDraft) !== JSON.stringify(deptDirNow()); } catch (e) { return true; }
+}
+function adminDeptsSave() {
+  var en = state.lang === 'en';
+  var rows = deptDirClean(adminState.deptDraft);
+  if (!rows) { adminToast(en ? 'The directory cannot be empty.' : '部门目录不能为空。', 'err'); return; }
+  var seen = {}, dup = '';
+  for (var i = 0; i < rows.length; i++) {
+    var k = deptEnNorm(rows[i].en).toLowerCase();
+    if (seen[k]) { dup = rows[i].en; break; }
+    seen[k] = 1;
+  }
+  if (dup) { adminToast((en ? 'Duplicate division name: ' : '大部门英文名重复：') + dup, 'err'); return; }
+  var ver = Date.now();
+  var dd = { ver: ver, rows: rows, ts: ver };
+  sbMergeAdminState({ deptDir: dd }).then(function () {
+    applyDeptDir(dd);
+    adminState.deptDraft = JSON.parse(JSON.stringify(rows));
+    adminToast(en ? 'Published. Every device gets the new directory on next sync.' : '已发布，所有设备下次同步即更新。', 'ok');
+    render();
+  }, function () {
+    applyDeptDir(dd);
+    adminState.deptDraft = JSON.parse(JSON.stringify(rows));
+    adminToast(en ? 'Applied locally, cloud sync failed \u2014 please save again later.' : '已在本机生效，云端同步失败——稍后再点一次发布。', 'warn');
+    render();
+  });
+}
+
+function renderAdminDepts() {
+  if (!adminState.authenticated) return renderAdminLogin();
+  var en = state.lang === 'en';
+  var d = adminDeptDraft();
+  var dirty = adminDeptsDirty();
+  var subs = 0;
+  for (var q = 0; q < d.length; q++) subs += (d[q].subs || []).length;
+
+  var h = '<div class="page">';
+  h += '<div class="ap-bar">'
+    + '<span class="ap-count">' + d.length + (en ? ' divisions \u00b7 ' : ' 个大部门 · ') + subs + (en ? ' units' : ' 个子部门')
+    + (dirty ? ' · <b style="color:#B26B00;">' + (en ? 'unsaved changes' : '有未发布的修改') + '</b>' : '')
+    + '</span>'
+    + '<span style="flex:1;"></span>'
+    + '<button class="ap-btn" onclick="adminDeptAdd()">+ ' + (en ? 'New division' : '新增大部门') + '</button>'
+    + (dirty ? '<button class="ap-btn" onclick="adminDeptDraftReset()">' + (en ? 'Discard' : '放弃修改') + '</button>' : '')
+    + '<button class="ap-btn pri" onclick="adminDeptsSave()">' + (en ? 'Save & publish' : '保存并发布') + '</button>'
+    + '</div>';
+
+  h += '<div class="ap-note">' + (en
+    ? 'This directory is the list students pick from at registration, and the grouping key for every department statistic. Renaming a division does NOT migrate historical records \u2014 keep names stable once people have registered; use this page mainly to add or remove units.'
+    : '这份目录同时是学员注册时的下拉选项，也是全平台部门统计的分组依据。改名字不会迁移已有记录（老学员仍挂在旧名字下），所以有人在册后尽量只增删、不改名。')
+    + '</div>';
+
+  h += '<div class="dept-wrap">';
+  for (var i = 0; i < d.length; i++) {
+    var dv = d[i] || {};
+    var open = adminState.deptOpen === i;
+    h += '<div class="dept-row' + (open ? ' open' : '') + '">';
+    h += '<div class="dept-main">'
+      + '<button class="dept-caret" onclick="adminDeptToggle(' + i + ')">' + (open ? '\u25be' : '\u25b8') + '</button>'
+      + '<input class="admin-input dept-in" value="' + escapeHtml(dv.cn || '') + '" '
+      + 'oninput="adminDeptField(' + i + ',\'cn\',this.value)" placeholder="' + (en ? 'Chinese name' : '中文名') + '">'
+      + '<input class="admin-input dept-in" value="' + escapeHtml(dv.en || '') + '" '
+      + 'oninput="adminDeptField(' + i + ',\'en\',this.value)" placeholder="English name">'
+      + '<span class="dept-cnt">' + ((dv.subs || []).length) + (en ? ' units' : ' 个子部门') + '</span>'
+      + '<span class="dept-acts">'
+      + '<button class="mini" title="' + (en ? 'Move up' : '上移') + '" onclick="adminDeptMove(' + i + ',-1)">\u2191</button>'
+      + '<button class="mini" title="' + (en ? 'Move down' : '下移') + '" onclick="adminDeptMove(' + i + ',1)">\u2193</button>'
+      + '<button class="mini danger" title="' + (en ? 'Remove' : '删除') + '" onclick="adminDeptDel(' + i + ')">\u2715</button>'
+      + '</span></div>';
+    if (open) {
+      h += '<div class="dept-subs">';
+      var sl = dv.subs || [];
+      for (var j = 0; j < sl.length; j++) {
+        var sv = sl[j] || {};
+        h += '<div class="dept-sub">'
+          + '<input class="admin-input dept-in" value="' + escapeHtml(sv.cn || '') + '" '
+          + 'oninput="adminDeptSubField(' + i + ',' + j + ',\'cn\',this.value)" placeholder="' + (en ? 'Chinese name' : '中文名') + '">'
+          + '<input class="admin-input dept-in" value="' + escapeHtml(sv.en || '') + '" '
+          + 'oninput="adminDeptSubField(' + i + ',' + j + ',\'en\',this.value)" placeholder="English name">'
+          + '<span class="dept-acts">'
+          + '<button class="mini" onclick="adminDeptSubMove(' + i + ',' + j + ',-1)">\u2191</button>'
+          + '<button class="mini" onclick="adminDeptSubMove(' + i + ',' + j + ',1)">\u2193</button>'
+          + '<button class="mini danger" onclick="adminDeptSubDel(' + i + ',' + j + ')">\u2715</button>'
+          + '</span></div>';
+      }
+      h += '<div class="dept-sub-add"><button class="ap-btn" onclick="adminDeptSubAdd(' + i + ')">+ '
+        + (en ? 'New unit' : '新增子部门') + '</button></div>';
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+  h += '</div>';
+  h += '</div>';
+  return h;
+}
+
+// ===== 部门统计 =====
+function deptStatDaysOf(rr) {
+  if (!rr || !rr.days || typeof rr.days !== 'object') return 0;
+  var n = 0;
+  for (var k in rr.days) if (Object.prototype.hasOwnProperty.call(rr.days, k)) n++;
+  return n;
+}
+// 纯聚合：不碰 DOM，测试可以直接喂数据。
+function deptStatRows(from, to) {
+  var recs = adminStudentRecords();
+  var raceMap = adminState.dashRaceMap || {};
+  var en = state.lang === 'en';
+  var map = {}, order = [];
+  function newBox(cn, enName) {
+    return { cn: cn, en: enName, n: 0, att: 0, exN: 0, pctSum: 0, pctN: 0,
+      passN: 0, passDen: 0, cor: 0, tot: 0, days: 0, people: [] };
+  }
+  function roll(b, p) {
+    b.n++; b.exN += p.exN; b.pctSum += p.pctSum; b.pctN += p.pctN;
+    b.passN += p.passN; b.passDen += p.passDen; b.cor += p.cor; b.tot += p.tot; b.days += p.days;
+    if (p.exN > 0) b.att++;
+  }
+  for (var i = 0; i < recs.length; i++) {
+    var rec = recs[i], snap = rec.snap || {};
+    var dCn = String(snap.div || '').trim() || (en ? '(none)' : '未填写');
+    var dEn = deptEnCanon(snap.divEn || dCn);
+    if (!map[dCn]) { map[dCn] = newBox(dCn, dEn); map[dCn].subs = {}; order.push(dCn); }
+    var b = map[dCn];
+    var sCn = String(snap.dept || '').trim() || (en ? '(none)' : '未填写');
+    if (!b.subs[sCn]) b.subs[sCn] = newBox(sCn, deptEnCanon(snap.deptEn || sCn));
+    var sb = b.subs[sCn];
+
+    var p = { key: rec.key, cn: dashNameCnOf(snap) || '', enName: dashNameEnOf(snap) || '',
+      emp: dashEmpNoOf(snap, rec.key), sub: sCn, exN: 0, pctSum: 0, pctN: 0,
+      passN: 0, passDen: 0, cor: 0, tot: 0, days: 0 };
+
+    var exs = rec.exams || [];
+    for (var j = 0; j < exs.length; j++) {
+      var ev = exs[j];
+      if (!ev) continue;
+      var ts = ev.ts || 0;
+      if (from && ts < from) continue;
+      if (to && ts > to) continue;
+      var tot = ev.total || 0, cor = ev.correct || 0;
+      var pct = tot > 0 ? Math.round(cor / tot * 100)
+        : (typeof ev.score === 'number' && isFinite(ev.score) ? Math.round(ev.score) : 0);
+      p.exN++; p.pctSum += pct; p.pctN++;
+      p.cor += cor; p.tot += tot;
+      if (typeof ev.passed === 'boolean') { p.passDen++; if (ev.passed) p.passN++; }
+    }
+    p.days = deptStatDaysOf(raceMap[rec.key]);
+    b.people.push(p);
+    sb.people.push(p);
+    roll(b, p);
+    roll(sb, p);
+  }
+
+  var rows = [];
+  for (var r = 0; r < order.length; r++) {
+    var bb = map[order[r]];
+    var subs = [];
+    for (var sk in bb.subs) if (Object.prototype.hasOwnProperty.call(bb.subs, sk)) subs.push(bb.subs[sk]);
+    subs.sort(function (a, b2) { return b2.n - a.n; });
+    bb.subsArr = subs;
+    bb.people.sort(function (a, b2) { return (b2.pctN ? b2.pctSum / b2.pctN : -1) - (a.pctN ? a.pctSum / a.pctN : -1); });
+    delete bb.subs;
+    rows.push(bb);
+  }
+  rows.sort(function (a, b2) { return b2.n - a.n; });
+  return rows;
+}
+function deptAvgOf(b) { return b.pctN ? Math.round(b.pctSum / b.pctN) : -1; }
+function deptPassRateOf(b) { return b.passDen ? Math.round(b.passN / b.passDen * 100) : -1; }
+function deptAccOf(b) { return b.tot ? Math.round(b.cor / b.tot * 100) : -1; }
+function deptDaysAvgOf(b) { return b.n ? Math.round(b.days / b.n * 10) / 10 : 0; }
+function adminDeptStatRange() {
+  var r = adminState.deptStatRange || 'all';
+  if (r === 'all') return { from: 0, to: 0 };
+  var days = parseInt(r, 10) || 0;
+  return { from: Date.now() - days * 86400000, to: 0 };
+}
+function adminDeptStatOpen(cn) {
+  adminState.deptStatOpen = (adminState.deptStatOpen === cn) ? '' : cn;
+  adminState.deptStatSub = '';
+  render();
+}
+function adminDeptStatOpenSub(cn) {
+  adminState.deptStatSub = (adminState.deptStatSub === cn) ? '' : cn;
+  render();
+}
+function adminDeptStatRangeSet(v) { adminState.deptStatRange = v; render(); }
+
+function renderAdminDeptStats() {
+  if (!adminState.authenticated) return renderAdminLogin();
+  var en = state.lang === 'en';
+  if (!adminState.dashRaceMap && !adminState.dashRaceLoading) { try { dashFetchRace(); } catch (e) {} }
+  var rb = adminDeptStatRange();
+  var rows = deptStatRows(rb.from, rb.to);
+  var totPpl = 0, totAtt = 0, totPctSum = 0, totPctN = 0;
+  for (var i = 0; i < rows.length; i++) {
+    totPpl += rows[i].n; totAtt += rows[i].att;
+    totPctSum += rows[i].pctSum; totPctN += rows[i].pctN;
+  }
+  var storeAvg = totPctN ? Math.round(totPctSum / totPctN) : -1;
+
+  var h = '<div class="page">';
+  h += '<div class="ap-bar"><div class="ap-seg">'
+    + ['all', '90', '30'].map(function (k) {
+      var lb = k === 'all' ? (en ? 'All time' : '全部时间') : (k === '90' ? (en ? '90 days' : '近 90 天') : (en ? '30 days' : '近 30 天'));
+      return '<button class="' + ((adminState.deptStatRange || 'all') === k ? 'on' : '') + '" onclick="adminDeptStatRangeSet(\'' + k + '\')">' + lb + '</button>';
+    }).join('')
+    + '</div><span class="ap-count">' + rows.length + (en ? ' divisions' : ' 个部门') + '</span></div>';
+
+  h += '<div class="ap-note">' + (en
+    ? 'Scope: every registered student with a division on file. Average score = mean of each attempt\u2019s correct-rate; pass rate counts attempts that have a pass mark; attendance = days marked in the quiz race. Click a row to see units, then people.'
+    : '统计范围：名册内已注册且填写了部门的学员。平均分取每次作答的正确率均值；及格率只统计有及格线的场次；打卡取答题赛累计天数。点击部门行展开子部门，再点一层看具体的人。')
+    + '</div>';
+
+  var attPct = totPpl ? Math.round(totAtt / totPpl * 100) : 0;
+  h += '<div class="ap-kpis">'
+    + '<div class="ap-kpi"><div class="lb">' + (en ? 'People' : '覆盖人数') + '</div><div class="v">' + totPpl + '</div></div>'
+    + '<div class="ap-kpi"><div class="lb">' + (en ? 'Took an exam' : '有考试记录') + '</div><div class="v">' + totAtt
+    + '<small>' + attPct + '%</small></div></div>'
+    + '<div class="ap-kpi"><div class="lb">' + (en ? 'Store average' : '全店平均分') + '</div><div class="v">'
+    + (storeAvg < 0 ? '\u2014' : storeAvg + '<small>%</small>') + '</div></div>'
+    + '<div class="ap-kpi"><div class="lb">' + (en ? 'Divisions' : '大部门数') + '</div><div class="v">' + rows.length + '</div></div>'
+    + '</div>';
+
+  if (!rows.length) {
+    h += '<div class="ap-empty">' + (en ? 'No student records yet.' : '还没有学员记录。') + '</div>';
+    h += '</div>';
+    return h;
+  }
+
+  h += '<div class="ds-wrap"><table class="ap-tbl ds-tbl"><thead><tr>'
+    + '<th>' + (en ? 'Division' : '大部门') + '</th>'
+    + '<th class="num">' + (en ? 'People' : '人数') + '</th>'
+    + '<th class="num">' + (en ? 'Tested' : '参考') + '</th>'
+    + '<th class="num">' + (en ? 'Avg' : '平均分') + '</th>'
+    + '<th class="num">' + (en ? 'Pass' : '及格率') + '</th>'
+    + '<th class="num">' + (en ? 'Accuracy' : '答对率') + '</th>'
+    + '<th class="num">' + (en ? 'Days' : '打卡天数') + '</th>'
+    + '<th style="width:132px;">' + (en ? 'Distribution' : '占比') + '</th>'
+    + '</tr></thead><tbody>';
+
+  var maxN = rows[0].n || 1;
+  for (var r2 = 0; r2 < rows.length; r2++) {
+    var b = rows[r2];
+    var open = adminState.deptStatOpen === b.cn;
+    var avg = deptAvgOf(b), pr = deptPassRateOf(b), ac = deptAccOf(b);
+    h += '<tr class="ds-row' + (open ? ' open' : '') + '" onclick="adminDeptStatOpen(\'' + jsKey(b.cn) + '\')">'
+      + '<td><span class="ds-caret">' + (open ? '\u25be' : '\u25b8') + '</span>' + escapeHtml(en ? (b.en || b.cn) : b.cn) + '</td>'
+      + '<td class="num">' + b.n + '</td>'
+      + '<td class="num">' + b.att + '</td>'
+      + '<td class="num">' + (avg < 0 ? '\u2014' : avg + '%') + '</td>'
+      + '<td class="num">' + (pr < 0 ? '\u2014' : pr + '%') + '</td>'
+      + '<td class="num">' + (ac < 0 ? '\u2014' : ac + '%') + '</td>'
+      + '<td class="num">' + deptDaysAvgOf(b) + '</td>'
+      + '<td><span class="ds-bar"><span style="width:' + Math.round(b.n / maxN * 100) + '%;"></span></span></td>'
+      + '</tr>';
+    if (open) {
+      h += '<tr class="ds-detail"><td colspan="8"><div class="ds-subwrap">';
+      var sa = b.subsArr || [];
+      for (var s2 = 0; s2 < sa.length; s2++) {
+        var sb = sa[s2];
+        var sOpen = (adminState.deptStatOpen === b.cn) && (adminState.deptStatSub === sb.cn);
+        h += '<div class="ds-subrow' + (sOpen ? ' open' : '') + '" onclick="event.stopPropagation();adminDeptStatOpenSub(\'' + jsKey(sb.cn) + '\')">'
+          + '<span class="ds-caret">' + (sOpen ? '\u25be' : '\u25b8') + '</span>'
+          + '<span class="ds-subname">' + escapeHtml(en ? (sb.en || sb.cn) : sb.cn) + '</span>'
+          + '<span class="ds-submeta">' + sb.n + (en ? ' people' : ' 人') + ' \u00b7 '
+          + (deptAvgOf(sb) < 0 ? '\u2014' : (en ? 'avg ' : '平均 ') + deptAvgOf(sb) + '%') + ' \u00b7 '
+          + (deptPassRateOf(sb) < 0 ? '\u2014' : (en ? 'pass ' : '及格 ') + deptPassRateOf(sb) + '%') + '</span>'
+          + '</div>';
+        if (sOpen) {
+          h += '<div class="ds-people">';
+          var pl = sb.people || [];
+          var cap = Math.min(pl.length, 60);
+          for (var p2 = 0; p2 < cap; p2++) {
+            var pp = pl[p2];
+            var pavg = pp.pctN ? Math.round(pp.pctSum / pp.pctN) : -1;
+            var ppr = pp.passDen ? Math.round(pp.passN / pp.passDen * 100) : -1;
+            h += '<div class="ds-person">'
+              + '<span class="ds-pname">' + escapeHtml(en ? (pp.enName || pp.cn || pp.key) : (pp.cn || pp.enName || pp.key)) + '</span>'
+              + '<span class="ds-pemp">' + escapeHtml(pp.emp || '') + '</span>'
+              + '<span class="ds-pstat">' + pp.exN + (en ? ' tries' : ' 次')
+              + ' \u00b7 ' + (pavg < 0 ? '\u2014' : pavg + '%')
+              + ' \u00b7 ' + (ppr < 0 ? '\u2014' : (en ? 'pass ' : '及格 ') + ppr + '%')
+              + ' \u00b7 ' + pp.days + (en ? 'd' : ' 天') + '</span>'
+              + '</div>';
+          }
+          if (pl.length > cap) h += '<div class="ds-more">' + (en ? 'and ' : '另有 ') + (pl.length - cap) + (en ? ' more' : ' 人未显示') + '</div>';
+          if (!pl.length) h += '<div class="ds-more">' + (en ? 'No one in this unit yet.' : '该子部门暂无学员。') + '</div>';
+          h += '</div>';
+        }
+      }
+      h += '</div></td></tr>';
+    }
+  }
+  h += '</tbody></table></div>';
+  h += '</div>';
+  return h;
+}
+
 function renderAdminTeaching() {
   if (!adminState.authenticated) return renderAdminLogin();
   var en = state.lang === 'en';
@@ -20716,8 +21438,8 @@ function buildReportCSV(rows, lang) {
   var lines = [head.map(q).join(',')];
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i], ev = r.ev, s = r.snap;
-    var div = en ? (s.divEn || s.div || '') : (s.div || '');
-    var dept = en ? (s.deptEn || s.dept || '') : (s.dept || '');
+    var div = en ? deptEnCanon(s.divEn || s.div || '') : (s.div || '');
+    var dept = en ? deptEnCanon(s.deptEn || s.dept || '') : (s.dept || '');
     var gr = gradeExam(ev, null);
     var resultLabel = gr.passed ? (en ? 'Passed' : '通过') : (en ? 'Failed' : '未通过');
     // Stage-2: keep the whole row on the SUBMIT-time grading scale so score /
@@ -22716,8 +23438,8 @@ function adminStudentRecords() {
 // all agree on the order.
 function adminDeptDivLabel(snap, en) {
   snap = snap || {};
-  var div = snap.div ? (en ? (snap.divEn || snap.div) : snap.div) : '';
-  var dept = snap.dept ? (en ? (snap.deptEn || snap.dept) : snap.dept) : '';
+  var div = snap.div ? (en ? deptEnCanon(snap.divEn || snap.div) : snap.div) : '';
+  var dept = snap.dept ? (en ? deptEnCanon(snap.deptEn || snap.dept) : snap.dept) : '';
   var out = '';
   if (div) out += escapeHtml(div);
   if (div && dept) out += ' · ';
@@ -22832,13 +23554,13 @@ function adminStuEditRowHtml(rec, en) {
   var pEn = snap.en || '';
   var divIdx = -1, deptIdx = -1;
   for (var di = 0; di < DEPARTMENTS.length; di++) {
-    if (snap.divEn && DEPARTMENTS[di].en === snap.divEn) { divIdx = di; break; }
+    if (snap.divEn && deptEnNorm(DEPARTMENTS[di].en) === deptEnNorm(snap.divEn)) { divIdx = di; break; }
     if (!snap.divEn && snap.div && DEPARTMENTS[di].cn === snap.div) { divIdx = di; break; }
   }
   if (divIdx >= 0) {
     var subList = DEPARTMENTS[divIdx].subs;
     for (var si = 0; si < subList.length; si++) {
-      if ((snap.deptEn && subList[si].en === snap.deptEn) || (!snap.deptEn && snap.dept && subList[si].cn === snap.dept)) { deptIdx = si; break; }
+      if ((snap.deptEn && deptEnNorm(subList[si].en) === deptEnNorm(snap.deptEn)) || (!snap.deptEn && snap.dept && subList[si].cn === snap.dept)) { deptIdx = si; break; }
     }
   }
   var h = '<tr class="stu-edit-tr"><td colspan="9">';
@@ -23089,13 +23811,13 @@ function renderAdminStudents() {
       var pEn = snap.en || '';
       var divIdx = -1, deptIdx = -1;
       for (var di = 0; di < DEPARTMENTS.length; di++) {
-        if (snap.divEn && DEPARTMENTS[di].en === snap.divEn) { divIdx = di; break; }
+        if (snap.divEn && deptEnNorm(DEPARTMENTS[di].en) === deptEnNorm(snap.divEn)) { divIdx = di; break; }
         if (!snap.divEn && snap.div && DEPARTMENTS[di].cn === snap.div) { divIdx = di; break; }
       }
       if (divIdx >= 0) {
         var subList = DEPARTMENTS[divIdx].subs;
         for (var si = 0; si < subList.length; si++) {
-          if ((snap.deptEn && subList[si].en === snap.deptEn) || (!snap.deptEn && snap.dept && subList[si].cn === snap.dept)) { deptIdx = si; break; }
+          if ((snap.deptEn && deptEnNorm(subList[si].en) === deptEnNorm(snap.deptEn)) || (!snap.deptEn && snap.dept && subList[si].cn === snap.dept)) { deptIdx = si; break; }
         }
       }
       html += '<div class="q-card" style="margin-top:12px;"><div class="profile-form">';
@@ -26015,7 +26737,10 @@ function adminIco(name) {
     bolt: '<path d="M13 2L4.5 13.5H11l-1 8.5 8.5-11.5H12z"/>',
     medal: '<circle cx="12" cy="9" r="5"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/>',
     chart: '<path d="M3 20h18"/><rect x="5" y="11" width="3.5" height="6" rx="1"/><rect x="10.5" y="7" width="3.5" height="10" rx="1"/><rect x="16" y="13" width="3.5" height="4" rx="1"/>',
-    layers: '<path d="M12 3l9 4.5-9 4.5-9-4.5z"/><path d="M21 12l-9 4.5L3 12"/><path d="M21 16.5L12 21l-9-4.5"/>'
+    layers: '<path d="M12 3l9 4.5-9 4.5-9-4.5z"/><path d="M21 12l-9 4.5L3 12"/><path d="M21 16.5L12 21l-9-4.5"/>',
+    sitemap: '<rect x="9" y="2.5" width="6" height="5" rx="1.5"/><rect x="2.5" y="16.5" width="6" height="5" rx="1.5"/><rect x="15.5" y="16.5" width="6" height="5" rx="1.5"/><path d="M12 7.5v4.5M5.5 16.5V12h13v4.5"/>',
+    pie: '<path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M14 2.2A9 9 0 0 1 21.8 10H14z"/>',
+    gear: '<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/>'
   }[name] || '';
   return '<svg viewBox="0 0 24 24">' + m + '</svg>';
 }
@@ -26031,10 +26756,13 @@ function adminShellRoutes() {
     { key: 'adminReports', label: en ? 'Scores & Grading' : '成绩与评分', ico: 'check', match: ['adminReports', 'adminGrading'] },
     { grp: en ? 'PEOPLE' : '组织', key: 'adminStudents', label: en ? 'Students' : '学员名册', ico: 'users', match: ['adminStudents'], badge: 'fix' },
     { key: 'adminVerify', label: en ? 'Registration Review' : '注册核查', ico: 'shield', match: ['adminVerify'], badge: 'verify' },
+    { key: 'adminDepts', label: en ? 'Departments' : '部门目录', ico: 'sitemap', match: ['adminDepts'] },
     { grp: en ? 'MOTIVATION' : '激励', key: 'adminRace', label: en ? 'Quiz Race' : '答题赛', ico: 'bolt', match: ['adminRace'] },
     { key: 'adminBadges', label: en ? 'Badges' : '徽章', ico: 'medal', match: ['adminBadges'] },
     { grp: en ? 'INSIGHTS' : '洞察', key: 'adminDash', label: en ? 'Data Board' : '数据看板', ico: 'chart', match: ['adminDash'] },
-    { key: 'adminTeaching', label: en ? 'Teaching' : '教学分析', ico: 'layers', match: ['adminTeaching'] }
+    { key: 'adminTeaching', label: en ? 'Teaching' : '教学分析', ico: 'layers', match: ['adminTeaching'] },
+    { key: 'adminDeptStats', label: en ? 'Dept Analytics' : '部门统计', ico: 'pie', match: ['adminDeptStats'] },
+    { grp: en ? 'SETTINGS' : '设置', key: 'adminSettings', label: en ? 'Settings' : '系统设置', ico: 'gear', match: ['adminSettings'] }
   ];
 }
 
@@ -26057,7 +26785,10 @@ function adminPageTitleOf(page) {
     adminRace:       en ? 'Quiz Race' : '答题赛',
     adminBadges:     en ? 'Badges' : '徽章',
     adminDash:       en ? 'Data Board' : '数据看板',
-    adminTeaching:   en ? 'Teaching' : '教学分析'
+    adminTeaching:   en ? 'Teaching' : '教学分析',
+    adminDeptStats:  en ? 'Department Analytics' : '部门统计',
+    adminDepts:      en ? 'Department Directory' : '部门目录',
+    adminSettings:   en ? 'Settings' : '系统设置'
   };
   return map[page] || (en ? 'Admin' : '管理后台');
 }
@@ -26078,7 +26809,13 @@ function adminSubOf(page) {
     adminTeaching:    en ? 'Where the cohort is weak, by division and module' : '\u6309\u90e8\u95e8\u4e0e\u6a21\u5757\u770b\u6574\u4f53\u8584\u5f31\u70b9',
     adminEdit:        en ? 'Edit the question and preview exactly what students will see' : '\u7f16\u8f91\u9898\u76ee\u5e76\u9884\u89c8\u5b66\u5458\u7aef\u770b\u5230\u7684\u6837\u5b50',
     adminPaperPicker: en ? 'Pick questions from the banks' : '\u4ece\u9898\u5e93\u52fe\u9009\u9898\u76ee',
-    adminBankHub:     en ? 'Question Bank' : '\u9898\u5e93'
+    adminBankHub:     en ? 'Question Bank' : '\u9898\u5e93',
+    adminDeptStats:   en ? 'Participation, scores and pass rate by division \u2014 click a row to drill down'
+                         : '按部门看参与率、平均分与及格率，点击任意一行可下钻到子部门与个人',
+    adminDepts:       en ? 'The directory students pick from at registration \u2014 divisions and units'
+                         : '学员注册时选择的大部门与子部门，改完发布即同步到所有设备',
+    adminSettings:    en ? 'Student access code, admin password and platform housekeeping'
+                         : '学员访问码、管理端密码与平台维护项'
   };
   return m[page] || '';
 }
@@ -26259,6 +26996,9 @@ function render() {
       case 'adminBadges': app.innerHTML = adminShellHtml('adminBadges', renderAdminBadges()); return;
       case 'adminDash': app.innerHTML = adminShellHtml('adminDash', renderAdminDash()); return;
       case 'adminTeaching': app.innerHTML = adminShellHtml('adminTeaching', renderAdminTeaching()); return;
+      case 'adminDeptStats': app.innerHTML = adminShellHtml('adminDeptStats', renderAdminDeptStats()); return;
+      case 'adminDepts': app.innerHTML = adminShellHtml('adminDepts', renderAdminDepts()); return;
+      case 'adminSettings': app.innerHTML = adminShellHtml('adminSettings', renderAdminSettings()); return;
     }
   }
   if (!state.currentUser) {
