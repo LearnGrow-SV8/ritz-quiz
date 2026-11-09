@@ -5691,7 +5691,7 @@ var I18N = {
   rv_bk_none: {cn:'今天没有待复习的题', en:'Nothing due today'},
   rv_bk_done_today: {cn:'今日复习已完成 ✓ 明天再来', en:"Today's review done ✓ see you tomorrow"},
   rv_bk_rules_sum: {cn:'复习规则', en:'How review works'},
-  rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。同一道错题：答对 1 次后隔 1 天再复习，答对 2 次后隔 3 天，答对 3 次后隔 7 天；第 4 次答对就彻底掌握，不再出现。', en:'Due mistakes come first, while the memory is still fresh. For each mistake: 1 correct answer brings it back in 1 day, then 3 days, then 7 days; a 4th correct answer masters it for good.'},
+  rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。同一道错题：答对 1 次后隔 1 天再复习，答对 2 次后隔 3 天，答对 3 次后隔 7 天；第 4 次答对即视为掌握，不再出现。当天答对过的题不再计入当日待复习数量，按上述间隔重新出现。', en:"Due mistakes come first, while the memory is still fresh. For each mistake: 1 correct answer brings it back in 1 day, then 3 days, then 7 days; a 4th correct answer masters it for good. Mistakes answered correctly today leave today's due count and return on the schedule above."},
   rv_cat_all: {cn:'全部错题', en:'All incorrect questions'},
   rv_cat_due: {cn:'需要优先巩固', en:'For priority review'},
   rv_cat_fav: {cn:'收藏题目', en:'Saved favourites'},
@@ -16299,6 +16299,17 @@ function wrongDueOf(e) {
   return (due > 0) ? due : 0;                  // 0 = 立即到期
 }
 function wrongIsDue(e, now) { return wrongDueOf(e) <= (now || Date.now()); }
+// 「今天已经答对过」= 这道题今天从待复习里拿走（2026-11-09 领导反馈）。
+// 老逻辑的死结：同一天第二次答对被判 early（防连点刷阶），不推进、due 也停在
+// 过去时间 → 待复习数永远不降、按钮一直可点。现在答对（哪怕 early）就记 pd，
+// 当天不再算到期；明天 due 照旧到期，题会正常回来，阶数不受影响。
+function wrongClearedToday(e, now) {
+  return !!(e && e.pd && e.pd === raceDayKey(now || Date.now()));
+}
+// 学员端所有「待复习 / 到期」口径统一走它，别再各自调 wrongIsDue
+function wrongDueToday(e, now) {
+  return wrongIsDue(e, now) && !wrongClearedToday(e, now);
+}
 function wrongDueInDays(e) {
   var due = wrongDueOf(e);
   if (!due) return 0;
@@ -16364,10 +16375,11 @@ function wrongAdd(skey, q, ans, opts) {
     e.due = now;
     e.last = now;
     e.timestamp = now;
+    e.pd = '';                                 // 又答错了：今天重新进待复习
   } else {
     e = book[q.id] = {
       question: q.question, section: q.section, section_en: q.section_en, type: q.type,
-      timestamp: now, st: 0, due: now, n: 1, last: now, src: opts.src || ''
+      timestamp: now, st: 0, due: now, n: 1, last: now, src: opts.src || '', pd: ''
     };
   }
   if (Array.isArray(ans) && ans.length) { e.userAnswer = ans; e.ua = ans; e.uok = 1; }
@@ -16389,9 +16401,10 @@ function wrongPass(skey, qid, opts) {
   wrongNormEntry(e);
   var now = opts.now || Date.now();
   var last = e.last || e.timestamp || 0;
-  if (last && (now - last) < WRONG_MIN_GAP_MS) return 'early';
-  if (last && raceDayKey(last) === raceDayKey(now)) return 'early';
+  if (last && (now - last) < WRONG_MIN_GAP_MS) { e.pd = raceDayKey(now); return 'early'; }
+  if (last && raceDayKey(last) === raceDayKey(now)) { e.pd = raceDayKey(now); return 'early'; }
   e.last = now;
+  e.pd = raceDayKey(now);
   if (wrongStageOf(e) >= WRONG_STAGE_MAX) {
     delete book[qid];
     if (!state.mastered || typeof state.mastered !== 'object') state.mastered = {};
@@ -16465,7 +16478,7 @@ function wrongRowsAll(opts) {
       if (!e) continue;
       if (opts.section && (e.section || '') !== opts.section) continue;
       if (opts.src && (e.src || '') !== opts.src) continue;
-      if (opts.dueOnly && !wrongIsDue(e, now)) continue;
+      if (opts.dueOnly && !wrongDueToday(e, now)) continue;
       if (opts.tag) {
         var q0 = findByIdAllBanks(qid);
         if (!q0 || questionTagsOf(q0).indexOf(opts.tag) < 0) continue;
@@ -16488,7 +16501,7 @@ function wrongRowsAll(opts) {
 function wrongDueCount(bank) {
   var rows = wrongRowsAll({ bank: bank });
   var n = 0;
-  for (var i = 0; i < rows.length; i++) if (wrongIsDue(rows[i].e)) n++;
+  for (var i = 0; i < rows.length; i++) if (wrongDueToday(rows[i].e)) n++;
   return n;
 }
 // 顺序练习：把到期错题排到本板块最前面。**只在新开一轮时用** —— 进度是按位置
@@ -17020,7 +17033,7 @@ function favIdsForSrc() {
 function rvCatCounts() {
   var scoped = wrongRowsScoped();
   var due = 0;
-  for (var i = 0; i < scoped.length; i++) if (wrongIsDue(scoped[i].e)) due++;
+  for (var i = 0; i < scoped.length; i++) if (wrongDueToday(scoped[i].e)) due++;
   return { all: scoped.length, due: due, fav: favIdsForSrc().length };
 }
 function rvCatCellHtml(v, icon, label, count, active, kind) {
@@ -17134,7 +17147,7 @@ function renderWrongAll() {
   var tab = state.wrongTab || 'all';
   var scoped = wrongRowsScoped();
   var dueAll = [];
-  for (var di = 0; di < scoped.length; di++) if (wrongIsDue(scoped[di].e)) dueAll.push(scoped[di]);
+  for (var di = 0; di < scoped.length; di++) if (wrongDueToday(scoped[di].e)) dueAll.push(scoped[di]);
   var shown = (tab === 'due') ? dueAll : scoped;
   if (tab === 'tag' && state.wrongTag) {
     var keep = [];
@@ -17188,6 +17201,26 @@ function renderWrongAll() {
     var _rlog = Array.isArray(state.reviewLog) ? state.reviewLog : [];
     for (var _li = 0; _li < _rlog.length; _li++) {
       if (_rlog[_li] && _rlog[_li].k && _rlog[_li].k.indexOf('|' + _todayK + '|') >= 0) { _didToday = true; break; }
+    }
+    // 今天答对但没进账本（同一天第二次答对算 early，不给阶数也不记 log）也得算
+    // 复习过，否则明明刚做完却显示「今天没有待复习的题」。
+    if (!_didToday) {
+      var _wbs = state.wrongAnswers || {};
+      for (var _bk in _wbs) {
+        if (!Object.prototype.hasOwnProperty.call(_wbs, _bk)) continue;
+        var _bkBook = _wbs[_bk] || {};
+        for (var _qid in _bkBook) {
+          if (Object.prototype.hasOwnProperty.call(_bkBook, _qid) && _bkBook[_qid] && _bkBook[_qid].pd === _todayK) { _didToday = true; break; }
+        }
+        if (_didToday) break;
+      }
+      // 全部答对且都已毕业的题会从错题本里删掉，只能靠账本判；这里再看一次毕业名单。
+      if (!_didToday) {
+        var _ms = state.mastered || {};
+        for (var _mq in _ms) {
+          if (Object.prototype.hasOwnProperty.call(_ms, _mq) && raceDayKey(_ms[_mq]) === _todayK) { _didToday = true; break; }
+        }
+      }
     }
     html += '<button class="nav-btn primary" style="width:100%;padding:13px;" disabled>'
       + escapeHtml(_didToday ? t('rv_bk_done_today') : t('rv_bk_none')) + '</button>';
