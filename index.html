@@ -5155,6 +5155,7 @@ var I18N = {
   dash_race_noday: {cn:'\u8be5\u65f6\u95f4\u8303\u56f4\u5185\u6ca1\u6709\u7b54\u9898\u8d5b\u8bb0\u5f55\u3002', en:'No speed-quiz records in this period.'},
   race_unit_correct: {cn:'\u9898', en:'correct'},
   race_board_sec: {cn:'\u677f\u5757', en:'Section'},
+  race_tag_bank: {cn:'题库', en:'Module'},
   dash_session: {cn:'场次', en:'Session'},
   dash_all_sessions: {cn:'全部场次', en:'All sessions'},
   dash_session_pick: {cn:'具体场次（某一次发布）', en:'Specific session (one published round)'},
@@ -14118,14 +14119,21 @@ function renderRaceBoard() {
           + (raceBadgeIsPastHonor(myBadge.def) ? ' <span style="font-weight:600;opacity:.8;">· ' + (state.lang === 'en' ? 'past' : '往期') + '</span>' : '')
           + '</span>' : '';
       html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#000;font-size:12px;">' + t('race_you') + '</span>' : '') + bdgTag + '</div>';
-      // 下沉过的部门显示「大部门 · 小部门」（房务部 · 客房部），一眼看出他属于哪个大部门；
-      // 没下沉的（人力资源部等）只显示大部门，不重复同一个词。
-      // A3 段位（2026-11-03）：名字行下面顺带挂段位小标（按历届累计打卡天数）。
-      html += '<div style="font-size:12px;color:#888;">' + escapeHtml(deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept)))
-        + (isDays
-          ? (' \u00b7 ' + (state.lang === 'en' ? 'runs ' : '挑战 ') + rw.runs)
-          : (rw.section && !sec && !isMoverTab ? ' \u00b7 ' + raceSecIcon(rw.section) + ' ' + raceSecName(rw.section) : ''))
-        + (rw.tier ? ' \u00b7 <span onclick="raceTierInfoShow()" style="cursor:pointer;color:#8a5a00;font-weight:600;">'
+      // 2026-11-09 排行榜信息分层（学员反馈：原来「部门 · 题库 · 段位」全靠「·」串联难辨认）：
+      // 部门 = 丽思蓝实底标签；题库板块 = 白底黑描边空心标签（带「题库」前缀）；段位维持金色文字。
+      // 下沉过的部门标签内仍显示「大部门 · 小部门」，标签形态本身已说明这是部门信息。
+      // A3 段位（2026-11-03）：段位小标挂在同一行（按历届累计打卡天数），点击仍可看段位说明。
+      var deptTagHtml = '<span style="display:inline-block;background:#C7DDF3;color:#000;font-size:11px;line-height:16px;padding:2px 7px;border-radius:9px;">'
+        + escapeHtml(deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept))) + '</span>';
+      var secTagHtml = (!isDays && !isMoverTab && rw.section && !sec)
+        ? ' <span style="display:inline-block;border:1px solid #000;background:#fff;color:#000;font-size:11px;line-height:16px;padding:1px 7px;border-radius:9px;">'
+          + raceSecIcon(rw.section) + ' ' + escapeHtml(t('race_tag_bank')) + ' \u00b7 ' + escapeHtml(raceSecName(rw.section)) + '</span>'
+        : '';
+      var runsTagHtml = isDays
+        ? ' <span style="color:#888;font-size:12px;">' + (state.lang === 'en' ? 'runs ' : '挑战 ') + rw.runs + '</span>'
+        : '';
+      html += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:4px;">' + deptTagHtml + secTagHtml + runsTagHtml
+        + (rw.tier ? '<span onclick="raceTierInfoShow()" style="cursor:pointer;color:#8a5a00;font-weight:600;font-size:12px;">'
             + rw.tier.icon + ' ' + (state.lang === 'en' ? rw.tier.en : rw.tier.cn) + '</span>' : '')
         + '</div>';
       html += '</div>';
