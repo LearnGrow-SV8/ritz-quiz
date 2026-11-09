@@ -716,6 +716,69 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 /* 登录页：丽思蓝狮冠纹理背景 */
 .admin-login { background:#E8F0FA url('assets/brand/pattern-light.jpg') center/cover no-repeat; }
 .admin-login-card { border-top:3px solid #C7DDF3; }
+
+/* ===== 二期：总览仪表盘（KPI / 图表 / 待办） ===== */
+.adm-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+.adm-kpi { background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+.adm-kpi .k-label { font-size:12px; color:var(--text-light); }
+.adm-kpi .k-num { font-size:26px; font-weight:700; color:var(--text); margin-top:2px; line-height:1.2; }
+.adm-kpi .k-sub { font-size:11.5px; color:var(--text-light); margin-top:2px; }
+.adm-kpi.warn .k-num { color:#c62828; }
+.adm-grid2 { display:grid; grid-template-columns:1.5fr 1fr; gap:12px; margin-bottom:16px; }
+.adm-card { background:#fff; border:1px solid var(--border); border-radius:12px; padding:16px; }
+.adm-card h3 { font-size:14px; font-weight:600; margin:0 0 12px; color:var(--text); }
+.adm-bars { display:flex; align-items:flex-end; gap:6px; height:120px; }
+.adm-bars .bar { flex:1; background:#C7DDF3; border-radius:4px 4px 0 0; min-height:2px; }
+.adm-bars .bar.today { background:#1a1a1a; }
+.adm-bar-labels { display:flex; gap:6px; margin-top:6px; }
+.adm-bar-labels span { flex:1; text-align:center; font-size:10px; color:var(--text-light); }
+.adm-dept-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12.5px; }
+.adm-dept-row .nm { width:92px; flex:0 0 92px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.adm-dept-row .track { flex:1; height:8px; background:#eef2f7; border-radius:4px; overflow:hidden; }
+.adm-dept-row .fill { height:100%; background:#C7DDF3; border-radius:4px; }
+.adm-dept-row .n { width:32px; text-align:right; color:var(--text-light); font-size:12px; }
+.adm-todo-item { display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--border); font-size:13px; cursor:pointer; }
+.adm-todo-item:last-child { border-bottom:none; }
+.adm-todo-item:hover { color:#000; }
+.adm-todo-dot { width:7px; height:7px; border-radius:50%; flex:0 0 7px; }
+.adm-todo-arrow { color:var(--text-light); }
+.adm-quick { display:flex; gap:8px; flex-wrap:wrap; }
+.adm-quick button { font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:#fff; cursor:pointer; font-family:inherit; }
+.adm-quick button:hover { border-color:#C7DDF3; background:#f7fbff; }
+
+/* ===== 二期：学员宽屏表格（搜索 + 行内编辑） ===== */
+.stu-toolbar { display:flex; align-items:center; gap:10px; margin:2px 0 12px; flex-wrap:wrap; }
+.stu-toolbar input[type=text] { flex:1; max-width:420px; padding:9px 12px; border:1px solid var(--border); border-radius:9px; font-size:13px; font-family:inherit; }
+.stu-toolbar .st-count { font-size:12px; color:var(--text-light); }
+.stu-table-wrap { background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+table.stu-table { width:100%; border-collapse:collapse; font-size:13px; table-layout:auto; }
+.stu-table thead th { text-align:left; font-size:11.5px; font-weight:600; color:var(--text-light); padding:10px 12px; background:#f8fafc; border-bottom:1px solid var(--border); white-space:nowrap; }
+.stu-table tbody td { padding:10px 12px; border-bottom:1px solid #f0f3f7; vertical-align:middle; }
+.stu-table tbody tr:hover { background:#fafcff; }
+.stu-table tbody tr.st-row { cursor:pointer; }
+.stu-table .st-name { font-weight:600; white-space:nowrap; }
+.stu-table .st-sub { font-size:11.5px; color:var(--text-light); font-weight:400; }
+.stu-table .st-muted { color:#a8b0ba; }
+.stu-table .st-btn { font-size:12px; padding:4px 10px; border-radius:7px; border:1px solid var(--border); background:#fff; cursor:pointer; font-family:inherit; white-space:nowrap; }
+.stu-table .st-btn:hover { border-color:#C7DDF3; background:#f4faff; }
+.stu-table .st-btn.primary { background:#1a1a1a; color:#fff; border-color:#1a1a1a; }
+.stu-edit-tr td { background:#fbfdff; border-bottom:2px solid #C7DDF3; cursor:default; }
+.stu-edit-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 14px; }
+.stu-edit-grid label { display:block; font-size:11.5px; color:var(--text-light); margin-bottom:3px; }
+.stu-edit-grid input, .stu-edit-grid select { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:7px; font-size:13px; font-family:inherit; background:#fff; }
+.stu-edit-actions { display:flex; gap:8px; margin-top:12px; align-items:center; }
+.stu-edit-actions .st-btn { padding:7px 16px; font-size:13px; }
+.stu-edit-err { color:#c62828; font-size:12px; }
+@media (min-width:861px) {
+  .adm-content .stu-cards { display:none; }
+  .adm-content .tab-bar { display:inline-flex; }
+  .adm-content .tab-bar .chip { flex:0 0 auto; padding:7px 16px; border-radius:9px; }
+}
+@media (max-width:860px) {
+  .stu-table-wrap, .stu-toolbar { display:none; }
+  .adm-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .adm-grid2 { grid-template-columns:1fr; }
+}
 </style>
 </head>
 <body>
@@ -19249,64 +19312,138 @@ function renderAdminTeaching() {
   return html;
 }
 
-function renderAdminDashboard() {
-  if (!adminState.authenticated) return renderAdminLogin();
-
-  var banks = [
-    {key:'day21', name: t('bank_day21'), count: QUESTION_DATA.day21.length},
-    {key:'tsos', name: t('bank_tsos'), count: QUESTION_DATA.tsos.length},
-    {key:'manual', name: t('bank_manual'), count: QUESTION_DATA.manual.length},
-  ];
-  var hasLocalChanges = localStorage.getItem('adminQuestionData') !== null;
-  var totalQ = banks[0].count + banks[1].count + banks[2].count;
-
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'home\')">\u2190</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>\u2699\ufe0f ' + (state.lang === 'en' ? 'Admin Panel' : '\u7ba1\u7406\u540e\u53f0') + '</h1>';
-  html += '<div class="subtitle">' + (state.lang === 'en' ? 'Choose a workspace' : '\u8bf7\u9009\u62e9\u7ba1\u7406\u6a21\u5757') + '</div>';
-  html += '</div><div class="page">';
-
-  html += '<div class="stats-summary">';
-  html += '<div class="stat-card"><div class="num">' + totalQ + '</div><div class="label">' + (state.lang === 'en' ? 'Total Q' : '\u603b\u9898\u6570') + '</div></div>';
-  html += '<div class="stat-card"><div class="num">4</div><div class="label">' + (state.lang === 'en' ? 'Papers' : '\u8bd5\u5377') + '</div></div>';
-  html += '<div class="stat-card"><div class="num" style="color:' + (SERVER_AVAILABLE ? 'var(--success)' : 'var(--warning)') + '">' + (SERVER_AVAILABLE ? '☁️' : '⏳') + '</div><div class="label">' + (SERVER_AVAILABLE ? (state.lang === 'en' ? 'Cloud Sync' : '\u4e91\u7aef\u5df2\u8fde\u63a5') : (state.lang === 'en' ? 'Cloud Pending' : '\u4e91\u7aef\u5f85\u7ed1\u5b9a')) + '</div></div>';
-  html += '</div>';
-
-  html += '<div class="save-status ' + (SERVER_AVAILABLE ? 'synced' : 'local') + '" id="adminCloudStatus" style="display:' + (SERVER_AVAILABLE || adminKvWarn ? 'block' : 'none') + ';">';
-  if (SERVER_AVAILABLE) {
-    html += (state.lang === 'en' ? '☁️ Cloud question bank connected. Edits sync to all users instantly.' : '\u2601\ufe0f \u4e91\u7aef\u9898\u5e93\u5df2\u8fde\u63a5\uff0c\u4fdd\u5b58\u540e\u6240\u6709\u7528\u6237\u5b9e\u65f6\u540c\u6b65\u3002');
-  } else if (adminKvWarn) {
-    html += (state.lang === 'en' ? '⚠️ Cloud save unavailable: KV storage not bound. Changes are kept in this browser only.' : '\u26a0\ufe0f \u4e91\u7aef\u4fdd\u5b58\u6682\u4e0d\u53ef\u7528\uff1aKV \u5b58\u50a8\u5c1a\u672a\u7ed1\u5b9a\uff0c\u4fee\u6539\u4ec5\u4fdd\u5b58\u5728\u672c\u6d4f\u89c8\u5668\u3002');
-  } else {
-    html += '&nbsp;';
-  }
-  html += '</div>';
-
-  // ===== Batch-4: 待处理题目报错——进管理端第一眼就能看到 =================
-  // 数据来自学员云端快照缓存（后台轮询持续更新）；打开首页时再补拉一次，
-  // 3 秒后重画让新报错冒出来。点击直达「学员管理 → 报错记录（待处理）」。
-  var _repRecs = adminStudentRecords();
-  var _repCache = adminStudentCache();
-  var openReports = 0;
-  for (var _ri = 0; _ri < _repRecs.length; _ri++) {
-    var _rl = _repRecs[_ri].reports || [];
-    for (var _rj = 0; _rj < _rl.length; _rj++) {
-      if (!_repCache.handled[_repRecs[_ri].key + '|' + _rl[_rj]._hid]) openReports++;
+// ===== 二期：总览仪表盘（2026-11-09）=====
+// 数据全部来自本地缓存（学生快照 + 事件），打开首页不发额外请求；要联网由「立即全量重拉」触发。
+// 口径约定：注册学员 = 云端记录数；7 日活跃 = 快照 ts 在 7 天内；平均分/掌握率只统计有数据的行。
+function adminDashMetrics() {
+  var recs = adminStudentRecords();
+  var now = Date.now(), cut7 = now - 7 * 86400000, cut14 = now - 13 * 86400000;
+  var m = {
+    total: recs.length, active7: 0, exam7: 0, scoreSum: 0, scoreN: 0,
+    mtSum: 0, mtN: 0, reportOpen: 0, verifyN: 0, fixN: 0,
+    trend: [], depts: {}, totalQ: 0
+  };
+  var dayMap = {};
+  var cache = adminStudentCache();
+  for (var i = 0; i < recs.length; i++) {
+    var rec = recs[i], snap = rec.snap || {};
+    if ((snap.ts || 0) >= cut7) m.active7++;
+    if (typeof snap.mt === 'number' && isFinite(snap.mt)) { m.mtSum += snap.mt; m.mtN++; }
+    var div = snap.div || (state.lang === 'en' ? 'Unassigned' : '未填部门');
+    m.depts[div] = (m.depts[div] || 0) + 1;
+    var rl = rec.reports || [];
+    for (var r = 0; r < rl.length; r++) {
+      if (!cache.handled[rec.key + '|' + rl[r]._hid]) m.reportOpen++;
+    }
+    var evs = rec.exams || [];
+    for (var j = 0; j < evs.length; j++) {
+      var ev = evs[j], ts = ev.ts || 0;
+      if (!ts) continue;
+      if (ts >= cut7) {
+        m.exam7++;
+        // 与学员列表「均分」同口径：直接用事件的 score；没有 score 再试 gradeExam
+        var pct = (typeof ev.score === 'number' && isFinite(ev.score))
+          ? ev.score
+          : (function () { var g = gradeExam(ev, null); return (g && typeof g.percent === 'number' && isFinite(g.percent) && g.percent > 0) ? g.percent : null; })();
+        if (pct !== null) { m.scoreSum += pct; m.scoreN++; }
+      }
+      if (ts >= cut14) { var dk = dayKeyOf(ts); dayMap[dk] = (dayMap[dk] || 0) + 1; }
     }
   }
-  if (openReports > 0) {
-    html += '<div class="admin-hub-card" style="border:1.5px solid #f2b8b5;background:#fdf3f2;margin-bottom:10px;" onclick="adminState.reportFilter=\'open\';navigate(\'adminQReports\')">';
-    html += '<div class="admin-hub-icon">\ud83d\udea9</div>';
-    html += '<div class="admin-hub-body"><div class="admin-hub-title" style="color:var(--danger-deep, #b3261e);">' +
-      (state.lang === 'en' ? (openReports + ' question report' + (openReports === 1 ? '' : 's') + ' awaiting review') : (openReports + ' \u6761\u9898\u76ee\u62a5\u9519\u5f85\u5904\u7406')) + '</div>';
-    html += '<div class="admin-hub-desc">' + (state.lang === 'en'
-      ? 'Tap to review reports and jump straight into the question editor'
-      : '\u70b9\u51fb\u67e5\u770b\u62a5\u9519\u8be6\u60c5\uff0c\u53ef\u4e00\u952e\u8df3\u5230\u5bf9\u5e94\u9898\u76ee\u4fee\u6b63') + '</div></div>';
-    html += '<div class="admin-hub-arrow">\u203a</div></div>';
+  for (var d = 13; d >= 0; d--) {
+    var t = new Date(now - d * 86400000);
+    var k = dayKeyOf(t.getTime());
+    m.trend.push({ label: (t.getMonth() + 1) + '/' + t.getDate(), n: dayMap[k] || 0, today: d === 0 });
   }
-  // 打开首页时补拉一次云端学员数据（60 s 节流）；仅当确有拉取在跑才安排
-  // 一次 3 s 后的重绘，避免常驻定时器反复刷新页面。
+  try { m.verifyN = adminPendingVerifyStudents().length; } catch (e1) {}
+  try { m.fixN = adminPendingFixCount(); } catch (e2) {}
+  try {
+    m.totalQ = (QUESTION_DATA.day21 || []).length + (QUESTION_DATA.tsos || []).length + (QUESTION_DATA.manual || []).length;
+  } catch (e3) {}
+  return m;
+}
+
+// 近 14 日考试提交量：柱状（今天用黑色）
+function adminDashBarsHtml(m, en) {
+  var max = 1;
+  for (var i = 0; i < m.trend.length; i++) if (m.trend[i].n > max) max = m.trend[i].n;
+  var bars = '', labels = '';
+  for (var j = 0; j < m.trend.length; j++) {
+    var p = m.trend[j];
+    var pct = p.n ? Math.max(6, Math.round(p.n / max * 100)) : 2;
+    bars += '<div class="bar' + (p.today ? ' today' : '') + '" style="height:' + pct + '%;" title="' + p.label + ' · ' + p.n + '"></div>';
+    labels += '<span>' + (j % 2 === 0 ? p.label : '') + '</span>';
+  }
+  return '<div class="adm-bars">' + bars + '</div><div class="adm-bar-labels">' + labels + '</div>';
+}
+
+// 部门人数分布（前 6）
+function adminDashDeptHtml(m, en) {
+  var arr = [];
+  for (var k in m.depts) if (m.depts.hasOwnProperty(k)) arr.push({ k: k, n: m.depts[k] });
+  arr.sort(function (a, b) { return b.n - a.n; });
+  arr = arr.slice(0, 6);
+  if (!arr.length) return '<div style="font-size:12.5px;color:var(--text-light);">' + (en ? 'No department data yet.' : '暂无部门数据。') + '</div>';
+  var max = arr[0].n || 1, h = '';
+  for (var i = 0; i < arr.length; i++) {
+    h += '<div class="adm-dept-row">'
+      + '<span class="nm">' + escapeHtml(arr[i].k) + '</span>'
+      + '<span class="track"><span class="fill" style="width:' + Math.round(arr[i].n / max * 100) + '%;display:block;"></span></span>'
+      + '<span class="n">' + arr[i].n + '</span></div>';
+  }
+  return h;
+}
+
+// 待办清单：报错 / 待核查 / 待同步 / 赛事状态
+function adminDashTodoHtml(m, en) {
+  var h = '', any = false;
+  if (m.reportOpen > 0) {
+    any = true;
+    h += '<div class="adm-todo-item" onclick="adminState.reportFilter=\'open\';navigate(\'adminQReports\')">'
+      + '<span class="adm-todo-dot" style="background:#d85a30;"></span>'
+      + '<span style="flex:1;">' + m.reportOpen + (en ? ' question report(s) to review' : ' 条题目报错待处理') + '</span>'
+      + '<span class="adm-todo-arrow">›</span></div>';
+  }
+  if (m.verifyN > 0) {
+    any = true;
+    h += '<div class="adm-todo-item" onclick="navigate(\'adminVerify\')">'
+      + '<span class="adm-todo-dot" style="background:#ba7517;"></span>'
+      + '<span style="flex:1;">' + m.verifyN + (en ? ' registration(s) to verify' : ' 位新注册学员待核查') + '</span>'
+      + '<span class="adm-todo-arrow">›</span></div>';
+  }
+  if (m.fixN > 0) {
+    any = true;
+    h += '<div class="adm-todo-item" onclick="adminFixFlush()">'
+      + '<span class="adm-todo-dot" style="background:#ba7517;"></span>'
+      + '<span style="flex:1;">' + m.fixN + (en ? ' profile fix(es) waiting for cloud' : ' 条资料修正待同步云端') + '</span>'
+      + '<span class="adm-todo-arrow">›</span></div>';
+  }
+  try {
+    var c = raceConfOf();
+    var st = raceStateOf(c);
+    if (st === 'open') {
+      any = true;
+      var daysLeft = c.endTime ? Math.max(0, Math.ceil((Date.parse(c.endTime) - Date.now()) / 86400000)) : 0;
+      h += '<div class="adm-todo-item" onclick="navigate(\'adminRace\')">'
+        + '<span class="adm-todo-dot" style="background:#0f6e56;"></span>'
+        + '<span style="flex:1;">' + escapeHtml(c.title || (en ? 'Quiz race' : '答题赛')) + (en ? ' · ' + daysLeft + ' day(s) left' : ' · 还剩 ' + daysLeft + ' 天') + '</span>'
+        + '<span class="adm-todo-arrow">›</span></div>';
+    }
+  } catch (e) {}
+  if (!any) {
+    h += '<div style="font-size:12.5px;color:var(--text-light);padding:6px 0;">'
+      + (en ? 'All clear — nothing needs attention.' : '暂无待办，一切正常。') + '</div>';
+  }
+  return h;
+}
+
+function renderAdminDashboard() {
+  if (!adminState.authenticated) return renderAdminLogin();
+  var en = state.lang === 'en';
+  var m = adminDashMetrics();
+  var todoN = m.reportOpen + m.verifyN + m.fixN;
+
+  // 打开首页时补拉一次云端学员数据（60 s 节流），拉完 3 秒后重画让新数据冒出来
   var _repInFlight = adminCloudFetching;
   if (SERVER_AVAILABLE && !_repInFlight && Date.now() - (renderAdminDashboard._lastKick || 0) > 60000) {
     renderAdminDashboard._lastKick = Date.now();
@@ -19315,88 +19452,63 @@ function renderAdminDashboard() {
   if (SERVER_AVAILABLE && (_repInFlight || adminCloudFetching) && !renderAdminDashboard._repTimer) {
     renderAdminDashboard._repTimer = setTimeout(function () {
       renderAdminDashboard._repTimer = null;
-      if (state.currentPage === 'adminDash') render();
+      if (state.currentPage === 'adminDashboard') render();
     }, 3000);
   }
 
-  // ===== Stage 10b/10c: 云端待同步修正 + 注册待核查 ——— 进管理端第一眼就能看到
-  var _pendN = adminPendingFixCount();
-  if (_pendN > 0) {
-    html += '<div class="admin-hub-card" style="border:1.5px solid #f2dcb0;background:#fdf8ee;margin-bottom:10px;" onclick="adminFixFlush()">';
-    html += '<div class="admin-hub-icon">\u23f7</div>';
-    html += '<div class="admin-hub-body"><div class="admin-hub-title" style="color:#9a6b00;">' +
-      (state.lang === 'en' ? (_pendN + ' profile fix(es) waiting to reach the cloud') : (_pendN + ' 条员工信息修正待同步到云端')) + '</div>';
-    html += '<div class="admin-hub-desc">' + (state.lang === 'en'
-      ? 'Retrying automatically every 30 s — tap to retry now'
-      : '每 30 秒自动重试，点击立即重试') + '</div></div>';
-    html += '<div class="admin-hub-arrow">\u203a</div></div>';
-  }
-  var _pvList = adminPendingVerifyStudents();
-  if (_pvList.length > 0) {
-    html += '<div class="admin-hub-card" style="border:1.5px solid #f2b8b5;background:#fdf3f2;margin-bottom:10px;" onclick="navigate(\'adminVerify\')">';
-    html += '<div class="admin-hub-icon">\u23f3</div>';
-    html += '<div class="admin-hub-body"><div class="admin-hub-title" style="color:var(--danger-deep, #b3261e);">' +
-      (state.lang === 'en' ? (_pvList.length + ' registration(s) to verify') : (_pvList.length + ' 位新注册学员待核查')) + '</div>';
-    html += '<div class="admin-hub-desc">' + (state.lang === 'en'
-      ? 'Reserved IDs (no name on the roster) or IDs not on the roster — tap to review'
-      : '预留工号注册 / 工号不在员工名册 —— 点击逐个核实') + '</div></div>';
-    html += '<div class="admin-hub-arrow">\u203a</div></div>';
-  }
+  var avgScore = m.scoreN ? Math.round(m.scoreSum / m.scoreN) : null;
+  var avgMt = m.mtN ? Math.round(m.mtSum / m.mtN) : null;
+  var activePct = m.total ? Math.round(m.active7 / m.total * 100) : 0;
 
-  // ===== Three workspace entries (question / student / exam management) =====
-  html += '<div class="admin-hub">';
-  html += '<div class="admin-hub-card" onclick="navigate(\'adminBankHub\')">';
-  html += '<div class="admin-hub-icon">\ud83d\udcda</div>';
-  html += '<div class="admin-hub-body"><div class="admin-hub-title">' + (state.lang === 'en' ? 'Question Management' : '\u9898\u76ee\u7ba1\u7406') + '</div>';
-  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Edit / add / delete questions, compose papers' : '\u9898\u5e93\u7f16\u8f91\u00b7\u65b0\u589e\u00b7\u5220\u9664\u00b7\u8bd5\u5377\u7f16\u6392') + '</div></div>';
-  html += '<div class="admin-hub-arrow">\u203a</div></div>';
-
-  html += '<div class="admin-hub-card" onclick="adminState.studentsTab=\'list\';adminState.studentDetail=\'\';adminState.editStudent=\'\';navigate(\'adminStudents\')">';
-  html += '<div class="admin-hub-icon">\ud83d\udc65</div>';
-  html += '<div class="admin-hub-body"><div class="admin-hub-title">' + (state.lang === 'en' ? 'Student Management' : '\u5b66\u5458\u7ba1\u7406') + '</div>';
-  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Learning data, info corrections, valid employee IDs' : '\u5b66\u4e60\u60c5\u51b5\u00b7\u4fe1\u606f\u66f4\u6b63\u00b7\u6709\u6548\u5de5\u53f7') + '</div></div>';
-  html += '<div class="admin-hub-arrow">\u203a</div></div>';
-
-  html += '<div class="admin-hub-card" onclick="navigate(\'adminExamHub\')">';
-  html += '<div class="admin-hub-icon">\ud83d\udccc</div>';
-  html += '<div class="admin-hub-body"><div class="admin-hub-title">' + (state.lang === 'en' ? 'Exam Management' : '\u8003\u8bd5\u7ba1\u7406') + '</div>';
-  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Publish formal exams, scores & replays, CSV export' : '\u6b63\u5f0f\u8003\u8bd5\u53d1\u5e03\u00b7\u62a5\u544a\u4e2d\u5fc3\u00b7\u6210\u7ee9\u5bfc\u51fa') + '</div></div>';
-  html += '<div class="admin-hub-arrow">\u203a</div></div>';
-
-  // 黑名单已于 2026-10-27 降级为「学员管理」的下一层级（页签），不再是并列模块。
+  var html = '<div class="adm-kpis">';
+  html += '<div class="adm-kpi"><div class="k-label">' + (en ? 'Registered students' : '注册学员') + '</div>'
+    + '<div class="k-num">' + m.total + '</div>'
+    + '<div class="k-sub">' + (en ? m.active7 + ' active · 7 days' : '近 7 日活跃 ' + m.active7 + ' 人 · ' + activePct + '%') + '</div></div>';
+  html += '<div class="adm-kpi"><div class="k-label">' + (en ? 'Questions' : '题库总量') + '</div>'
+    + '<div class="k-num">' + m.totalQ + '</div>'
+    + '<div class="k-sub">' + (en ? '3 banks' : '21天 · 三步法 · 手册') + '</div></div>';
+  html += '<div class="adm-kpi"><div class="k-label">' + (en ? 'Exams · 7 days' : '近 7 日考试') + '</div>'
+    + '<div class="k-num">' + m.exam7 + '</div>'
+    + '<div class="k-sub">' + (avgScore === null ? (en ? 'no scores yet' : '暂无成绩') : (en ? 'avg ' + avgScore + '%' : '平均分 ' + avgScore + ' 分')) + '</div></div>';
+  html += '<div class="adm-kpi"><div class="k-label">' + (en ? 'Mastery' : '平均掌握率') + '</div>'
+    + '<div class="k-num">' + (avgMt === null ? '—' : avgMt + '%') + '</div>'
+    + '<div class="k-sub">' + (m.mtN ? (en ? m.mtN + ' students' : m.mtN + ' 人有数据') : (en ? 'no data yet' : '暂无数据')) + '</div></div>';
+  html += '<div class="adm-kpi' + (todoN > 0 ? ' warn' : '') + '"><div class="k-label">' + (en ? 'To-do' : '待办事项') + '</div>'
+    + '<div class="k-num">' + todoN + '</div>'
+    + '<div class="k-sub">' + (en ? 'reports · verify · sync' : '报错 · 核查 · 同步') + '</div></div>';
   html += '</div>';
-  html += '<div class="admin-hub-card" onclick="navigate(\'adminRace\')">';
-  html += '<div class="admin-hub-icon">⚡</div>';
-  html += '<div class="admin-hub-body"><div class="admin-hub-title">' + t('race_admin_hub') + '</div>';
-  html += '<div class="admin-hub-desc">' + t('race_admin_hub_desc') + '</div></div>';
-  html += '<div class="admin-hub-arrow">›</div></div>';
 
-  html += '<div class="admin-hub-card" onclick="navigate(\'adminDash\')">';
-  html += '<div class="admin-hub-icon">📊</div>';
-  html += '<div class="admin-hub-body"><div class="admin-hub-title">' + t('dash_hub') + '</div>';
-  html += '<div class="admin-hub-desc">' + t('dash_hub_desc') + '</div></div>';
-  html += '<div class="admin-hub-arrow">›</div></div>';
-
-  // 教学看板（2026-11-05）：高频错题 / 薄弱章节 / 复习任务完成率。
-  // 和数据中心的区别：数据中心看"谁在学"，这里看"哪里没学会"。
-  html += '<div class="admin-hub-card" onclick="navigate(\'adminTeaching\')">';
-  html += '<div class="admin-hub-icon">🧭</div>';
-  html += '<div class="admin-hub-body"><div class="admin-hub-title">' + (state.lang === 'en' ? 'Teaching Board' : '教学看板') + '</div>';
-  html += '<div class="admin-hub-desc">' + (state.lang === 'en' ? 'Most-missed questions, weak sections, review completion' : '高频错题·薄弱章节·复习完成率·题目体检') + '</div></div>';
-  html += '<div class="admin-hub-arrow">›</div></div>';
-
-  if (hasLocalChanges) {
-    html += '<div class="save-status local">' + (state.lang === 'en' ? '\u26a0\ufe0f Changes are saved and auto-synced to student devices (within ~90 s). Export JSON is for backup only.' : '\u26a0\ufe0f \u4fee\u6539\u5df2\u4fdd\u5b58\u5e76\u81ea\u52a8\u540c\u6b65\u7ed9\u5b66\u5458\u7aef\uff08\u7ea6 90 \u79d2\u5185\u751f\u6548\uff09\u3002\u300c\u5bfc\u51faJSON\u6570\u636e\u300d\u4ec5\u4f5c\u5907\u4efd\u7528\u3002') + '</div>';
+  if (adminState.cloudStatus === 'partial' || adminState.cloudStatus === 'error') {
+    html += '<div class="sync-note" style="margin-bottom:12px;">' + (en
+      ? '⚠️ Local list may be incomplete. '
+      : '⚠️ 本地列表可能不完整。 ')
+      + '<button class="admin-mini-btn" onclick="adminForceFullSync()">' + (en ? '↻ Full re-sync' : '↻ 立即全量重拉') + '</button></div>';
   }
 
-  html += '<button class="admin-export-btn" onclick="adminExportJSON()">\uD83D\uDCE5 ' + (state.lang === 'en' ? 'Export JSON Data' : '\u5bfc\u51faJSON\u6570\u636e') + '</button>';
-  html += '<button class="admin-reset-btn" onclick="adminResetData()">\uD83D\uDD04 ' + (state.lang === 'en' ? 'Reset to Original Data' : '\u6062\u590d\u539f\u59cb\u6570\u636e') + '</button>';
-
-  // 左上角「←」改成通用返回（回到进管理端之前的界面），退出登录挪到这里 ——
-  // 一个箭头不该悄悄把人踢出管理端。
-  html += '<button class="nav-btn secondary" style="width:100%;margin-top:10px;" onclick="adminLogout()">🚪 ' + (state.lang === 'en' ? 'Sign out of admin' : '退出管理端') + '</button>';
-
+  html += '<div class="adm-grid2">';
+  html += '<div class="adm-card"><h3>' + (en ? 'Exam submissions · last 14 days' : '近 14 日考试提交量') + '</h3>' + adminDashBarsHtml(m, en) + '</div>';
+  html += '<div class="adm-card"><h3>' + (en ? 'To-do' : '待办') + '</h3>' + adminDashTodoHtml(m, en) + '</div>';
   html += '</div>';
+
+  html += '<div class="adm-grid2">';
+  html += '<div class="adm-card"><h3>' + (en ? 'Students by division' : '学员部门分布') + '</h3>' + adminDashDeptHtml(m, en) + '</div>';
+  html += '<div class="adm-card"><h3>' + (en ? 'Quick actions' : '快捷操作') + '</h3><div class="adm-quick">'
+    + '<button onclick="navigate(\'adminBankHub\')">📚 ' + (en ? 'Question bank' : '题库管理') + '</button>'
+    + '<button onclick="navigate(\'adminExamHub\')">📌 ' + (en ? 'Publish exam' : '发布考试') + '</button>'
+    + '<button onclick="adminState.studentsTab=\'list\';navigate(\'adminStudents\')">👥 ' + (en ? 'Students' : '学员管理') + '</button>'
+    + '<button onclick="navigate(\'adminDash\')">📈 ' + (en ? 'Data board' : '数据看板') + '</button>'
+    + '<button onclick="navigate(\'adminRace\')">⚡ ' + (en ? 'Quiz race' : '答题赛') + '</button>'
+    + '</div>'
+    + '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;">'
+    + '<button class="admin-mini-btn" onclick="adminExportJSON()">📥 ' + (en ? 'Export JSON' : '导出 JSON 备份') + '</button>'
+    + '<button class="admin-mini-btn" style="color:#c62828;" onclick="adminResetData()">🔄 ' + (en ? 'Reset data' : '恢复原始数据') + '</button>'
+    + '</div>'
+    + '<div style="font-size:11.5px;color:var(--text-light);margin-top:10px;">' + (en
+      ? 'Sign out of the admin panel from the bottom of the sidebar.'
+      : '退出管理端请用左下角侧边栏的「退出管理端」。') + '</div>'
+    + '</div>';
+  html += '</div>';
+
   return html;
 }
 
@@ -22251,6 +22363,161 @@ function adminRestoreStudentListScroll(y, key) {
     } catch (e) {}
   }, 60);
 }
+// ===== 二期：学员宽屏表格（2026-11-09）=====
+// 桌面（>860px）用表格：一行看全注册资料 + 行内编辑；窄屏仍走原卡片列表（.stu-cards）。
+// 行内编辑复用 seEmp/seCn/seEn/seDivision/seDept/seError 这套 id 和 adminSaveStudentEdit()，
+// 保存链路（pfFix 队列 + 快照 + 账户目录三写）一行没改，只是入口从详情页搬到了列表行。
+function adminStuHay(rec) {
+  var s = rec.snap || {};
+  return normalizeLoginField([
+    s.name, s.cn, s.en, s.emp, adminStudentEmp(rec), rec.key,
+    s.div, s.divEn, s.dept, s.deptEn, s.phone
+  ].join(' ')).toLowerCase();
+}
+function adminStuFiltered(recs) {
+  var q = normalizeLoginField(state.adminEmpQuery || '').toLowerCase();
+  if (!q) return recs;
+  var out = [];
+  for (var i = 0; i < recs.length; i++) {
+    if (adminStuHay(recs[i]).indexOf(q) >= 0) out.push(recs[i]);
+  }
+  return out;
+}
+function adminStuStatusHtml(rec, en) {
+  var snap = rec.snap || {};
+  var tags = [];
+  if (adminBanStateOf(rec)) tags.push('<span style="font-size:11px;color:#c0392b;">🚫 ' + (en ? 'disabled' : '已禁用') + '</span>');
+  if (snap.needsVerify) tags.push('<span style="font-size:11px;color:#b8860b;">⏳ ' + (en ? 'to verify' : '待核查') + '</span>');
+  if (!snap.pinSetAt && !adminBanStateOf(rec)) tags.push('<span style="font-size:11px;color:#b8860b;">🔑 ' + (en ? 'no PIN' : '未设 PIN') + '</span>');
+  if (!tags.length) tags.push('<span class="st-muted">' + (en ? 'OK' : '正常') + '</span>');
+  return tags.join(' ');
+}
+function adminStuEditRowHtml(rec, en) {
+  var snap = rec.snap || {};
+  var pCn = snap.cn || snap.name || '';
+  var pEn = snap.en || '';
+  var divIdx = -1, deptIdx = -1;
+  for (var di = 0; di < DEPARTMENTS.length; di++) {
+    if (snap.divEn && DEPARTMENTS[di].en === snap.divEn) { divIdx = di; break; }
+    if (!snap.divEn && snap.div && DEPARTMENTS[di].cn === snap.div) { divIdx = di; break; }
+  }
+  if (divIdx >= 0) {
+    var subList = DEPARTMENTS[divIdx].subs;
+    for (var si = 0; si < subList.length; si++) {
+      if ((snap.deptEn && subList[si].en === snap.deptEn) || (!snap.deptEn && snap.dept && subList[si].cn === snap.dept)) { deptIdx = si; break; }
+    }
+  }
+  var h = '<tr class="stu-edit-tr"><td colspan="9">';
+  h += '<div class="stu-edit-grid">';
+  h += '<div><label>' + (en ? 'Employee ID *' : '工号 *') + '</label><input type="text" id="seEmp" value="' + escapeHtml(snap.emp || '') + '" autocomplete="off"></div>';
+  h += '<div><label>' + (en ? 'Chinese name' : '中文名') + '</label><input type="text" id="seCn" value="' + escapeHtml(pCn) + '" maxlength="20" oninput="filterNameField(this,\'cn\')" autocomplete="off"></div>';
+  h += '<div><label>' + (en ? 'English name' : '英文名') + '</label><input type="text" id="seEn" value="' + escapeHtml(pEn) + '" maxlength="50" oninput="filterNameField(this,\'en\')" autocomplete="off"></div>';
+  h += '<div><label>' + (en ? 'Division' : '大部门') + '</label><select id="seDivision" onchange="adminSelDivision(this.value)">';
+  h += '<option value="">' + (en ? '— none —' : '— 未选择 —') + '</option>';
+  for (var dj = 0; dj < DEPARTMENTS.length; dj++) {
+    h += '<option value="' + dj + '"' + (dj === divIdx ? ' selected' : '') + '>' + escapeHtml(en ? DEPARTMENTS[dj].en : DEPARTMENTS[dj].cn) + '</option>';
+  }
+  h += '</select></div>';
+  h += '<div><label>' + (en ? 'Department' : '小部门') + '</label><select id="seDept">';
+  if (divIdx >= 0) {
+    var subs = DEPARTMENTS[divIdx].subs;
+    h += '<option value="">' + (en ? '— none —' : '— 未选择 —') + '</option>';
+    for (var sk = 0; sk < subs.length; sk++) {
+      h += '<option value="' + sk + '"' + (sk === deptIdx ? ' selected' : '') + '>' + escapeHtml(en ? subs[sk].en : subs[sk].cn) + '</option>';
+    }
+  } else {
+    h += '<option value="">' + (en ? '— pick a division first —' : '— 请先选择大部门 —') + '</option>';
+  }
+  h += '</select></div>';
+  h += '<div><label>' + (en ? 'Account key' : '账号键') + '</label><input type="text" value="' + escapeHtml(rec.key) + '" readonly style="background:#f5f7fa;color:#8a8f96;"></div>';
+  h += '</div>';
+  h += '<div class="stu-edit-actions">'
+    + '<button class="st-btn primary" onclick="adminSaveStudentEdit(\'' + jsKey(rec.key) + '\')">☁️ ' + (en ? 'Save & sync' : '保存并同步到学员端') + '</button>'
+    + '<button class="st-btn" onclick="adminState.editStudent=\'\';render()">' + (en ? 'Cancel' : '取消') + '</button>'
+    + '<span class="stu-edit-err" id="seError"></span>'
+    + '</div>';
+  h += '</td></tr>';
+  return h;
+}
+function adminStuTableHtml(listRecs, en) {
+  var h = '<div class="stu-table-wrap"><table class="stu-table"><thead><tr>';
+  h += '<th>' + (en ? 'Student' : '学员') + '</th>';
+  h += '<th>' + (en ? 'Emp ID' : '工号') + '</th>';
+  h += '<th>' + (en ? 'Division · Dept' : '部门归属') + '</th>';
+  h += '<th>' + (en ? 'Phone' : '手机') + '</th>';
+  h += '<th>' + (en ? 'Last active' : '最近活跃') + '</th>';
+  h += '<th>' + (en ? 'Exams' : '考试') + '</th>';
+  h += '<th>' + (en ? 'Mastery' : '掌握率') + '</th>';
+  h += '<th>' + (en ? 'Status' : '状态') + '</th>';
+  h += '<th style="text-align:right;">' + (en ? 'Actions' : '操作') + '</th>';
+  h += '</tr></thead><tbody>';
+  for (var i = 0; i < listRecs.length; i++) {
+    var rec = listRecs[i], snap = rec.snap || {};
+    var name = snap.name || rec.key;
+    var emp = adminStudentEmp(rec);
+    var sub = (snap.cn && snap.cn !== name) ? '<div class="st-sub">' + escapeHtml(snap.cn) + '</div>' : '';
+    var examTxt = '<span class="st-muted">—</span>';
+    if (rec.exams.length) {
+      var sum = 0;
+      for (var ex = 0; ex < rec.exams.length; ex++) sum += (rec.exams[ex].score || 0);
+      examTxt = rec.exams.length + (en ? ' · avg ' : ' 次 · 均 ') + Math.round(sum / rec.exams.length);
+    }
+    var mtTxt = (typeof snap.mt === 'number' && isFinite(snap.mt)) ? (snap.mt + '%') : '<span class="st-muted">—</span>';
+    var justBack = (rec.key === adminState.studentListLastKey && !adminState.studentDetail) ? ' style="background:#f7fbff;"' : '';
+    h += '<tr class="st-row"' + justBack + ' onclick="adminOpenStudentDetail(\'' + jsKey(rec.key) + '\')">';
+    h += '<td><div class="st-name">' + escapeHtml(name) + '</div>' + sub + '</td>';
+    h += '<td>' + (emp ? '<span style="font-family:monospace;">' + escapeHtml(emp) + '</span>' : '<span class="st-muted">—</span>') + '</td>';
+    h += '<td>' + adminDeptDivLabel(snap, en) + '</td>';
+    h += '<td>' + (snap.phone ? escapeHtml(snap.phone) : '<span class="st-muted">—</span>') + '</td>';
+    h += '<td>' + fmtSyncTime(snap.ts) + '</td>';
+    h += '<td>' + examTxt + '</td>';
+    h += '<td>' + mtTxt + '</td>';
+    h += '<td>' + adminStuStatusHtml(rec, en) + '</td>';
+    h += '<td style="text-align:right;white-space:nowrap;">'
+      + '<button class="st-btn primary" onclick="event.stopPropagation();adminState.editStudent=\'' + jsKey(rec.key) + '\';render()">✏️ ' + (en ? 'Edit' : '编辑') + '</button> '
+      + '<button class="st-btn" onclick="event.stopPropagation();adminOpenStudentDetail(\'' + jsKey(rec.key) + '\')">' + (en ? 'Detail' : '详情') + '</button>'
+      + '</td>';
+    h += '</tr>';
+    if (adminState.editStudent === rec.key) h += adminStuEditRowHtml(rec, en);
+  }
+  h += '</tbody></table></div>';
+  return h;
+}
+
+// 窄屏卡片列表：与原学员列表同一套信息（按搜索词过滤后）
+function adminStuCardsHtml(listRecs, en) {
+  var h = '';
+  for (var i = 0; i < listRecs.length; i++) {
+    var rec = listRecs[i], snap = rec.snap || {};
+    var name = snap.name || rec.key.split('_')[0];
+    var emp = adminStudentEmp(rec);
+    var isBanned = !!adminBanStateOf(rec);
+    var cnTag = (snap.cn && snap.cn !== name)
+      ? ' <span style="font-weight:400;font-size:12px;color:#8a8f96;">· ' + escapeHtml(snap.cn) + '</span>' : '';
+    var empTag = ' <span style="font-weight:400;font-size:12px;color:#8a8f96;">' + (emp ? escapeHtml(t('admin_emp_no')) + ' ' + escapeHtml(emp) : escapeHtml(rec.key)) + '</span>';
+    var banTag = isBanned ? ' <span style="font-weight:400;font-size:11px;color:#c0392b;">🚫 ' + (en ? 'banned' : '已禁用') + '</span>' : '';
+    var noPinTag = (!snap.pinSetAt && !isBanned) ? ' <span style="font-weight:400;font-size:11px;color:#b8860b;">🔑 ' + (en ? 'no PIN' : '未设 PIN') + '</span>' : '';
+    var justBack = (rec.key === adminState.studentListLastKey && !adminState.studentDetail) ? 'background:#f2f6ff;' : '';
+    h += '<div class="stu-row" data-stu-key="' + escapeHtml(rec.key) + '" style="' + justBack + '" onclick="adminOpenStudentDetail(\'' + jsKey(rec.key) + '\')">';
+    h += '<div class="stu-name">' + escapeHtml(name) + cnTag + empTag + banTag + noPinTag + '</div>';
+    h += '<div class="stu-meta">' + adminDeptDivLabel(snap, en) + ' · ' + (en ? 'active ' : '活跃 ') + fmtSyncTime(snap.ts) + '</div>';
+    h += '<div class="stu-stats">';
+    var prog = snap.prog || {};
+    var progKeys = ['day21', 'day21_kitchen', 'tsos', 'tsos_kitchen', 'manual'];
+    for (var pk = 0; pk < progKeys.length; pk++) {
+      if (prog[progKeys[pk]]) h += '<span class="stu-pill">' + escapeHtml(syncPaperLabel(progKeys[pk])) + ' <b>' + prog[progKeys[pk]] + '</b></span>';
+    }
+    if (rec.exams.length) {
+      var sum = 0;
+      for (var ex = 0; ex < rec.exams.length; ex++) sum += (rec.exams[ex].score || 0);
+      h += '<span class="stu-pill">📝 ' + (en ? 'Exams ' : '考试 ') + '<b>' + rec.exams.length + '</b> · ' + (en ? 'avg ' : '均分 ') + '<b>' + Math.round(sum / rec.exams.length) + '</b></span>';
+    }
+    if (rec.reports.length) h += '<span class="stu-pill">🚩 ' + (en ? 'Reports ' : '报错 ') + '<b>' + rec.reports.length + '</b></span>';
+    h += '</div></div>';
+  }
+  return h;
+}
+
 function renderAdminStudents() {
   if (!adminState.authenticated) return renderAdminLogin();
   var en = state.lang === 'en';
@@ -22495,86 +22762,20 @@ function renderAdminStudents() {
   html += '<div class="sync-note">' + statusLine + '</div>';
 
   {
-    // ===== Student list =====
-    // Stage 9: "what is his employee ID?" is the question the front desk asks
-    // most. One box matches name (CN or EN), employee ID, or account key, and
-    // the result is actionable — tapping it opens that student's detail card.
+    // ===== 学员列表（桌面宽屏表格 / 窄屏卡片，共用同一个搜索词）=====
     var adminQ = normalizeLoginField(state.adminEmpQuery || '').toLowerCase();
-    html += '<div class="q-card" style="margin-bottom:10px;"><div class="profile-form">';
-    html += '<label>🔎 ' + (en ? 'Find an employee ID by name' : '按姓名查工号') + '</label>';
-    html += '<input type="text" id="adminEmpQ" value="' + escapeHtml(state.adminEmpQuery || '') + '" placeholder="' + (en ? 'e.g. Liu Jiahua, or 1000' : '例如：刘嘉华，或 1000') + '" maxlength="30" autocomplete="off" oninput="adminEmpQueryInput(this.value)">';
-    if (adminQ) {
-      var found = adminLookupResult();
-      if (!found.length) {
-        html += '<div class="sync-note" style="margin-top:8px;">' + (en ? 'No match in the cloud data or this device.' : '云端数据与本机记录中都没有匹配项。') + '</div>';
-      } else {
-        for (var f = 0; f < found.length && f < 8; f++) {
-          var fr = found[f];
-          html += '<div class="exam-row" style="cursor:pointer;" onclick="' + (fr.inCloud
-            ? 'adminOpenStudentDetail(\'' + jsKey(fr.key) + '\')'
-            : 'adminState.editStudent=\'\';render()') + '"><span>' + escapeHtml(fr.name) + (fr.en ? ' · ' + escapeHtml(fr.en) : '') + '</span><b style="font-size:15px;color:#2c4a8a;">' + (fr.emp ? escapeHtml(t('admin_emp_no')) + ' ' + escapeHtml(fr.emp) : escapeHtml(fr.key)) + '</b></div>';
-        }
-        if (!found[0].inCloud) {
-          html += '<div class="sync-note" style="margin-top:6px;font-size:11px;">' + (en
-            ? 'Found on this device only — the student has not synced a cloud record yet.'
-            : '仅在本机记录中找到——该学员还没有同步云端记录。') + '</div>';
-        }
-      }
-    }
-    html += '</div></div>';
-    // A live query also narrows the list below, so the box works as a filter
-    // and as a "who is this?" lookup at the same time.
-    var listRecs = recs;
-    if (adminQ) {
-      listRecs = [];
-      for (var lf = 0; lf < recs.length; lf++) {
-        var s3 = recs[lf].snap || {};
-        var hay = [s3.name, s3.cn, s3.en, adminStudentEmp(recs[lf]), recs[lf].key];
-        for (var hh = 0; hh < hay.length; hh++) {
-          if (normalizeLoginField(hay[hh] || '').toLowerCase().indexOf(adminQ) >= 0) { listRecs.push(recs[lf]); break; }
-        }
-      }
-    }
+    var listRecs = adminStuFiltered(recs);
+    html += '<div class="stu-toolbar">';
+    html += '<input type="text" id="adminEmpQ" value="' + escapeHtml(state.adminEmpQuery || '') + '" placeholder="' + (en ? 'Search name / employee ID / division / phone' : '搜索姓名 / 工号 / 部门 / 手机号') + '" maxlength="40" autocomplete="off" oninput="adminEmpQueryInput(this.value)">';
+    html += '<span class="st-count">' + (adminQ
+      ? (en ? listRecs.length + ' of ' + recs.length : '筛出 ' + listRecs.length + ' / ' + recs.length + ' 人')
+      : (en ? recs.length + ' students' : '共 ' + recs.length + ' 人')) + '</span>';
+    html += '</div>';
     if (!listRecs.length) {
-      html += '<div class="empty-state"><div class="icon">👥</div><p>' + (en ? 'No student data yet. Records appear as employees use the platform.' : '暂无学员数据。员工登录使用平台后，学习记录会自动同步到这里。') + '</p></div>';
-    }
-    for (var s2 = 0; s2 < listRecs.length; s2++) {
-      var rec2 = listRecs[s2], snap2 = rec2.snap;
-      var name = snap2.name || rec2.key.split('_')[0];
-      // Stage 9: the employee ID is how accounts are told apart now (two
-      // students can share a name; nobody shares an ID). A banned account is
-      // flagged inline so the list doubles as a status board.
-      var emp2 = adminStudentEmp(rec2);
-      var isBanned = !!adminBanStateOf(rec2);
-      // Batch 6: Chinese name inline in the list — disambiguates same-English-
-      // -name students at a glance. Hidden when empty (no Chinese name) or when
-      // the display name already IS the Chinese name.
-      var cnTag2 = (snap2.cn && snap2.cn !== name)
-        ? ' <span style="font-weight:400;font-size:12px;color:#8a8f96;">· ' + escapeHtml(snap2.cn) + '</span>'
-        : '';
-      var empTag = ' <span style="font-weight:400;font-size:12px;color:#8a8f96;">' + (emp2 ? escapeHtml(t('admin_emp_no')) + ' ' + escapeHtml(emp2) : escapeHtml(rec2.key)) + '</span>';
-      var banTag = isBanned ? ' <span style="font-weight:400;font-size:11px;color:#c0392b;">🚫 ' + (en ? 'banned' : '已禁用') + '</span>' : '';
-      var noPinTag = (!snap2.pinSetAt && !isBanned) ? ' <span style="font-weight:400;font-size:11px;color:#b8860b;">🔑 ' + (en ? 'no PIN' : '未设 PIN') + '</span>' : '';
-      // 刚看过的那一行淡底色标记一下，返回列表时一眼看到自己改到哪了。
-      var justBack = (rec2.key === adminState.studentListLastKey && !adminState.studentDetail)
-        ? 'background:#f2f6ff;'
-        : '';
-      html += '<div class="stu-row" data-stu-key="' + escapeHtml(rec2.key) + '" style="' + justBack + '" onclick="adminOpenStudentDetail(\'' + jsKey(rec2.key) + '\')">';
-      html += '<div class="stu-name">' + escapeHtml(name) + cnTag2 + empTag + banTag + noPinTag + '</div>';
-      html += '<div class="stu-meta">' + adminDeptDivLabel(snap2, en) + ' · ' + (en ? 'active ' : '活跃 ') + fmtSyncTime(snap2.ts) + '</div>';
-      html += '<div class="stu-stats">';
-      var prog = snap2.prog || {};
-      var progKeys = ['day21', 'day21_kitchen', 'tsos', 'tsos_kitchen', 'manual'];
-      for (var pk = 0; pk < progKeys.length; pk++) {
-        if (prog[progKeys[pk]]) html += '<span class="stu-pill">' + escapeHtml(syncPaperLabel(progKeys[pk])) + ' <b>' + prog[progKeys[pk]] + '</b></span>';
-      }
-      if (rec2.exams.length) {
-        var sum = 0;
-        for (var ex = 0; ex < rec2.exams.length; ex++) sum += (rec2.exams[ex].score || 0);
-        html += '<span class="stu-pill">📝 ' + (en ? 'Exams ' : '考试 ') + '<b>' + rec2.exams.length + '</b> · ' + (en ? 'avg ' : '均分 ') + '<b>' + Math.round(sum / rec2.exams.length) + '</b></span>';
-      }
-      if (rec2.reports.length) html += '<span class="stu-pill">🚩 ' + (en ? 'Reports ' : '报错 ') + '<b>' + rec2.reports.length + '</b></span>';
-      html += '</div></div>';
+      html += '<div class="empty-state"><div class="icon">👥</div><p>' + (en ? 'No matching student.' : '没有匹配的学员。') + '</p></div>';
+    } else {
+      html += adminStuTableHtml(listRecs, en);
+      html += '<div class="stu-cards">' + adminStuCardsHtml(listRecs, en) + '</div>';
     }
   }
   html += '<div class="sync-note">' + (en
