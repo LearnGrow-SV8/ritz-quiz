@@ -17303,6 +17303,100 @@ function renderExamResult() {
   return html;
 }
 
+// ============ 刷新后留在原页面（2026-11-09）============
+// 员工在排行榜 / 打卡日历 / 错题本 / 某个题库里点刷新（手机下拉刷新也算），以前一律
+// 被送回首页。现在把「当前页面 + 这一页的筛选状态」存进会话，开机先读回来再渲染 ——
+// 刷新的效果就变成"在本页重新取一次最新数据"。
+// 不恢复的页面：答题中(question)、答题赛进行中(racePlay)、结算 / 回放 / 本轮小结。
+// 题面、计时器、本轮成绩都只在内存里，刷新本就等于放弃这一轮；这些页面刷新后退回
+// 它的上一层（题库 / 答题赛首页 / 首页），而不是弹一张空题页给人看。
+var ROUTE_STORE_KEY = '__quizRouteV1';
+// localStorage 兜底有效期：安卓部分浏览器下拉刷新会重建 WebView，sessionStorage 会丢。
+// 30 分钟足够覆盖"刷一下看最新榜单"，又不至于第二天打开还停在榜上。
+var ROUTE_STORE_TTL = 30 * 60 * 1000;
+var ROUTE_RESTORABLE = {
+  home: 1, bank: 1, paperSelect: 1, search: 1, wrongList: 1, wrongAll: 1,
+  collectedList: 1, race: 1, raceBoard: 1, raceCalendar: 1, myBadges: 1,
+  examHistory: 1, profile: 1, avatar: 1
+};
+var ROUTE_KNOWN_BANKS = { day21: 1, tsos: 1, manual: 1 };
+// 当前页不可恢复时，往页面栈里找最近的、可恢复的那一层
+// （question → bank，racePlay → race，examResult → 来时的页面）。
+function routeRestoreTargetOf(page) {
+  if (ROUTE_RESTORABLE[page]) return page;
+  var st = state.navStack || [];
+  for (var i = st.length - 1; i >= 0; i--) {
+    if (st[i] && ROUTE_RESTORABLE[st[i]]) return st[i];
+  }
+  return 'home';
+}
+function routeClearStored() {
+  try { sessionStorage.removeItem(ROUTE_STORE_KEY); } catch (e0) {}
+  try { localStorage.removeItem(ROUTE_STORE_KEY); } catch (e1) {}
+}
+// 每次 render 都记一次：不管是从按钮、返回键还是异步刷新进的页面，都能跟上。
+function routeSnapshotNow() {
+  // 未登录（登录页 / 扫码页）和管理端页面不记：刷新后该回登录页或首页，
+  // 别把后台界面顶给员工。
+  if (!state.currentUser || adminState.authenticated) { routeClearStored(); return; }
+  var page = routeRestoreTargetOf(state.currentPage || 'home');
+  if (page === 'home') { routeClearStored(); return; }
+  var snap = {
+    p: page,
+    b: state.currentBank || '',
+    pp: state.currentPaper || 'all',
+    s: state.currentSection || 'all',
+    bt: state.raceBoardTab || 'period',
+    bs: state.raceBoardSec || '',
+    wt: state.wrongTab || 'all',
+    ws: state.wrongSec || '',
+    wsrc: state.wrongSrc || '',
+    kw: state.searchKeyword || '',
+    t: Date.now()
+  };
+  try { sessionStorage.setItem(ROUTE_STORE_KEY, JSON.stringify(snap)); } catch (e2) {}
+  try { localStorage.setItem(ROUTE_STORE_KEY, JSON.stringify(snap)); } catch (e3) {}
+}
+function routeReadStored() {
+  try {
+    var raw = sessionStorage.getItem(ROUTE_STORE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e0) {}
+  try {
+    var raw2 = localStorage.getItem(ROUTE_STORE_KEY);
+    if (!raw2) return null;
+    var s2 = JSON.parse(raw2);
+    if (s2 && (Date.now() - (Number(s2.t) || 0)) < ROUTE_STORE_TTL) return s2;
+  } catch (e1) {}
+  return null;
+}
+// 开机恢复（必须早于第一次 render）
+function routeRestoreOnBoot() {
+  var snap = routeReadStored();
+  if (!snap || !snap.p || !ROUTE_RESTORABLE[snap.p]) return;
+  if (!state.currentUser) return;
+  var p = snap.p;
+  if (p === 'bank' || p === 'paperSelect') {
+    if (!ROUTE_KNOWN_BANKS[snap.b]) return;
+    state.currentBank = snap.b;
+    state.currentPaper = (snap.pp === 'kitchen') ? 'kitchen' : 'all';
+    state.currentSection = snap.s || 'all';
+  }
+  if (p === 'raceBoard') {
+    state.raceBoardTab = (snap.bt === 'dept' || snap.bt === 'best' || snap.bt === 'mover') ? snap.bt : 'period';
+    state.raceBoardSec = snap.bs || '';
+  }
+  if (p === 'wrongList' || p === 'wrongAll') {
+    state.wrongTab = snap.wt || 'all';
+    state.wrongSec = snap.ws || '';
+    state.wrongSrc = snap.wsrc || '';
+  }
+  if (p === 'search') state.searchKeyword = snap.kw || '';
+  state.currentPage = p;
+  // 恢复来的页面没有"上一页"可言：返回键直落首页，别跳到上个会话的旧页面
+  state.navStack = [];
+}
+
 // ============ Navigation ============
 // Student-side navigation keeps a page stack so that the single "←" button in
 // the top-left corner of every page returns to the page the student actually
@@ -25063,6 +25157,8 @@ function adminShellHtml(page, inner) {
 
 function render() {
   var app = document.getElementById('app');
+  // 记下"现在停在哪一页"，供刷新后原页恢复用（登录页 / 管理端会自动清除）
+  try { routeSnapshotNow(); } catch (eSnap) {}
   // Admin pages accessible without employee login
   if (state.currentPage === 'adminLogin') {
     app.innerHTML = renderAdminLogin();
@@ -25224,6 +25320,9 @@ try { raceSettleOnBoot(); } catch (eBoot) {}
 // 待补传心跳（2026-11-06）：队列里还有没传出去的成绩时，每 20 秒补一次；
 // 联网 / 回到前台立刻补一次；没有待补传就一次请求都不发。
 try { raceSyncStartLoop(); } catch (eLoop) {}
+// 刷新留在原页（必须在第一次 render 之前）：员工在排行榜 / 日历 / 错题本上点刷新时
+// 原地重新拉一份最新数据，而不是被送回首页。
+try { routeRestoreOnBoot(); } catch (eRoute) {}
 render();
 </script>
 </body>
