@@ -5845,8 +5845,8 @@ var I18N = {
   rv_no_weak: {cn:'还没有足够数据找出薄弱知识点，先练几道再来。', en:'Not enough data yet — practise a few questions first.'},
   rv_task_title: {cn:'今日复习', en:"Today's review"},
   rv_task_desc: {cn:'近一周你的错题集中在「{tag}」，点开复习巩固一下。', en:'Most of your recent mistakes are in "{tag}" — review them now.'},
-  rv_task_go: {cn:'开始复习', en:'Start review'},
-  rv_task_go_n: {cn:'开始复习（{n} 道）', en:'Start review ({n})'},
+  rv_task_go: {cn:'开始今日复习', en:"Start today's review"},
+  rv_task_go_n: {cn:'开始今日复习（{n} 道）', en:"Start today's review ({n})"},
   rv_redo_all: {cn:'重做错题', en:'Review mistakes'},
   rv_hub_title: {cn:'我的错题', en:'My mistakes'},
   rv_hub_browse: {cn:'打开错题本', en:'Open'},
@@ -5893,14 +5893,16 @@ var I18N = {
   // ===== 错题本三版：三大功能分区（2026-11-05）=====
   // 学员端只讲"这里能干什么"，不讲系统原理。分类名沿用领导的定稿，不再自创同义词。
   // 中文模式只出中文：英文分类名只放在 en 译文里，不混排在中文标题后面。
-  rv_bk_eb1: {cn:'智能复习', en:'Smart Review'},
-  rv_bk_t1: {cn:'智能巩固练习', en:'Smart review practice'},
-  rv_bk_d1: {cn:'依据遗忘节奏，自动挑选待复习错题，一键开始', en:'Picks your due mistakes by the forgetting curve — one tap to start'},
+  // 「每日」这个前缀是学员提的（2026-11-10）：让学员一眼知道「每天进来做这一组就够了」。
+  // 但名字里不能出现「打卡」——打卡只认答题赛一局（raceMarkDay），这里只是当日复习。
+  rv_bk_eb1: {cn:'每日复习', en:'Daily Review'},
+  rv_bk_t1: {cn:'每日巩固练习', en:'Daily review practice'},
+  rv_bk_d1: {cn:'按记忆曲线挑出今天到期的错题；答对即推进一阶，做完这一组，今天的复习就完成了。', en:'Picks the mistakes due today by the forgetting curve. Each correct answer advances one stage — finish the set and today\'s review is done.'},
   rv_bk_due_unit: {cn:'道待复习', en:'due'},
   rv_bk_task: {cn:'本周巩固任务 {d}/{n}', en:'This week {d}/{n}'},
-  rv_bk_start: {cn:'开始复习（{n} 道）', en:'Start review ({n})'},
-  rv_bk_none: {cn:'今天没有待复习的题', en:'Nothing due today'},
-  rv_bk_done_today: {cn:'今日复习已完成 ✓ 明天再来', en:"Today's review done ✓ see you tomorrow"},
+  rv_bk_start: {cn:'开始今日巩固（{n} 道）', en:"Start today's review ({n})"},
+  rv_bk_none: {cn:'今天没有到期的错题', en:'Nothing due today'},
+  rv_bk_done_today: {cn:'今日巩固已完成 ✓ 明天再来', en:"Today's review done ✓ see you tomorrow"},
   rv_bk_rules_sum: {cn:'复习规则', en:'How review works'},
   rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。第一次答对即记 1/3 阶，之后同一道错题每天最多推进 1 阶：第 1 次答对后隔 1 天复习，第 2 次后隔 3 天，第 3 次后隔 7 天；第 4 次答对即毕业，自动移出错题本。当天答对过的题不再计入当日待复习数量，按上述间隔重新出现。', en:"Due mistakes come first, while the memory is still fresh. The first correct answer counts as stage 1 of 3, after that a mistake advances at most one stage per day: the 1st correct answer brings it back in 1 day, then 3 days, then 7 days; the 4th correct answer graduates it and removes it from the book. Mistakes answered correctly today leave today's due count and return on the schedule above."},
   // 错题进度图表（2026-11-10）：三个数字 + 一条分段进度条，代替原来那行「掌握度 X% | …」。
@@ -17537,7 +17539,7 @@ function wrongDueLabel(e) {
 // ---- 错题本页（2026-11-05 三版：三大功能分区）----
 // 领导第三轮反馈：「整页读不出错题本能做什么，文字还是绕」。这一版不再把页签、
 // 下拉、药丸三层控件堆在一页，而是把错题本拆成三块，每块只做一件事、只留一个主动作：
-//   ① 智能复习 Smart Review —— 系统按遗忘节奏挑题，一键开练
+//   ① 每日复习 Daily Review —— 系统按记忆曲线挑出今天到期的题，一键开练（2026-11-10 更名）
 //   ② 自主组卷 Custom Quiz   —— 自己选分类和题量，生成练习卷
 //   ③ 错题归档 My Error Bank —— 按分类 / 来源翻全部历史错题
 // 控件压到两种：2×2 分类卡（选"哪一类"）+ 小药丸（选"哪一批 / 多少个"）。
@@ -17829,7 +17831,7 @@ function renderWrongAll() {
   html += '<div style="font-size:11.5px;color:#8a97a4;margin-top:10px;line-height:1.6;">' + escapeHtml(t('rv_chart_rule')) + '</div>';
   html += '</div>';
 
-  // ---- 智能复习：今天该练什么，一键开练（三块并列，无先后）----
+  // ---- 每日复习（原名「智能复习」，2026-11-10 按学员反馈更名）：今天该练什么，一键开练 ----
   html += '<div class="rv-blk" id="rvBlkSmart">';
   html += rvBlkHeadHtml('⏰', t('rv_bk_eb1'), t('rv_bk_t1'), t('rv_bk_d1'));
   html += '<div style="display:flex;align-items:flex-end;gap:14px;margin:13px 0 12px;">';
