@@ -5584,9 +5584,11 @@ var I18N = {
   // 2026-11-10 补签额度制 + 赚补签任务
   race_makeup_left: {cn:'剩余补签次数：{n}', en:'Make-ups left: {n}'},
   race_makeup_card_desc2: {cn:'答 {n} 题产品知识题、答对 {m} 题以上，即可补回昨天的打卡。每期可用补签次数见下方任务。', en:'Answer {n} product-knowledge questions (get {m}+ right) to restore yesterday\u2019s check-in. See available make-ups below.'},
-  race_mk_task_entry: {cn:'🎯 补签机会与任务', en:'🎯 Make-ups & tasks'},
+  race_mk_task_entry: {cn:'补签机会与任务', en:'Make-ups & tasks'},
   race_mk_task_title: {cn:'🎯 补签机会与任务', en:'🎯 Make-ups & tasks'},
   race_mk_task_sub: {cn:'完成任务赚取额外补签次数', en:'Complete tasks to earn extra make-ups'},
+  race_mk_task_card_desc: {cn:'复习毕业错题或完成产品知识模块挑战，均可赚取额外补签次数；每届最多 {cap} 次。', en:'Graduate wrong answers or pass a module challenge to earn extra make-ups, up to {cap} per round.'},
+  race_mk_task_open: {cn:'查看任务与进度', en:'View tasks & progress'},
   race_mk_task_full: {cn:'补签次数已达上限（{cap} 次）。', en:'Make-up limit reached ({cap} per round).'},
   race_mk_task_a_name: {cn:'任务一 · 错题毕业', en:'Task 1 \u00b7 Graduate mistakes'},
   race_mk_task_a_desc: {cn:'统计范围：本届赛事期间，通过复习让 {x} 道错题毕业（移出错题本）。每毕业 {x} 道记 1 次补签机会。手动移出错题本不计入。', en:'Scope: this round only. Graduate {x} wrong answers through spaced review to earn 1 make-up per {x}. Manual removal does not count.'},
@@ -14019,9 +14021,24 @@ function renderRaceCalendar() {
   // 复盘语境：温故知新后再刷一遍产品知识题库
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">🔁 ' + t('race_study_cal') + '</button>';
   // 补签机会与任务（2026-11-10）：从首页收进日历最底部 —— 想补签的人本来就会来看日历
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceMkTask\')">🎯 ' + t('race_mk_task_entry') + '</button>';
-  // 看完自己的打卡记录，顺手就能看自己在榜上第几（页面底部，次级入口）
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
+  // 补签机会与任务卡（页面最底部，2026-11-10 领导二次调整）：用小按钮太不起眼，
+  // 改回首页那款大卡片 —— 标题 + 说明 + 剩余次数一次说清，卡片自己会长得比按钮醒目。
+  // emoji 只在标题里出现一次（race_mk_task_title 自带 🎯），按钮不再重复挂。
+  var calConf = raceConfOf() || {};
+  var calMk = null;
+  try { calMk = raceMkAllowance(rec, calConf); } catch (eMk2) { calMk = null; }
+  if (calConf.id && calMk) {
+    html += '<div class="q-card" style="border:1px solid #f0b357;background:#fffdf5;margin-top:14px;">';
+    html += '<div style="font-size:14px;font-weight:700;color:#8a5a00;">' + t('race_mk_task_title') + '</div>';
+    html += '<div style="font-size:12px;color:#9a7b4f;margin-top:5px;line-height:1.65;">'
+      + t('race_mk_task_card_desc').replace('{cap}', String(calMk.cap)) + '</div>';
+    html += '<div style="font-size:12.5px;color:#8a5a00;margin-top:8px;font-weight:700;">'
+      + t('race_makeup_left').replace('{n}', String(calMk.left)) + '</div>';
+    html += '<button class="action-btn primary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceMkTask\')">'
+      + t('race_mk_task_open') + '</button>';
+    html += '</div>';
+  }
   html += '</div>';
   return html;
 }
@@ -14693,8 +14710,8 @@ function renderRaceMakeup() {
     }
     // ③ 操作按钮
     if (passed) {
-      html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="state.raceMakeup=null;navigate(' + (isMod ? "'raceMkTask'" : "'raceCalendar'") + ')">📅 '
-        + (isMod ? t('race_mk_task_entry') : t('race_cal_open')) + '</button>';
+      html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="state.raceMakeup=null;navigate(' + (isMod ? "'raceMkTask'" : "'raceCalendar'") + ')">'
+        + (isMod ? '🎯 ' + t('race_mk_task_entry') : '📅 ' + t('race_cal_open')) + '</button>';
     } else {
       html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="' + (isMod ? 'raceMkTaskBegin(\'' + mk.module + '\')' : 'raceMakeupBegin()') + '">🔄 ' + t('race_makeup_start') + '</button>';
     }
