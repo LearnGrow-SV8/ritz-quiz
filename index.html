@@ -1243,6 +1243,26 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
 @media (max-width:900px) {
   .ap-head { margin:0 0 16px; padding:0; border-bottom:0; }
 }
+
+/* ===== 学员管理 v4：侧边栏子项 + 工具条/表头吸顶 ===== */
+.adm-nav-item.adm-nav-sub { padding:6px 10px 6px 40px; font-size:12.5px; color:rgba(255,255,255,.55); }
+.adm-nav-item.adm-nav-sub:hover { color:rgba(255,255,255,.85); }
+.adm-nav-sub-dot { width:5px; height:5px; border-radius:50%; background:rgba(255,255,255,.35); flex:0 0 5px; }
+.adm-nav-item.adm-nav-sub.active { background:rgba(199,221,243,.16); color:#fff; font-weight:500; }
+.adm-nav-item.adm-nav-sub.active .adm-nav-sub-dot { background:var(--a-blue); }
+@media (min-width:901px) {
+  /* 工具条（页签/状态/搜索）钉在页头下方；top 由 adminPinRefresh 实测注入 */
+  .stu-pin { position:sticky; z-index:70; top:136px; background:#fff;
+    margin:0 -26px 10px; padding:0 26px 8px; border-bottom:1px solid var(--a-line2); }
+  /* 强制吸顶层各自独立合成层：headless 截图曾出现静态行盖过吸顶条的假象，真实层序以此为准 */
+  .adm-topbar, .ap-head, .stu-pin { transform:translateZ(0); }
+  /* sticky 表头：wrap 的 overflow:hidden 会吞掉 sticky，改 clip（不产生滚动容器） */
+  .adm-content .stu-table-wrap { overflow:clip; }
+  .adm-content .stu-table thead th { position:sticky; top:var(--stuThTop, 190px); background:#fff; z-index:5;
+    box-shadow:0 1px 0 var(--a-line); }
+  .adm-content .stu-table thead th:first-child { border-top-left-radius:12px; }
+  .adm-content .stu-table thead th:last-child { border-top-right-radius:12px; }
+}
 </style>
 </head>
 <body>
@@ -8136,7 +8156,7 @@ function adminStaffSetActive(emp) {
   if (!hadAny) {
     adminToast(en
       ? 'The roster is empty. Add the ID on the roster page (or re-import the full list) so nobody else gets locked out.'
-      : '名册目前是空的。请先在「学员名册 → 有效工号」里补全名单（或重新导入整份名册），否则只加一个人会把其他所有人挡在门外。', false);
+      : '名册目前是空的。请先在「学员管理 → 有效工号」里补全名单（或重新导入整份名册），否则只加一个人会把其他所有人挡在门外。', false);
     return;
   }
   if (!rows[e]) {
@@ -24549,7 +24569,7 @@ function renderAdminStudents() {
     ? '<button class="ap-btn" onclick="adminBackFromStudent()">← ' + (en ? 'Back to list' : '返回列表') + '</button>'
     : '';
   var html = adminHead(
-    adminState.studentDetail ? (en ? 'Student Profile' : '学员档案') : (en ? 'Student Roster' : '学员名册'),
+    adminState.studentDetail ? (en ? 'Student Profile' : '学员档案') : (en ? 'Student Management' : '学员管理'),
     adminState.studentDetail
       ? (en ? 'Full profile, exam history and question reports' : '完整档案、考试记录与报错记录')
       : (en ? 'Roster is the whitelist — only listed employee IDs can register. Click a row for the full profile.'
@@ -24775,6 +24795,7 @@ function renderAdminStudents() {
       if (!cache0.handled[rk]) openReports++;
     }
   }
+  html += '<div class="stu-pin" id="stuPin">';
   html += '<div class="tab-bar">';
   html += '<div class="chip ' + (adminState.studentsTab === 'list' ? 'active' : '') + '" onclick="adminState.studentsTab=\'list\';render()">👥 ' + (en ? 'Students' : '学员列表') + ' (' + recs.length + ')</div>';
   // 有效工号是学员管理的下一层级。黑名单已于 2026-11-03 下线 —— 不在有效工号名单里
@@ -24786,7 +24807,9 @@ function renderAdminStudents() {
 
   if (adminState.studentsTab === 'roster') {
     html += adminRosterPanelHtml();
+    html += '</div>'; // /stu-pin
     html += '</div>';
+    setTimeout(adminPinRefresh, 30);
     return html;
   }
   html += '<div class="sync-note">' + statusLine + '</div>';
@@ -24801,6 +24824,7 @@ function renderAdminStudents() {
       ? (en ? listRecs.length + ' of ' + recs.length : '筛出 ' + listRecs.length + ' / ' + recs.length + ' 人')
       : (en ? recs.length + ' students' : '共 ' + recs.length + ' 人')) + '</span>';
     html += '</div>';
+    html += '</div>'; // /stu-pin —— 表头及以下照常滚动，滚走时被本条与表头钉住
     if (!listRecs.length) {
       html += '<div class="empty-state"><div class="icon">👥</div><p>' + (en ? 'No matching student.' : '没有匹配的学员。') + '</p></div>';
     } else {
@@ -24812,7 +24836,34 @@ function renderAdminStudents() {
     ? 'Data is auto-uploaded by students\' devices when they log in, practice, or submit exams. Records stay available on this device once fetched.'
     : '学员在登录、刷题、交卷时会自动上传学习数据；已拉取的记录会保留在本设备缓存中。') + '</div>';
   html += '</div>';
+  setTimeout(adminPinRefresh, 30);
   return html;
+}
+// 学员管理页吸顶测量：把 .stu-pin 钉在页头正下方，表头（thead）钉在工具条正下方。
+// 页头/工具条高度随内容与换行变化，全部用实测值，不写死像素。
+function adminPinRefresh() {
+  try {
+    var main = document.querySelector('.adm-main');
+    if (!main || !main.getBoundingClientRect) return;
+    var head = main.querySelector('.ap-head');
+    var pin = document.getElementById('stuPin');
+    if (!head || !pin || !pin.style) return;
+    var hb = head.getBoundingClientRect();
+    var mTop = main.getBoundingClientRect().top;
+    if (!isFinite(hb.bottom) || !isFinite(mTop)) return;
+    var pinTop = Math.max(57, hb.bottom - mTop + (main.scrollTop || 0) + 1);
+    pin.style.top = pinTop + 'px';
+    var wrap = main.querySelector('.stu-table-wrap');
+    if (wrap && wrap.style && wrap.style.setProperty) {
+      var pb = pin.getBoundingClientRect();
+      var h = pb.height;
+      if (isFinite(h) && h > 0) wrap.style.setProperty('--stuThTop', (pinTop + h) + 'px');
+    }
+  } catch (e) {}
+  if (!adminPinRefresh._bound) {
+    adminPinRefresh._bound = true;
+    try { window.addEventListener('resize', function () { setTimeout(adminPinRefresh, 50); }); } catch (e) {}
+  }
 }
 // One error-report card. `inDetail` hides the student name (already shown).
 function adminRenderReportItem(ev, rec, inDetail) {
@@ -27634,9 +27685,18 @@ function adminShellRoutes() {
     { key: 'adminQReports', label: en ? 'Question Reports' : '题目报错', ico: 'flag', match: ['adminQReports'], badge: 'report' },
     { grp: en ? 'ASSESSMENT' : '考核', key: 'adminExams', label: en ? 'Exams' : '考试与场次', ico: 'cal', match: ['adminExams', 'adminExamHub'] },
     { key: 'adminReports', label: en ? 'Scores & Grading' : '成绩与评分', ico: 'check', match: ['adminReports', 'adminGrading'] },
-    { grp: en ? 'PEOPLE' : '组织', key: 'adminStudents', label: en ? 'Students' : '学员名册', ico: 'users', match: ['adminStudents'], badge: 'fix' },
-    { key: 'adminVerify', label: en ? 'Registration Review' : '注册核查', ico: 'shield', match: ['adminVerify'], badge: 'verify' },
-    { key: 'adminStaff', label: en ? 'Staff Changes' : '人员变动', ico: 'userx', match: ['adminStaff'] },
+    // 「学员管理」是一组：学员列表（本页）/ 有效工号（本页页签）/ 注册核查 / 人员变动。
+    // subOf 的项在侧边栏渲染成缩进子项，不再占一级导航。
+    { grp: en ? 'PEOPLE' : '组织', key: 'adminStudents', label: en ? 'Students' : '学员管理', ico: 'users',
+      match: ['adminStudents', 'adminVerify', 'adminStaff'], badge: 'fix',
+      subs: [
+        { key: 'adminStudents', label: en ? 'Student list' : '学员列表', list: true },
+        { roster: true, label: en ? 'Valid IDs' : '有效工号' },
+        { key: 'adminVerify' },
+        { key: 'adminStaff' }
+      ] },
+    { key: 'adminVerify', label: en ? 'Registration Review' : '注册核查', ico: 'shield', match: ['adminVerify'], badge: 'verify', subOf: 'adminStudents' },
+    { key: 'adminStaff', label: en ? 'Staff Changes' : '人员变动', ico: 'userx', match: ['adminStaff'], subOf: 'adminStudents' },
     { key: 'adminDepts', label: en ? 'Departments' : '部门目录', ico: 'sitemap', match: ['adminDepts'] },
     { grp: en ? 'MOTIVATION' : '激励', key: 'adminRace', label: en ? 'Quiz Race' : '答题赛', ico: 'bolt', match: ['adminRace'] },
     { key: 'adminBadges', label: en ? 'Badges' : '徽章', ico: 'medal', match: ['adminBadges'] },
@@ -27664,7 +27724,7 @@ function adminPageTitleOf(page) {
     adminQReports:   en ? 'Question Reports' : '题目报错',
     adminReports:    en ? 'Scores & Grading' : '成绩与评分',
     adminGrading:    en ? 'Scores & Grading · Rules' : '成绩与评分 · 评分配置',
-    adminStudents:   en ? 'Students' : '学员名册',
+    adminStudents:   en ? 'Student Management' : '学员管理',
     adminVerify:     en ? 'Registration Review' : '注册核查',
     adminStaff:      en ? 'Staff Changes' : '人员变动',
     adminRace:       en ? 'Quiz Race' : '答题赛',
@@ -27827,13 +27887,40 @@ function adminShellHtml(page, inner) {
   var routes = adminShellRoutes();
   var cloud = !!SERVER_AVAILABLE;
   var nav = '';
+  function adminNavSubHtml(sub) {
+    var sLabel = sub.label;
+    var sAct, sClick;
+    if (sub.roster) {
+      sAct = page === 'adminStudents' && adminState.studentsTab === 'roster';
+      sClick = "adminState.studentsTab='roster';adminCloseGSearch();navigate('adminStudents')";
+    } else if (sub.list) {
+      sAct = page === 'adminStudents' && adminState.studentsTab !== 'roster';
+      sClick = "adminState.studentsTab='list';adminCloseGSearch();navigate('adminStudents')";
+    } else {
+      var sr = null;
+      for (var j = 0; j < routes.length; j++) if (routes[j].key === sub.key) { sr = routes[j]; break; }
+      if (!sr) return '';
+      if (!sLabel) sLabel = sr.label;
+      sAct = sr.match.indexOf(page) >= 0;
+      sClick = "adminCloseGSearch();navigate('" + sub.key + "')";
+    }
+    return '<button class="adm-nav-item adm-nav-sub' + (sAct ? ' active' : '') + '" onclick="' + sClick + '">'
+      + '<span class="adm-nav-sub-dot"></span><span>' + sLabel + '</span>'
+      + (sr && sr.badge ? adminShellBadgeHtml(sr.badge) : '')
+      + '</button>';
+  }
   for (var i = 0; i < routes.length; i++) {
     var r = routes[i];
+    if (r.subOf) continue; // 已随父项渲染成子项
     if (r.grp) nav += '<div class="adm-nav-grp">' + r.grp + '</div>';
     var act = r.match.indexOf(page) >= 0;
-    nav += '<button class="adm-nav-item' + (act ? ' active' : '') + '" onclick="adminCloseGSearch();navigate(\'' + r.key + '\')">'
+    var click = r.subs
+      ? "adminState.studentsTab='list';adminCloseGSearch();navigate('" + r.key + "')"
+      : "adminCloseGSearch();navigate('" + r.key + "')";
+    nav += '<button class="adm-nav-item' + (act ? ' active' : '') + '" onclick="' + click + '">'
       + '<span class="adm-nav-ico">' + adminIco(r.ico) + '</span><span>' + r.label + '</span>'
       + (r.badge ? adminShellBadgeHtml(r.badge) : '') + '</button>';
+    if (r.subs) for (var k = 0; k < r.subs.length; k++) nav += adminNavSubHtml(r.subs[k]);
   }
   var h = '<div class="adm-root">';
   h += '<aside class="adm-side">';
