@@ -216,15 +216,25 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
   transform:translateY(-50%); background:#fff; box-shadow:0 0 0 3px rgba(183,121,31,.28); }
 .race-hero-note { margin-top:9px; font-size:10.5px; color:rgba(14,37,69,.48); letter-spacing:.1px; }
 
-/* ===== 答题赛倒计时：贴在「⏱ 60s ｜ 已答 N」矩形下沿的色块，随时间从满格缩到空 ===== */
-.exam-info.race-timer-box { display:block; padding:12px 16px 0; overflow:hidden; }
-.race-timer-line { display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; }
-/* 色块和矩形同宽（负 margin 抵消卡片内边距），视觉上就是矩形底部的一条 */
-.race-timer-track { position:relative; height:9px; margin:0 -16px; background:var(--primary-soft); overflow:hidden; }
-.race-timer-fill { position:relative; height:100%; width:100%; background:var(--primary-light); transition:width .25s linear, background-color .3s linear; }
-.race-timer-fill.warn { background:var(--warning); }
-.race-timer-fill.urgent { background:var(--danger); }
-.race-timer-track.urgent { background:#fdeaea; }
+/* ===== 答题赛倒计时圆环（2026-11-10）：挂在吸顶 banner 右下角——其他页面放头像的位置，
+   答题页头像本来就是关的（avatar:false），圆环放这是"填空位"，不新增占位。
+   原计时盒已删除，题目区上移约 70px，安卓小屏下滑看选项时倒计时不再消失。 ===== */
+.race-ring { position:absolute; right:10px; bottom:17px; width:42px; height:42px; pointer-events:none; }
+.race-ring svg { display:block; }
+.race-ring .race-arc { transition:stroke-dashoffset .25s linear, stroke .3s linear; }
+/* 充足 = 中调丽思蓝（开局不沉闷，在浅蓝 banner 上也够清楚）；过半 = 柔和琥珀
+   （不吓人，别时间刚过半就让大家紧张）；≤10s = 红 + 脉动，真正该紧张的时候才紧张 */
+.race-ring .race-arc.warn { stroke:#eda63d; }
+.race-ring .race-arc.urgent { stroke:var(--danger); }
+.race-ring .race-num { font-size:15px; font-weight:700; fill:#000; }
+.race-ring.urgent { animation:raceRingPulse 1s infinite; }
+@keyframes raceRingPulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.07); } }
+/* 答题页副标题带「已答 N」：两侧留出 56px（圆环上移后与副标题行重叠区变大），
+   长部门名不顶到右下角圆环 */
+.app-header.race-play-hdr .subtitle { padding:0 56px; }
+/* 答题页「确认作答」吸底：长选项下滑时按钮始终可见可点（和圆环同一个目的） */
+.page.race-play { padding-bottom:14px; }
+.page.race-play .q-nav { position:sticky; bottom:0; z-index:60; margin:14px -16px 0; padding:10px 16px calc(10px + env(safe-area-inset-bottom)); background:var(--bg); }
 
 /* A4 庆祝彩带（2026-11-03）：满分 / 拿到新徽章时结果页顶部撒一轮彩纸。
    纯 CSS 动画（transform + opacity），纸片由 raceConfettiHtml() 生成，只播一轮不循环。 */
@@ -12113,23 +12123,35 @@ function raceTimerLevel(pct, leftSec) {
   if (pct <= 50) return 'warn';
   return '';
 }
+// 倒计时圆环（2026-11-10）：42px SVG，弧长 = 剩余时间比例，中心是剩余秒数。
+// 挂在吸顶 banner 右下角语言切换栏以下的空余位（垂直居中，不贴底边），替换掉
+// 会随页面滚走的计时盒。配色走丽思蓝系：充足=中调蓝 #4a7cb5，过半=柔和琥珀
+// #eda63d（不吓人），≤10s=红 + 脉动。
+var RACE_RING_C = 113; // 底圆周长 2π×18，取整
+function raceRingHtml(pct, lv, leftSec) {
+  var off = (RACE_RING_C * (1 - pct / 100)).toFixed(1);
+  return '<div class="race-ring' + (lv === 'urgent' ? ' urgent' : '') + '" id="raceRing">'
+    + '<svg viewBox="0 0 42 42" width="42" height="42" aria-label="' + (state.lang === 'en' ? 'seconds left' : '剩余秒数') + '">'
+    + '<circle cx="21" cy="21" r="18" fill="rgba(255,255,255,0.82)" stroke="rgba(0,0,0,0.14)" stroke-width="4"/>'
+    + '<circle class="race-arc' + (lv ? ' ' + lv : '') + '" id="raceRingArc" cx="21" cy="21" r="18" fill="none" stroke="#4a7cb5" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + RACE_RING_C + ' ' + RACE_RING_C + '" stroke-dashoffset="' + off + '" transform="rotate(-90 21 21)"/>'
+    + '<text class="race-num" id="raceRingNum" x="21" y="25.5" text-anchor="middle">' + leftSec + '</text>'
+    + '</svg></div>';
+}
 function raceTick() {
   var r = state.race; if (!r) { clearRaceTimer(); return; }
   var left = raceLeftSec(), pct = raceLeftPct(), lv = raceTimerLevel(pct, left);
-  var el = document.getElementById('raceTimer');
-  if (el) {
-    el.textContent = '⏱ ' + left + 's';
-    el.className = 'exam-timer' + (left <= 10 ? ' urgent' : '');
+  // 圆环三件套：中心秒数 / 弧长 / urgent 脉动。元素不存在（已收卷）就静默跳过。
+  var num = document.getElementById('raceRingNum');
+  if (num) num.textContent = left;
+  var arc = document.getElementById('raceRingArc');
+  if (arc) {
+    arc.style.strokeDashoffset = (RACE_RING_C * (1 - pct / 100)).toFixed(1);
+    arc.setAttribute('class', 'race-arc' + (lv ? ' ' + lv : ''));
   }
-  var fill = document.getElementById('raceTimerFill');
-  if (fill) {
-    fill.style.width = pct.toFixed(2) + '%';
-    fill.className = 'race-timer-fill' + (lv ? ' ' + lv : '');
-  }
-  var track = document.getElementById('raceTimerTrack');
-  if (track) track.className = 'race-timer-track' + (lv === 'urgent' ? ' urgent' : '');
+  var ring = document.getElementById('raceRing');
+  if (ring) ring.className = 'race-ring' + (lv === 'urgent' ? ' urgent' : '');
   if (left <= 0) {
-    // 稍微等一下再收卷：让时间条完整走到 0（空掉），而不是刚变红就跳结果页
+    // 稍微等一下再收卷：让圆环完整走完（弧线归零），而不是刚变红就跳结果页
     if (!r.ending) {
       r.ending = true;
       setTimeout(function () { raceEnd('timeout'); }, RACE_END_DELAY_MS);
@@ -13914,28 +13936,24 @@ function renderRaceCalendar() {
 }
 // 答题界面沿用**正常刷题**的题干 / 选项 / 按钮结构（.q-card → .q-header → .q-text →
 // .options/.option/.option-letter + .option-text，按钮用 .q-nav > .nav-btn），
-// 学员不用在两种风格之间切换。只有顶部的倒计时条是答题赛独有的。
+// 学员不用在两种风格之间切换。倒计时是答题赛独有的：圆环挂在吸顶 banner 右下角
+// （其他页面的头像位，不新增占位），「已答 N」并入副标题行；确认按钮吸底常驻。
 function renderRacePlay() {
   var r = state.race;
   if (!r || r.endReason) { return '<div class="page"><div class="q-card">' + t('race_no_conf') + '</div></div>'; }
   var q = r.pool[r.idx];
   if (!q) { return '<div class="page"></div>'; }
   var idx = r.idx;
-  var html = renderAppHeader({ title: '⚡ ' + (r.conf.title || t('race_title')), subtitle: raceSecIcon(r.section || 'all') + ' ' + raceSecName(r.section || 'all'), showBack: true, showHome: false, avatar: false });
-  html += '<div class="page">';
-  // 倒计时：上排是「⏱ 60s ｜ 已答 N」，色块贴在这个矩形的下沿，
-  // 开局满格、随剩余时间连续缩短、归零即空。raceTick 每 250ms 只改宽度
-  // （配合 CSS transition 就是平滑缩短），切题重绘时按当前值重建，不会闪。
+  // 倒计时圆环初值：切题重绘时按当前剩余重建，raceTick 每 250ms 只改弧长和秒数，不会闪。
   var pct0 = raceLeftPct(), lv0 = raceTimerLevel(pct0, raceLeftSec());
-  html += '<div class="exam-info race-timer-box">';
-  html += '<div class="race-timer-line">';
-  html += '<span class="exam-timer" id="raceTimer">⏱ ' + raceLeftSec() + 's</span>';
-  html += '<span class="exam-score">' + t('race_answered') + ' ' + idx + '</span>';
-  html += '</div>';
-  html += '<div class="race-timer-track' + (lv0 === 'urgent' ? ' urgent' : '') + '" id="raceTimerTrack">';
-  html += '<div class="race-timer-fill' + (lv0 ? ' ' + lv0 : '') + '" id="raceTimerFill" style="width:' + pct0.toFixed(2) + '%;"></div>';
-  html += '</div>';
-  html += '</div>';
+  var html = renderAppHeader({
+    title: '⚡ ' + (r.conf.title || t('race_title')),
+    subtitle: raceSecIcon(r.section || 'all') + ' ' + raceSecName(r.section || 'all') + ' · ' + t('race_answered') + ' ' + idx,
+    showBack: true, showHome: false, avatar: false,
+    extraClass: 'race-play-hdr',
+    cornerHtml: raceRingHtml(pct0, lv0, raceLeftSec())
+  });
+  html += '<div class="page race-play">';
   html += '<div class="q-card">';
   html += '<div class="q-header">';
   html += '<span class="q-num">' + t('q_prefix') + (idx + 1) + t('q_suffix') + '</span>';
@@ -18200,7 +18218,7 @@ function renderAppHeader(opt) {
   var showLang = o.showLang !== false;
   var langShort = o.langShort !== false;
   var backCall = o.onBack || 'goBack()';
-  var html = '<div class="app-header' + (showBack ? ' has-back' : '') + '">';
+  var html = '<div class="app-header' + (showBack ? ' has-back' : '') + (o.extraClass ? ' ' + o.extraClass : '') + '">';
   if (showBack) {
     html += '<button class="back-btn wide" onclick="' + backCall + '" title="' + t('nav_back_hint') + '" aria-label="' + t('nav_back') + '">←<span class="back-label">' + t('nav_back') + '</span></button>';
   }
@@ -18226,7 +18244,11 @@ function renderAppHeader(opt) {
   if (o.avatar !== false && state.currentUser) {
     html += headerAvatarHtml();
   }
-  html += '</div></div>';
+  html += '</div>';
+  // 右下角自定义挂件（答题赛倒计时圆环用）：在 header-right 之外独立定位，
+  // 不跟语言切换/头像抢位置。纯展示，pointer-events:none 由样式兜住误触。
+  if (o.cornerHtml) html += o.cornerHtml;
+  html += '</div>';
   return html;
 }
 
