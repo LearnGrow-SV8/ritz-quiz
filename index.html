@@ -1067,9 +1067,10 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
 @media (max-width:900px) {
   .adm-root { display:block; margin-left:0; width:100%; }
   .adm-side { display:none; }
-  .adm-topbar { display:none; }
+  .adm-topbar { display:flex; height:50px; padding:0 14px; gap:10px; }
+  .adm-gsearch, .adm-sync { display:none; }
   .adm-content { padding:0 16px 80px; }
-  .adm-content .app-header { display:block; }
+  .adm-content .app-header { display:none; }
   .adm-content .stu-table-wrap, .adm-content .stu-toolbar { display:none; }
   .adm-content .adm-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .adm-content .tab-bar { display:flex; }
@@ -1213,6 +1214,34 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
 @media (max-width:760px) {
   .adm-content .stf-row { flex-wrap:wrap; }
   .adm-content .stf-acts { width:100%; }
+}
+
+/* ===== v3 布局：页头吸顶 / 顶栏返回 / 编辑页吸底操作条 ===== */
+.adm-tb-back { display:inline-flex; align-items:center; gap:5px; height:30px; padding:0 10px 0 7px;
+  border:1px solid var(--a-line); border-radius:7px; background:#fff; color:var(--a-i2);
+  font-size:12.5px; cursor:pointer; font-family:inherit; flex:0 0 auto; transition:.14s; }
+.adm-tb-back:hover { border-color:var(--a-blue-d); background:#F7FAFD; color:var(--a-ink); }
+.adm-tb-back svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.9;
+  stroke-linecap:round; stroke-linejoin:round; }
+@media (min-width:901px) {
+  /* 桌面 = 容器滚动：窗口永不滚，滚动只发生在 .adm-main 内。
+     侧边栏 / 顶栏 / 页头 / 吸底操作条因此全部确定性常驻。 */
+  .adm-root { height:100vh; }
+  .adm-main { height:100vh; overflow-y:auto; overflow-x:hidden; }
+  /* 页头吸在顶栏下方：滚到任何位置，返回与主操作都在视口里 */
+  .ap-head { position:sticky; top:56px; z-index:78; background:#fff;
+    margin:-24px -26px 18px; padding:15px 26px 13px; border-bottom:1px solid var(--a-line); }
+}
+.ed-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; padding:12px 0 4px;
+  border-top:1px solid var(--a-line); background:#fff; }
+.ed-actions .admin-btn-save { flex:1 0 100%; width:auto; }
+.ed-actions .admin-btn-copy, .ed-actions .admin-btn-delete, .ed-actions .admin-btn-cancel {
+  flex:1 1 0; width:auto; min-width:0; }
+@media (min-width:901px) {
+  .ed-actions { position:sticky; bottom:0; z-index:24; padding-bottom:12px; }
+}
+@media (max-width:900px) {
+  .ap-head { margin:0 0 16px; padding:0; border-bottom:0; }
 }
 </style>
 </head>
@@ -5304,7 +5333,7 @@ var I18N = {
   race_admin_hub_desc: {cn:'发布赛事、设置板块与时限、导出成绩', en:'Publish rounds, set section & time limit, export scores'},
   dash_hub: {cn:'数据中心', en:'Data Center'},
   dash_hub_desc: {cn:'活跃榜 · 考试分析 · 答题赛分析', en:'Active ranking · exam & quiz analytics'},
-  dash_title: {cn:'数据中心', en:'Data Center'},
+  dash_title: {cn:'数据看板', en:'Data Board'},
   dash_sub: {cn:'活跃学员排名 · 考试与答题赛表现', en:'Active ranking · exam & quiz performance'},
   dash_tab_active: {cn:'\u6d3b\u8dc3\u5b66\u5458', en:'Active'},
   dash_tab_exam: {cn:'\u8003\u8bd5\u5206\u6790', en:'Exams'},
@@ -5813,7 +5842,7 @@ var I18N = {
   // 规则文案（2026-11-10 统一术语）：巩固 = 答对 1 次推进 1 阶；毕业 = 走完两阶后（第 5 天）
   // 再答对 1 次、自动移出错题本；毕业后仍会被练习抽查两次。
   // 「掌握」这个词在学员端全部退役 —— 任务一叫「错题毕业」，错题本就该用同一套词。
-  rv_stage_hint: {cn:'规则：第 1 天答对记 1 阶，第 2 天再答对记 2 阶，第 5 天再答对一次即毕业、自动移出错题本。同一道错题每天最多推进 1 阶；中途又答错，就回到第 1 阶重来。毕业后仍会在练习里被抽查，答错会重新进错题本。', en:'How it works: correct on day 1 (stage 1), correct on day 2 (stage 2), then one more correct answer on day 5 graduates it and removes it from the book. At most one stage per day; a wrong answer sends it back to stage 1. Graduated questions are still spot-checked in later practice \u2014 get one wrong and it returns to the book.'},
+  rv_stage_hint: {cn:'规则：第 1 天答对记 1 阶，第 2 天再答对记 2 阶，第 5 天再答对一次即毕业、自动移出错题本。同一道错题每天最多推进 1 阶；中途又答错，就回到第 1 阶重来。毕业后仍会被抽查：练习、模拟考试、限时答题赛里都可能再遇到它，答错就重新回到第 1 阶。', en:'How it works: correct on day 1 (stage 1), correct on day 2 (stage 2), then one more correct answer on day 5 graduates it and removes it from the book. At most one stage per day; a wrong answer sends it back to stage 1. Graduating does not mean it is never asked again: practice, mock exams and timed races may still bring it back \u2014 answer wrong and it returns to stage 1.'},
   rv_stage_n: {cn:'已巩固 {n}/{m} 阶', en:'stage {n} of {m}'},
   rv_stage_last: {cn:' · 再答对 1 次即毕业', en:' · one more answer to graduate'},
   rv_wrong_times: {cn:'您做错过 {n} 次', en:'{n} wrong attempts'},
@@ -5923,7 +5952,7 @@ var I18N = {
   rv_bk_none: {cn:'今天没有到期的错题', en:'Nothing due today'},
   rv_bk_done_today: {cn:'今日巩固已完成 ✓ 明天再来', en:"Today's review done ✓ see you tomorrow"},
   rv_bk_rules_sum: {cn:'复习规则', en:'How review works'},
-  rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。一道错题的节奏：第 1 天答对 → 隔 1 天，第 2 天再答对 → 隔 3 天，第 5 天再答对，即毕业并自动移出错题本；同一道错题每天最多推进 1 阶。毕业不等于不再考：之后的练习里还会抽查两次，答对无事，答错重新进错题本。当天答对过的题不再计入当日待复习数量，按上述间隔重新出现。', en:"Due mistakes come first, while the memory is still fresh. The rhythm for each mistake: correct on day 1, again on day 2 (1 day later), again on day 5 (3 days later) \u2014 that graduates it and removes it from the book. At most one stage per day. Graduating does not mean it is never asked again: practice spot-checks it twice; answer right and nothing changes, answer wrong and it returns to the book. Mistakes answered correctly today leave today's due count and return on the schedule above."},
+  rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。一道错题的节奏：第 1 天答对 → 隔 1 天，第 2 天再答对 → 隔 3 天，第 5 天再答对，即毕业并自动移出错题本；同一道错题每天最多推进 1 阶。毕业不等于不再考：之后的练习、模拟考试、限时答题赛里都可能再抽到它（共抽查两次），答对无事，答错重新进错题本。当天答对过的题不再计入当日待复习数量，按上述间隔重新出现。', en:"Due mistakes come first, while the memory is still fresh. The rhythm for each mistake: correct on day 1, again on day 2 (1 day later), again on day 5 (3 days later) \u2014 that graduates it and removes it from the book. At most one stage per day. Graduating does not mean it is never asked again: practice, mock exams and timed races spot-check it twice; answer right and nothing changes, answer wrong and it returns to the book. Mistakes answered correctly today leave today's due count and return on the schedule above."},
   // 错题进度图表（2026-11-10）：三个数字 + 一条分段进度条，代替原来那行「掌握度 X% | …」。
   // 学员一眼能看出「多少道学完了、多少道在复习、多少道还没开始」。
   rv_chart_title: {cn:'错题复习进度', en:'Mistake progress'},
@@ -5936,9 +5965,9 @@ var I18N = {
   // 答完一题后的即时说明：告诉学员「这一答到底推进了什么」，否则做了还是 0/3 会以为坏了
   rv_h_promote: {cn:'本题已巩固 {n}/{m} 阶 · 下次复习：{d}', en:'Stage {n} of {m} · next review in {d}'},
   rv_h_promote_today: {cn:'本题已巩固 {n}/{m} 阶 · 明天可再复习', en:'Stage {n} of {m} · due again tomorrow'},
-  rv_h_grad: {cn:'本题已毕业，已自动移出错题本（以后练习里还会抽查）', en:'Graduated and removed from your mistake book (still spot-checked in practice)'},
+  rv_h_grad: {cn:'本题已毕业，已自动移出错题本（以后练习、考试里还会抽查）', en:'Graduated and removed from your mistake book (still spot-checked in practice and exams)'},
   rv_h_checkpass: {cn:'抽查通过：这道题你已稳定掌握', en:'Spot-check passed — this one is solid'},
-  rv_h_readded: {cn:'这道题以前毕业过，这次答错，重新回到错题本第 1 阶', en:'You had graduated this one — now it is back in your book at stage 1'},
+  rv_h_readded: {cn:'这道题此前已巩固通过、移出错题本；这次答错，重新回到第 1 阶', en:'You had already cleared this one and it had left your book — now it is back at stage 1'},
   rv_h_early: {cn:'本题今天已作答过：同一道错题每天最多推进 1 阶，明天再答对即可进到下一阶', en:'Already answered today \u2014 one stage per day. Answer correctly tomorrow for the next stage.'},
   rv_h_added: {cn:'本题已加入错题本，将按记忆曲线安排复习', en:'Added to your mistake book and scheduled for review'},
   rv_h_added_back: {cn:'本题已记录错误：重回第 1 次巩固', en:'Recorded — back to the first consolidation round'},
@@ -9764,23 +9793,36 @@ function raceRecordStudy(r) {
 // 前 8 题插 2 道（员工 60 秒里真正能答到的就是前几题），之后每 4 题插 1 道。
 // 绝不跨板块：为了让错题出现而把厨房的题塞进餐饮板块，等于教错知识；
 // 也不改题池总量 —— 满分上限不变，排名口径不变。
+// 2026-11-10：毕业后到期抽查的题也走这条插入规则（最多 2 道），答错就地回错题本。
+var RACE_CHECK_CAP = 2;
 function racePrioritizeWrong(list) {
   try {
-    var book = (state.wrongAnswers && state.wrongAnswers.manual) || {};
-    var due = [], rest = [], i;
+    var now = Date.now(), due = [], rest = [], i;
     for (i = 0; i < list.length; i++) {
-      var e = book[list[i].id];
-      if (e && wrongIsDue(e)) due.push(list[i]);
+      var e = wrongEntryAnyBank(list[i].id);
+      if (e && wrongIsDue(e)) due.push({ q: list[i], ts: wrongDueOf(e) });
       else rest.push(list[i]);
     }
-    if (!due.length || !rest.length) return list;
-    due.sort(function (a, b) { return wrongDueOf(book[a.id]) - wrongDueOf(book[b.id]); });
+    // 毕业后到期抽查（2026-11-10）：跟到期错题一起插进前几道 —— 答错就地回错题本，
+    // 答对就把下一次抽查往后排。每局最多 RACE_CHECK_CAP 道，不在限时赛里刷复习题。
+    var checks = wrongCheckPoolFrom(rest, RACE_CHECK_CAP, now);
+    if (checks.length) {
+      var cid = {};
+      for (i = 0; i < checks.length; i++) {
+        cid[checks[i].id] = 1;
+        due.push({ q: checks[i], ts: wrongCheckDueTs(checks[i].id) });
+      }
+      rest = rest.filter(function (q) { return !cid[q.id]; });
+    }
+    if (!due.length) return list;
+    due.sort(function (a, b) { return a.ts - b.ts; });
+    var mix = due.map(function (x) { return x.q; });
     var out = [], di = 0, ri = 0, idx = 0;
-    while (ri < rest.length || di < due.length) {
+    while (ri < rest.length || di < mix.length) {
       var wantWrong = (idx < 8) ? (idx === 1 || idx === 4) : (idx % 4 === 2);
-      if (wantWrong && di < due.length) out.push(due[di++]);
+      if (wantWrong && di < mix.length) out.push(mix[di++]);
       else if (ri < rest.length) out.push(rest[ri++]);
-      else if (di < due.length) out.push(due[di++]);
+      else if (di < mix.length) out.push(mix[di++]);
       else break;
       idx++;
     }
@@ -17226,7 +17268,7 @@ function reviewTagName(tag) {
 // 两阶毕业（2026-11-10 用户拍板缩短）：第 1 天答对 → 1 阶，第 2 天答对 → 2 阶，
 // 第 5 天再答对一次即毕业。原来是三阶（1/3/7 天，最快 12 天），对酒店同事太长，
 // 中途一断就前功尽弃；5 天的节奏既保住「隔天回忆」的记忆价值，也不至于劝退。
-var WRONG_STAGE_MAX = 2;                       // 走满两阶（1/3 天）= 毕业
+var WRONG_STAGE_MAX = 2;                       // 走满两阶（隔 1 天、隔 3 天）= 毕业
 var WRONG_INTERVALS = [1, 3];                  // 第 1/2 阶通过后的复习间隔（天）
 var WRONG_DAY_MS = 86400000;
 var WRONG_MIN_GAP_MS = 4 * 3600 * 1000;        // 同一天里刷两次不算通过，至少隔 4 小时
@@ -17235,6 +17277,7 @@ var WRONG_MASTER_CAP = 400;                    // 毕业名单上限（只影响
 // 答错原样回错题本第 1 阶），两次都答对才算彻底过关，之后不再出现。
 var WRONG_CHECK_GAPS = [7, 30];                // 毕业后第 1/2 次抽查的间隔（天）
 var WRONG_CHECK_CAP = 3;                       // 每轮练习最多混入几道抽查题，别喧宾夺主
+var WRONG_CHECK_EXAM_CAP = 2;                  // 模拟考卷里最多换进几道抽查题（占 30% 预算内）
 
 function wrongStageOf(e) {
   var st = parseInt(e && e.st, 10);
@@ -17351,6 +17394,40 @@ function wrongCheckDrop(qid) {
   if (state.mastered) delete state.mastered[qid];
 }
 
+// ---- 跨场口取题（2026-11-10）----
+// 同一道题可能同时挂在多个板块桶里（day21 / day21_kitchen / manual …），而学员是在
+// 哪个场口答错的并不固定 ⇒ 判断「这道题要不要优先出」必须跨桶看，只看当前桶会漏。
+// 返回最该复习的那一条（到期最早的），没有就 null。
+function wrongEntryAnyBank(qid) {
+  if (!qid) return null;
+  var best = null, banks = state.wrongAnswers || {};
+  for (var sk in banks) {
+    if (!Object.prototype.hasOwnProperty.call(banks, sk)) continue;
+    var b = banks[sk];
+    if (!b || typeof b !== 'object') continue;
+    var e = b[qid];
+    if (!e) continue;
+    wrongNormEntry(e);
+    if (!best || wrongDueOf(e) < wrongDueOf(best)) best = e;
+  }
+  return best;
+}
+// 从任意题池里挑出「毕业后到期该抽查」的题，最多 cap 道。
+// 还在错题本里的题不算抽查（它走「到期错题」那条线，别重复算）。
+function wrongCheckPoolFrom(list, cap, now) {
+  var out = [];
+  if (!state.mastered || !cap) return out;
+  now = now || Date.now();
+  for (var i = 0; i < list.length && out.length < cap; i++) {
+    var q = list[i];
+    if (!q || !q.id) continue;
+    if (wrongEntryAnyBank(q.id)) continue;
+    if (!wrongCheckIsDue(q.id, now)) continue;
+    out.push(q);
+  }
+  return out;
+}
+
 // 记一道错题（已有的话打回第一阶并累加错误次数）
 function wrongAdd(skey, q, ans, opts) {
   opts = opts || {};
@@ -17384,7 +17461,7 @@ function wrongAdd(skey, q, ans, opts) {
 }
 // 答对一次 → 推进一阶。
 // 首阶必记（2026-11-10 用户拍板放宽）：还没推进过任何一阶（st=0）的题，第一次答对
-// 就记 1/3，哪怕当天刚进错题本、或间隔不足 4 小时 —— 否则学员做完一遍仍旧 0/3，
+// 就记 1/2，哪怕当天刚进错题本、或间隔不足 4 小时 —— 否则学员做完一遍仍旧 0/2，
 // 看起来像没生效。从第 2 阶起恢复防刷：同一自然日 / 间隔不足 4 小时不进阶，
 // 所以「看答案连点」最多拿到第 1 阶，跨天才能往上走。
 // 返回 'graduated' | 'promoted' | 'early' | 'none'
@@ -17516,45 +17593,65 @@ function wrongDueCount(bank) {
 }
 // 顺序练习：把到期错题排到本板块最前面。**只在新开一轮时用** —— 进度是按位置
 // 记的，中途重排会让「练到哪儿」错位。
+// 2026-11-10：不再限定 manual 桶 —— 学员可能在别的场口（答题赛 / 模拟考）答错，
+// 那道题只要出现在本次练习的题池里，就应该被优先推到前面。
 function wrongPriorityPracticeList(rawQuestions) {
-  if (state.currentBank !== 'manual') return rawQuestions;
-  var book = (state.wrongAnswers && state.wrongAnswers.manual) || {};
-  var due = [], checks = [], rest = [], i;
-  var now = Date.now();
+  // 整卷（21 天 / 三步法）保持试卷原顺序：它本身就是「按天学」的次序，重排会打乱进度感；
+  // 而且整卷练习本来就要走完整张卷子，毕业题不会漏，不需要抢位置。
+  if (isPaperBank(state.currentBank)) return rawQuestions;
+  var due = [], rest = [], i, now = Date.now();
   for (i = 0; i < rawQuestions.length; i++) {
-    var e = book[rawQuestions[i].id];
+    var e = wrongEntryAnyBank(rawQuestions[i].id);
     if (e && wrongIsDue(e)) due.push(rawQuestions[i]);
     else rest.push(rawQuestions[i]);
   }
   // 毕业后抽查（2026-11-10）：到期的已毕业题排在「到期错题」之后、「普通题」之前，
   // 每轮最多 WRONG_CHECK_CAP 道 —— 学员感觉是「顺手又碰到一道以前错过的题」，
   // 而不是被塞了一卷复习题。答错的话它会原样回到错题本第 1 阶。
-  if (state.mastered) {
+  var checks = wrongCheckPoolFrom(rest, WRONG_CHECK_CAP, now);
+  if (checks.length) {
+    var cid = {};
+    for (i = 0; i < checks.length; i++) cid[checks[i].id] = 1;
     var keep = [];
-    for (i = 0; i < rest.length; i++) {
-      if (checks.length < WRONG_CHECK_CAP && wrongCheckIsDue(rest[i].id, now)) checks.push(rest[i]);
-      else keep.push(rest[i]);
-    }
+    for (i = 0; i < rest.length; i++) if (!cid[rest[i].id]) keep.push(rest[i]);
     rest = keep;
   }
   if (!due.length && !checks.length) return rawQuestions;
-  due.sort(function (a, b) { return wrongDueOf(book[a.id]) - wrongDueOf(book[b.id]); });
+  due.sort(function (a, b) { return wrongDueOf(wrongEntryAnyBank(a.id)) - wrongDueOf(wrongEntryAnyBank(b.id)); });
   return due.concat(checks, rest);
 }
-// 模拟考试：在同一批抽题里用到期错题换掉最多 30%（21 天 / 三步法是整卷，不动）
+// 模拟考试：在同一批抽题里用「到期错题 + 毕业后抽查题」换掉最多 30%
+// （整卷试卷不换：题量已经等于题池时原样返回）
 function wrongPriorityExamSet(rawQuestions, picked) {
-  if (state.currentBank !== 'manual' || !picked.length) return picked;
-  var book = (state.wrongAnswers && state.wrongAnswers.manual) || {};
-  var duePool = [], i, id;
-  for (i = 0; i < rawQuestions.length; i++) {
-    var e = book[rawQuestions[i].id];
-    if (e && wrongIsDue(e)) duePool.push(rawQuestions[i]);
-  }
-  if (!duePool.length) return picked;
+  if (!picked.length) return picked;
+  if (picked.length >= rawQuestions.length) return picked;
+  var now = Date.now(), i;
   var quota = Math.max(1, Math.floor(picked.length * 0.3));
-  var inject = shuffleArray(duePool).slice(0, Math.min(quota, duePool.length));
-  var out = [], used = {};
-  for (i = 0; i < inject.length; i++) { out.push(inject[i]); used[inject[i].id] = 1; }
+  var pickedIds = {}, used = {}, inject = [];
+  for (i = 0; i < picked.length; i++) pickedIds[picked[i].id] = 1;
+  // 没被抽中的题里，先挑「毕业后到期该抽查」的 —— 它们最需要再考一次，
+  // 预算有限时优先给它们 1~2 个名额。
+  var restPool = [];
+  for (i = 0; i < rawQuestions.length; i++) {
+    if (!pickedIds[rawQuestions[i].id]) restPool.push(rawQuestions[i]);
+  }
+  var checks = wrongCheckPoolFrom(restPool, Math.min(WRONG_CHECK_EXAM_CAP, quota), now);
+  for (i = 0; i < checks.length; i++) { inject.push(checks[i]); used[checks[i].id] = 1; }
+  // 剩下的预算给到期错题（跨桶判断，跟顺序练习同一口径）
+  var duePool = [];
+  for (i = 0; i < rawQuestions.length; i++) {
+    var q0 = rawQuestions[i];
+    if (!q0 || used[q0.id]) continue;
+    var e = wrongEntryAnyBank(q0.id);
+    if (e && wrongIsDue(e)) duePool.push(q0);
+  }
+  var wrongs = shuffleArray(duePool);
+  for (i = 0; i < wrongs.length && inject.length < quota; i++) {
+    if (used[wrongs[i].id]) continue;
+    inject.push(wrongs[i]); used[wrongs[i].id] = 1;
+  }
+  if (!inject.length) return picked;
+  var out = inject.slice();
   for (i = 0; i < picked.length && out.length < picked.length; i++) {
     if (!used[picked[i].id]) { out.push(picked[i]); used[picked[i].id] = 1; }
   }
@@ -17766,67 +17863,18 @@ function reviewRingHtml(pct, size, label) {
   return html;
 }
 function reviewHubCardHtml() {
-  var task = null;
-  try { task = reviewTaskBuild(false); } catch (e) { task = null; }
   var m = -1, left = 0, grad = 0;
   try { m = masteryOf(); left = wrongRowsAll({ bank: 'manual' }).length; grad = masteredCount(); } catch (e) {}
   var dueN = 0;
   try { dueN = wrongDueCount('manual'); } catch (e) { dueN = 0; }
-  var hasTask = !!(task && task.target);
-  var done = hasTask ? Math.min(task.done || 0, task.target) : 0;
-  var pct = hasTask ? Math.round(done / task.target * 100) : 0;
-  var finished = hasTask && done >= task.target;
 
-  // 两张卡，不是一个卡里的上下两段（2026-11-05 二版）。
-  // 上次把"看我的错题"和"今天该练什么"塞进同一张卡，虽然少了一个卡片框，但员工
-  // 读起来仍是一坨：不知道上半是身份、下半是任务。这次直接拆成两张：
-  //   卡 1：浅蓝底 —— 今天要做的事（任务 + 进度 + 按钮）
-  //   卡 2：白底 —— 状态与入口（我的错题 / 掌握度）
-  // （2026-11-05 追记一：原来的"黑左边 / 蓝左边"彩色左边条已按用户要求整体移除，
-  //   两卡现在靠底色区分。）
-  // （2026-11-05 追记二：顺序对调 —— 今日复习提前（用户要求），先看到"现在该做什么"，
-  //   再看错题总账。）
+  // 2026-11-10：首页只保留「入口」，不再放第二个复习按钮。
+  // 领导反馈：首页「今日复习」与错题本「智能复习」重名，学员分不清；而且首页那颗
+  // 「重做错题」按钮实际调的是 wrongStartAllRedo()（整本错题），名字和动作对不上。
+  // 现在复习动作只有一处入口 —— 错题本内部的三块：智能复习 / 自主组卷 / 错题归档。
   var html = '';
 
-  // ---------- 卡 1：今日复习（任务 + 行动） ----------
-  html += '<div class="bank-card" style="padding:0;overflow:hidden;cursor:default;margin-bottom:10px;">';
-  html += '<div style="padding:12px 14px 11px;background:linear-gradient(135deg,#EDF4FC,#F8FBFF);border-bottom:1px solid #e3ecf7;">';
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
-  html += '<div style="font-size:14.5px;font-weight:800;color:#1a1a1a;">🔥 ' + t('rv_task_title') + '</div>';
-  if (finished) html += '<div style="font-size:11px;font-weight:700;color:#2e7d32;background:#eaf5eb;padding:3px 9px;border-radius:999px;">✓ ' + t('rv_task_done') + '</div>';
-  html += '</div>';
-  html += '<div style="font-size:12.5px;color:#3c4b59;margin-top:5px;line-height:1.6;">'
-    + escapeHtml(hasTask ? t('rv_hub_hint').replace('{tag}', reviewTagName(task.tag)) : t('rv_hub_none')) + '</div>';
-  html += '</div>';
-  html += '<div style="padding:12px 14px 14px;background:#fff;">';
-  if (!hasTask) {
-    html += '<div style="display:flex;gap:8px;">';
-    if (left > 0) {
-      html += '<button class="nav-btn primary" style="flex:1;" onclick="wrongStartAllRedo()">▶ ' + t('rv_redo_all') + '</button>';
-      html += '<button class="nav-btn secondary" style="flex:0 0 auto;" onclick="wrongOpenPaper()">🎯 ' + t('rv_make_paper') + '</button>';
-    } else {
-      html += '<button class="nav-btn primary" style="flex:1;" onclick="goToBank(\'manual\')">📖 ' + t('rv_hub_go_practice') + '</button>';
-    }
-    html += '</div>';
-  } else {
-    html += '<div style="display:flex;align-items:center;gap:8px;">';
-    html += '<div style="flex:1;height:7px;background:#e8edf2;border-radius:4px;overflow:hidden;">'
-      + '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#1a1a1a,#4a7ba7);transition:width .3s;"></div></div>';
-    html += '<div style="font-size:11px;font-weight:700;color:#65727f;">' + done + '/' + task.target + '</div></div>';
-    if (finished) {
-      html += '<button class="nav-btn secondary" style="width:100%;margin-top:10px;" onclick="wrongStartAllRedo()">🔁 ' + t('rv_redo_all') + '</button>';
-    } else {
-      var ids = (task.ids || []).filter(function (x) { return !(task.doneIds && task.doneIds[x]); });
-      html += '<div style="display:flex;gap:8px;margin-top:10px;">';
-      html += '<button class="nav-btn primary" style="flex:1;" onclick="wrongStartTaskRedo()">▶ '
-        + escapeHtml(t('rv_task_go_n').replace('{n}', String(ids.length))) + '</button>';
-      html += '<button class="nav-btn secondary" style="flex:0 0 auto;" onclick="reviewTaskSwap()">' + t('rv_task_skip') + '</button>';
-      html += '</div>';
-    }
-  }
-  html += '</div></div>';
-
-  // ---------- 卡 2：我的错题（状态 + 入口） ----------
+  // ---------- 我的错题（状态 + 入口） ----------
   html += '<div class="bank-card" style="padding:0;overflow:hidden;cursor:pointer;margin-bottom:14px;" onclick="navigate(\'wrongAll\')">';
   html += '<div style="display:flex;align-items:center;gap:14px;padding:14px;">';
   html += reviewRingHtml(m, 68, t('rv_hub_mastery_short'));
@@ -18234,12 +18282,18 @@ function renderWrongAll() {
   html += '<div style="flex:0 0 auto;"><span class="rv-due-num">' + dueTotal + '</span>'
     + '<span style="font-size:12px;color:#3c4b59;font-weight:700;margin-left:4px;">' + t('rv_bk_due_unit') + '</span></div>';
   var task = null;
-  try { task = reviewTaskOf(); } catch (e1) { task = null; }
+  // 周任务的唯一生成点搬到错题本：首页不再有「今日复习」卡，任务仍要按周自动建，
+  // 否则这块进度条永远不出现（2026-11-10）。
+  try { task = reviewTaskBuild(false); } catch (e1) { task = null; }
   if (task && task.target > 0) {
     var td = Math.min(task.done || 0, task.target);
     html += '<div style="flex:1;min-width:0;text-align:right;">';
     html += '<div style="font-size:11.5px;color:#5a6473;font-weight:600;">'
-      + escapeHtml(t('rv_bk_task').replace('{d}', String(td)).replace('{n}', String(task.target))) + '</div>';
+      + escapeHtml(t('rv_bk_task').replace('{d}', String(td)).replace('{n}', String(task.target)))
+      // 首页撤掉「今日复习」卡后，「换一个知识点」只剩这一处入口（2026-11-10）
+      + (td < task.target ? ' · <span style="color:#8a97a4;cursor:pointer;text-decoration:underline;" onclick="reviewTaskSwap()">'
+        + escapeHtml(t('rv_task_skip')) + '</span>' : '')
+      + '</div>';
     html += '<div style="height:6px;background:#dbe7f4;border-radius:3px;overflow:hidden;margin-top:5px;">'
       + '<div style="height:100%;width:' + Math.round(td / task.target * 100) + '%;background:#000;"></div></div>';
     html += '</div>';
@@ -18975,7 +19029,7 @@ function navigate(page, opts) {
   // Remember the question-list scroll position so that returning from the
   // editor lands back where the admin left off (not at the top).
   if (prev === 'adminBank' && page !== 'adminBank') {
-    try { adminState.bankScrollY = window.scrollY || window.pageYOffset || 0; } catch (e) {}
+    try { adminState.bankScrollY = adminScrollY(); } catch (e) {}
   }
   if (!o.replace && prev && prev !== page) {
     if (!state.navStack) state.navStack = [];
@@ -18986,9 +19040,9 @@ function navigate(page, opts) {
   render();
   if (page === 'adminBank' && prev !== 'adminBank' && adminState.bankScrollY > 0) {
     var y = adminState.bankScrollY;
-    setTimeout(function () { try { window.scrollTo(0, y); } catch (e) {} }, 60);
+    setTimeout(function () { try { adminScrollTo(y); } catch (e) {} }, 60);
   } else {
-    window.scrollTo(0, 0);
+    adminScrollTo(0);
   }
 }
 
@@ -20349,12 +20403,7 @@ function adminRoundTakenCount(pk, sess) {
 function renderAdminExams() {
   if (!adminState.authenticated) return renderAdminLogin();
   var cfg = autoCloseExpiredExams(); // 过了截止时间的已发布考试 → 自动关闭
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminExamHub\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>📌 ' + (state.lang === 'en' ? 'Formal Exams' : '正式考试管理') + '</h1>';
-  html += '<div class="subtitle">' + (state.lang === 'en' ? 'Publish timed exams to student devices' : '发布限时正式考试到学员端') + '</div>';
-  html += '</div><div class="page">';
+  var html = '<div class="page">';
 
   html += '<div class="save-status synced">' + (state.lang === 'en'
     ? '☁️ Publishing here instantly notifies every student device (visible within ~90 s, or on next open). Papers stay identical to the full mock-exam papers.'
@@ -21228,12 +21277,7 @@ function renderAdminTeaching() {
     renderAdminTeaching._lastKick = Date.now();
     adminFetchCloudStudents();
   }
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminDashboard\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>🧭 ' + (en ? 'Teaching Board' : '教学看板') + '</h1>';
-  html += '<div class="subtitle">' + (en ? 'Where the whole hotel gets it wrong' : '全店错在哪：高频错题 · 薄弱章节 · 复习任务完成率') + '</div>';
-  html += '</div><div class="page">';
+  var html = '<div class="page">';
   html += adminTeachingBodyHtml(en);
   html += '</div>';
   return html;
@@ -21537,12 +21581,7 @@ function renderAdminBankHub() {
     {key:'manual', name: t('bank_manual'), count: QUESTION_DATA.manual.length},
   ];
 
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminDashboard\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>📚 ' + (state.lang === 'en' ? 'Question Management' : '题目管理') + '</h1>';
-  html += '<div class="subtitle">' + (state.lang === 'en' ? 'Banks & paper composer' : '题库与试卷编排') + '</div>';
-  html += '</div><div class="page">';
+  var html = '<div class="page">';
 
   for (var i = 0; i < banks.length; i++) {
     var b = banks[i];
@@ -21608,12 +21647,7 @@ function renderAdminGrading() {
       if (changed && state.currentPage === 'adminGrading') render();
     });
   }
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminExamHub\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>🎯 ' + (en ? 'Exam Grading' : '评分设置') + '</h1>';
-  html += '<div class="subtitle">' + (en ? 'Points per question · Passing score' : '每题分值 · 及格分') + '</div>';
-  html += '</div><div class="page">';
+  var html = '<div class="page">';
 
   html += '<div class="save-status synced">' + (en
     ? '☁️ Publishing here instantly notifies every student device (visible within ~90 s, or on next open). Both formal and practice exams share these rules per paper.'
@@ -22125,12 +22159,7 @@ function renderAdminVerify() {
   if (!adminState.authenticated) return renderAdminLogin();
   var en = state.lang === 'en';
   var list = adminPendingVerifyStudents();
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminDashboard\')">\u2190</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>\u23f3 ' + (en ? 'Registrations to Verify' : '注册待核查') + '</h1>';
-  html += '<div class="subtitle">' + (en ? 'Reserved IDs / IDs not on the name roster' : '预留工号注册 · 工号不在员工名册') + '</div>';
-  html += '</div><div class="page">';
+  var html = '<div class="page">';
   // 打开页面时补拉一次云端学员数据，待核查名单以云端为准。
   if (SERVER_AVAILABLE && !adminCloudFetching && Date.now() - (renderAdminVerify._lastKick || 0) > 60000) {
     renderAdminVerify._lastKick = Date.now();
@@ -22161,12 +22190,7 @@ function renderAdminVerify() {
 function renderAdminQReports() {
   if (!adminState.authenticated) return renderAdminLogin();
   var en = state.lang === 'en';
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminBankHub\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>🚩 ' + (en ? 'Question Reports' : '题目报错记录') + '</h1>';
-  html += '<div class="subtitle">' + (en ? 'Answer-key / explanation objections' : '学员提交的答案与解析异议') + '</div>';
-  html += '</div><div class="page">';
+  var html = '<div class="page">';
   // 报错随学员快照一起下来，打开页面时补拉一次（60 s 节流）。
   if (SERVER_AVAILABLE && !adminCloudFetching && Date.now() - (renderAdminQReports._lastKick || 0) > 60000) {
     renderAdminQReports._lastKick = Date.now();
@@ -22218,12 +22242,7 @@ function adminQReportsListHtml() {
 function renderAdminExamHub() {
   if (!adminState.authenticated) return renderAdminLogin();
   var en = state.lang === 'en';
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminDashboard\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>📌 ' + (en ? 'Exam Management' : '考试管理') + '</h1>';
-  html += '<div class="subtitle">' + (en ? 'Publishing & reports' : '发布与报告') + '</div>';
-  html += '</div><div class="page">';
+  var html = '<div class="page">';
 
   html += '<div class="admin-hub">';
   html += '<div class="admin-hub-card" onclick="navigate(\'adminExams\')">';
@@ -22357,7 +22376,7 @@ function reportOpenReplay(key, eid) {
   adminState.reportDetail = { key: key, eid: eid };
   adminState.reportFrom = '';
   render();
-  window.scrollTo(0, 0);
+  adminScrollTo(0);
 }
 // Batch 6: ← back from an answer replay. Most replays open from the report
 // center (currentPage stays 'adminReports'), but a replay can now also be
@@ -22370,9 +22389,10 @@ function adminReportBack() {
   if (from === 'student') {
     state.currentPage = 'adminStudents';
     render();
-    window.scrollTo(0, 0);
+    adminScrollTo(0);
   } else {
     render();
+    adminScrollTo(0);
   }
 }
 // Batch 6: student-detail exam-history row → that attempt's answer replay.
@@ -22383,7 +22403,7 @@ function adminOpenExamFromStudent(key, eid) {
   adminState.reportFrom = 'student';
   state.currentPage = 'adminReports';
   render();
-  window.scrollTo(0, 0);
+  adminScrollTo(0);
 }
 // ================= 部门看板 Division Dashboard =================
 // 管理端第 5 张 hub 卡：按大部门聚合参与度与成绩；可按场次切换；
@@ -23080,12 +23100,7 @@ function renderAdminDash() {
   var rb = dashRangeBounds(adminState.dashRange, adminState.dashFrom, adminState.dashTo);
   var from = rb ? rb.from : 0, to = rb ? rb.to : 0;
 
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminDashboard\')">\u2190</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>\ud83d\udcca ' + t('dash_title') + '</h1>';
-  html += '<div class="subtitle">' + t('dash_sub') + '</div>';
-  html += '</div><div class="page">';
+  var html = '<div class="page">';
 
   var fullSyncBtn = '<button class="admin-mini-btn" onclick="adminForceFullSync()">' + (en ? '\u21bb Full re-sync' : '\u21bb \u7acb\u5373\u5168\u91cf\u91cd\u62c9') + '</button>';
   if (adminState.cloudStatus === 'loading') html += '<div class="sync-note">\u23f3 ' + (en ? 'Fetching cloud data\u2026' : '\u6b63\u5728\u62c9\u53d6\u4e91\u7aef\u6570\u636e\u2026') + ' ' + fullSyncBtn + '</div>';
@@ -23461,12 +23476,7 @@ function renderAdminReports() {
   // ===== Replay view (one exam, per-question answers) =====
   if (adminState.reportDetail) return renderAdminReportReplay();
 
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminExamHub\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>📊 ' + (en ? 'Report Center' : '考试报告中心') + '</h1>';
-  html += '<div class="subtitle">' + (en ? 'Scores, replays & export' : '成绩总表 · 答题回放 · 导出') + '</div>';
-  html += '</div><div class="page">';
+  var html = '<div class="page">';
 
   if (adminState.cloudStatus !== 'ok' && adminState.cloudStatus !== 'partial' && !adminCloudFetching) adminFetchCloudStudents();
   adminScheduleFullSync();
@@ -23579,14 +23589,7 @@ function renderAdminReports() {
 function renderAdminReportReplay() {
   var en = state.lang === 'en';
   var det = adminState.reportDetail;
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminReportBack()">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>🎬 ' + (en ? 'Answer Replay' : '答题回放') + '</h1>';
-  html += '<div class="subtitle">' + (adminState.reportFrom === 'student'
-    ? (en ? 'Per-question review · from student detail' : '逐题查看作答 · 来自学员详情')
-    : (en ? 'Per-question review' : '逐题查看作答')) + '</div>';
-  html += '</div><div class="page">';
+  var html = '<div class="page">';
 
   // locate the exam event + student record
   var rec = null, ev = null;
@@ -24317,14 +24320,14 @@ function adminDeptDivLabel(snap, en) {
 // 从有效工号页签进来的回有效工号页签，从注册待核查页进来的回待核查页，
 // 不许再让管理员点点点、上下拉找回原位。
 function adminOpenStudentDetail(key) {
-  try { adminState.studentListScrollY = window.scrollY || window.pageYOffset || 0; } catch (e) {}
+  try { adminState.studentListScrollY = adminScrollY(); } catch (e) {}
   adminState.studentListLastKey = key || '';
   adminState.studentRetPage = state.currentPage || 'adminStudents';
   adminState.studentRetTab = adminState.studentsTab || 'list';
   adminState.studentDetail = key || '';
   adminState.editStudent = '';
   render();
-  try { window.scrollTo(0, 0); } catch (e) {}
+  try { adminScrollTo(0); } catch (e) {}
 }
 // 从学员详情返回：回到进入前的页面与页签（默认学员列表），并还原滚动位置。
 // 管理员重置某个学员的头像（照片不合规 / 学员要求 / 换人用了旧账号）。
@@ -24375,7 +24378,7 @@ function adminRestoreStudentListScroll(y, key) {
         }
       } catch (e) {}
     }
-    try { window.scrollTo(0, y || 0); } catch (e) {}
+    try { adminScrollTo(y || 0); } catch (e) {}
     if (!row) return;
     try {
       var r = row.getBoundingClientRect();
@@ -26245,12 +26248,7 @@ function renderAdminPaperPicker() {
   var bankKey = paperKey.replace(/_(all|kitchen)$/, '');
   var source = adminState.pickerSource || 'manual';
 
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminPaper\')">←</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>\ud83d\udd0d ' + (state.lang === 'en' ? 'Select Questions' : '\u9009\u62e9\u9898\u76ee') + '</h1>';
-  html += '<div class="subtitle">' + escapeHtml(getBankName(bankKey)) + ' · ' + (isAll ? t('paper_all') : t('paper_kitchen')) + '</div>';
-  html += '</div><div class="page">';
+  var html = '<div class="page">';
   html += adminCloudSyncBanner();
 
   // Source selector (All-Employee paper can pull from its own bank or the Product Knowledge bank)
@@ -27005,12 +27003,7 @@ function renderAdminEdit() {
     q = dq;
   }
 
-  var html = '<div class="app-header">';
-  html += '<button class="back-btn" onclick="adminBack(\'adminBank\')">\u2190</button>';
-  html += '<img class="header-logo" src="assets/logo.webp" alt="logo">';
-  html += '<h1>' + (adminState.isNew ? '\u2795 ' + (state.lang === 'en' ? 'Add' : '\u65b0\u589e') : '\u270f\ufe0f ' + (state.lang === 'en' ? 'Edit' : '\u7f16\u8f91')) + '</h1>';
-  html += '<div class="subtitle">' + getBankName(bank) + '</div>';
-  html += '</div><div class="page">';
+  var html = '<div class="page">';
 
   if (draftInfo) {
     var dT = new Date(draftInfo.at);
@@ -27077,12 +27070,14 @@ function renderAdminEdit() {
   html += '<textarea id="qExplanationEn" style="min-height:60px;">' + escapeHtml(eSplit.en) + '</textarea>';
 
   // Buttons (Batch-3: labels carry the keyboard shortcut hints)
+  html += '<div class="ed-actions">';
   html += '<button class="admin-btn-save" onclick="adminSaveQuestion()">\uD83D\uDCBE ' + (state.lang === 'en' ? 'Save (Ctrl+S)' : '\u4fdd\u5b58\uff08Ctrl+S\uff09') + '</button>';
   if (!adminState.isNew) {
     html += '<button class="admin-btn-copy" onclick="adminDuplicateFromEditor()">\uD83D\uDCCB ' + (state.lang === 'en' ? 'Save as New Copy (Ctrl+Enter)' : '\u590d\u5236\u4e3a\u65b0\u9898\uff08Ctrl+Enter\uff09') + '</button>';
     html += '<button class="admin-btn-delete" onclick="adminDeleteFromEdit()">\uD83D\uDDD1\ufe0f ' + (state.lang === 'en' ? 'Delete' : '\u5220\u9664') + '</button>';
   }
   html += '<button class="admin-btn-cancel" onclick="adminBack(\'adminBank\')">' + (state.lang === 'en' ? 'Cancel (Esc)' : '\u53d6\u6d88\uff08Esc\uff09') + '</button>';
+  html += '</div>'; // ed-actions
 
   html += '</div></div>'; // 表单 + 左栏
   html += '<div class="ed-preview" id="adminEditPreview">' + adminEditPreviewHtml() + '</div>';
@@ -27582,6 +27577,25 @@ function adminResetDataContinue() {
 // ===== 管理端桌面外壳 v2（2026-11-09 重做）=====
 // 结构：左侧分组导航 + 顶栏（面包屑 / 全局搜索），内容区各页自带 .ap-head 页头。
 // 只负责容器与导航，业务逻辑仍由各 renderAdminXxx() 产出。
+// v3 桌面：滚动发生在 .adm-main 容器内；小屏仍整页滚动。两套统一走这里。
+function adminScroller() {
+  try {
+    var m = document.querySelector('.adm-main');
+    if (m && m.scrollHeight > m.clientHeight + 1) return m;
+  } catch (e) {}
+  return null;
+}
+function adminScrollY() {
+  var m = adminScroller();
+  if (m) return m.scrollTop || 0;
+  try { return window.scrollY || window.pageYOffset || 0; } catch (e) { return 0; }
+}
+function adminScrollTo(y) {
+  var m = adminScroller();
+  if (m) { m.scrollTop = y || 0; return; }
+  try { window.scrollTo(0, y || 0); } catch (e) {}
+}
+
 // 统一页头：标题 + 一句说明 + 右侧主操作（各页自带，不再依赖被隐藏的 .app-header）
 function adminHead(title, sub, acts) {
   return '<div class="ap-head"><div class="ap-head-txt"><h1>' + title + '</h1>'
@@ -27635,6 +27649,9 @@ function adminShellRoutes() {
 
 function adminPageTitleOf(page) {
   var en = state.lang === 'en';
+  // 页内子视图（学员档案 / 答题回放）沿用父页 key，标题要跟着变
+  if (page === 'adminStudents' && adminState.studentDetail) return en ? 'Student Profile' : '学员档案';
+  if (page === 'adminReports' && adminState.reportDetail) return en ? 'Answer Replay' : '答题回放';
   var map = {
     adminDashboard:  en ? 'Overview' : '总览',
     adminBankHub:    en ? 'Question Bank' : '题库',
@@ -27786,6 +27803,24 @@ function adminBindGlobalKeys() {
   });
 }
 
+// 顶栏返回：桌面/移动都在顶栏常驻，任何页面一键回上一级，不必滚到页底找按钮
+function adminShellBackOf(page) {
+  if (page === 'adminEdit') return "adminBack('adminBank')";
+  if (page === 'adminPaperPicker') return "adminBack('adminPaper')";
+  if (page === 'adminStudents' && adminState.studentDetail) return 'adminBackFromStudent()';
+  if (page === 'adminReports' && adminState.reportDetail) return 'adminReportBack()';
+  if (page === 'adminGrading') return "adminBack('adminReports')";
+  if (page === 'adminDashboard') return '';
+  return "adminBack('adminDashboard')";
+}
+function adminShellBackHtml(page, en) {
+  var h = adminShellBackOf(page);
+  if (!h) return '';
+  return '<button class="adm-tb-back" onclick="' + h + '" title="' + (en ? 'Back' : '\u8fd4\u56de\u4e0a\u4e00\u7ea7') + '">'
+    + '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>'
+    + '<span>' + (en ? 'Back' : '\u8fd4\u56de') + '</span></button>';
+}
+
 function adminShellHtml(page, inner) {
   try { adminBindGlobalKeys(); } catch (e) {}
   var en = state.lang === 'en';
@@ -27813,6 +27848,7 @@ function adminShellHtml(page, inner) {
   h += '</aside>';
   h += '<div class="adm-main">';
   h += '<div class="adm-topbar">';
+  h += adminShellBackHtml(page, en);
   h += '<div class="adm-crumb"><b>' + adminPageTitleOf(page) + '</b></div>';
   h += '<div class="adm-gsearch">'
     + '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>'
