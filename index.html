@@ -5581,6 +5581,32 @@ var I18N = {
   race_makeup_used: {cn:'本期已经补签过一次了。', en:'You already made up a day this round.'},
   race_makeup_no_need: {cn:'没有需要补签的日子。', en:'No missed day to restore.'},
   race_makeup_need_today: {cn:'先完成今天的打卡，再来补昨天。', en:'Check in today first, then restore yesterday.'},
+  // 2026-11-10 补签额度制 + 赚补签任务
+  race_makeup_left: {cn:'剩余补签次数：{n}', en:'Make-ups left: {n}'},
+  race_makeup_card_desc2: {cn:'答 {n} 题产品知识题、答对 {m} 题以上，即可补回昨天的打卡。每期可用补签次数见下方任务。', en:'Answer {n} product-knowledge questions (get {m}+ right) to restore yesterday\u2019s check-in. See available make-ups below.'},
+  race_mk_task_entry: {cn:'🎯 补签机会与任务', en:'🎯 Make-ups & tasks'},
+  race_mk_task_title: {cn:'🎯 补签机会与任务', en:'🎯 Make-ups & tasks'},
+  race_mk_task_sub: {cn:'完成任务赚取额外补签次数', en:'Complete tasks to earn extra make-ups'},
+  race_mk_task_full: {cn:'补签次数已达上限（{cap} 次）。', en:'Make-up limit reached ({cap} per round).'},
+  race_mk_task_a_name: {cn:'任务一 · 错题毕业', en:'Task 1 \u00b7 Graduate mistakes'},
+  race_mk_task_a_desc: {cn:'统计范围：本届赛事期间，通过复习让 {x} 道错题毕业（移出错题本）。每毕业 {x} 道记 1 次补签机会。手动移出错题本不计入。', en:'Scope: this round only. Graduate {x} wrong answers through spaced review to earn 1 make-up per {x}. Manual removal does not count.'},
+  race_mk_task_a_prog: {cn:'本轮已毕业 {a}/{x} 道 · 已获得 {n} 次', en:'Graduated {a}/{x} \u00b7 earned {n}'},
+  race_mk_task_b_name: {cn:'任务二 · 模块挑战', en:'Task 2 \u00b7 Module challenge'},
+  race_mk_task_b_desc: {cn:'任选一个产品知识模块，抽取 {n} 题一次性全部答对，该模块记 1 次补签机会。同一模块本届限领 1 次，更换模块可再次获得。', en:'Pick a product-knowledge module and answer {n} drawn questions all correct in one run to earn 1 make-up. Once per module per round; switch modules to earn again.'},
+  race_mk_task_go: {cn:'开始挑战', en:'Start challenge'},
+  race_mk_task_done: {cn:'已完成 ✓', en:'Completed ✓'},
+  race_mk_mod_pass: {cn:'模块挑战通过，补签机会 +1。', en:'Module challenge passed. Make-ups +1.'},
+  race_mk_mod_dup: {cn:'该模块本届已完成挑战，请更换模块。', en:'This module is already completed this round. Pick another one.'},
+  race_mk_mod_none: {cn:'该模块题目不足 {n} 题。', en:'Not enough questions in this module.'},
+  race_mk_mod_sub: {cn:'抽 {n} 题 · 一次全对', en:'{n} questions \u00b7 all correct in one run'},
+  // 2026-11-10 零作答拦截 + 日历明细删除 + 重做状态
+  race_zero_skip: {cn:'本次未作答，未计入学习记录。', en:'No questions answered \u2014 not counted in your record.'},
+  race_cal_del: {cn:'删除', en:'Delete'},
+  race_cal_del_confirm: {cn:'统计范围：仅删除这一条挑战记录，当天打卡次数随之减 1；若这天不再有任何打卡，当天打卡记录会一并移除。已获得的徽章与历史最佳成绩不受影响。确定删除？', en:'Only this run will be removed and the day\u2019s check-in count drops by 1; if no run remains that day, the check-in itself is removed. Earned badges and personal-best records are not affected. Delete?'},
+  rv_cal_mastered: {cn:'✓ 已掌握', en:'✓ Mastered'},
+  rv_redo_again: {cn:'再练一遍', en:'Practice again'},
+  rv_cal_redo_done_btn: {cn:'🔁 再练已掌握的错题（{n} 道）', en:'🔁 Practice mastered questions ({n})'},
+  rv_cal_redo_all_done: {cn:'本组错题已全部掌握，可随时再练巩固。', en:'All mistakes mastered \u2014 practice again anytime.'},
   race_cal_makeup_note: {cn:'✍ 这一天是补签（通过产品知识挑战补回）。', en:'✍ Restored via a make-up product-knowledge quiz.'},
   race_cal_makeup_day: {cn:'补签', en:'Make-up'},
   race_badge_mine_hint: {cn:'连续打卡徽章每一期都能重新拿一次，跨期没断的话会接着累计；累计型徽章终身只拿一次。名字旁边带 ×N 表示你在 N 个周期里都拿到了这枚。点「设为展示徽章」可以挑选一枚挂在排行榜你的名字旁（不选则默认展示等级最高的一枚）。', en:'Streak badges can be earned again in every round \u2014 an unbroken streak keeps counting across rounds. All-time badges are earned once only. \u00d7N means you earned that badge in N different rounds. Tap "Show on leaderboard" to pin one badge next to your name on the leaderboard (defaults to your highest-level one).'},
@@ -12093,6 +12119,7 @@ function raceStart(sectionKey) {
   state.raceNewBadges = null;   // 上一轮的"新徽章"提示只属于上一轮
   state.raceCelebrate = null;   // 彩带也一样：庆祝只属于拿到好成绩的那一轮
   state.raceTierUp = null;      // 段位晋升卡片同理
+  state.raceZeroSkip = null;    // 零作答提示同理（2026-11-10）
   state.race = { conf: c, section: sec, pool: pool, spare: raceSparePoolOf(sec, pool), idx: 0, answers: [], cur: null, startTs: Date.now(), endReason: null, correct: 0, answered: 0 };
   clearRaceTimer();
   state.raceTimer = setInterval(raceTick, 250);
@@ -12264,6 +12291,10 @@ var raceSyncTickTimer = null;
 // 提示行只在这些**终态**出现；pending / retry / ok 一律不打扰
 // （重试最多十几秒，中途闪一行红字只会让人更慌）。
 function raceSyncTipInner() {
+  // 零作答拦截（2026-11-10）：这场的成绩没入库，结果页只提示一句，不挂任何同步警告
+  if (state.raceZeroSkip) {
+    return '<div style="font-size:12px;line-height:1.55;color:#666;">ℹ️ ' + escapeHtml(t('race_zero_skip')) + '</div>';
+  }
   var st = state.raceSyncState;
   var msg = '', color = '#a14a00';
   if (st === 'queued' || st === 'fail') { msg = t('race_sync_queued'); color = '#8a5a00'; }
@@ -12398,6 +12429,14 @@ function raceSyncStartLoop() {
 }
 function raceSubmitScore() {
   var r = state.race; if (!r || !r.conf) return Promise.resolve(false);
+  // 零作答拦截（2026-11-10）：误触进去一题没答就交卷 / 超时收卷，
+  // 不写流水、不打卡、不结算徽章、不上传 —— 这不是一次挑战，不该占打卡。
+  if (!r.answered) {
+    state.raceZeroSkip = true;
+    state.raceSyncState = '';
+    return Promise.resolve(false);
+  }
+  state.raceZeroSkip = null;
   var acc = r.answered ? Math.round(r.correct / r.answered * 1000) / 10 : 0;
   // 用时（秒）：闪电快手徽章要按"平均每题几秒"判定，老成绩没有这个字段就自然不参与。
   var secs = Math.max(1, Math.round((Date.now() - (r.startTs || Date.now())) / 1000));
@@ -13497,15 +13536,27 @@ function renderRaceHome() {
       html += '<button class="action-btn primary" style="width:100%;margin-top:6px;" onclick="raceStart()">⚡ ' + t('race_start') + '</button>';
     }
   }
-  // B3 补签卡（2026-11-03）：昨天漏打卡、今天已经打卡 → 提示可以用产品知识挑战补签
+  // 补签卡（2026-11-03 引入；2026-11-10 改额度制）：显示剩余次数 + 赚补签任务入口。
+  // 次数用完也能进任务页继续赚（上限之内），所以入口常驻（赛事开放时）。
   var mkInfo = raceMakeupInfo();
+  var mkAllow = null;
+  try { mkAllow = raceMkAllowance(raceLocalRecord() || {}, raceConfOf() || {}); } catch (eMk) { mkAllow = null; }
   if (mkInfo.ok) {
     var mkEn = state.lang === 'en';
     html += '<div class="q-card" style="border:1px solid #f0b357;background:#fffdf5;">';
     html += '<div style="font-size:13.5px;font-weight:700;color:#8a5a00;">' + t('race_makeup_card_title') + '</div>';
     html += '<div style="font-size:12px;color:#9a7b4f;margin-top:4px;line-height:1.6;">'
-      + t('race_makeup_card_desc').replace('{n}', String(RACE_MAKEUP_N)).replace('{m}', String(RACE_MAKEUP_PASS)) + '</div>';
+      + t('race_makeup_card_desc2').replace('{n}', String(RACE_MAKEUP_N)).replace('{m}', String(RACE_MAKEUP_PASS)) + '</div>';
+    html += '<div style="font-size:12px;color:#8a5a00;margin-top:6px;font-weight:600;">✍ ' + t('race_makeup_left').replace('{n}', String(mkAllow ? mkAllow.left : 1)) + '</div>';
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceMakeupBegin()">✍ ' + t('race_makeup_start') + '</button>';
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:8px;" onclick="navigate(\'raceMkTask\')">' + t('race_mk_task_entry') + '</button>';
+    html += '</div>';
+  } else if (mkAllow && mkAllow.taskOn && mkAllow.left < mkAllow.cap && raceStateOf(raceConfOf()) === 'open') {
+    // 本届补签次数已用完，但还能靠任务再赚：给个入口，别让学员以为彻底没戏了
+    html += '<div class="q-card" style="border:1px solid #eef1f4;background:#fff;">';
+    html += '<div style="font-size:13px;font-weight:700;color:#000;">✍ ' + t('race_makeup_left').replace('{n}', String(mkAllow.left)) + '</div>';
+    html += '<div style="font-size:12px;color:#666;margin-top:4px;line-height:1.6;">' + t('race_mk_task_sub') + '</div>';
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceMkTask\')">' + t('race_mk_task_entry') + '</button>';
     html += '</div>';
   }
   html += '<div style="display:flex;gap:8px;margin-top:10px;">';
@@ -13576,6 +13627,32 @@ function raceCalToggleRun(k) {
   if (!state.raceCalOpen) state.raceCalOpen = {};
   if (state.raceCalOpen[k]) delete state.raceCalOpen[k];
   else state.raceCalOpen[k] = true;
+  render();
+}
+// 删除一条挑战明细（2026-11-10）：误触进去没答题、或学员想清掉某条记录。
+// 只动 rec.log 这条流水 + 当天打卡次数（归零且非补签日则整日移除）；
+// 徽章只加不减（既定策略，不回收）、榜单历史最佳成绩不动。
+function raceCalDelRun(day, ts) {
+  ts = Number(ts) || 0;
+  if (!day || !ts) return;
+  if (!window.confirm(t('race_cal_del_confirm'))) return;
+  var rec = {};
+  try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
+  var log = Array.isArray(rec.log) ? rec.log : [];
+  var idx = -1;
+  for (var i = 0; i < log.length; i++) {
+    if (log[i] && Number(log[i].ts) === ts) { idx = i; break; }
+  }
+  if (idx < 0) return;
+  log.splice(idx, 1);
+  rec.log = log;
+  var d = rec.days && rec.days[day];
+  if (d) {
+    d[0] = Math.max(0, (d[0] || 0) - 1);
+    if (!d[0] && d[2] !== 'mk') delete rec.days[day];
+  }
+  raceSaveLocalRecord(rec);
+  if (typeof pushStudentSnapshotToKv === 'function') { try { pushStudentSnapshotToKv(); } catch (e2) {} }
   render();
 }
 // 某自然月内的打卡天数（rid 为空 = 不挑届）
@@ -13863,10 +13940,16 @@ function renderRaceCalendar() {
       html += '</div>';
       html += '<div style="font-size:18px;font-weight:700;color:#000;">' + (it.c || 0) + '</div>';
       if (hasQ) html += '<div style="font-size:11px;color:#8b98a3;">' + (ok[okey] ? '▲' : '▼') + '</div>';
+      // 删除这条明细（2026-11-10）：误触进去没答、或不想保留的记录由学员自己清（二次确认）
+      html += '<div onclick="event.stopPropagation();raceCalDelRun(\'' + day + '\',' + (it.ts || 0) + ')"'
+        + ' title="' + escapeHtml(t('race_cal_del')) + '"'
+        + ' style="flex:0 0 auto;font-size:12px;color:#b0b8bf;padding:2px 6px;cursor:pointer;">✕</div>';
       html += '</div>';
       if (hasQ) {
         if (ok[okey]) {
-          var runWrong = [];
+          // 重做状态分两组（2026-11-10）：runWrong = 还在错题本里的「可再练」；
+          // runDone = 重做后已毕业出错的题本「已掌握」，收进次级按钮供自愿巩固。
+          var runWrong = [], runDone = [];
           html += '<div style="margin-top:10px;">';
           for (var qi = 0; qi < it.q.length; qi++) {
             var trip = it.q[qi];
@@ -13879,7 +13962,11 @@ function renderRaceCalendar() {
             // 串成别的选项（偶尔碰巧对也是运气）。既然无从还原，就一律不显示"你的作答"，
             // 只给判定 + 正确答案，免得学员以为自己选了另一个选项。
             var lost = !trip[3];
-            if (!good) runWrong.push(String(trip[0]));
+            var mastered = false;
+            if (!good) {
+              try { mastered = wrongSkeysForQid(trip[0]).length === 0; } catch (eM) { mastered = false; }
+              if (mastered) runDone.push(String(trip[0])); else runWrong.push(String(trip[0]));
+            }
             html += '<div style="border-left:3px solid ' + (good ? '#27ae60' : '#c0392b') + ';padding:8px 0 8px 10px;margin-bottom:8px;">';
             html += '<div style="font-size:13px;font-weight:600;">' + (qi + 1) + '. ' + escapeHtml(raceQText(q)).replace(/\n/g, '<br>') + '</div>';
             if (lost) {
@@ -13893,9 +13980,12 @@ function renderRaceCalendar() {
             }
             var exp = en ? (q.explanation_en || q.explanation || '') : (q.explanation_cn || q.explanation || '');
             if (exp) html += '<div style="font-size:11px;color:#666;margin-top:4px;line-height:1.6;">📖 ' + escapeHtml(exp).replace(/\n/g, '<br>') + '</div>';
-            // 一键重做这道（2026-11-05）：复盘完紧接着练，比"关掉日历再进错题本找"短得多
+            // 一键重做这道（2026-11-05）：复盘完紧接着练，比"关掉日历再进错题本找"短得多。
+            // 2026-11-10 起按掌握状态区分：已毕业的显示「再练一遍」，未毕业的显示「重做这道」。
             if (!good) {
-              html += '<button class="action-btn secondary" style="margin-top:6px;font-size:12px;padding:4px 12px;" onclick="startWrongRedoIds([\'' + trip[0] + '\'],{kind:\'cal\',title:\'' + t('rv_cal_redo_one') + '\'})">🔁 ' + t('rv_cal_redo_one') + '</button>';
+              html += '<button class="action-btn secondary" style="margin-top:6px;font-size:12px;padding:4px 12px;'
+                + (mastered ? 'color:#2e7d32;' : '') + '" onclick="startWrongRedoIds([\'' + trip[0] + '\'],{kind:\'cal\',title:\'' + t('rv_cal_redo_one') + '\'})">'
+                + (mastered ? '✓ ' + t('rv_redo_again') : '🔁 ' + t('rv_cal_redo_one')) + '</button>';
             }
             html += '</div>';
           }
@@ -13903,8 +13993,14 @@ function renderRaceCalendar() {
           if (runWrong.length) {
             html += '<button class="action-btn primary" style="width:100%;margin-top:4px;" onclick="startWrongRedoIds([' + runWrong.map(function (x) { return "'" + x + "'"; }).join(',') + '],{kind:\'cal\',title:\'' + t('rv_cal_redo_run') + '\'})">'
               + '🔁 ' + t('rv_cal_redo_run').replace('{n}', String(runWrong.length)) + '</button>';
+          } else if (runDone.length) {
+            html += '<div style="font-size:12px;color:#27ae60;text-align:center;margin:2px 0 6px;">✓ ' + t('rv_cal_redo_all_done') + '</div>';
           } else {
             html += '<div style="font-size:12px;color:#27ae60;text-align:center;margin:2px 0 6px;">✓ ' + t('rv_cal_redo_none') + '</div>';
+          }
+          if (runDone.length) {
+            html += '<button class="action-btn secondary" style="width:100%;margin-top:4px;" onclick="startWrongRedoIds([' + runDone.map(function (x) { return "'" + x + "'"; }).join(',') + '],{kind:\'cal\',title:\'' + t('rv_cal_redo_done_btn') + '\'})">'
+              + t('rv_cal_redo_done_btn').replace('{n}', String(runDone.length)) + '</button>';
           }
           html += '<button class="action-btn secondary" style="width:100%;margin-top:4px;" onclick="raceCalToggleRun(\'' + okey + '\')">' + t('race_cal_hide_q') + '</button>';
         } else {
@@ -14481,6 +14577,47 @@ function renderRaceHall() {
 var RACE_MAKEUP_N = 5, RACE_MAKEUP_PASS = 4;
 // 补签资格：返回 {ok, why, day, rid}。why: today=今天还没打卡 / filled=昨天已有记录
 // / noid=没有届次可挂 / used=本期已补过。
+// ---- 补签额度制（2026-11-10）----
+// 每届原生 1 次补签；完成任务可再赚，总上限 cap 次（管理端可配，默认 3）。
+//   任务A · 错题毕业：本届期间通过复习让 gradN 道错题毕业（默认 5 道/次）。
+//           只认 reviewLog 里的 'g'（毕业）事件 —— 手动移出错题本不走这条账，天然不计。
+//   任务B · 模块挑战：任选产品知识模块抽 5 题一次全对，每模块每届 1 次（rec.mkModules 记账）。
+// 额度全部**按状态推导**，不另存"已赚"字段：改门槛 / 换届都不用做数据迁移，也不会重复发。
+function raceMkGradCount(since) {
+  var log = Array.isArray(state.reviewLog) ? state.reviewLog : [];
+  var seen = {}, n = 0;
+  for (var i = 0; i < log.length; i++) {
+    var e = log[i];
+    if (!e || e.r !== 'g' || !e.q) continue;
+    if (since && !(e.t >= since)) continue;
+    if (!seen[e.q]) { seen[e.q] = 1; n++; }
+  }
+  return n;
+}
+function raceMkAllowance(rec, conf) {
+  rec = rec || {}; conf = conf || {};
+  var cap = (conf.mkCap && conf.mkCap > 0) ? Math.min(10, conf.mkCap) : 3;
+  var gradN = (conf.mkGradN && conf.mkGradN > 0) ? conf.mkGradN : 5;
+  var taskOn = conf.mkTaskOn !== false;
+  var rid = conf.id || '';
+  var startTs = 0;
+  try { startTs = (conf.startTime && Date.parse(conf.startTime)) || 0; } catch (e0) { startTs = 0; }
+  var grad = taskOn ? raceMkGradCount(startTs) : 0;
+  var earnedA = (taskOn && gradN > 0) ? Math.floor(grad / gradN) : 0;
+  var mods = {};
+  if (taskOn && rec.mkModules && rec.mkModules[rid] && typeof rec.mkModules[rid] === 'object') mods = rec.mkModules[rid];
+  var earnedB = 0, k;
+  for (k in mods) if (Object.prototype.hasOwnProperty.call(mods, k)) earnedB++;
+  var used = 0;
+  if (rec.mkUsed && typeof rec.mkUsed[rid] === 'number') used = rec.mkUsed[rid];
+  else if (rec.makeups && rec.makeups[rid]) used = 1;   // 旧数据：每届一次，记过即用过
+  var allow = Math.min(cap, 1 + earnedA + earnedB);
+  return {
+    cap: cap, gradN: gradN, taskOn: taskOn, rid: rid,
+    grad: grad, earnedA: Math.max(0, Math.min(earnedA, cap - 1 - earnedB)),
+    earnedB: earnedB, mods: mods, used: used, allow: allow, left: Math.max(0, allow - used)
+  };
+}
 function raceMakeupInfo() {
   var rec = {};
   try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
@@ -14490,9 +14627,12 @@ function raceMakeupInfo() {
   var tEntry = rec.days && rec.days[today];
   if (!tEntry || !tEntry[0]) { info.why = 'today'; return info; }
   if (rec.days && rec.days[yest]) { info.why = 'filled'; return info; }
-  var rid = (tEntry[1] || '') || ((raceConfOf() || {}).id || '');
+  var conf = raceConfOf() || {};
+  var rid = (tEntry[1] || '') || (conf.id || '');
   if (!rid) { info.why = 'noid'; return info; }
-  if (rec.makeups && rec.makeups[rid]) { info.why = 'used'; return info; }
+  var mk = raceMkAllowance(rec, conf);
+  info.mk = mk;
+  if (mk.left <= 0) { info.why = 'used'; return info; }
   info.ok = true; info.rid = rid;
   return info;
 }
@@ -14513,22 +14653,30 @@ function raceMakeupBegin() {
 function renderRaceMakeup() {
   var mk = state.raceMakeup;
   var en = state.lang === 'en';
-  var html = renderAppHeader({ title: t('race_makeup_title'), subtitle: t('race_makeup_sub') });
+  var isMod = !!(mk && mk.mode === 'module');
+  var html = renderAppHeader({
+    title: isMod ? t('race_mk_task_b_name') : t('race_makeup_title'),
+    subtitle: isMod ? t('race_mk_mod_sub').replace('{n}', String(RACE_MAKEUP_N)) : t('race_makeup_sub')
+  });
   html += '<div class="page">';
   if (!mk) { html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_makeup_no_need') + '</div></div>'; return html; }
   // 答完 → 结算页
   if (mk.idx >= mk.pool.length) {
-    var passed = mk.correct >= RACE_MAKEUP_PASS;
-    if (passed) raceMakeupGrant(mk.day, mk.rid);
+    // 补签挑战：答对 RACE_MAKEUP_PASS 题即过；模块挑战：{n} 题必须一次全对
+    var passed = isMod ? (mk.correct >= mk.pool.length) : (mk.correct >= RACE_MAKEUP_PASS);
+    if (isMod) { if (passed) raceMkModuleGrant(mk.rid, mk.module); }
+    else if (passed) raceMakeupGrant(mk.day, mk.rid);
     html += '<div class="q-card" style="text-align:center;padding:24px 16px;">';
     html += '<div style="font-size:46px;">' + (passed ? '🎉' : '💪') + '</div>';
     html += '<div style="font-size:15px;font-weight:700;margin-top:8px;">'
       + (en ? 'Correct ' : '答对 ') + mk.correct + '/' + mk.pool.length + '</div>';
-    html += '<div style="font-size:13px;color:#666;margin-top:8px;">' + (passed ? t('race_makeup_pass') : t('race_makeup_fail')) + '</div>';
+    html += '<div style="font-size:13px;color:#666;margin-top:8px;">'
+      + (passed ? (isMod ? t('race_mk_mod_pass') : t('race_makeup_pass')) : t('race_makeup_fail')) + '</div>';
     if (passed) {
-      html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="state.raceMakeup=null;navigate(\'raceCalendar\')">📅 ' + t('race_cal_open') + '</button>';
+      html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="state.raceMakeup=null;navigate(' + (isMod ? "'raceMkTask'" : "'raceCalendar'") + ')">📅 '
+        + (isMod ? t('race_mk_task_entry') : t('race_cal_open')) + '</button>';
     } else {
-      html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="raceMakeupBegin()">🔄 ' + t('race_makeup_start') + '</button>';
+      html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="' + (isMod ? 'raceMkTaskBegin(\'' + mk.module + '\')' : 'raceMakeupBegin()') + '">🔄 ' + t('race_makeup_start') + '</button>';
     }
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="state.raceMakeup=null;goBack()">' + (en ? 'Back' : '返回') + '</button>';
     html += '</div>';
@@ -14573,16 +14721,95 @@ function raceMakeupAdvance() {
 }
 // 补签落库：days 记 [0 次, 届次, 'mk']（0 次 = 当天没真跑，日历按 mk 显示 ✍），
 // 并当场结算徽章 —— 补回的这一天可能正好点亮连续徽章。
+// 2026-11-10 额度制：mkUsed[届次] 计已用次数（旧 makeups[届次] 保留为首补日期，向后兼容）。
 function raceMakeupGrant(day, rid) {
   var rec = {};
   try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
   if (!rec.days || typeof rec.days !== 'object') rec.days = {};
   if (!rec.days[day]) rec.days[day] = [0, rid || '', 'mk'];
+  rec.mkUsed = (rec.mkUsed && typeof rec.mkUsed === 'object') ? rec.mkUsed : {};
+  rec.mkUsed[rid] = (rec.mkUsed[rid] || 0) + 1;
   rec.makeups = (rec.makeups && typeof rec.makeups === 'object') ? rec.makeups : {};
-  if (rid) rec.makeups[rid] = day;
+  if (rid && !rec.makeups[rid]) rec.makeups[rid] = day;
   raceAwardBadges(rec, rid || '');
   raceSaveLocalRecord(rec);
   if (typeof pushStudentSnapshotToKv === 'function') { try { pushStudentSnapshotToKv(); } catch (e) {} }
+}
+// 任务B落库：模块挑战通过 → mkModules[届次][模块] = 时间戳（每模块每届只此一条）。
+function raceMkModuleGrant(rid, secKey) {
+  if (!rid || !secKey) return;
+  var rec = {};
+  try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
+  rec.mkModules = (rec.mkModules && typeof rec.mkModules === 'object') ? rec.mkModules : {};
+  var box = (rec.mkModules[rid] && typeof rec.mkModules[rid] === 'object') ? rec.mkModules[rid] : (rec.mkModules[rid] = {});
+  if (box[secKey]) return;   // 已完成过：不重复记（同一模块本届限 1 次）
+  box[secKey] = Date.now();
+  raceSaveLocalRecord(rec);
+  if (typeof pushStudentSnapshotToKv === 'function') { try { pushStudentSnapshotToKv(); } catch (e) {} }
+}
+// 任务B开跑：从指定模块抽 RACE_MAKEUP_N 题一次全对。赛事关闭时不允许刷。
+function raceMkTaskBegin(secKey) {
+  var conf = raceConfOf() || {};
+  var st = raceStateOf(conf);
+  if (st !== 'open') {
+    alert(t(st === 'pending' ? 'race_pending' : st === 'ended' ? 'race_ended' : st === 'closed' ? 'race_closed' : 'race_no_conf'));
+    return;
+  }
+  var rec = {};
+  try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
+  var rid = conf.id || '';
+  if (rec.mkModules && rec.mkModules[rid] && rec.mkModules[rid][secKey]) { alert(t('race_mk_mod_dup')); return; }
+  var pool = raceQuestionsOf(secKey);
+  if (pool.length < RACE_MAKEUP_N) { alert(t('race_mk_mod_none').replace('{n}', String(RACE_MAKEUP_N))); return; }
+  var picked = shuffleArray(pool.slice()).slice(0, RACE_MAKEUP_N);
+  state.raceMakeup = { pool: prepareQuestions(picked), idx: 0, correct: 0, day: '', rid: rid, mode: 'module', module: secKey, cur: null };
+  navigate('raceMakeup');
+}
+// 任务页：额度总览 + 任务A进度 + 任务B模块列表
+function renderRaceMkTask() {
+  var en = state.lang === 'en';
+  var conf = raceConfOf() || {};
+  var rec = {};
+  try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
+  var mk = raceMkAllowance(rec, conf);
+  var html = renderAppHeader({ title: t('race_mk_task_title'), subtitle: t('race_mk_task_sub') });
+  html += '<div class="page">';
+  // 额度总览
+  html += '<div class="q-card" style="background:linear-gradient(135deg,var(--primary-soft) 0%,var(--primary-light) 100%);border:1px solid rgba(0,0,0,.06);">';
+  html += '<div style="font-size:13px;font-weight:700;color:#000;">✍ ' + t('race_makeup_left').replace('{n}', String(mk.left)) + '</div>';
+  html += '<div style="font-size:11px;color:rgba(0,0,0,.55);margin-top:3px;">' + t('race_mk_task_full').replace('{cap}', String(mk.cap)) + '</div>';
+  html += '</div>';
+  // 任务A · 错题毕业
+  var aGot = mk.earnedA, aNext = mk.grad % mk.gradN;
+  html += '<div class="q-card">';
+  html += '<div style="font-size:13px;font-weight:700;">' + t('race_mk_task_a_name') + '</div>';
+  html += '<div style="font-size:12px;color:#666;margin-top:4px;line-height:1.6;">' + t('race_mk_task_a_desc').replace(/\{x\}/g, String(mk.gradN)) + '</div>';
+  html += '<div style="font-size:12px;color:#8a5a00;margin-top:8px;font-weight:600;">' + t('race_mk_task_a_prog')
+    .replace('{a}', String(aNext)).replace('{x}', String(mk.gradN)).replace('{n}', String(aGot)) + '</div>';
+  html += '<div style="height:6px;background:#eef1f4;border-radius:3px;margin-top:6px;overflow:hidden;">'
+    + '<div style="height:100%;width:' + Math.min(100, Math.round(aNext / mk.gradN * 100)) + '%;background:#2e7d32;border-radius:3px;"></div></div>';
+  html += '</div>';
+  // 任务B · 模块挑战
+  html += '<div class="q-card">';
+  html += '<div style="font-size:13px;font-weight:700;">' + t('race_mk_task_b_name') + '</div>';
+  html += '<div style="font-size:12px;color:#666;margin-top:4px;line-height:1.6;">' + t('race_mk_task_b_desc').replace('{n}', String(RACE_MAKEUP_N)) + '</div>';
+  for (var i = 0; i < RACE_SECTIONS.length; i++) {
+    var s = RACE_SECTIONS[i];
+    if (s.key === 'all') continue;
+    var done = !!(mk.mods && mk.mods[s.key]);
+    html += '<div style="display:flex;align-items:center;gap:9px;padding:7px 0;' + (i > 1 ? 'border-top:1px dashed #eef1f4;' : '') + '">';
+    html += '<div style="flex:1;min-width:0;font-size:13px;font-weight:600;">' + s.icon + ' ' + escapeHtml(en ? s.en : s.cn) + '</div>';
+    if (done) {
+      html += '<div style="font-size:12px;color:#2e7d32;font-weight:600;">' + t('race_mk_task_done') + '</div>';
+    } else {
+      html += '<button class="action-btn secondary" style="font-size:12px;padding:5px 14px;" onclick="raceMkTaskBegin(\'' + s.key + '\')">🎯 ' + t('race_mk_task_go') + '</button>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  html += '<button class="action-btn secondary" style="width:100%;" onclick="goBack()">' + (en ? 'Back' : '返回') + '</button>';
+  html += '</div>';
+  return html;
 }
 // ================= 限时答题赛 · 管理端 =================
 function renderAdminRace() {
@@ -14659,6 +14886,21 @@ function renderAdminRace() {
   html += '<option value="sum"' + (dmode === 'sum' ? ' selected' : '') + '>' + t('race_dept_days_sum') + '</option>';
   html += '<option value="avg"' + (dmode === 'avg' ? ' selected' : '') + '>' + t('race_dept_days_avg') + '</option>';
   html += '</select>';
+  // 补签任务配置（2026-11-10 额度制）：任务开关 / 错题毕业数 / 每届补签上限
+  html += '<div style="border-top:1px solid #eef1f4;margin-top:12px;padding-top:10px;">';
+  html += '<div style="font-size:13px;font-weight:600;margin-bottom:6px;">' + (en ? 'Make-up tasks' : '补签任务') + '</div>';
+  html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;padding:2px 0;cursor:pointer;">'
+    + '<input type="checkbox" id="raceMkTaskOn" style="margin-top:2px;"' + (c.mkTaskOn !== false ? ' checked' : '') + '> '
+    + '<span>' + (en ? 'Enable make-up earning tasks' : '启用赚补签任务（错题毕业 / 模块挑战）') + '</span></label>';
+  html += '<label style="font-size:12px;color:#666;margin-top:8px;display:block;">' + (en ? 'Wrong answers to graduate per make-up (Task 1)' : '任务一：每毕业多少道错题记 1 次补签') + '</label>';
+  html += '<input id="raceMkGradN" type="number" min="1" max="50" step="1" style="width:100%;padding:8px;margin:4px 0 4px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((parseInt(c.mkGradN, 10) || 0) > 0 ? parseInt(c.mkGradN, 10) : 5) + '">';
+  html += '<label style="font-size:12px;color:#666;margin-top:8px;display:block;">' + (en ? 'Make-up limit per round (incl. the free one)' : '每届补签次数上限（含原生 1 次）') + '</label>';
+  html += '<input id="raceMkCap" type="number" min="1" max="10" step="1" style="width:100%;padding:8px;margin:4px 0 4px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((parseInt(c.mkCap, 10) || 0) > 0 ? parseInt(c.mkCap, 10) : 3) + '">';
+  html += '<div style="font-size:11px;color:#888;margin:4px 0 2px;line-height:1.5;">'
+    + (en ? 'Task 2: pick a module, answer 5 drawn questions all correct — once per module per round.'
+          : '任务二：任选模块抽 5 题一次全对，同一模块本届限 1 次。')
+    + '</div>';
+  html += '</div>';
   // 新一季开关：勾选 = 发布时换一个全新届次 id，本届榜单自动清零（历史最佳榜
   // 跨届累计，不受影响）；不勾 = 沿用本届 id，只更新设置。榜单按届次 id 过滤，
   // 所以"清空榜单"不需要删任何数据，换 id 即可。
@@ -15279,6 +15521,10 @@ function adminRacePublish() {
   // C1 参与保底达标线（2026-11-03）：随赛事配置一起发布
   c.partN = parseInt((el('racePartN') && el('racePartN').value), 10) || 5;
   c.deptDaysMode = ((el('raceDeptDaysMode') && el('raceDeptDaysMode').value) === 'avg') ? 'avg' : 'sum';
+  // 补签任务配置（2026-11-10）：开关 / 毕业数 / 上限随赛事一起发布
+  c.mkTaskOn = !!(el('raceMkTaskOn') && el('raceMkTaskOn').checked);
+  c.mkGradN = Math.max(1, Math.min(50, parseInt((el('raceMkGradN') && el('raceMkGradN').value), 10) || 5));
+  c.mkCap = Math.max(1, Math.min(10, parseInt((el('raceMkCap') && el('raceMkCap').value), 10) || 3));
   // 徽章判定读目录，这里写一个兼容值，老版本页面 / 老导出读到也不会崩
   c.badgeDays = raceBadgeMonthDays();
   var sv = el('raceStart') && el('raceStart').value, ev = el('raceEnd') && el('raceEnd').value;
@@ -27085,6 +27331,7 @@ function render() {
     case 'raceBoard': app.innerHTML = renderRaceBoard(); break;
     case 'raceHall': app.innerHTML = renderRaceHall(); break;
     case 'raceMakeup': app.innerHTML = renderRaceMakeup(); break;
+    case 'raceMkTask': app.innerHTML = renderRaceMkTask(); break;
     case 'raceCalendar': app.innerHTML = renderRaceCalendar(); break;
     case 'myBadges': app.innerHTML = renderMyBadges(); break;
     default: app.innerHTML = renderHome();
