@@ -5591,14 +5591,16 @@ var I18N = {
   race_mk_task_a_name: {cn:'任务一 · 错题毕业', en:'Task 1 \u00b7 Graduate mistakes'},
   race_mk_task_a_desc: {cn:'统计范围：本届赛事期间，通过复习让 {x} 道错题毕业（移出错题本）。每毕业 {x} 道记 1 次补签机会。手动移出错题本不计入。', en:'Scope: this round only. Graduate {x} wrong answers through spaced review to earn 1 make-up per {x}. Manual removal does not count.'},
   race_mk_task_a_prog: {cn:'本轮已毕业 {a}/{x} 道 · 已获得 {n} 次', en:'Graduated {a}/{x} \u00b7 earned {n}'},
+  race_mk_task_a_go: {cn:'📚 去错题本开始复习 ›', en:'📚 Go to the wrong-answer book ›'},
   race_mk_task_b_name: {cn:'任务二 · 模块挑战', en:'Task 2 \u00b7 Module challenge'},
-  race_mk_task_b_desc: {cn:'任选一个产品知识模块，抽取 {n} 题一次性全部答对，该模块记 1 次补签机会。同一模块本届限领 1 次，更换模块可再次获得。', en:'Pick a product-knowledge module and answer {n} drawn questions all correct in one run to earn 1 make-up. Once per module per round; switch modules to earn again.'},
+  race_mk_task_b_desc: {cn:'任选一个产品知识模块，抽取 {n} 题并答对 {m} 题，该模块记 1 次补签机会。同一模块本届限领 1 次，更换模块可再次获得。答错的题会自动进入错题集。', en:'Pick a product-knowledge module and get {m}+ of {n} drawn questions right to earn 1 make-up. Once per module per round; switch modules to earn again. Wrong answers go to your wrong-answer book automatically.'},
   race_mk_task_go: {cn:'开始挑战', en:'Start challenge'},
   race_mk_task_done: {cn:'已完成 ✓', en:'Completed ✓'},
   race_mk_mod_pass: {cn:'模块挑战通过，补签机会 +1。', en:'Module challenge passed. Make-ups +1.'},
   race_mk_mod_dup: {cn:'该模块本届已完成挑战，请更换模块。', en:'This module is already completed this round. Pick another one.'},
   race_mk_mod_none: {cn:'该模块题目不足 {n} 题。', en:'Not enough questions in this module.'},
-  race_mk_mod_sub: {cn:'抽 {n} 题 · 一次全对', en:'{n} questions \u00b7 all correct in one run'},
+  race_mk_mod_sub: {cn:'抽 {n} 题 · 答对 {m} 题即可', en:'{n} questions \u00b7 get {m}+ right'},
+  race_mk_mod_review: {cn:'本轮逐题回顾', en:'Question review'},
   // 2026-11-10 零作答拦截 + 日历明细删除 + 重做状态
   race_zero_skip: {cn:'本次未作答，未计入学习记录。', en:'No questions answered \u2014 not counted in your record.'},
   race_cal_del: {cn:'删除', en:'Delete'},
@@ -13536,27 +13538,18 @@ function renderRaceHome() {
       html += '<button class="action-btn primary" style="width:100%;margin-top:6px;" onclick="raceStart()">⚡ ' + t('race_start') + '</button>';
     }
   }
-  // 补签卡（2026-11-03 引入；2026-11-10 改额度制）：显示剩余次数 + 赚补签任务入口。
-  // 次数用完也能进任务页继续赚（上限之内），所以入口常驻（赛事开放时）。
+  // 补签卡（2026-11-03 引入；2026-11-10 改额度制）：只保留开始补签挑战。
+  // 任务入口收进打卡日历底部（2026-11-10 领导要求），首页不再放。
   var mkInfo = raceMakeupInfo();
   var mkAllow = null;
   try { mkAllow = raceMkAllowance(raceLocalRecord() || {}, raceConfOf() || {}); } catch (eMk) { mkAllow = null; }
   if (mkInfo.ok) {
-    var mkEn = state.lang === 'en';
     html += '<div class="q-card" style="border:1px solid #f0b357;background:#fffdf5;">';
     html += '<div style="font-size:13.5px;font-weight:700;color:#8a5a00;">' + t('race_makeup_card_title') + '</div>';
     html += '<div style="font-size:12px;color:#9a7b4f;margin-top:4px;line-height:1.6;">'
       + t('race_makeup_card_desc2').replace('{n}', String(RACE_MAKEUP_N)).replace('{m}', String(RACE_MAKEUP_PASS)) + '</div>';
     html += '<div style="font-size:12px;color:#8a5a00;margin-top:6px;font-weight:600;">✍ ' + t('race_makeup_left').replace('{n}', String(mkAllow ? mkAllow.left : 1)) + '</div>';
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceMakeupBegin()">✍ ' + t('race_makeup_start') + '</button>';
-    html += '<button class="action-btn secondary" style="width:100%;margin-top:8px;" onclick="navigate(\'raceMkTask\')">' + t('race_mk_task_entry') + '</button>';
-    html += '</div>';
-  } else if (mkAllow && mkAllow.taskOn && mkAllow.left < mkAllow.cap && raceStateOf(raceConfOf()) === 'open') {
-    // 本届补签次数已用完，但还能靠任务再赚：给个入口，别让学员以为彻底没戏了
-    html += '<div class="q-card" style="border:1px solid #eef1f4;background:#fff;">';
-    html += '<div style="font-size:13px;font-weight:700;color:#000;">✍ ' + t('race_makeup_left').replace('{n}', String(mkAllow.left)) + '</div>';
-    html += '<div style="font-size:12px;color:#666;margin-top:4px;line-height:1.6;">' + t('race_mk_task_sub') + '</div>';
-    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceMkTask\')">' + t('race_mk_task_entry') + '</button>';
     html += '</div>';
   }
   html += '<div style="display:flex;gap:8px;margin-top:10px;">';
@@ -14025,6 +14018,8 @@ function renderRaceCalendar() {
   html += '<button class="action-btn primary" style="width:100%;margin-top:2px;" onclick="navigate(\'race\')">⚡ ' + t('race_cal_retry') + '</button>';
   // 复盘语境：温故知新后再刷一遍产品知识题库
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">🔁 ' + t('race_study_cal') + '</button>';
+  // 补签机会与任务（2026-11-10）：从首页收进日历最底部 —— 想补签的人本来就会来看日历
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceMkTask\')">🎯 ' + t('race_mk_task_entry') + '</button>';
   // 看完自己的打卡记录，顺手就能看自己在榜上第几（页面底部，次级入口）
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
   html += '</div>';
@@ -14575,6 +14570,8 @@ function renderRaceHall() {
 // 补的天数照常计入连续 / 单期 / 段位（目的就是保住连续），但当天挑战次数为 0，
 // 日历上用 ✍ 标出"这一天是补签"。每期（届次）只能补签一次，防刷。
 var RACE_MAKEUP_N = 5, RACE_MAKEUP_PASS = 4;
+// 模块挑战（任务B）抽题数与达标数（2026-11-10：10 题答对 8 题即可）
+var RACE_MK_MOD_N = 10, RACE_MK_MOD_PASS = 8;
 // 补签资格：返回 {ok, why, day, rid}。why: today=今天还没打卡 / filled=昨天已有记录
 // / noid=没有届次可挂 / used=本期已补过。
 // ---- 补签额度制（2026-11-10）----
@@ -14656,22 +14653,45 @@ function renderRaceMakeup() {
   var isMod = !!(mk && mk.mode === 'module');
   var html = renderAppHeader({
     title: isMod ? t('race_mk_task_b_name') : t('race_makeup_title'),
-    subtitle: isMod ? t('race_mk_mod_sub').replace('{n}', String(RACE_MAKEUP_N)) : t('race_makeup_sub')
+    subtitle: isMod
+      ? t('race_mk_mod_sub').replace('{n}', String(RACE_MK_MOD_N)).replace('{m}', String(RACE_MK_MOD_PASS))
+      : t('race_makeup_sub')
   });
   html += '<div class="page">';
   if (!mk) { html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_makeup_no_need') + '</div></div>'; return html; }
   // 答完 → 结算页
   if (mk.idx >= mk.pool.length) {
-    // 补签挑战：答对 RACE_MAKEUP_PASS 题即过；模块挑战：{n} 题必须一次全对
-    var passed = isMod ? (mk.correct >= mk.pool.length) : (mk.correct >= RACE_MAKEUP_PASS);
+    // 补签挑战：答对 RACE_MAKEUP_PASS 题即过；模块挑战：10 题答对 RACE_MK_MOD_PASS 题即过
+    var passed = isMod ? (mk.correct >= RACE_MK_MOD_PASS) : (mk.correct >= RACE_MAKEUP_PASS);
     if (isMod) { if (passed) raceMkModuleGrant(mk.rid, mk.module); }
     else if (passed) raceMakeupGrant(mk.day, mk.rid);
+    // ① 成绩卡
     html += '<div class="q-card" style="text-align:center;padding:24px 16px;">';
     html += '<div style="font-size:46px;">' + (passed ? '🎉' : '💪') + '</div>';
     html += '<div style="font-size:15px;font-weight:700;margin-top:8px;">'
       + (en ? 'Correct ' : '答对 ') + mk.correct + '/' + mk.pool.length + '</div>';
     html += '<div style="font-size:13px;color:#666;margin-top:8px;">'
       + (passed ? (isMod ? t('race_mk_mod_pass') : t('race_makeup_pass')) : t('race_makeup_fail')) + '</div>';
+    html += '</div>';
+    // ② 模块挑战小结：逐题判定 + 你的作答 + 正确答案 + 解析（2026-11-10），
+    //    做错了也要知道对的是什么，挑战才算真正学到东西
+    if (isMod && Array.isArray(mk.results) && mk.results.length) {
+      html += '<div class="q-card">';
+      html += '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">📋 ' + t('race_mk_mod_review') + '</div>';
+      for (var ri2 = 0; ri2 < mk.results.length; ri2++) {
+        var rr = mk.results[ri2], rq = rr.q, rp = rr.picked;
+        html += '<div style="border-left:3px solid ' + (rr.good ? '#27ae60' : '#c0392b') + ';padding:8px 0 8px 10px;margin-bottom:8px;">';
+        html += '<div style="font-size:13px;font-weight:600;">' + (ri2 + 1) + '. ' + escapeHtml(raceQText(rq)).replace(/\n/g, '<br>') + '</div>';
+        html += '<div style="font-size:12px;margin-top:4px;color:' + (rr.good ? '#27ae60;' : '#c0392b;') + '">'
+          + (rr.good ? '✓ ' : '✗ ') + escapeHtml(raceUserText(rq, rp)) + '</div>';
+        if (!rr.good) html += '<div style="font-size:12px;color:#27ae60;margin-top:2px;">✓ ' + escapeHtml(raceCorrectText(rq)) + '</div>';
+        var rexp = en ? (rq.explanation_en || rq.explanation || '') : (rq.explanation_cn || rq.explanation || '');
+        if (rexp) html += '<div style="font-size:11px;color:#666;margin-top:4px;line-height:1.6;">📖 ' + escapeHtml(rexp).replace(/\n/g, '<br>') + '</div>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    // ③ 操作按钮
     if (passed) {
       html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="state.raceMakeup=null;navigate(' + (isMod ? "'raceMkTask'" : "'raceCalendar'") + ')">📅 '
         + (isMod ? t('race_mk_task_entry') : t('race_cal_open')) + '</button>';
@@ -14706,7 +14726,15 @@ function renderRaceMakeup() {
 function raceMakeupPick(i) {
   var mk = state.raceMakeup;
   if (!mk || mk.idx >= mk.pool.length) return;
-  mk.cur = [i];
+  var q = mk.pool[mk.idx];
+  // 多选题：再点一次取消，与答题赛 racePick 同款交互；单选保持一点即定
+  if (q && q.type === 'multiple') {
+    mk.cur = Array.isArray(mk.cur) ? mk.cur : [];
+    var p = mk.cur.indexOf(i);
+    if (p >= 0) mk.cur.splice(p, 1); else mk.cur.push(i);
+  } else {
+    mk.cur = [i];
+  }
   render();
 }
 function raceMakeupAdvance() {
@@ -14714,7 +14742,16 @@ function raceMakeupAdvance() {
   if (!mk || mk.idx >= mk.pool.length) return;
   var q = mk.pool[mk.idx], cur = mk.cur || [];
   if (!cur.length) return;
-  if (raceGrade(q, cur)) mk.correct++;
+  var good = raceGrade(q, cur);
+  if (good) mk.correct++;
+  // 逐题记账（2026-11-10）：模块挑战要出小结 + 错题进错题集，必须把每题结果留在会话里；
+  // 错题走 recordAttempt 落错题本（与挑战赛 raceRecordStudy 同口径：答对推进、答错进本）
+  mk.results = Array.isArray(mk.results) ? mk.results : [];
+  mk.results.push({ q: q, picked: cur.slice(), good: good });
+  if (typeof recordAttempt === 'function') {
+    try { recordAttempt(q, cur, { ok: good, skey: 'manual', src: 'race' }); } catch (eR) {}
+    try { saveState(); } catch (eS) {}
+  }
   mk.cur = null;
   mk.idx++;
   render();
@@ -14747,7 +14784,7 @@ function raceMkModuleGrant(rid, secKey) {
   raceSaveLocalRecord(rec);
   if (typeof pushStudentSnapshotToKv === 'function') { try { pushStudentSnapshotToKv(); } catch (e) {} }
 }
-// 任务B开跑：从指定模块抽 RACE_MAKEUP_N 题一次全对。赛事关闭时不允许刷。
+// 任务B开跑：从指定模块抽 RACE_MK_MOD_N 题（答对 RACE_MK_MOD_PASS 题即过）。赛事关闭时不允许刷。
 function raceMkTaskBegin(secKey) {
   var conf = raceConfOf() || {};
   var st = raceStateOf(conf);
@@ -14760,8 +14797,8 @@ function raceMkTaskBegin(secKey) {
   var rid = conf.id || '';
   if (rec.mkModules && rec.mkModules[rid] && rec.mkModules[rid][secKey]) { alert(t('race_mk_mod_dup')); return; }
   var pool = raceQuestionsOf(secKey);
-  if (pool.length < RACE_MAKEUP_N) { alert(t('race_mk_mod_none').replace('{n}', String(RACE_MAKEUP_N))); return; }
-  var picked = shuffleArray(pool.slice()).slice(0, RACE_MAKEUP_N);
+  if (pool.length < RACE_MK_MOD_N) { alert(t('race_mk_mod_none').replace('{n}', String(RACE_MK_MOD_N))); return; }
+  var picked = shuffleArray(pool.slice()).slice(0, RACE_MK_MOD_N);
   state.raceMakeup = { pool: prepareQuestions(picked), idx: 0, correct: 0, day: '', rid: rid, mode: 'module', module: secKey, cur: null };
   navigate('raceMakeup');
 }
@@ -14788,11 +14825,14 @@ function renderRaceMkTask() {
     .replace('{a}', String(aNext)).replace('{x}', String(mk.gradN)).replace('{n}', String(aGot)) + '</div>';
   html += '<div style="height:6px;background:#eef1f4;border-radius:3px;margin-top:6px;overflow:hidden;">'
     + '<div style="height:100%;width:' + Math.min(100, Math.round(aNext / mk.gradN * 100)) + '%;background:#2e7d32;border-radius:3px;"></div></div>';
+  // 一键进错题本（2026-11-10）：复习入口就在任务旁边，少一跳完成难度就低一分
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:12px;" onclick="wrongOpenSrc(\'manual\')">' + t('race_mk_task_a_go') + '</button>';
   html += '</div>';
   // 任务B · 模块挑战
   html += '<div class="q-card">';
   html += '<div style="font-size:13px;font-weight:700;">' + t('race_mk_task_b_name') + '</div>';
-  html += '<div style="font-size:12px;color:#666;margin-top:4px;line-height:1.6;">' + t('race_mk_task_b_desc').replace('{n}', String(RACE_MAKEUP_N)) + '</div>';
+  html += '<div style="font-size:12px;color:#666;margin-top:4px;line-height:1.6;">' + t('race_mk_task_b_desc')
+    .replace('{n}', String(RACE_MK_MOD_N)).replace('{m}', String(RACE_MK_MOD_PASS)) + '</div>';
   for (var i = 0; i < RACE_SECTIONS.length; i++) {
     var s = RACE_SECTIONS[i];
     if (s.key === 'all') continue;
