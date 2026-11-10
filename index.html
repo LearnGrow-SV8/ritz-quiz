@@ -4870,14 +4870,14 @@ const state = {
   profile: null,        // {empNo, cnName, enName, division:{en,cn}, dept:{en,cn}} per employee
   wrongAnswers: {},
   collectedQuestions: [],
-  // 复习闭环（2026-11-05）：毕业的题号 → 毕业时间。错题本只留"还没掌握"的，
-  // 毕业记录单独存，掌握度要数它；否则一道题毕业后掌握度反而会掉。
+  // 复习闭环（2026-11-05）：巩固完成的题号 → 巩固完成时间。错题本只留"还没掌握"的，
+  // 巩固完成记录单独存，掌握度要数它；否则一道题巩固完成后掌握度反而会掉。
   mastered: {},
   reviewTask: null,   // 本周复习任务 {wk,tag,ids,target,done,doneIds,skippedList}
   // 复习行为账本（积分制地基）：事件流 + 去重计数器。
   // 积分将来只读这两项，不在别处另算次数，否则同一道题会被算两次。
   reviewLog: [],      // [{k:去重键, q:题号, t:时间, r:'p'|'g'|'f', s:阶, w:来源}]
-  reviewStats: null,  // {rv:复习作答次数, ps:推进阶次, gr:毕业题数, fl:复习答错次数, ts:最近时间}
+  reviewStats: null,  // {rv:复习作答次数, ps:推进阶次, gr:巩固完成题数, fl:复习答错次数, ts:最近时间}
   paperSession: null, // 专项练习卷 / 错题重做的本轮会话 {kind,title,ids,total,ok,graduated,promoted}
   recGuards: {},      // 本轮已记账的「题号@位置」——防止重绘把错误次数/小结重复累加
   wrongTab: 'all',    // 错题本分类：'all' 全部错题 | 'due' 需要优先巩固 | 'fav' 收藏题目 | 'tag' 薄弱知识点
@@ -5634,7 +5634,7 @@ var I18N = {
   race_mk_task_entry: {cn:'补签机会与任务', en:'Make-ups & tasks'},
   race_mk_task_title: {cn:'🎯 补签机会与任务', en:'🎯 Make-ups & tasks'},
   race_mk_task_sub: {cn:'完成任务赚取额外补签次数', en:'Complete tasks to earn extra make-ups'},
-  race_mk_task_card_desc: {cn:'复习毕业错题或完成产品知识模块挑战，均可赚取额外补签次数；每届最多 {cap} 次。', en:'Graduate wrong answers or pass a module challenge to earn extra make-ups, up to {cap} per round.'},
+  race_mk_task_card_desc: {cn:'复习错题直至巩固完成，或完成产品知识模块挑战，均可赚取额外补签次数；每届最多 {cap} 次。', en:'Clear wrong answers or pass a module challenge to earn extra make-ups, up to {cap} per round.'},
   race_mk_task_open: {cn:'查看任务与进度', en:'View tasks & progress'},
   race_mk_task_full: {cn:'本届 {cap} 次补签机会已全部用完。', en:'All {cap} make-ups for this round are used.'},
   // 补签额度说明（2026-11-10 二次改写）：原来「剩余 0 + 已达上限」两句并列，
@@ -5642,10 +5642,10 @@ var I18N = {
   race_mk_note_can: {cn:'本届上限 {cap} 次，完成任务还可再赚 {r} 次。', en:'Round limit {cap}; tasks can still earn {r} more.'},
   race_mk_note_full: {cn:'本届上限 {cap} 次，已全部获得。', en:'All {cap} for this round have been earned.'},
   race_mk_note_used_can: {cn:'当前次数已用完，完成任务还可再赚 {r} 次。', en:'None left right now — tasks can earn {r} more.'},
-  race_mk_task_a_name: {cn:'任务一 · 错题毕业', en:'Task 1 \u00b7 Graduate mistakes'},
-  race_mk_task_a_desc: {cn:'统计范围：本届赛事期间，通过复习让 {x} 道错题毕业。毕业规则与错题本一致——第 1 天、第 2 天、第 5 天各答对一次即毕业并自动移出错题本（同一道题每天最多推进 1 阶）；每毕业 {x} 道记 1 次补签机会。手动移出错题本不计入。', en:'Scope: this round only. Graduate {x} mistakes through review to earn 1 make-up per {x}. Same rule as the mistake book: correct answers on day 1, day 2 and day 5 graduate the question and remove it automatically (at most one stage per day). Manual removal does not count.'},
-  race_mk_task_a_prog: {cn:'本届已毕业 {a} 道 · 每毕业 {x} 道记 1 次', en:'{a} graduated this round \u00b7 1 make-up per {x}'},
-  race_mk_task_a_next: {cn:'已获得 {n} 次 · 再毕业 {r} 道可再得 1 次', en:'{n} earned \u00b7 {r} more to earn another'},
+  race_mk_task_a_name: {cn:'任务一 · 错题巩固', en:'Task 1 \u00b7 Clear mistakes'},
+  race_mk_task_a_desc: {cn:'统计范围：本届赛事期间，通过复习让 {x} 道错题巩固完成。巩固规则与错题本一致——第 1 天、第 2 天、第 5 天各答对一次即巩固完成并自动移出错题本（同一道题每天最多推进 1 阶）；每巩固完成 {x} 道记 1 次补签机会。手动移出错题本不计入。', en:'Scope: this round only. Clear {x} mistakes through review to earn 1 make-up per {x}. Same rule as the mistake book: correct answers on day 1, day 2 and day 5 clear the question and remove it automatically (at most one stage per day). Manual removal does not count.'},
+  race_mk_task_a_prog: {cn:'本届已巩固完成 {a} 道 · 每巩固完成 {x} 道记 1 次', en:'{a} cleared this round \u00b7 1 make-up per {x}'},
+  race_mk_task_a_next: {cn:'已获得 {n} 次 · 再巩固完成 {r} 道可再得 1 次', en:'{n} earned \u00b7 {r} more to earn another'},
   race_mk_task_a_go: {cn:'📚 去错题本开始复习 ›', en:'📚 Go to the wrong-answer book ›'},
   race_mk_task_b_name: {cn:'任务二 · 模块挑战', en:'Task 2 \u00b7 Module challenge'},
   race_mk_task_b_desc: {cn:'任选一个产品知识模块，抽取 {n} 题并答对 {m} 题，该模块记 1 次补签机会。同一模块本届限领 1 次，更换模块可再次获得。答错的题会自动进入错题集。', en:'Pick a product-knowledge module and get {m}+ of {n} drawn questions right to earn 1 make-up. Once per module per round; switch modules to earn again. Wrong answers go to your wrong-answer book automatically.'},
@@ -5660,10 +5660,10 @@ var I18N = {
   race_zero_skip: {cn:'本次未作答，未计入学习记录。', en:'No questions answered \u2014 not counted in your record.'},
   race_cal_del: {cn:'删除', en:'Delete'},
   race_cal_del_confirm: {cn:'统计范围：仅删除这一条挑战记录，当天打卡次数随之减 1；若这天不再有任何打卡，当天打卡记录会一并移除。已获得的徽章与历史最佳成绩不受影响。确定删除？', en:'Only this run will be removed and the day\u2019s check-in count drops by 1; if no run remains that day, the check-in itself is removed. Earned badges and personal-best records are not affected. Delete?'},
-  rv_cal_mastered: {cn:'✓ 已毕业', en:'✓ Graduated'},
+  rv_cal_mastered: {cn:'✓ 已巩固完成', en:'✓ Cleared'},
   rv_redo_again: {cn:'再练一遍', en:'Practice again'},
-  rv_cal_redo_done_btn: {cn:'🔁 再练已毕业的错题（{n} 道）', en:'🔁 Practice graduated questions ({n})'},
-  rv_cal_redo_all_done: {cn:'本组错题已全部毕业，可随时再练巩固。', en:'All mistakes in this run have graduated \u2014 practice again anytime.'},
+  rv_cal_redo_done_btn: {cn:'🔁 再练已巩固完成的错题（{n} 道）', en:'🔁 Practice cleared questions ({n})'},
+  rv_cal_redo_all_done: {cn:'本组错题已全部巩固完成，可随时再练。', en:'All mistakes in this run are cleared \u2014 practice again anytime.'},
   race_cal_makeup_note: {cn:'✍ 这一天是补签（通过产品知识挑战补回）。', en:'✍ Restored via a make-up product-knowledge quiz.'},
   race_cal_makeup_day: {cn:'补签', en:'Make-up'},
   race_badge_mine_hint: {cn:'连续打卡徽章每一期都能重新拿一次，跨期没断的话会接着累计；累计型徽章终身只拿一次。名字旁边带 ×N 表示你在 N 个周期里都拿到了这枚。点「设为展示徽章」可以挑选一枚挂在排行榜你的名字旁（不选则默认展示等级最高的一枚）。', en:'Streak badges can be earned again in every round \u2014 an unbroken streak keeps counting across rounds. All-time badges are earned once only. \u00d7N means you earned that badge in N different rounds. Tap "Show on leaderboard" to pin one badge next to your name on the leaderboard (defaults to your highest-level one).'},
@@ -5839,12 +5839,12 @@ var I18N = {
   rv_tab_all_hint: {cn:'你在练习、模拟考、答题赛里做错过的全部题目。', en:'Every question you have got wrong in practice, exams and races.'},
   rv_tab_tag_hint: {cn:'选一个知识点，看看这一类你错了几道。', en:'Pick a topic to see how many you got wrong in it.'},
   rv_no_due: {cn:'现在没有该复习的题。等它到期再来，效果最好。', en:'Nothing due right now — come back when it is.'},
-  // 规则文案（2026-11-10 统一术语）：巩固 = 答对 1 次推进 1 阶；毕业 = 走完两阶后（第 5 天）
-  // 再答对 1 次、自动移出错题本；毕业后仍会被练习抽查两次。
-  // 「掌握」这个词在学员端全部退役 —— 任务一叫「错题毕业」，错题本就该用同一套词。
-  rv_stage_hint: {cn:'规则：第 1 天答对记 1 阶，第 2 天再答对记 2 阶，第 5 天再答对一次即毕业、自动移出错题本。同一道错题每天最多推进 1 阶；中途又答错，就回到第 1 阶重来。毕业后仍会被抽查：练习、模拟考试、限时答题赛里都可能再遇到它，答错就重新回到第 1 阶。', en:'How it works: correct on day 1 (stage 1), correct on day 2 (stage 2), then one more correct answer on day 5 graduates it and removes it from the book. At most one stage per day; a wrong answer sends it back to stage 1. Graduating does not mean it is never asked again: practice, mock exams and timed races may still bring it back \u2014 answer wrong and it returns to stage 1.'},
+  // 规则文案（2026-11-10 统一术语）：巩固 = 答对 1 次推进 1 阶；巩固完成 = 走完两阶后（第 5 天）
+  // 再答对 1 次、自动移出错题本；巩固完成后仍会被练习抽查两次。
+  // 「掌握」这个词在学员端全部退役 —— 任务一叫「错题巩固完成」，错题本就该用同一套词。
+  rv_stage_hint: {cn:'规则：第 1 天答对记 1 阶，第 2 天再答对记 2 阶，第 5 天再答对一次即巩固完成、自动移出错题本。同一道错题每天最多推进 1 阶；中途又答错，就回到第 1 阶重来。巩固完成后仍会被抽查：练习、模拟考试、限时答题赛里都可能再遇到它，答错就重新回到第 1 阶。', en:'How it works: correct on day 1 (stage 1), correct on day 2 (stage 2), then one more correct answer on day 5 clears it and removes it from the book. At most one stage per day; a wrong answer sends it back to stage 1. Clearing does not mean it is never asked again: practice, mock exams and timed races may still bring it back \u2014 answer wrong and it returns to stage 1.'},
   rv_stage_n: {cn:'已巩固 {n}/{m} 阶', en:'stage {n} of {m}'},
-  rv_stage_last: {cn:' · 再答对 1 次即毕业', en:' · one more answer to graduate'},
+  rv_stage_last: {cn:' · 再答对 1 次即巩固完成', en:' · one more answer to clear'},
   rv_wrong_times: {cn:'您做错过 {n} 次', en:'{n} wrong attempts'},
   rv_redo_due: {cn:'复习这 {n} 道题', en:'Review these {n}'},
   rv_redo_due_sub: {cn:'复习时间已到，现在练记得最牢。', en:'Due now — the best time to review.'},
@@ -5865,22 +5865,22 @@ var I18N = {
   rv_src_tag_d: {cn:'挑一个错得最多的知识点，只练这一类', en:'Pick the topic you miss most'},
   rv_all_q: {cn:'全部', en:'All'},
   rv_paper_take: {cn:'道题', en:'questions'},
-  rv_paper_take_note: {cn:'答完会给你本轮小结：答对几道、几道巩固进阶、几道毕业。', en:'Afterwards you get a summary: correct count, questions advanced, and questions graduated.'},
+  rv_paper_take_note: {cn:'答完会给你本轮小结：答对几道、几道巩固进阶、几道巩固完成。', en:'Afterwards you get a summary: correct count, questions advanced, and questions cleared.'},
   rv_paper_none: {cn:'这一批暂时没有题，换一个批次试试。', en:'Nothing in this batch — try another.'},
   rv_start_paper: {cn:'开始练习', en:'Start practising'},
   rv_paper_done: {cn:'本轮完成', en:'Paper complete'},
   rv_done_ok: {cn:'答对（道）', en:'correct'},
   rv_done_promote: {cn:'巩固进阶（按时复习）', en:'advanced'},
-  rv_done_grad: {cn:'已毕业（移出错题本）', en:'graduated'},
+  rv_done_grad: {cn:'已巩固完成（移出错题本）', en:'cleared'},
   // 本轮小结第四格：今天答对但当天已经巩固过（不推进阶）的题数 —— 不加这一格，
   // 学员会以为"我明明做对了，为什么一道都没进阶"（2026-11-10 领导反馈）。
   rv_done_early: {cn:'今日已作答（不重复进阶）', en:'answered today'},
   rv_done_early_tip: {cn:'同一道错题每天最多推进 1 阶：今天已巩固过的题不再进阶，明天再答对即可进到下一阶（第一次答对不受此限）。', en:'Each mistake advances at most one stage per day. Questions already consolidated today will not advance again; answer them correctly tomorrow for the next stage (the first correct answer is not limited).'},
   rv_done_review: {cn:'本轮逐题解析', en:'Answers and explanations'},
-  rv_finish_bar_sub: {cn:'答对 {ok}/{n} · 巩固进阶 {p} 道 · 毕业 {g} 道', en:'{ok}/{n} correct · {p} advanced · {g} graduated'},
+  rv_finish_bar_sub: {cn:'答对 {ok}/{n} · 巩固进阶 {p} 道 · 巩固完成 {g} 道', en:'{ok}/{n} correct · {p} advanced · {g} cleared'},
   rv_finish_bar_go: {cn:'查看小结', en:'See summary'},
   rv_paper_line: {cn:'答对 {ok} / {total} 道', en:'{ok} / {total} correct'},
-  rv_paper_gain: {cn:'{p} 道巩固进阶 · {g} 道已毕业', en:'{p} advanced · {g} graduated'},
+  rv_paper_gain: {cn:'{p} 道巩固进阶 · {g} 道已巩固完成', en:'{p} advanced · {g} cleared'},
   rv_back_wrong: {cn:'返回错题本', en:'Back to mistakes'},
   // 小结页返回按钮：从哪来回哪去，按钮文案跟着入口变
   rv_back_race_result: {cn:'返回本场解析', en:"Back to this run's review"},
@@ -5889,7 +5889,7 @@ var I18N = {
   rv_back_fav: {cn:'返回收藏夹', en:'Back to favourites'},
   rv_back_generic: {cn:'返回', en:'Back'},
   rv_again_paper: {cn:'再组一卷', en:'New paper'},
-  rv_strip: {cn:'答对 {ok} · 巩固进阶 {p} 道 · 毕业 {g} 道', en:'{ok} correct · {p} advanced · {g} graduated'},
+  rv_strip: {cn:'答对 {ok} · 巩固进阶 {p} 道 · 巩固完成 {g} 道', en:'{ok} correct · {p} advanced · {g} cleared'},
   rv_no_weak: {cn:'还没有足够数据找出薄弱知识点，先练几道再来。', en:'Not enough data yet — practise a few questions first.'},
   rv_task_title: {cn:'今日复习', en:"Today's review"},
   rv_task_desc: {cn:'近一周你的错题集中在「{tag}」，点开复习巩固一下。', en:'Most of your recent mistakes are in "{tag}" — review them now.'},
@@ -5899,30 +5899,30 @@ var I18N = {
   rv_hub_title: {cn:'我的错题', en:'My mistakes'},
   rv_hub_browse: {cn:'打开错题本', en:'Open'},
   rv_hub_mastery_short: {cn:'错题完成度', en:'Mistakes cleared'},
-  rv_hub_sub: {cn:'已毕业 {g} 道 · 错题本现有 {n} 道', en:'{g} graduated · {n} in the book'},
+  rv_hub_sub: {cn:'已巩固完成 {g} 道 · 错题本现有 {n} 道', en:'{g} cleared · {n} in the book'},
   rv_hub_empty: {cn:'还没有错题记录，去练几道新题吧。', en:'No mistakes yet — start practising.'},
   rv_hub_due: {cn:'今天该复习 {n} 道', en:'{n} due today'},
   rv_hub_hint: {cn:'近一周你的错题集中在「{tag}」，点开复习巩固一下。', en:'Most of your recent mistakes are in "{tag}" — review them now.'},
   rv_hub_none: {cn:'本周没有该复习的错题，可以自己挑几道错题巩固，或者练几道新题。', en:'Nothing due this week — review any mistake you like, or practise new questions.'},
-  rv_stat_line: {cn:'累计复习 {rv} 次 · 巩固进阶 {p} 道 · 已毕业 {g} 道', en:'{rv} reviews · {p} advanced · {g} graduated'},
+  rv_stat_line: {cn:'累计复习 {rv} 次 · 巩固进阶 {p} 道 · 已巩固完成 {g} 道', en:'{rv} reviews · {p} advanced · {g} cleared'},
   race_goto_wrong: {cn:'去错题本复习（本场答错已收录）', en:'Review mistakes (this run saved)'},
   race_goto_wrong_run: {cn:'一键重做本场错题（{n} 道）', en:'Redo all mistakes from this run ({n})'},
   exam_goto_wrong_run: {cn:'一键重做本卷错题（{n} 道）', en:'Redo all mistakes from this paper ({n})'},
   rv_book_ledger: {cn:'我的学习记录', en:'My learning record'},
   rv_hub_go_practice: {cn:'去练新题', en:'Practise questions'},
-  rv_week_line: {cn:'近 7 天：巩固进阶 {p} 道 · 已毕业 {g} 道', en:'Last 7 days: {p} advanced · {g} graduated'},
+  rv_week_line: {cn:'近 7 天：巩固进阶 {p} 道 · 已巩固完成 {g} 道', en:'Last 7 days: {p} advanced · {g} cleared'},
   rv_task_skip: {cn:'换一个', en:'Swap'},
   rv_task_done: {cn:'本周任务已完成', en:'Done this week'},
   rv_task_none: {cn:'暂无该复习的错题，去练几道新题保持手感。', en:'Nothing due — try some new questions.'},
   rv_task_progress: {cn:'已完成 {d}/{n}', en:'{d}/{n} done'},
   rv_mastery: {cn:'错题完成度', en:'Mistakes cleared'},
-  rv_mastery_sub: {cn:'已毕业 {g} 道 · 错题本还剩 {n} 道', en:'{g} graduated · {n} left'},
+  rv_mastery_sub: {cn:'已巩固完成 {g} 道 · 错题本还剩 {n} 道', en:'{g} cleared · {n} left'},
   rv_mastery_none: {cn:'还没有错题记录，先练几道再来。', en:'No mistakes recorded yet.'},
   rv_cal_redo_run: {cn:'一键重做本次错题（{n} 道）', en:'Redo all mistakes from this run ({n})'},
   rv_cal_redo_one: {cn:'再做一次', en:'Try again'},
   rv_cal_redo_none: {cn:'本次全对，没有需要重做的题', en:'No mistakes in this run'},
   rv_fav_paper: {cn:'刷一遍收藏题', en:'Practise saved questions'},
-  rv_fav_mastered: {cn:'已毕业，可移除', en:'Graduated — can remove'},
+  rv_fav_mastered: {cn:'已巩固完成，可移除', en:'Cleared — can remove'},
   // 来源筛选（领导问"能不能只复习某一场的错题"）
   rv_src_label: {cn:'看哪一批错题', en:'Which questions'},
   rv_src_all_opt: {cn:'全部来源', en:'All sources'},
@@ -5952,22 +5952,22 @@ var I18N = {
   rv_bk_none: {cn:'今天没有到期的错题', en:'Nothing due today'},
   rv_bk_done_today: {cn:'今日巩固已完成 ✓ 明天再来', en:"Today's review done ✓ see you tomorrow"},
   rv_bk_rules_sum: {cn:'复习规则', en:'How review works'},
-  rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。一道错题的节奏：第 1 天答对 → 隔 1 天，第 2 天再答对 → 隔 3 天，第 5 天再答对，即毕业并自动移出错题本；同一道错题每天最多推进 1 阶。毕业不等于不再考：之后的练习、模拟考试、限时答题赛里都可能再抽到它（共抽查两次），答对无事，答错重新进错题本。当天答对过的题不再计入当日待复习数量，按上述间隔重新出现。', en:"Due mistakes come first, while the memory is still fresh. The rhythm for each mistake: correct on day 1, again on day 2 (1 day later), again on day 5 (3 days later) \u2014 that graduates it and removes it from the book. At most one stage per day. Graduating does not mean it is never asked again: practice, mock exams and timed races spot-check it twice; answer right and nothing changes, answer wrong and it returns to the book. Mistakes answered correctly today leave today's due count and return on the schedule above."},
+  rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。一道错题的节奏：第 1 天答对 → 隔 1 天，第 2 天再答对 → 隔 3 天，第 5 天再答对，即巩固完成并自动移出错题本；同一道错题每天最多推进 1 阶。巩固完成不等于不再考：之后的练习、模拟考试、限时答题赛里都可能再抽到它（共抽查两次），答对无事，答错重新进错题本。当天答对过的题不再计入当日待复习数量，按上述间隔重新出现。', en:"Due mistakes come first, while the memory is still fresh. The rhythm for each mistake: correct on day 1, again on day 2 (1 day later), again on day 5 (3 days later) \u2014 that clears it and removes it from the book. At most one stage per day. Clearing does not mean it is never asked again: practice, mock exams and timed races spot-check it twice; answer right and nothing changes, answer wrong and it returns to the book. Mistakes answered correctly today leave today's due count and return on the schedule above."},
   // 错题进度图表（2026-11-10）：三个数字 + 一条分段进度条，代替原来那行「掌握度 X% | …」。
   // 学员一眼能看出「多少道学完了、多少道在复习、多少道还没开始」。
   rv_chart_title: {cn:'错题复习进度', en:'Mistake progress'},
   rv_chart_pct: {cn:'完成度 {p}%', en:'{p}% cleared'},
-  rv_chart_grad: {cn:'已毕业', en:'Graduated'},
+  rv_chart_grad: {cn:'已巩固完成', en:'Cleared'},
   rv_chart_doing: {cn:'巩固中', en:'In review'},
   rv_chart_todo: {cn:'未开始', en:'Not started'},
   rv_chart_unit: {cn:'道', en:''},
-  rv_chart_rule: {cn:'第 1 天、第 2 天、第 5 天各答对一次即毕业并移出错题本；同一道错题每天最多推进 1 阶。', en:'Correct on day 1, day 2 and day 5 graduates it and removes it from the book \u2014 at most one stage per day.'},
+  rv_chart_rule: {cn:'第 1 天、第 2 天、第 5 天各答对一次即巩固完成并移出错题本；同一道错题每天最多推进 1 阶。', en:'Correct on day 1, day 2 and day 5 clears it and removes it from the book \u2014 at most one stage per day.'},
   // 答完一题后的即时说明：告诉学员「这一答到底推进了什么」，否则做了还是 0/3 会以为坏了
   rv_h_promote: {cn:'本题已巩固 {n}/{m} 阶 · 下次复习：{d}', en:'Stage {n} of {m} · next review in {d}'},
   rv_h_promote_today: {cn:'本题已巩固 {n}/{m} 阶 · 明天可再复习', en:'Stage {n} of {m} · due again tomorrow'},
-  rv_h_grad: {cn:'本题已毕业，已自动移出错题本（以后练习、考试里还会抽查）', en:'Graduated and removed from your mistake book (still spot-checked in practice and exams)'},
+  rv_h_grad: {cn:'本题已巩固完成，已自动移出错题本（以后练习、考试里还会抽查）', en:'Cleared and removed from your mistake book (still spot-checked in practice and exams)'},
   rv_h_checkpass: {cn:'抽查通过：这道题你已稳定掌握', en:'Spot-check passed — this one is solid'},
-  rv_h_readded: {cn:'这道题此前已巩固通过、移出错题本；这次答错，重新回到第 1 阶', en:'You had already cleared this one and it had left your book — now it is back at stage 1'},
+  rv_h_readded: {cn:'这道题此前已巩固完成、移出错题本；这次答错，重新回到第 1 阶', en:'You had already cleared this one and it had left your book — now it is back at stage 1'},
   rv_h_early: {cn:'本题今天已作答过：同一道错题每天最多推进 1 阶，明天再答对即可进到下一阶', en:'Already answered today \u2014 one stage per day. Answer correctly tomorrow for the next stage.'},
   rv_h_added: {cn:'本题已加入错题本，将按记忆曲线安排复习', en:'Added to your mistake book and scheduled for review'},
   rv_h_added_back: {cn:'本题已记录错误：重回第 1 次巩固', en:'Recorded — back to the first consolidation round'},
@@ -6023,7 +6023,7 @@ function saveState() {
   localStorage.setItem(uk + 'wrongAnswers', JSON.stringify(state.wrongAnswers));
   localStorage.setItem(uk + 'collectedQuestions', JSON.stringify(state.collectedQuestions));
   localStorage.setItem(uk + 'practiceProgress', JSON.stringify(state.practiceProgress));
-  // 掌握度靠这两个才成立：错题本毕业名单 + 本周复习任务
+  // 掌握度靠这两个才成立：错题本巩固完成名单 + 本周复习任务
   try {
     localStorage.setItem(uk + 'mastered', JSON.stringify(state.mastered || {}));
     localStorage.setItem(uk + 'mcheck', JSON.stringify(state.mcheck || {}));
@@ -6139,7 +6139,7 @@ function collectSyncSnapshot() {
         return (tk && tk.target) ? [tk.done || 0, tk.target] : null;
       } catch (e) { return null; }
     })(),
-    // 掌握阶（只传已经推进过的题，st=0 的新错题不必传）+ 毕业名单。
+    // 掌握阶（只传已经推进过的题，st=0 的新错题不必传）+ 巩固完成名单。
     // 换设备/清缓存后靠这两个把"复习到第几阶"接回来，否则掌握率会凭空归零。
     ws: (function () {
       var o = {}, n = 0;
@@ -6868,7 +6868,7 @@ function applyCloudAccountData(key, rec) {
       localStorage.setItem(key + '_reviewStats', JSON.stringify(rv0));
     }
   } catch (eRV) {}
-  // 毕业名单：换设备后掌握率不能凭空归零，本机没有就从快照接回来
+  // 巩固完成名单：换设备后掌握率不能凭空归零，本机没有就从快照接回来
   try {
     if (localStorage.getItem(key + '_mastered') == null && Array.isArray(snap.mg)) {
       var mgObj = {}, mt0 = (snap.ts || Date.now());
@@ -9793,7 +9793,7 @@ function raceRecordStudy(r) {
 // 前 8 题插 2 道（员工 60 秒里真正能答到的就是前几题），之后每 4 题插 1 道。
 // 绝不跨板块：为了让错题出现而把厨房的题塞进餐饮板块，等于教错知识；
 // 也不改题池总量 —— 满分上限不变，排名口径不变。
-// 2026-11-10：毕业后到期抽查的题也走这条插入规则（最多 2 道），答错就地回错题本。
+// 2026-11-10：巩固完成后到期抽查的题也走这条插入规则（最多 2 道），答错就地回错题本。
 var RACE_CHECK_CAP = 2;
 function racePrioritizeWrong(list) {
   try {
@@ -9803,7 +9803,7 @@ function racePrioritizeWrong(list) {
       if (e && wrongIsDue(e)) due.push({ q: list[i], ts: wrongDueOf(e) });
       else rest.push(list[i]);
     }
-    // 毕业后到期抽查（2026-11-10）：跟到期错题一起插进前几道 —— 答错就地回错题本，
+    // 巩固完成后到期抽查（2026-11-10）：跟到期错题一起插进前几道 —— 答错就地回错题本，
     // 答对就把下一次抽查往后排。每局最多 RACE_CHECK_CAP 道，不在限时赛里刷复习题。
     var checks = wrongCheckPoolFrom(rest, RACE_CHECK_CAP, now);
     if (checks.length) {
@@ -14336,7 +14336,7 @@ function renderRaceCalendar() {
       if (hasQ) {
         if (ok[okey]) {
           // 重做状态分两组（2026-11-10）：runWrong = 还在错题本里的「可再练」；
-          // runDone = 重做后已毕业出错的题本「已掌握」，收进次级按钮供自愿巩固。
+          // runDone = 重做后已巩固完成出错的题本「已掌握」，收进次级按钮供自愿巩固。
           var runWrong = [], runDone = [];
           html += '<div style="margin-top:10px;">';
           for (var qi = 0; qi < it.q.length; qi++) {
@@ -14369,7 +14369,7 @@ function renderRaceCalendar() {
             var exp = en ? (q.explanation_en || q.explanation || '') : (q.explanation_cn || q.explanation || '');
             if (exp) html += '<div style="font-size:11px;color:#666;margin-top:4px;line-height:1.6;">📖 ' + escapeHtml(exp).replace(/\n/g, '<br>') + '</div>';
             // 一键重做这道（2026-11-05）：复盘完紧接着练，比"关掉日历再进错题本找"短得多。
-            // 2026-11-10 起按掌握状态区分：已毕业的显示「再练一遍」，未毕业的显示「重做这道」。
+            // 2026-11-10 起按掌握状态区分：已巩固完成的显示「再练一遍」，未巩固完成的显示「重做这道」。
             if (!good) {
               html += '<button class="action-btn secondary" style="margin-top:6px;font-size:12px;padding:4px 12px;'
                 + (mastered ? 'color:#2e7d32;' : '') + '" onclick="startWrongRedoIds([\'' + trip[0] + '\'],{kind:\'cal\',title:\'' + t('rv_cal_redo_one') + '\'})">'
@@ -14989,8 +14989,8 @@ var RACE_MK_MOD_N = 10, RACE_MK_MOD_PASS = 8;
 // / noid=没有届次可挂 / used=本期已补过。
 // ---- 补签额度制（2026-11-10）----
 // 每届原生 1 次补签；完成任务可再赚，总上限 cap 次（管理端可配，默认 3）。
-//   任务A · 错题毕业：本届期间通过复习让 gradN 道错题毕业（默认 5 道/次）。
-//           只认 reviewLog 里的 'g'（毕业）事件 —— 手动移出错题本不走这条账，天然不计。
+//   任务A · 错题巩固完成：本届期间通过复习让 gradN 道错题巩固完成（默认 5 道/次）。
+//           只认 reviewLog 里的 'g'（巩固完成）事件 —— 手动移出错题本不走这条账，天然不计。
 //   任务B · 模块挑战：任选产品知识模块抽 5 题一次全对，每模块每届 1 次（rec.mkModules 记账）。
 // 额度全部**按状态推导**，不另存"已赚"字段：改门槛 / 换届都不用做数据迁移，也不会重复发。
 function raceMkGradCount(since) {
@@ -15241,7 +15241,7 @@ function renderRaceMkTask() {
   html += '<div style="font-size:13px;font-weight:700;color:#000;">✍ ' + t('race_makeup_left').replace('{n}', String(mk.left)) + '</div>';
   html += '<div style="font-size:11.5px;color:rgba(0,0,0,.6);margin-top:4px;line-height:1.6;">' + escapeHtml(raceMkNoteOf(mk)) + '</div>';
   html += '</div>';
-  // 任务A · 错题毕业
+  // 任务A · 错题巩固完成
   var aGot = mk.earnedA, aNext = mk.grad % mk.gradN;
   var aRest = mk.gradN - aNext;
   html += '<div class="q-card">';
@@ -15354,13 +15354,13 @@ function renderAdminRace() {
   html += '<option value="sum"' + (dmode === 'sum' ? ' selected' : '') + '>' + t('race_dept_days_sum') + '</option>';
   html += '<option value="avg"' + (dmode === 'avg' ? ' selected' : '') + '>' + t('race_dept_days_avg') + '</option>';
   html += '</select>';
-  // 补签任务配置（2026-11-10 额度制）：任务开关 / 错题毕业数 / 每届补签上限
+  // 补签任务配置（2026-11-10 额度制）：任务开关 / 错题巩固完成数 / 每届补签上限
   html += '<div style="border-top:1px solid #eef1f4;margin-top:12px;padding-top:10px;">';
   html += '<div style="font-size:13px;font-weight:600;margin-bottom:6px;">' + (en ? 'Make-up tasks' : '补签任务') + '</div>';
   html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;padding:2px 0;cursor:pointer;">'
     + '<input type="checkbox" id="raceMkTaskOn" style="margin-top:2px;"' + (c.mkTaskOn !== false ? ' checked' : '') + '> '
-    + '<span>' + (en ? 'Enable make-up earning tasks' : '启用赚补签任务（错题毕业 / 模块挑战）') + '</span></label>';
-  html += '<label style="font-size:12px;color:#666;margin-top:8px;display:block;">' + (en ? 'Wrong answers to graduate per make-up (Task 1)' : '任务一：每毕业多少道错题记 1 次补签') + '</label>';
+    + '<span>' + (en ? 'Enable make-up earning tasks' : '启用赚补签任务（错题巩固 / 模块挑战）') + '</span></label>';
+  html += '<label style="font-size:12px;color:#666;margin-top:8px;display:block;">' + (en ? 'Wrong answers to clear per make-up (Task 1)' : '任务一：每巩固完成多少道错题记 1 次补签') + '</label>';
   html += '<input id="raceMkGradN" type="number" min="1" max="50" step="1" style="width:100%;padding:8px;margin:4px 0 4px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((parseInt(c.mkGradN, 10) || 0) > 0 ? parseInt(c.mkGradN, 10) : 5) + '">';
   html += '<label style="font-size:12px;color:#666;margin-top:8px;display:block;">' + (en ? 'Make-up limit per round (incl. the free one)' : '每届补签次数上限（含原生 1 次）') + '</label>';
   html += '<input id="raceMkCap" type="number" min="1" max="10" step="1" style="width:100%;padding:8px;margin:4px 0 4px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((parseInt(c.mkCap, 10) || 0) > 0 ? parseInt(c.mkCap, 10) : 3) + '">';
@@ -15989,7 +15989,7 @@ function adminRacePublish() {
   // C1 参与保底达标线（2026-11-03）：随赛事配置一起发布
   c.partN = parseInt((el('racePartN') && el('racePartN').value), 10) || 5;
   c.deptDaysMode = ((el('raceDeptDaysMode') && el('raceDeptDaysMode').value) === 'avg') ? 'avg' : 'sum';
-  // 补签任务配置（2026-11-10）：开关 / 毕业数 / 上限随赛事一起发布
+  // 补签任务配置（2026-11-10）：开关 / 巩固完成数 / 上限随赛事一起发布
   c.mkTaskOn = !!(el('raceMkTaskOn') && el('raceMkTaskOn').checked);
   c.mkGradN = Math.max(1, Math.min(50, parseInt((el('raceMkGradN') && el('raceMkGradN').value), 10) || 5));
   c.mkCap = Math.max(1, Math.min(10, parseInt((el('raceMkCap') && el('raceMkCap').value), 10) || 3));
@@ -16821,7 +16821,7 @@ function renderQuestion() {
   html += '<div class="progress-bar"><div class="progress-fill" style="width:'+progressPct+'%"></div></div>';
 
   // 专项卷 / 错题重做：顶部一条会话条。让员工看到「这一卷已经在产出什么」——
-  // 答对几道、几道题推进了掌握阶、几道彻底毕业，比只给个进度条更有反馈。
+  // 答对几道、几道题推进了掌握阶、几道彻底巩固完成，比只给个进度条更有反馈。
   if (state.paperSession && state.currentMode === 'wrong') {
     var ps0 = state.paperSession;
     html += '<div style="display:flex;gap:10px;align-items:center;background:#eef6f0;border:1px solid #cfe6d6;'
@@ -17116,8 +17116,8 @@ function renderWrongList() {
 //  记答案而不记知识。光多开练习入口没用，必须让答错的题自己回来找他，而且只有
 //  隔天再答对才算数。于是：
 //    · 每道错题带一个掌握阶 st(0..2) 和下次到期时间 due；
-//    · 答对一次升一阶（1 天 / 3 天后再考），第 1、2、5 天各答对一次即毕业（2026-11-10 由三阶缩短）；
-//    · 毕业后仍会被练习抽查两次（+7 天 / +30 天），答错原样回错题本第 1 阶；
+//    · 答对一次升一阶（1 天 / 3 天后再考），第 1、2、5 天各答对一次即巩固完成（2026-11-10 由三阶缩短）；
+//    · 巩固完成后仍会被练习抽查两次（+7 天 / +30 天），答错原样回错题本第 1 阶；
 //    · 同一局 / 同一天里重复答对不算（防连点刷掉），且间隔至少 4 小时；
 //    · 到期错题会优先出现在练习、模拟考、答题赛里，但永远只在本板块内 ——
 //      为了让错题出现而把题塞进不属于它的板块，等于教错知识。
@@ -17265,17 +17265,17 @@ function reviewTagName(tag) {
 }
 
 // ---- 掌握阶与到期调度 ----
-// 两阶毕业（2026-11-10 用户拍板缩短）：第 1 天答对 → 1 阶，第 2 天答对 → 2 阶，
-// 第 5 天再答对一次即毕业。原来是三阶（1/3/7 天，最快 12 天），对酒店同事太长，
+// 两阶走满即巩固完成（2026-11-10 用户拍板缩短）：第 1 天答对 → 1 阶，第 2 天答对 → 2 阶，
+// 第 5 天再答对一次即巩固完成。原来是三阶（1/3/7 天，最快 12 天），对酒店同事太长，
 // 中途一断就前功尽弃；5 天的节奏既保住「隔天回忆」的记忆价值，也不至于劝退。
-var WRONG_STAGE_MAX = 2;                       // 走满两阶（隔 1 天、隔 3 天）= 毕业
+var WRONG_STAGE_MAX = 2;                       // 走满两阶（隔 1 天、隔 3 天）= 巩固完成
 var WRONG_INTERVALS = [1, 3];                  // 第 1/2 阶通过后的复习间隔（天）
 var WRONG_DAY_MS = 86400000;
 var WRONG_MIN_GAP_MS = 4 * 3600 * 1000;        // 同一天里刷两次不算通过，至少隔 4 小时
-var WRONG_MASTER_CAP = 400;                    // 毕业名单上限（只影响掌握度精度）
-// 毕业后抽查：毕业不等于永远不考了。隔 7 天、再隔 30 天各抽查一次（答对无事、
+var WRONG_MASTER_CAP = 400;                    // 巩固完成名单上限（只影响掌握度精度）
+// 巩固完成后抽查：巩固完成不等于永远不考了。隔 7 天、再隔 30 天各抽查一次（答对无事、
 // 答错原样回错题本第 1 阶），两次都答对才算彻底过关，之后不再出现。
-var WRONG_CHECK_GAPS = [7, 30];                // 毕业后第 1/2 次抽查的间隔（天）
+var WRONG_CHECK_GAPS = [7, 30];                // 巩固完成后第 1/2 次抽查的间隔（天）
 var WRONG_CHECK_CAP = 3;                       // 每轮练习最多混入几道抽查题，别喧宾夺主
 var WRONG_CHECK_EXAM_CAP = 2;                  // 模拟考卷里最多换进几道抽查题（占 30% 预算内）
 
@@ -17332,7 +17332,7 @@ function ansToBankOrder(q, ans) {
   return ans.map(function (x) { return (typeof ord[x] === 'number') ? ord[x] : x; });
 }
 // 同一道题可能同时挂在 day21 和 day21_kitchen 两个桶里 —— 作答是对这道题的，
-// 两个桶都要推进，否则「厨房版错题永远毕业不了」。
+// 两个桶都要推进，否则「厨房版错题永远巩固完成不了」。
 function wrongSkeysForQid(qid) {
   var out = [], banks = state.wrongAnswers || {};
   for (var sk in banks) {
@@ -17350,8 +17350,8 @@ function wrongTrimMastered() {
   for (var i = 0; i < ids.length - WRONG_MASTER_CAP; i++) delete m[ids[i]];
 }
 
-// ---- 毕业后抽查（2026-11-10）----
-// 毕业的题不再躺在错题本里，但「毕业 = 永远不考」等于把遗忘交给运气。所以毕业后
+// ---- 巩固完成后抽查（2026-11-10）----
+// 巩固完成的题不再躺在错题本里，但「巩固完成 = 永远不考」等于把遗忘交给运气。所以巩固完成后
 // 排两次抽查（+7 天、+30 天）：练习里会优先混进来再考一次，答对无事、答错原样回
 // 错题本第 1 阶重来。两次抽查都过 = 彻底掌握，之后不再出现。
 function wrongCheckOf(qid) {
@@ -17359,8 +17359,8 @@ function wrongCheckOf(qid) {
   if (m && typeof m === 'object' && m.due) return m;
   return null;
 }
-// 没记过抽查排期的（这版之前毕业的老数据）按「毕业时间 + 7 天」推算，
-// 不会一次性把几百道毕业题全塞进练习里。
+// 没记过抽查排期的（这版之前巩固完成的老数据）按「巩固完成时间 + 7 天」推算，
+// 不会一次性把几百道巩固完成题全塞进练习里。
 function wrongCheckDueTs(qid) {
   var mas = state.mastered || {};
   var g = mas[qid] || 0;
@@ -17373,7 +17373,7 @@ function wrongCheckIsDue(qid, now) {
   var due = wrongCheckDueTs(qid);
   return !!due && due <= (now || Date.now());
 }
-// 刚毕业：排第一次抽查
+// 刚巩固完成：排第一次抽查
 function wrongCheckStart(qid, now) {
   if (!state.mcheck || typeof state.mcheck !== 'object') state.mcheck = {};
   state.mcheck[qid] = { n: 1, due: (now || Date.now()) + WRONG_CHECK_GAPS[0] * WRONG_DAY_MS };
@@ -17412,7 +17412,7 @@ function wrongEntryAnyBank(qid) {
   }
   return best;
 }
-// 从任意题池里挑出「毕业后到期该抽查」的题，最多 cap 道。
+// 从任意题池里挑出「巩固完成后到期该抽查」的题，最多 cap 道。
 // 还在错题本里的题不算抽查（它走「到期错题」那条线，别重复算）。
 function wrongCheckPoolFrom(list, cap, now) {
   var out = [];
@@ -17484,7 +17484,7 @@ function wrongPass(skey, qid, opts) {
     if (!state.mastered || typeof state.mastered !== 'object') state.mastered = {};
     state.mastered[qid] = now;
     wrongTrimMastered();
-    wrongCheckStart(qid, now);      // 毕业 → 排第一次抽查（7 天后练习里混进来再考）
+    wrongCheckStart(qid, now);      // 巩固完成 → 排第一次抽查（7 天后练习里混进来再考）
     reviewTaskNotePass(qid);
     return 'graduated';
   }
@@ -17515,7 +17515,7 @@ function recordAttempt(q, ans, opts) {
   var where = opts.src || reviewSourceOf();
   var wasMastered = !!(state.mastered && state.mastered[q.id]);
   if (opts.ok) {
-    // 已毕业的题在练习里被抽查到：答对就把下一次抽查往后排，两次都过即销号。
+    // 已巩固完成的题在练习里被抽查到：答对就把下一次抽查往后排，两次都过即销号。
     // 这道题不在错题本里（keys 为空），所以这里必须单独处理，不然抽查永远结不了账。
     if (!keys.length) {
       if (wasMastered) {
@@ -17531,14 +17531,14 @@ function recordAttempt(q, ans, opts) {
       else if (r === 'promoted' && best !== 'graduated') best = 'promoted';
       else if (r === 'early' && !best) best = 'early';
     }
-    // 只有真正推进/毕业才入账：'early'（当天连点、间隔不足 4 小时）不给分，
+    // 只有真正推进/巩固完成才入账：'early'（当天连点、间隔不足 4 小时）不给分，
     // 这是"记答案刷分"唯一的缺口，必须堵死。
     if (best === 'graduated') reviewLogAdd(q.id, 'g', WRONG_STAGE_MAX, where, opts.now);
     else if (best === 'promoted') reviewLogAdd(q.id, 'p', wrongStageOf((state.wrongAnswers[keys[0]] || {})[q.id]), where, opts.now);
     return best;
   }
   var skey = opts.skey || bankStateKey();
-  // 毕业的题又答错：先从毕业名单里销号，再按新错题重新进本（第 1 阶重来）。
+  // 巩固完成的题又答错：先从巩固完成名单里销号，再按新错题重新进本（第 1 阶重来）。
   if (wasMastered) wrongCheckDrop(q.id);
   var targets = keys.length ? keys : [skey];
   for (var j = 0; j < targets.length; j++) wrongAdd(targets[j], q, ua, opts);
@@ -17597,7 +17597,7 @@ function wrongDueCount(bank) {
 // 那道题只要出现在本次练习的题池里，就应该被优先推到前面。
 function wrongPriorityPracticeList(rawQuestions) {
   // 整卷（21 天 / 三步法）保持试卷原顺序：它本身就是「按天学」的次序，重排会打乱进度感；
-  // 而且整卷练习本来就要走完整张卷子，毕业题不会漏，不需要抢位置。
+  // 而且整卷练习本来就要走完整张卷子，巩固完成题不会漏，不需要抢位置。
   if (isPaperBank(state.currentBank)) return rawQuestions;
   var due = [], rest = [], i, now = Date.now();
   for (i = 0; i < rawQuestions.length; i++) {
@@ -17605,7 +17605,7 @@ function wrongPriorityPracticeList(rawQuestions) {
     if (e && wrongIsDue(e)) due.push(rawQuestions[i]);
     else rest.push(rawQuestions[i]);
   }
-  // 毕业后抽查（2026-11-10）：到期的已毕业题排在「到期错题」之后、「普通题」之前，
+  // 巩固完成后抽查（2026-11-10）：到期的已巩固完成题排在「到期错题」之后、「普通题」之前，
   // 每轮最多 WRONG_CHECK_CAP 道 —— 学员感觉是「顺手又碰到一道以前错过的题」，
   // 而不是被塞了一卷复习题。答错的话它会原样回到错题本第 1 阶。
   var checks = wrongCheckPoolFrom(rest, WRONG_CHECK_CAP, now);
@@ -17620,7 +17620,7 @@ function wrongPriorityPracticeList(rawQuestions) {
   due.sort(function (a, b) { return wrongDueOf(wrongEntryAnyBank(a.id)) - wrongDueOf(wrongEntryAnyBank(b.id)); });
   return due.concat(checks, rest);
 }
-// 模拟考试：在同一批抽题里用「到期错题 + 毕业后抽查题」换掉最多 30%
+// 模拟考试：在同一批抽题里用「到期错题 + 巩固完成后抽查题」换掉最多 30%
 // （整卷试卷不换：题量已经等于题池时原样返回）
 function wrongPriorityExamSet(rawQuestions, picked) {
   if (!picked.length) return picked;
@@ -17629,7 +17629,7 @@ function wrongPriorityExamSet(rawQuestions, picked) {
   var quota = Math.max(1, Math.floor(picked.length * 0.3));
   var pickedIds = {}, used = {}, inject = [];
   for (i = 0; i < picked.length; i++) pickedIds[picked[i].id] = 1;
-  // 没被抽中的题里，先挑「毕业后到期该抽查」的 —— 它们最需要再考一次，
+  // 没被抽中的题里，先挑「巩固完成后到期该抽查」的 —— 它们最需要再考一次，
   // 预算有限时优先给它们 1~2 个名额。
   var restPool = [];
   for (i = 0; i < rawQuestions.length; i++) {
@@ -17689,7 +17689,7 @@ function reviewWeakTags(bank) {
 }
 
 // ---- 错题掌握率：脱离排名的第二维度 ----
-// 定义 = (毕业题数 + Σ掌握阶/4) ÷ (毕业题数 + 错题本现有题数)。
+// 定义 = (巩固完成题数 + Σ掌握阶/4) ÷ (巩固完成题数 + 错题本现有题数)。
 // 为什么不用"503 道题做分母"：平台没有逐题正确历史，答对过的题根本不留痕，
 // 用全量做分母会让练了 100 题的人显示 0% —— 那是个假指标。
 // 只算产品知识：21 天培训和三步法的错题本按需求保持不变，不参与这个口径。
@@ -17725,7 +17725,7 @@ function reviewStatsEnsure() {
   for (var i = 0; i < k.length; i++) if (typeof st[k[i]] !== 'number' || st[k[i]] < 0) st[k[i]] = 0;
   return st;
 }
-// 记一条复习事件。res: 'p' 推进一阶 | 'g' 毕业 | 'f' 复习答错
+// 记一条复习事件。res: 'p' 推进一阶 | 'g' 巩固完成 | 'f' 复习答错
 // 返回 true 表示这次真的入账（去重没过返回 false，界面不受影响）
 function reviewLogAdd(qid, res, stage, where, now) {
   if (!qid || !res) return false;
@@ -18246,7 +18246,7 @@ function renderWrongAll() {
   html += '<div class="page">';
 
   // ---- 错题复习进度（2026-11-10）：三个数字 + 一条分段进度条，代替原来那行
-  // 「错题掌握度 42% | 已掌握…」。学员先要看清「一共多少道 / 多少在复习 / 多少已毕业」，
+  // 「错题掌握度 42% | 已掌握…」。学员先要看清「一共多少道 / 多少在复习 / 多少已巩固完成」，
   // 后面的练习才有目标感；规则也放在这里一行说明，不用点开折叠才知道。
   var nTodo = 0, nDoing = 0;
   for (var ci2 = 0; ci2 < allRows.length; ci2++) {
@@ -18323,7 +18323,7 @@ function renderWrongAll() {
         }
         if (_didToday) break;
       }
-      // 全部答对且都已毕业的题会从错题本里删掉，只能靠账本判；这里再看一次毕业名单。
+      // 全部答对且都已巩固完成的题会从错题本里删掉，只能靠账本判；这里再看一次巩固完成名单。
       if (!_didToday) {
         var _ms = state.mastered || {};
         for (var _mq in _ms) {
@@ -18519,10 +18519,10 @@ function attemptHintHtml(q, res) {
   } else if (res === 'early') {
     txt = '⏳ ' + t('rv_h_early'); color = '#8a5a00';
   } else if (res === 'checked') {
-    // 毕业后抽查：答对了不给进度条压力，只轻声确认一句，学员知道自己过关了
+    // 巩固完成后抽查：答对了不给进度条压力，只轻声确认一句，学员知道自己过关了
     txt = '✅ ' + t('rv_h_checkpass'); color = '#2e7d32';
   } else if (res === 'readded') {
-    // 毕业过的题又答错：必须说清楚它回到错题本了，否则学员会以为系统出错
+    // 巩固完成过的题又答错：必须说清楚它回到错题本了，否则学员会以为系统出错
     txt = '📥 ' + t('rv_h_readded'); color = '#c0392b';
   } else if (res === 'added') {
     var k2 = wrongSkeysForQid(q.id), back = false;
@@ -18710,7 +18710,7 @@ function renderCollectedList() {
       html += '<div class="q-preview">' + escapeHtml(q ? qTextOf(q).substring(0, 100) : qid) + '</div>';
       html += '<div class="q-meta">';
       html += '<span>' + escapeHtml(getBankName(collectedBankOf(qid)) || '') + (q ? ' · ' + getTypeShort(q.type) : '') + '</span>';
-      // 已从错题本毕业的收藏题：提示"可以移出了"，但不自动删 —— 收藏是主观意愿
+      // 已从错题本巩固完成的收藏题：提示"可以移出了"，但不自动删 —— 收藏是主观意愿
       if (gone) html += '<span style="color:#27ae60;">✓ ' + t('rv_fav_mastered') + '</span>';
       html += '</div>';
       html += '<div style="text-align:right;margin-top:8px;"><button class="nav-btn secondary" style="font-size:12px;padding:4px 12px;" onclick="event.stopPropagation();removeFromCollected(\'' + qid + '\')">🗑 ' + t('remove_one') + '</button></div>';
