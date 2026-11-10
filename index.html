@@ -1198,6 +1198,22 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
   .ds-subname { flex:0 0 120px; }
   .dept-cnt { display:none; }
 }
+
+/* ===== 人员变动：工号行卡 ===== */
+.adm-content .stf-row { display:flex; align-items:center; gap:12px; padding:11px 13px; border:1px solid var(--a-line);
+  border-radius:10px; margin-bottom:8px; background:#fff; }
+.adm-content .stf-row:hover { border-color:var(--a-blue-d); background:#FAFCFE; }
+.adm-content .stf-emp { font-size:13px; font-weight:700; letter-spacing:.01em; min-width:70px; color:var(--a-ink);
+  font-variant-numeric:tabular-nums; }
+.adm-content .stf-main { flex:1; min-width:0; }
+.adm-content .stf-nm { font-size:13px; color:var(--a-ink); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.adm-content .stf-meta { font-size:11.5px; color:var(--a-i4); margin-top:3px; }
+.adm-content .stf-acts { display:flex; gap:6px; flex-shrink:0; }
+.adm-content .stf-acts .ap-btn { height:30px; padding:0 12px; font-size:12.5px; }
+@media (max-width:760px) {
+  .adm-content .stf-row { flex-wrap:wrap; }
+  .adm-content .stf-acts { width:100%; }
+}
 </style>
 </head>
 <body>
@@ -4704,12 +4720,14 @@ function loadUserData() {
   state.collectedQuestions = JSON.parse(localStorage.getItem(uk + 'collectedQuestions') || '[]');
   state.practiceProgress = JSON.parse(localStorage.getItem(uk + 'practiceProgress') || '{}');
   try { state.mastered = JSON.parse(localStorage.getItem(uk + 'mastered') || '{}') || {}; } catch (e) { state.mastered = {}; }
+  try { state.mcheck = JSON.parse(localStorage.getItem(uk + 'mcheck') || '{}') || {}; } catch (e5) { state.mcheck = {}; }
   try { state.reviewTask = JSON.parse(localStorage.getItem(uk + 'reviewTask') || 'null'); } catch (e2) { state.reviewTask = null; }
   // 复习账本：积分制的唯一数据源，必须跟错题本一起载入/保存
   try { state.reviewLog = JSON.parse(localStorage.getItem(uk + 'reviewLog') || '[]') || []; } catch (e3) { state.reviewLog = []; }
   try { state.reviewStats = JSON.parse(localStorage.getItem(uk + 'reviewStats') || 'null'); } catch (e4) { state.reviewStats = null; }
   if (!Array.isArray(state.reviewLog)) state.reviewLog = [];
   if (!state.mastered || typeof state.mastered !== 'object') state.mastered = {};
+  if (!state.mcheck || typeof state.mcheck !== 'object') state.mcheck = {};
   wrongNormAll();   // 老版本存的错题条目没有掌握阶，这里补齐（st=0 立即到期）
   state.profile = loadProfile();
   // Push the latest cumulative snapshot to the admin cloud view on every login /
@@ -5596,7 +5614,7 @@ var I18N = {
   race_mk_note_full: {cn:'本届上限 {cap} 次，已全部获得。', en:'All {cap} for this round have been earned.'},
   race_mk_note_used_can: {cn:'当前次数已用完，完成任务还可再赚 {r} 次。', en:'None left right now — tasks can earn {r} more.'},
   race_mk_task_a_name: {cn:'任务一 · 错题毕业', en:'Task 1 \u00b7 Graduate mistakes'},
-  race_mk_task_a_desc: {cn:'统计范围：本届赛事期间，通过复习让 {x} 道错题毕业。毕业规则与错题本一致——第一次答对即记 1/3 阶，之后同一道题每天最多推进 1 阶，累计答对 4 次（跨 4 天）即毕业并自动移出错题本；每毕业 {x} 道记 1 次补签机会。手动移出错题本不计入。', en:'Scope: this round only. Graduate {x} mistakes through review to earn 1 make-up per {x}. Same rule as the mistake book: the first correct answer counts as stage 1 of 3, after that one stage per day, four correct answers in total to graduate and be removed automatically. Manual removal does not count.'},
+  race_mk_task_a_desc: {cn:'统计范围：本届赛事期间，通过复习让 {x} 道错题毕业。毕业规则与错题本一致——第 1 天、第 2 天、第 5 天各答对一次即毕业并自动移出错题本（同一道题每天最多推进 1 阶）；每毕业 {x} 道记 1 次补签机会。手动移出错题本不计入。', en:'Scope: this round only. Graduate {x} mistakes through review to earn 1 make-up per {x}. Same rule as the mistake book: correct answers on day 1, day 2 and day 5 graduate the question and remove it automatically (at most one stage per day). Manual removal does not count.'},
   race_mk_task_a_prog: {cn:'本届已毕业 {a} 道 · 每毕业 {x} 道记 1 次', en:'{a} graduated this round \u00b7 1 make-up per {x}'},
   race_mk_task_a_next: {cn:'已获得 {n} 次 · 再毕业 {r} 道可再得 1 次', en:'{n} earned \u00b7 {r} more to earn another'},
   race_mk_task_a_go: {cn:'📚 去错题本开始复习 ›', en:'📚 Go to the wrong-answer book ›'},
@@ -5792,10 +5810,11 @@ var I18N = {
   rv_tab_all_hint: {cn:'你在练习、模拟考、答题赛里做错过的全部题目。', en:'Every question you have got wrong in practice, exams and races.'},
   rv_tab_tag_hint: {cn:'选一个知识点，看看这一类你错了几道。', en:'Pick a topic to see how many you got wrong in it.'},
   rv_no_due: {cn:'现在没有该复习的题。等它到期再来，效果最好。', en:'Nothing due right now — come back when it is.'},
-  // 规则文案（2026-11-10 统一术语）：巩固 = 答对 1 次推进 1 阶；毕业 = 走完三阶后再答对 1 次、自动移出错题本。
+  // 规则文案（2026-11-10 统一术语）：巩固 = 答对 1 次推进 1 阶；毕业 = 走完两阶后（第 5 天）
+  // 再答对 1 次、自动移出错题本；毕业后仍会被练习抽查两次。
   // 「掌握」这个词在学员端全部退役 —— 任务一叫「错题毕业」，错题本就该用同一套词。
-  rv_stage_hint: {cn:'规则：第一次答对即记 1/3 阶；之后同一道错题每天最多推进 1 阶。每次答对记 1 次巩固，下次复习依次间隔 1 天、3 天、7 天；巩固满 3 次后再答对 1 次即毕业，系统自动移出错题本。中途若又答错，这道题回到第 1 次重新巩固。', en:'How it works: the first correct answer always counts as stage 1 of 3; after that a mistake advances at most one stage per day. Each correct answer counts once and brings the question back after 1, then 3, then 7 days. One more correct answer after the third consolidation graduates it and removes it from the book. A wrong answer sends it back to the first round.'},
-  rv_stage_n: {cn:'已巩固 {n}/{m} 次', en:'{n} of {m} consolidated'},
+  rv_stage_hint: {cn:'规则：第 1 天答对记 1 阶，第 2 天再答对记 2 阶，第 5 天再答对一次即毕业、自动移出错题本。同一道错题每天最多推进 1 阶；中途又答错，就回到第 1 阶重来。毕业后仍会在练习里被抽查，答错会重新进错题本。', en:'How it works: correct on day 1 (stage 1), correct on day 2 (stage 2), then one more correct answer on day 5 graduates it and removes it from the book. At most one stage per day; a wrong answer sends it back to stage 1. Graduated questions are still spot-checked in later practice \u2014 get one wrong and it returns to the book.'},
+  rv_stage_n: {cn:'已巩固 {n}/{m} 阶', en:'stage {n} of {m}'},
   rv_stage_last: {cn:' · 再答对 1 次即毕业', en:' · one more answer to graduate'},
   rv_wrong_times: {cn:'您做错过 {n} 次', en:'{n} wrong attempts'},
   rv_redo_due: {cn:'复习这 {n} 道题', en:'Review these {n}'},
@@ -5904,7 +5923,7 @@ var I18N = {
   rv_bk_none: {cn:'今天没有到期的错题', en:'Nothing due today'},
   rv_bk_done_today: {cn:'今日巩固已完成 ✓ 明天再来', en:"Today's review done ✓ see you tomorrow"},
   rv_bk_rules_sum: {cn:'复习规则', en:'How review works'},
-  rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。第一次答对即记 1/3 阶，之后同一道错题每天最多推进 1 阶：第 1 次答对后隔 1 天复习，第 2 次后隔 3 天，第 3 次后隔 7 天；第 4 次答对即毕业，自动移出错题本。当天答对过的题不再计入当日待复习数量，按上述间隔重新出现。', en:"Due mistakes come first, while the memory is still fresh. The first correct answer counts as stage 1 of 3, after that a mistake advances at most one stage per day: the 1st correct answer brings it back in 1 day, then 3 days, then 7 days; the 4th correct answer graduates it and removes it from the book. Mistakes answered correctly today leave today's due count and return on the schedule above."},
+  rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。一道错题的节奏：第 1 天答对 → 隔 1 天，第 2 天再答对 → 隔 3 天，第 5 天再答对，即毕业并自动移出错题本；同一道错题每天最多推进 1 阶。毕业不等于不再考：之后的练习里还会抽查两次，答对无事，答错重新进错题本。当天答对过的题不再计入当日待复习数量，按上述间隔重新出现。', en:"Due mistakes come first, while the memory is still fresh. The rhythm for each mistake: correct on day 1, again on day 2 (1 day later), again on day 5 (3 days later) \u2014 that graduates it and removes it from the book. At most one stage per day. Graduating does not mean it is never asked again: practice spot-checks it twice; answer right and nothing changes, answer wrong and it returns to the book. Mistakes answered correctly today leave today's due count and return on the schedule above."},
   // 错题进度图表（2026-11-10）：三个数字 + 一条分段进度条，代替原来那行「掌握度 X% | …」。
   // 学员一眼能看出「多少道学完了、多少道在复习、多少道还没开始」。
   rv_chart_title: {cn:'错题复习进度', en:'Mistake progress'},
@@ -5913,11 +5932,13 @@ var I18N = {
   rv_chart_doing: {cn:'巩固中', en:'In review'},
   rv_chart_todo: {cn:'未开始', en:'Not started'},
   rv_chart_unit: {cn:'道', en:''},
-  rv_chart_rule: {cn:'第一次答对即记 1 阶，之后每天最多推进 1 阶；累计答对 4 次（跨 4 天）即毕业并移出错题本。', en:'The first correct answer counts as stage 1, then one stage per day; 4 correct answers across 4 days graduate it and remove it from the book.'},
+  rv_chart_rule: {cn:'第 1 天、第 2 天、第 5 天各答对一次即毕业并移出错题本；同一道错题每天最多推进 1 阶。', en:'Correct on day 1, day 2 and day 5 graduates it and removes it from the book \u2014 at most one stage per day.'},
   // 答完一题后的即时说明：告诉学员「这一答到底推进了什么」，否则做了还是 0/3 会以为坏了
-  rv_h_promote: {cn:'本题已巩固 {n}/{m} 次 · 下次复习：{d}', en:'Consolidated {n}/{m} · next review in {d}'},
-  rv_h_promote_today: {cn:'本题已巩固 {n}/{m} 次 · 明天可再复习', en:'Consolidated {n}/{m} · due again tomorrow'},
-  rv_h_grad: {cn:'本题已毕业，已自动移出错题本', en:'Graduated — removed from your mistake book'},
+  rv_h_promote: {cn:'本题已巩固 {n}/{m} 阶 · 下次复习：{d}', en:'Stage {n} of {m} · next review in {d}'},
+  rv_h_promote_today: {cn:'本题已巩固 {n}/{m} 阶 · 明天可再复习', en:'Stage {n} of {m} · due again tomorrow'},
+  rv_h_grad: {cn:'本题已毕业，已自动移出错题本（以后练习里还会抽查）', en:'Graduated and removed from your mistake book (still spot-checked in practice)'},
+  rv_h_checkpass: {cn:'抽查通过：这道题你已稳定掌握', en:'Spot-check passed — this one is solid'},
+  rv_h_readded: {cn:'这道题以前毕业过，这次答错，重新回到错题本第 1 阶', en:'You had graduated this one — now it is back in your book at stage 1'},
   rv_h_early: {cn:'本题今天已作答过：同一道错题每天最多推进 1 阶，明天再答对即可进到下一阶', en:'Already answered today \u2014 one stage per day. Answer correctly tomorrow for the next stage.'},
   rv_h_added: {cn:'本题已加入错题本，将按记忆曲线安排复习', en:'Added to your mistake book and scheduled for review'},
   rv_h_added_back: {cn:'本题已记录错误：重回第 1 次巩固', en:'Recorded — back to the first consolidation round'},
@@ -5976,6 +5997,7 @@ function saveState() {
   // 掌握度靠这两个才成立：错题本毕业名单 + 本周复习任务
   try {
     localStorage.setItem(uk + 'mastered', JSON.stringify(state.mastered || {}));
+    localStorage.setItem(uk + 'mcheck', JSON.stringify(state.mcheck || {}));
     localStorage.setItem(uk + 'reviewTask', JSON.stringify(state.reviewTask || null));
     localStorage.setItem(uk + 'reviewLog', JSON.stringify(state.reviewLog || []));
     localStorage.setItem(uk + 'reviewStats', JSON.stringify(state.reviewStats || null));
@@ -7166,6 +7188,9 @@ function rosterHas(emp) {
 function isEmpNotInRoster(emp) {
   var e = normEmpNo(emp);
   if (!e) return false;
+  // 管理员在「人员变动」里显式标为离职的工号：即使名册为空也要拦。
+  // fail-open 只针对"还没配名单"，不该让一次点名失效被空名单放过去。
+  try { if ((loadNameRoster().reasons || {})[e] === 'left') return true; } catch (err) {}
   var r = loadRoster();
   if (!r.ids || !r.ids.length) return false;
   return !rosterHas(e);
@@ -7923,6 +7948,300 @@ function adminMarkStudentLeft(stuKey) {
     render();
   });
 }
+// ===== 人员变动：按工号即时失效 / 恢复（2026-11-10）====================
+// 以前把一个人标离职只有两条路：改 Excel 重导整份名册，或进「已注册学员」的
+// 详情页点按钮。前者笨重（人事变动是每天的事，名册却是月度的），后者对
+// 「从来没注册过」的工号完全无效。这里给一个按工号操作的入口，与是否注册过无关：
+//   设为离职 → 从名册移出 + reasons[工号]='left'
+//              ⇒ isEmpBlocked 立即为真：学员端 ~90 秒内被拦，已登录的设备踢回登录页
+//   恢复在职 → 写回名册（优先用注册姓名 / 历史名册姓名，都没有则留空成预留工号）
+// 写入仍走唯一出口 adminPublishNameRoster（ids 与 nameRoster 同源、everIds 只增不减）。
+function staffIsLeft(emp) {
+  var e = normEmpNo(emp);
+  if (!e) return false;
+  return (loadNameRoster().reasons || {})[e] === 'left';
+}
+// 已注册账号索引（工号 → 最新档案），一次遍历建表，避免逐行 O(n²)
+function staffRegIndex() {
+  var recs = adminStudentRecords(), idx = {};
+  for (var i = 0; i < recs.length; i++) {
+    var rec = recs[i], sn = rec.snap || {};
+    var e = normEmpNo(dashEmpNoOf(sn, rec.key));
+    if (!e) continue;
+    var ts = sn.ts || 0, prev = idx[e];
+    if (prev && (prev.ts || 0) > ts) continue;
+    idx[e] = {
+      key: rec.key, cn: String(sn.cn || sn.name || ''), en: String(sn.en || ''),
+      div: String(sn.div || ''), dept: String(sn.dept || ''), ts: ts,
+      n: (rec.exams || []).length
+    };
+  }
+  return idx;
+}
+// 工号 → 一行可展示数据
+function staffRowOf(emp, idx) {
+  var e = normEmpNo(emp);
+  var nr = loadNameRoster();
+  var rr = (nr.rows || {})[e] || null;
+  return {
+    emp: e,
+    rosterCn: rr ? String(rr.cn || '') : '',
+    rosterEn: rr ? String(rr.en || '') : '',
+    inRoster: !!rr,
+    reg: (idx || staffRegIndex())[e] || null,
+    left: (nr.reasons || {})[e] === 'left',
+    ever: (nr.everIds || []).indexOf(e) >= 0
+  };
+}
+// 当前状态：left 已离职 / active 在职 / reserved 在职但名册缺姓名（预留）/ off 不在名册
+function staffStateOf(row) {
+  if (!row || !row.emp) return 'unknown';
+  if (row.left) return 'left';
+  if (row.inRoster) return (row.rosterCn || row.rosterEn) ? 'active' : 'reserved';
+  return 'off';
+}
+// 搜索：工号精确 / 工号前缀 / 姓名模糊；空词给提示
+function staffLookupRows(q) {
+  var key = String(q == null ? '' : q).trim().toLowerCase();
+  if (!key) return [];
+  var nr = loadNameRoster(), rows = nr.rows || {}, reasons = nr.reasons || {};
+  var idx = staffRegIndex();
+  var order = [], seen = {};
+  function add(e) {
+    e = normEmpNo(e);
+    if (!e || seen[e]) return;
+    seen[e] = true;
+    order.push(e);
+  }
+  for (var k in rows) {
+    if ((k + ' ' + String(rows[k].cn || '') + ' ' + String(rows[k].en || '')).toLowerCase().indexOf(key) >= 0) add(k);
+  }
+  for (var k2 in idx) {
+    var g = idx[k2];
+    if ((k2 + ' ' + g.cn + ' ' + g.en).toLowerCase().indexOf(key) >= 0) add(k2);
+  }
+  for (var k3 in reasons) {
+    if (reasons[k3] === 'left' && (k3.toLowerCase().indexOf(key) >= 0)) add(k3);
+  }
+  // 纯数字且没有任何记录 → 仍给出来，允许先把「这个工号」点成失效
+  if (!order.length && /^\d{3,}$/.test(key)) add(key);
+  order.sort(function (a, b) {
+    var x = parseInt(a, 10), y = parseInt(b, 10);
+    var ax = isFinite(x), ay = isFinite(y);
+    if (ax && ay && x !== y) return x - y;
+    if (ax !== ay) return ax ? -1 : 1;
+    return a < b ? -1 : (a > b ? 1 : 0);
+  });
+  var out = [];
+  for (var i = 0; i < order.length && i < 40; i++) out.push(staffRowOf(order[i], idx));
+  return out;
+}
+// 显式标为离职的工号（不含 everIds 推断，推断的另有人数统计）
+function staffLeftList() {
+  var nr = loadNameRoster(), reasons = nr.reasons || {};
+  var idx = staffRegIndex(), out = [];
+  for (var k in reasons) if (reasons[k] === 'left') out.push(staffRowOf(k, idx));
+  out.sort(function (a, b) {
+    var x = parseInt(a.emp, 10), y = parseInt(b.emp, 10);
+    if (isFinite(x) && isFinite(y) && x !== y) return x - y;
+    return a.emp < b.emp ? -1 : (a.emp > b.emp ? 1 : 0);
+  });
+  return out;
+}
+function staffNamed(row) {
+  var cn = row.rosterCn || (row.reg && row.reg.cn) || '';
+  var en = row.rosterEn || (row.reg && row.reg.en) || '';
+  if (cn && en) return cn + ' / ' + en;
+  return cn || en || '';
+}
+function adminStaffMsg(msg, bad) {
+  var el = document.getElementById('staffMsg');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = bad ? '#B3261E' : '#1E8E5A';
+}
+function adminStaffSearch(v) {
+  adminState.staffQuery = String(v == null ? '' : v);
+  var box = document.getElementById('staffHits');
+  if (box) box.innerHTML = adminStaffHitsHtml(adminState.staffQuery);
+}
+// 设为离职：移出名册 + 记原因。历史考试记录一律保留（只影响能不能进得来）。
+function adminStaffSetLeft(emp) {
+  var en = state.lang === 'en';
+  var e = normEmpNo(emp);
+  if (!e) return;
+  var row = staffRowOf(e);
+  var nm = staffNamed(row);
+  var head = (nm ? nm + ' (' + e + ')' : (en ? 'employee ID ' : '工号 ') + e);
+  var msg = en
+    ? 'Take ' + head + ' out of service?\n\n· The ID is removed from the roster and marked "left the hotel"\n· It can no longer register or sign in on any device\n· Devices already signed in are sent back to the login page within ~90 s\n· Exam and quiz-race history is kept'
+    : '确认让「' + head + '」失效吗？\n\n· 该工号将从名册移除，并标记为「已离职」\n· 任何设备都无法再用它注册或登录\n· 已登录的设备约 90 秒内退回登录页\n· 历史考试与答题赛记录保留，不会删除';
+  if (!confirm(msg)) return;
+  var nr = loadNameRoster(), rows = {};
+  for (var k in (nr.rows || {})) rows[k] = { cn: nr.rows[k].cn || '', en: nr.rows[k].en || '' };
+  delete rows[e];
+  var reasons = {};
+  for (var rk in (nr.reasons || {})) reasons[rk] = nr.reasons[rk];
+  reasons[e] = 'left';
+  adminStaffMsg(en ? 'Saving…' : '正在保存…');
+  adminPublishNameRoster(rows, { reasons: reasons }).then(function (ok) {
+    if (ok) {
+      adminStaffMsg(en ? '✅ ' + e + ' is out of service — every device picks it up within ~90 s.' : '✅ 工号 ' + e + ' 已失效，所有设备约 90 秒内生效。');
+      adminToast(en ? '✅ ' + e + ' is out of service.' : '✅ 工号 ' + e + ' 已设为离职。', true);
+    } else {
+      adminStaffMsg(en ? '⚠️ Publish failed — check the network and try again.' : '⚠️ 发布失败，请检查网络后重试。', true);
+      adminToast(en ? '⚠️ Publish failed — check the network and try again.' : '⚠️ 发布失败，请检查网络后重试。', false);
+    }
+    render();
+  });
+}
+// 恢复在职：写回名册（有名字用名字，没有就留空成预留工号）
+function adminStaffSetActive(emp) {
+  var en = state.lang === 'en';
+  var e = normEmpNo(emp);
+  if (!e) return;
+  var nr = loadNameRoster(), rows = {};
+  var hadAny = false;
+  for (var k in (nr.rows || {})) { rows[k] = { cn: nr.rows[k].cn || '', en: nr.rows[k].en || '' }; hadAny = true; }
+  // 名册整体为空时绝不能"只加一个人"——ids 会从空变成一条，等于把全店其他人全拦在门外。
+  if (!hadAny) {
+    adminToast(en
+      ? 'The roster is empty. Add the ID on the roster page (or re-import the full list) so nobody else gets locked out.'
+      : '名册目前是空的。请先在「学员名册 → 有效工号」里补全名单（或重新导入整份名册），否则只加一个人会把其他所有人挡在门外。', false);
+    return;
+  }
+  if (!rows[e]) {
+    var row = staffRowOf(e);
+    rows[e] = { cn: row.reg ? String(row.reg.cn || '') : '', en: row.reg ? String(row.reg.en || '') : '' };
+  }
+  var reasons = {};
+  for (var rk in (nr.reasons || {})) if (rk !== e) reasons[rk] = nr.reasons[rk];
+  adminStaffMsg(en ? 'Saving…' : '正在保存…');
+  adminPublishNameRoster(rows, { reasons: reasons }).then(function (ok) {
+    if (ok) {
+      adminStaffMsg(en ? '✅ ' + e + ' is back on staff — every device picks it up within ~90 s.' : '✅ 工号 ' + e + ' 已恢复在职，所有设备约 90 秒内生效。');
+      adminToast(en ? '✅ ' + e + ' is back on staff.' : '✅ 工号 ' + e + ' 已恢复在职。', true);
+    } else {
+      adminStaffMsg(en ? '⚠️ Publish failed — check the network and try again.' : '⚠️ 发布失败，请检查网络后重试。', true);
+    }
+    render();
+  });
+}
+function adminStaffRefresh() {
+  var en = state.lang === 'en';
+  adminStaffMsg(en ? 'Fetching…' : '正在拉取…');
+  adminFetchRoster().then(function (ok) {
+    adminStaffMsg(ok ? (en ? '✅ Pulled the latest roster from the cloud.' : '✅ 已拉取云端最新名册。')
+                     : (en ? '⚠️ No newer copy in the cloud.' : '⚠️ 云端没有更新的名册。'), !ok);
+    render();
+  });
+}
+// ---- 渲染 ----
+function adminStaffChip(st) {
+  var en = state.lang === 'en';
+  var m = {
+    left: ['red', en ? 'Left the hotel' : '已离职'],
+    active: ['grn', en ? 'On staff' : '在职'],
+    reserved: ['blu', en ? 'On staff · no name' : '在职 · 缺姓名'],
+    off: ['red', en ? 'Not on roster' : '不在名册'],
+    unknown: ['amb', en ? 'No record' : '无记录']
+  }[st] || ['', st];
+  return '<span class="ap-tag ' + m[0] + '">' + m[1] + '</span>';
+}
+function adminStaffRowHtml(r) {
+  var en = state.lang === 'en';
+  var st = staffStateOf(r);
+  var nm = staffNamed(r);
+  var meta = [];
+  if (r.reg && (r.reg.div || r.reg.dept)) meta.push(r.reg.div + (r.reg.dept ? ' · ' + r.reg.dept : ''));
+  if (r.reg) meta.push((en ? 'registered' : '已注册') + (r.reg.n ? ' · ' + r.reg.n + (en ? ' exam(s)' : ' 次考试') : ''));
+  else meta.push(en ? 'never registered' : '未注册');
+  var acts = '';
+  if (st === 'left') {
+    acts += '<button class="ap-btn" onclick="adminStaffSetActive(\'' + jsKey(r.emp) + '\')">' + (en ? 'Restore' : '恢复在职') + '</button>';
+  } else {
+    acts += '<button class="ap-btn" onclick="adminStaffSetLeft(\'' + jsKey(r.emp) + '\')">' + (en ? 'Take out of service' : '设为离职') + '</button>';
+  }
+  if (r.reg) {
+    acts = '<button class="ap-btn" onclick="adminOpenStudentDetail(\'' + jsKey(r.reg.key) + '\')">' + (en ? 'Profile' : '查看档案') + '</button>' + acts;
+  }
+  var h = '<div class="stf-row">'
+    + '<div class="stf-emp">' + escapeHtml(r.emp) + '</div>'
+    + '<div class="stf-main">'
+    + '<div class="stf-nm">' + (nm ? escapeHtml(nm) : '<span style="color:var(--a-i4);">' + (en ? 'no name on record' : '暂无姓名记录') + '</span>') + ' ' + adminStaffChip(st) + '</div>'
+    + '<div class="stf-meta">' + escapeHtml(meta.join(' · ')) + '</div>'
+    + '</div>'
+    + '<div class="stf-acts">' + acts + '</div>'
+    + '</div>';
+  return h;
+}
+function adminStaffHitsHtml(q) {
+  var en = state.lang === 'en';
+  var word = String(q == null ? '' : q).trim();
+  if (!word) {
+    return '<div class="ap-note" style="margin:0;">' + (en
+      ? 'Type an employee ID or a name above. Any ID — registered or not — can be taken out of service here.'
+      : '在上面输入工号或姓名。无论该工号是否注册过，都可以在这里直接设为离职。') + '</div>';
+  }
+  var rows = staffLookupRows(word);
+  if (!rows.length) {
+    return '<div class="ap-note" style="margin:0;">' + (en
+      ? 'No employee ID or name matches "' + escapeHtml(word) + '".'
+      : '没有匹配「' + escapeHtml(word) + '」的工号或姓名。') + '</div>';
+  }
+  var h = '';
+  for (var i = 0; i < rows.length; i++) h += adminStaffRowHtml(rows[i]);
+  return h;
+}
+function renderAdminStaff() {
+  if (!adminState.authenticated) return renderAdminLogin();
+  var en = state.lang === 'en';
+  var q = adminState.staffQuery || '';
+  var left = staffLeftList();
+  var nr = loadNameRoster();
+  var h = '<div class="page">';
+
+  // ① 按工号处理
+  h += '<div class="ap-card" style="margin-bottom:14px;"><div class="ap-card-b">';
+  h += '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'
+    + '<input class="admin-input" id="staffSearch" value="' + escapeHtml(q) + '" autocomplete="off" maxlength="40"'
+    + ' placeholder="' + (en ? 'Employee ID or name, e.g. 1001' : '输入工号或姓名，例如 1001 / 张伟') + '"'
+    + ' style="flex:1;min-width:240px;height:42px;font-size:14px;padding:0 12px;" oninput="adminStaffSearch(this.value)">'
+    + '<button class="ap-btn" onclick="adminStaffRefresh()">' + (en ? '\u21bb Re-sync' : '\u21bb 从云端重拉') + '</button>'
+    + '</div>';
+  h += '<div class="login-error" id="staffMsg" style="min-height:0;margin-top:6px;"></div>';
+  h += '<div id="staffHits" style="margin-top:12px;">' + adminStaffHitsHtml(q) + '</div>';
+  h += '</div></div>';
+
+  // ② 已离职名单
+  h += '<div class="ap-card"><div class="ap-card-h"><h3>' + (en ? 'Out of service' : '已离职工号') + '</h3>'
+    + '<span class="ap-tag amb">' + left.length + '</span>'
+    + '<span class="more">' + (en ? 'restore any of them in one click' : '可一键恢复') + '</span></div>';
+  h += '<div class="ap-card-b" style="padding-top:12px;">';
+  if (!left.length) {
+    h += '<div class="ap-note" style="margin:0;">' + (en
+      ? 'Nobody has been taken out of service yet.'
+      : '还没有被设为离职的工号。') + '</div>';
+  } else {
+    for (var i = 0; i < left.length && i < 100; i++) h += adminStaffRowHtml(left[i]);
+    if (left.length > 100) {
+      h += '<div class="ap-note" style="margin:0;">' + (en ? '\u2026and ' + (left.length - 100) + ' more. Search above to find a specific ID.'
+        : '\u2026另有 ' + (left.length - 100) + ' 个。在上面搜索具体工号。') + '</div>';
+    }
+  }
+  h += '</div></div>';
+
+  // ③ 口径说明
+  h += '<div class="ap-note">' + (en
+    ? 'How it works: an ID that is out of service is removed from the roster and marked "left the hotel". Students already signed in are sent back to the login page on their next roster check (~90 s); exam and quiz-race history is never deleted. Roster last updated '
+      + (nr.ver ? fmtSyncTime(nr.ver) : '—') + '.'
+    : '口径说明：设为离职的工号会从有效工号名册中移除并标记「已离职」，学员端下次拉取名册（约 90 秒）即无法进入，已登录的设备会被退回登录页；考试与答题赛的历史记录一律保留、不删除。名册更新于 '
+      + (nr.ver ? fmtSyncTime(nr.ver) : '—') + '。') + '</div>';
+
+  h += '</div>';
+  return h;
+}
+
 function adminRosterSearchInput(v) {
   adminState.rosterQuery = String(v == null ? '' : v);
   adminState.rosterPage = 0;
@@ -16754,8 +17073,9 @@ function renderWrongList() {
 //  为什么要有这一层：限时答题赛按「答对题数」排名，员工的最优策略就是快速点选、
 //  记答案而不记知识。光多开练习入口没用，必须让答错的题自己回来找他，而且只有
 //  隔天再答对才算数。于是：
-//    · 每道错题带一个掌握阶 st(0..3) 和下次到期时间 due；
-//    · 答对一次升一阶（1 天 / 3 天 / 7 天后再考），走满三阶才毕业；
+//    · 每道错题带一个掌握阶 st(0..2) 和下次到期时间 due；
+//    · 答对一次升一阶（1 天 / 3 天后再考），第 1、2、5 天各答对一次即毕业（2026-11-10 由三阶缩短）；
+//    · 毕业后仍会被练习抽查两次（+7 天 / +30 天），答错原样回错题本第 1 阶；
 //    · 同一局 / 同一天里重复答对不算（防连点刷掉），且间隔至少 4 小时；
 //    · 到期错题会优先出现在练习、模拟考、答题赛里，但永远只在本板块内 ——
 //      为了让错题出现而把题塞进不属于它的板块，等于教错知识。
@@ -16903,11 +17223,18 @@ function reviewTagName(tag) {
 }
 
 // ---- 掌握阶与到期调度 ----
-var WRONG_STAGE_MAX = 3;                       // 走满三阶（1/3/7 天）= 毕业
-var WRONG_INTERVALS = [1, 3, 7];               // 第 1/2/3 阶通过后的复习间隔（天）
+// 两阶毕业（2026-11-10 用户拍板缩短）：第 1 天答对 → 1 阶，第 2 天答对 → 2 阶，
+// 第 5 天再答对一次即毕业。原来是三阶（1/3/7 天，最快 12 天），对酒店同事太长，
+// 中途一断就前功尽弃；5 天的节奏既保住「隔天回忆」的记忆价值，也不至于劝退。
+var WRONG_STAGE_MAX = 2;                       // 走满两阶（1/3 天）= 毕业
+var WRONG_INTERVALS = [1, 3];                  // 第 1/2 阶通过后的复习间隔（天）
 var WRONG_DAY_MS = 86400000;
 var WRONG_MIN_GAP_MS = 4 * 3600 * 1000;        // 同一天里刷两次不算通过，至少隔 4 小时
 var WRONG_MASTER_CAP = 400;                    // 毕业名单上限（只影响掌握度精度）
+// 毕业后抽查：毕业不等于永远不考了。隔 7 天、再隔 30 天各抽查一次（答对无事、
+// 答错原样回错题本第 1 阶），两次都答对才算彻底过关，之后不再出现。
+var WRONG_CHECK_GAPS = [7, 30];                // 毕业后第 1/2 次抽查的间隔（天）
+var WRONG_CHECK_CAP = 3;                       // 每轮练习最多混入几道抽查题，别喧宾夺主
 
 function wrongStageOf(e) {
   var st = parseInt(e && e.st, 10);
@@ -16980,6 +17307,50 @@ function wrongTrimMastered() {
   for (var i = 0; i < ids.length - WRONG_MASTER_CAP; i++) delete m[ids[i]];
 }
 
+// ---- 毕业后抽查（2026-11-10）----
+// 毕业的题不再躺在错题本里，但「毕业 = 永远不考」等于把遗忘交给运气。所以毕业后
+// 排两次抽查（+7 天、+30 天）：练习里会优先混进来再考一次，答对无事、答错原样回
+// 错题本第 1 阶重来。两次抽查都过 = 彻底掌握，之后不再出现。
+function wrongCheckOf(qid) {
+  var m = state.mcheck && state.mcheck[qid];
+  if (m && typeof m === 'object' && m.due) return m;
+  return null;
+}
+// 没记过抽查排期的（这版之前毕业的老数据）按「毕业时间 + 7 天」推算，
+// 不会一次性把几百道毕业题全塞进练习里。
+function wrongCheckDueTs(qid) {
+  var mas = state.mastered || {};
+  var g = mas[qid] || 0;
+  if (!g) return 0;
+  var m = wrongCheckOf(qid);
+  if (m) return m.due;
+  return g + WRONG_CHECK_GAPS[0] * WRONG_DAY_MS;
+}
+function wrongCheckIsDue(qid, now) {
+  var due = wrongCheckDueTs(qid);
+  return !!due && due <= (now || Date.now());
+}
+// 刚毕业：排第一次抽查
+function wrongCheckStart(qid, now) {
+  if (!state.mcheck || typeof state.mcheck !== 'object') state.mcheck = {};
+  state.mcheck[qid] = { n: 1, due: (now || Date.now()) + WRONG_CHECK_GAPS[0] * WRONG_DAY_MS };
+}
+// 抽查答对：排下一次；两次都过就销号，以后不再出现
+function wrongCheckPass(qid, now) {
+  var m = wrongCheckOf(qid);
+  var n = (m && m.n) || 1;
+  var t = now || Date.now();
+  if (n >= WRONG_CHECK_GAPS.length) {
+    if (state.mcheck) delete state.mcheck[qid];
+    return;
+  }
+  state.mcheck[qid] = { n: n + 1, due: t + (WRONG_CHECK_GAPS[n] || 30) * WRONG_DAY_MS };
+}
+function wrongCheckDrop(qid) {
+  if (state.mcheck) delete state.mcheck[qid];
+  if (state.mastered) delete state.mastered[qid];
+}
+
 // 记一道错题（已有的话打回第一阶并累加错误次数）
 function wrongAdd(skey, q, ans, opts) {
   opts = opts || {};
@@ -17036,6 +17407,7 @@ function wrongPass(skey, qid, opts) {
     if (!state.mastered || typeof state.mastered !== 'object') state.mastered = {};
     state.mastered[qid] = now;
     wrongTrimMastered();
+    wrongCheckStart(qid, now);      // 毕业 → 排第一次抽查（7 天后练习里混进来再考）
     reviewTaskNotePass(qid);
     return 'graduated';
   }
@@ -17064,8 +17436,17 @@ function recordAttempt(q, ans, opts) {
   var keys = wrongSkeysForQid(q.id);
   var ua = ansToBankOrder(q, ans);
   var where = opts.src || reviewSourceOf();
+  var wasMastered = !!(state.mastered && state.mastered[q.id]);
   if (opts.ok) {
-    if (!keys.length) return '';
+    // 已毕业的题在练习里被抽查到：答对就把下一次抽查往后排，两次都过即销号。
+    // 这道题不在错题本里（keys 为空），所以这里必须单独处理，不然抽查永远结不了账。
+    if (!keys.length) {
+      if (wasMastered) {
+        wrongCheckPass(q.id, opts.now);
+        return 'checked';
+      }
+      return '';
+    }
     var best = '';
     for (var i = 0; i < keys.length; i++) {
       var r = wrongPass(keys[i], q.id, opts);
@@ -17080,11 +17461,14 @@ function recordAttempt(q, ans, opts) {
     return best;
   }
   var skey = opts.skey || bankStateKey();
+  // 毕业的题又答错：先从毕业名单里销号，再按新错题重新进本（第 1 阶重来）。
+  if (wasMastered) wrongCheckDrop(q.id);
   var targets = keys.length ? keys : [skey];
   for (var j = 0; j < targets.length; j++) wrongAdd(targets[j], q, ua, opts);
   // 只有"本来就在错题本里的题又答错"才算复习失败；第一次错的新题不算。
-  if (keys.length) reviewLogAdd(q.id, 'f', 0, where, opts.now);
-  return 'added';
+  // 抽查栽了的（wasMastered）也算失败 —— 它是真的退步了。
+  if (keys.length || wasMastered) reviewLogAdd(q.id, 'f', 0, where, opts.now);
+  return wasMastered ? 'readded' : 'added';
 }
 
 // ---- 错题汇总（带到期排序）----
@@ -17135,15 +17519,27 @@ function wrongDueCount(bank) {
 function wrongPriorityPracticeList(rawQuestions) {
   if (state.currentBank !== 'manual') return rawQuestions;
   var book = (state.wrongAnswers && state.wrongAnswers.manual) || {};
-  var due = [], rest = [], i;
+  var due = [], checks = [], rest = [], i;
+  var now = Date.now();
   for (i = 0; i < rawQuestions.length; i++) {
     var e = book[rawQuestions[i].id];
     if (e && wrongIsDue(e)) due.push(rawQuestions[i]);
     else rest.push(rawQuestions[i]);
   }
-  if (!due.length) return rawQuestions;
+  // 毕业后抽查（2026-11-10）：到期的已毕业题排在「到期错题」之后、「普通题」之前，
+  // 每轮最多 WRONG_CHECK_CAP 道 —— 学员感觉是「顺手又碰到一道以前错过的题」，
+  // 而不是被塞了一卷复习题。答错的话它会原样回到错题本第 1 阶。
+  if (state.mastered) {
+    var keep = [];
+    for (i = 0; i < rest.length; i++) {
+      if (checks.length < WRONG_CHECK_CAP && wrongCheckIsDue(rest[i].id, now)) checks.push(rest[i]);
+      else keep.push(rest[i]);
+    }
+    rest = keep;
+  }
+  if (!due.length && !checks.length) return rawQuestions;
   due.sort(function (a, b) { return wrongDueOf(book[a.id]) - wrongDueOf(book[b.id]); });
-  return due.concat(rest);
+  return due.concat(checks, rest);
 }
 // 模拟考试：在同一批抽题里用到期错题换掉最多 30%（21 天 / 三步法是整卷，不动）
 function wrongPriorityExamSet(rawQuestions, picked) {
@@ -18068,6 +18464,12 @@ function attemptHintHtml(q, res) {
     color = '#2e7d32';
   } else if (res === 'early') {
     txt = '⏳ ' + t('rv_h_early'); color = '#8a5a00';
+  } else if (res === 'checked') {
+    // 毕业后抽查：答对了不给进度条压力，只轻声确认一句，学员知道自己过关了
+    txt = '✅ ' + t('rv_h_checkpass'); color = '#2e7d32';
+  } else if (res === 'readded') {
+    // 毕业过的题又答错：必须说清楚它回到错题本了，否则学员会以为系统出错
+    txt = '📥 ' + t('rv_h_readded'); color = '#c0392b';
   } else if (res === 'added') {
     var k2 = wrongSkeysForQid(q.id), back = false;
     if (k2.length) {
@@ -27197,6 +27599,7 @@ function adminIco(name) {
     check: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/>',
     users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M17 8.5a2.6 2.6 0 0 1 0 5M18 20c0-2.3-.8-4-2-5"/>',
     shield: '<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',
+    userx: '<circle cx="9.5" cy="8" r="3.4"/><path d="M3 20c0-3.4 2.9-5.9 6.5-5.9 1.2 0 2.4.27 3.3.75"/><path d="M16 16l5 5M21 16l-5 5"/>',
     bolt: '<path d="M13 2L4.5 13.5H11l-1 8.5 8.5-11.5H12z"/>',
     medal: '<circle cx="12" cy="9" r="5"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/>',
     chart: '<path d="M3 20h18"/><rect x="5" y="11" width="3.5" height="6" rx="1"/><rect x="10.5" y="7" width="3.5" height="10" rx="1"/><rect x="16" y="13" width="3.5" height="4" rx="1"/>',
@@ -27219,6 +27622,7 @@ function adminShellRoutes() {
     { key: 'adminReports', label: en ? 'Scores & Grading' : '成绩与评分', ico: 'check', match: ['adminReports', 'adminGrading'] },
     { grp: en ? 'PEOPLE' : '组织', key: 'adminStudents', label: en ? 'Students' : '学员名册', ico: 'users', match: ['adminStudents'], badge: 'fix' },
     { key: 'adminVerify', label: en ? 'Registration Review' : '注册核查', ico: 'shield', match: ['adminVerify'], badge: 'verify' },
+    { key: 'adminStaff', label: en ? 'Staff Changes' : '人员变动', ico: 'userx', match: ['adminStaff'] },
     { key: 'adminDepts', label: en ? 'Departments' : '部门目录', ico: 'sitemap', match: ['adminDepts'] },
     { grp: en ? 'MOTIVATION' : '激励', key: 'adminRace', label: en ? 'Quiz Race' : '答题赛', ico: 'bolt', match: ['adminRace'] },
     { key: 'adminBadges', label: en ? 'Badges' : '徽章', ico: 'medal', match: ['adminBadges'] },
@@ -27245,6 +27649,7 @@ function adminPageTitleOf(page) {
     adminGrading:    en ? 'Scores & Grading · Rules' : '成绩与评分 · 评分配置',
     adminStudents:   en ? 'Students' : '学员名册',
     adminVerify:     en ? 'Registration Review' : '注册核查',
+    adminStaff:      en ? 'Staff Changes' : '人员变动',
     adminRace:       en ? 'Quiz Race' : '答题赛',
     adminBadges:     en ? 'Badges' : '徽章',
     adminDash:       en ? 'Data Board' : '数据看板',
@@ -27278,7 +27683,9 @@ function adminSubOf(page) {
     adminDepts:       en ? 'The directory students pick from at registration \u2014 divisions and units'
                          : '学员注册时选择的大部门与子部门，改完发布即同步到所有设备',
     adminSettings:    en ? 'Student access code, admin password and platform housekeeping'
-                         : '学员访问码、管理端密码与平台维护项'
+                         : '学员访问码、管理端密码与平台维护项',
+    adminStaff:       en ? 'Search an employee ID and take it out of service on the spot — no full roster re-import'
+                         : '搜索工号即可让其失效或恢复，不必重新导入整份名册'
   };
   return m[page] || '';
 }
@@ -27451,6 +27858,7 @@ function render() {
       case 'adminPaperPicker': app.innerHTML = adminShellHtml('adminPaperPicker', renderAdminPaperPicker()); return;
       case 'adminStudents': app.innerHTML = adminShellHtml('adminStudents', renderAdminStudents()); return;
       case 'adminVerify': app.innerHTML = adminShellHtml('adminVerify', renderAdminVerify()); return;
+      case 'adminStaff': app.innerHTML = adminShellHtml('adminStaff', renderAdminStaff()); return;
       case 'adminExams': app.innerHTML = adminShellHtml('adminExams', renderAdminExams()); return;
       case 'adminQReports': app.innerHTML = adminShellHtml('adminQReports', renderAdminQReports()); return;
       case 'adminReports': app.innerHTML = adminShellHtml('adminReports', renderAdminReports()); return;
