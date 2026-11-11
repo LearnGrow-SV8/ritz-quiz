@@ -5500,7 +5500,7 @@ var I18N = {
   race_cal_hide_q: {cn:'收起答题清单', en:'Hide the questions'},
   race_cal_your: {cn:'你的作答', en:'Your answer'},
   race_cal_ans_lost: {cn:'（旧版记录，未保存你当时的选项）', en:'(legacy record — your choice was not saved)'},
-  race_cal_legend: {cn:'有底色代表当日已打卡，点开可查看当日挑战与答题明细；虚线金边（✍）为可补签的日子，点开即可补签。', en:'Dates with background color indicate a finished check-in; tap to view the day\u2019s challenge and quiz details. Dashed gold cells (✍) can be restored with a make-up.'},
+  race_cal_legend: {cn:'有底色代表当日已打卡，点开可查看当日挑战与答题明细；虚线金边为可补签的日子（补签次数用完即不再显示），点开即可补签。', en:'Dates with background color indicate a finished check-in; tap to view the day\u2019s challenge and quiz details. Dashed gold cells are days you can still restore with a make-up (they stop showing once your make-ups are used up).'},
   race_cal_week: {cn:'一二三四五六日', en:'M T W T F S S'},
   race_board_days: {cn:'📅 打卡天数', en:'📅 Check-in days'},
   race_board_days_hint_period: {cn:'统计范围：本届赛事全体参赛绅士淑女的打卡天数。单日多次答题仅计一日，榜单依打卡天数排序；天数相同时，则比对累计挑战总次数。', en:'Scope: Check-in days of all participating Ladies and Gentlemen for the current contest. Multiple attempts on the same day count as one day only. Ranking is determined by total check-in days; total quiz attempts serve as the tiebreaker.'},
@@ -14280,11 +14280,13 @@ function renderRaceCalendar() {
     var bdg = hit ? raceBadgesOnDay(rec, key) : [];
     var isToday = key === todayKey;
     var isSel = state.raceCalDay === key;
-    // 可补签的空白日（本届窗口内、今天之前）：虚线金边 + ✍ 提示，**有没有补签卡都可点** ——
-    // 没卡时点开给「完成任务可获得补签机会」的指引，别让学员猜格子为什么亮（2026-11-11）
-    var mkCell = !hit && !isToday && calStartK && key >= calStartK && key < todayKey;
-    // 解锁徽章的日子用金色底 + 🏅，比"打了几次"更值得被看见；补签日用 ✍ 标出
-    // 可补签日：白底 + 虚线金边 + ✍（2026-11-11 领导五调：有底色 = 已打卡，补签日绝不能带底色）
+    // 可补签日 = 赛季窗口内、今天之前、无记录、且**还有剩余补签次数**（2026-11-11 领导六调：
+    // 额度用完就不再亮可补状态，免得给学员"还能补"的假希望）。
+    // 视觉只用白底 + 虚线金边：格子里不再挂 ✍ 图标（太抢戏），图形语言由金边独立承担；
+    // 有底色 = 已打卡，这条口径不容例外。
+    var mkCell = !hit && !isToday && calStartK && key >= calStartK && key < todayKey
+      && !!calMk && calMk.left > 0;
+    // 解锁徽章的日子用金色底 + 🏅；已补签的日子用淡紫底 + ✍ 标出（属于"已打卡"的一种）
     var bg = !hit ? '#fff' : (bdg.length ? '#fff8e1' : (isMk ? '#f3f0ff' : '#e8f5e9'));
     var bd = isSel ? '#000' : (mkCell ? '#f0b357' : (isToday ? '#f0b357' : (hit ? (bdg.length ? '#f0b357' : (isMk ? '#9575cd' : '#a5d6a7')) : '#eceff1')));
     var fg = hit ? '#1b5e20' : (mkCell ? '#b7791f' : '#9aa3ad');
@@ -14301,7 +14303,7 @@ function renderRaceCalendar() {
           : (isMk
             ? '<span style="color:#5e35b1;">✍' + t('race_cal_makeup_day') + '</span>'
             : '<span style="color:#2e7d32;">✓' + (runs > 1 ? runs : '') + '</span>')) + '</div>'
-        : '<div style="font-size:10px;line-height:1;">' + (mkCell ? '<span style="color:#b7791f;">✍</span>' : '') + '</div>')
+        : '<div style="height:10px;"></div>')
       + '</div>';
   }
   html += '</div>';
