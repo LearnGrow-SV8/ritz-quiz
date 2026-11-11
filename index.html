@@ -275,6 +275,12 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .search-result-item .q-preview { font-size:14px; line-height:1.5; margin-bottom:4px; }
 .search-result-item .q-meta { font-size:12px; color:var(--text-light); }
 .search-result-item mark { background:#fff3cd; padding:0 2px; border-radius:2px; }
+/* 2026-11-11：题库页常驻搜索框（顺序练习/模拟考试上方）。输入即出结果，菜单卡暂时隐去。 */
+.bank-search { margin-bottom:16px; }
+.bank-search .search-box { margin-bottom:0; }
+.bank-search .search-box input { padding-right:42px; }
+.bank-search .search-results:not(:empty) { margin-top:12px; }
+.bank-search-clear { position:absolute; right:12px; top:50%; transform:translateY(-50%); width:22px; height:22px; line-height:22px; text-align:center; border-radius:50%; background:var(--primary-soft); color:var(--text-light); font-size:12px; cursor:pointer; }
 
 .wrong-list { display:flex; flex-direction:column; gap:10px; }
 .wrong-item { background:var(--card-bg); padding:14px; border-radius:10px; box-shadow:var(--shadow); cursor:pointer; border-left:3px solid var(--danger); max-width:100%; box-sizing:border-box; overflow-wrap:break-word; }
@@ -6855,7 +6861,7 @@ function rebuildWrongFromIds(wrongIds, stages) {
       m[ids[i]] = {
         question: q.question, section: q.section, section_en: q.section_en,
         type: q.type, userAnswer: null, timestamp: Date.now(),
-        st: st, due: st > 0 ? (Date.now() + (WRONG_INTERVALS[st - 1] || 1) * WRONG_DAY_MS) : 0,
+        st: st, due: st > 0 ? wrongDueTs(WRONG_INTERVALS[st - 1] || 1, Date.now()) : 0,
         n: 1, last: Date.now() - WRONG_DAY_MS
       };
     }
@@ -16981,7 +16987,19 @@ function renderBank(bank) {
 
   var sectionCount = getBankQuestions(bank, state.currentSection).length;
 
-  html += '<div class="menu-grid">';
+  // 2026-11-11：题目搜索框直接放在顺序练习/模拟考试上方（21 天、优质服务三步骤、产品知识、
+  // 以及后续新增的考试板块全部通用），不用先点「题目搜索」进搜索页。
+  // 换题库时清掉上一个库的关键词；同一库返回本页（如从搜索结果作答后返回）保留结果。
+  if (state.searchBank !== bank) { state.searchKeyword = ''; state.searchBank = bank; }
+  var kwVal = state.searchKeyword || '';
+  html += '<div class="bank-search">';
+  html += '<div class="search-box"><span class="search-icon">🔍</span>';
+  html += '<input type="text" id="bankSearchInput" placeholder="'+t('search_ph')+'" value="'+escapeHtml(kwVal)+'" oninput="bankSearchInput(this)">';
+  html += '<span class="bank-search-clear" id="bankSearchClear" style="display:'+(kwVal?'block':'none')+'" onclick="bankSearchClear()">✕</span></div>';
+  html += '<div class="search-results" id="searchResults">'+(kwVal ? searchResultsHtml(kwVal, bank, false) : '')+'</div>';
+  html += '</div>';
+
+  html += '<div class="menu-grid" id="bankMenuGrid" style="'+(kwVal?'display:none':'')+'">';
   html += '<button class="menu-btn" onclick="startPractice(\''+bank+'\')"><span class="icon">📖</span><div class="label">'+t('menu_practice')+'</div><div class="count">'+t('practice_done')+' '+progress+'/'+sectionCount+'</div></button>';
   var examBtnLabel = (bank === 'day21' || bank === 'tsos') ? t('exam_all').replace('{n}', getBankQuestions(bank, 'all').length) : t('randomN').replace('{n}', manualExamCount(state.currentSection));
   html += '<button class="menu-btn" onclick="startExam(\''+bank+'\')"><span class="icon">📝</span><div class="label">'+t('menu_exam')+'</div><div class="count">'+examBtnLabel+'</div></button>';
@@ -16989,7 +17007,7 @@ function renderBank(bank) {
   // 掌握阶，也看不到别的试卷的错题，员工从不同入口进去看到的东西不一样，容易以为
   // 错题丢了。所有入口现在都指向同一个页。
   html += '<button class="menu-btn" onclick="wrongOpenSrc(\''+bank+'\')"><span class="icon">❌</span><div class="label">'+t('menu_wrong')+'</div><div class="count">'+wrongBankCount(bank)+t('questions_unit')+'</div></button>';
-  html += '<button class="menu-btn" onclick="startSearch(\''+bank+'\')"><span class="icon">🔍</span><div class="label">'+t('menu_search')+'</div><div class="count">'+t('kw_search')+'</div></button>';
+  // 2026-11-11：「题目搜索」独立入口按钮撤销 —— 搜索框已常驻在本页菜单上方（见 bank-search）。
   html += '<button class="menu-btn" onclick="openExamHistory()"><span class="icon">📊</span><div class="label">'+t('result_history')+'</div><div class="count">'+(state.lang==='en'?'Past attempts':'历史成绩')+'</div></button>';
   if (isPaperBank(bank)) {
     var formalPk = isKitchen ? bank + '_kitchen' : bank + '_all';
@@ -17306,26 +17324,7 @@ function renderSearch() {
   html += '</div>';
   
   html += '<div class="search-results" id="searchResults">';
-  var results = performSearchQuery(state.searchKeyword, bank);
-  if (results.length === 0 && state.searchKeyword) {
-    html += '<div class="empty-state"><div class="icon">🔍</div><p>'+t('search_no_result')+'</p></div>';
-  } else if (results.length === 0) {
-    html += '<div class="empty-state"><div class="icon">📝</div><p>'+t('search_empty_kw')+'</p></div>';
-  } else {
-    for (var i=0; i<Math.min(results.length, 50); i++) {
-      var q = results[i];
-      html += '<div class="search-result-item" onclick="openSearchResult(\''+q.id+'\',\''+bank+'\')">';
-      html += '<div class="q-preview">'+highlightKeyword(qTextOf(q), state.searchKeyword)+'</div>';
-      html += '<div class="q-meta">';
-      var sectionDisplay = state.lang === 'en' ? (q.section_en || q.section || bankName) : (q.section || bankName);
-      html += '<span>'+sectionDisplay+' · '+getTypeShort(q.type)+'</span>';
-      html += '<span>'+t('q_prefix')+q.number+t('q_suffix')+'</span>';
-      html += '</div></div>';
-    }
-    if (results.length > 50) {
-      html += '<div style="text-align:center;padding:12px;color:var(--text-light);font-size:13px;">'+t('search_count_prefix')+results.length+t('search_count_suffix')+'</div>';
-    }
-  }
+  html += searchResultsHtml(state.searchKeyword, bank, true);
   html += '</div></div>';
   return html;
 }
@@ -17535,6 +17534,14 @@ var WRONG_INTERVALS = [1, 3];                  // 第 1/2 阶通过后的复习�
 var WRONG_STAGE_DOTS = WRONG_STAGE_MAX + 1;    // 错题行显示的点点个数（= 一共要答对 3 次）
 var WRONG_DAY_MS = 86400000;
 var WRONG_MIN_GAP_MS = 4 * 3600 * 1000;        // 同一天里刷两次不算通过，至少隔 4 小时
+// 🔴 复习到期一律按**自然日**（北京时间）算，不走「从答题时刻起 24 小时」：
+// 第 D 天答对 → 第 D+间隔 天 0 点起到期，当天全天可复习。之前用 now + N×24h，
+// 昨天下午答对的题今天同一钟点才出现，学员上午清完每日练习、下午又冒出题来（2026-11-11 领导反馈）。
+function wrongDueTs(intervalDays, now) {
+  var key = raceDayKeyBj(now || Date.now());            // 'YYYY-MM-DD'（北京自然日）
+  var base = Date.parse(key + 'T00:00:00+08:00');       // 该自然日 0 点（北京时间）
+  return base + (intervalDays || 0) * WRONG_DAY_MS;
+}
 var WRONG_MASTER_CAP = 400;                    // 巩固完成名单上限（只影响掌握度精度）
 // 巩固完成后抽查：巩固完成不等于永远不考了。隔 7 天、再隔 30 天各抽查一次（答对无事、
 // 答错原样回错题本第 1 阶），两次都答对才算彻底过关，之后不再出现。
@@ -17575,6 +17582,13 @@ function wrongNormEntry(e) {
   if (typeof e.due !== 'number' || e.due < 0) e.due = 0;
   if (typeof e.n !== 'number' || e.n < 1) e.n = 1;
   if (typeof e.last !== 'number') e.last = e.timestamp || 0;
+  // 旧版 24h 制的存量到期时间就地归一到自然日 0 点：到期日不变（仍是原定那天），
+  // 只是当天 0 点就生效，避免同一天里一会儿不到期、一会儿又到期（2026-11-11 改自然日口径）。
+  // 已是 0 点的条目原样跳过（幂等）。
+  if (e.due > 0) {
+    var _mid = wrongDueTs(0, e.due);
+    if (e.due !== _mid) e.due = _mid;
+  }
   return e;
 }
 function wrongNormAll() {
@@ -17639,7 +17653,7 @@ function wrongCheckIsDue(qid, now) {
 // 刚巩固完成：排第一次抽查
 function wrongCheckStart(qid, now) {
   if (!state.mcheck || typeof state.mcheck !== 'object') state.mcheck = {};
-  state.mcheck[qid] = { n: 1, due: (now || Date.now()) + WRONG_CHECK_GAPS[0] * WRONG_DAY_MS };
+  state.mcheck[qid] = { n: 1, due: wrongDueTs(WRONG_CHECK_GAPS[0], now) };
 }
 // 抽查答对：排下一次；两次都过就销号，以后不再出现
 function wrongCheckPass(qid, now) {
@@ -17650,7 +17664,7 @@ function wrongCheckPass(qid, now) {
     if (state.mcheck) delete state.mcheck[qid];
     return;
   }
-  state.mcheck[qid] = { n: n + 1, due: t + (WRONG_CHECK_GAPS[n] || 30) * WRONG_DAY_MS };
+  state.mcheck[qid] = { n: n + 1, due: wrongDueTs(WRONG_CHECK_GAPS[n] || 30, t) };
 }
 function wrongCheckDrop(qid) {
   if (state.mcheck) delete state.mcheck[qid];
@@ -17752,7 +17766,7 @@ function wrongPass(skey, qid, opts) {
     return 'graduated';
   }
   e.st = wrongStageOf(e) + 1;
-  e.due = now + (WRONG_INTERVALS[e.st - 1] || 1) * WRONG_DAY_MS;
+  e.due = wrongDueTs(WRONG_INTERVALS[e.st - 1] || 1, now);
   reviewTaskNotePass(qid);
   return 'promoted';
 }
@@ -20211,31 +20225,60 @@ function openWrongQuestion(qid, bank) {
 
 function performSearch(keyword) {
   state.searchKeyword = keyword;
-  var results = performSearchQuery(keyword, state.currentBank);
   var resultsEl = document.getElementById('searchResults');
   if (!resultsEl) return;
-  
-  if (results.length === 0 && keyword) {
-    resultsEl.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><p>'+t('search_no_result')+'</p></div>';
-  } else if (results.length === 0) {
-    resultsEl.innerHTML = '<div class="empty-state"><div class="icon">📝</div><p>'+t('search_empty_kw')+'</p></div>';
-  } else {
-    var html = '';
-    for (var i=0; i<Math.min(results.length, 50); i++) {
-      var q = results[i];
-      html += '<div class="search-result-item" onclick="openSearchResult(\''+q.id+'\',\''+state.currentBank+'\')">';
-      html += '<div class="q-preview">'+highlightKeyword(qTextOf(q), keyword)+'</div>';
-      html += '<div class="q-meta">';
-      var sectionDisplay = state.lang === 'en' ? (q.section_en || q.section || getBankName(state.currentBank)) : (q.section || getBankName(state.currentBank));
-      html += '<span>'+sectionDisplay+' · '+getTypeShort(q.type)+'</span>';
-      html += '<span>'+t('q_prefix')+q.number+t('q_suffix')+'</span>';
-      html += '</div></div>';
-    }
-    if (results.length > 50) {
-      html += '<div style="text-align:center;padding:12px;color:var(--text-light);font-size:13px;">'+t('search_count_prefix')+results.length+t('search_count_suffix')+'</div>';
-    }
-    resultsEl.innerHTML = html;
+  resultsEl.innerHTML = searchResultsHtml(keyword, state.currentBank, true);
+}
+
+// 2026-11-11：搜索结果 HTML 唯一出口 —— 搜索页 / 题库页常驻搜索框 / 输入即时刷新三处共用。
+// emptyHint=false 时连「请输入关键词」提示也不输出（题库页把结果区当纯结果列表，空输入直接什么都不显示）。
+function searchResultsHtml(keyword, bank, emptyHint) {
+  var results = performSearchQuery(keyword, bank);
+  if (results.length === 0) {
+    if (!(keyword && keyword.trim()) && emptyHint === false) return '';
+    if (keyword && keyword.trim()) return '<div class="empty-state"><div class="icon">🔍</div><p>'+t('search_no_result')+'</p></div>';
+    return '<div class="empty-state"><div class="icon">📝</div><p>'+t('search_empty_kw')+'</p></div>';
   }
+  var html = '';
+  for (var i=0; i<Math.min(results.length, 50); i++) {
+    var q = results[i];
+    html += '<div class="search-result-item" onclick="openSearchResult(\''+q.id+'\',\''+bank+'\')">';
+    html += '<div class="q-preview">'+highlightKeyword(qTextOf(q), keyword)+'</div>';
+    html += '<div class="q-meta">';
+    var sectionDisplay = state.lang === 'en' ? (q.section_en || q.section || getBankName(bank)) : (q.section || getBankName(bank));
+    html += '<span>'+sectionDisplay+' · '+getTypeShort(q.type)+'</span>';
+    html += '<span>'+t('q_prefix')+q.number+t('q_suffix')+'</span>';
+    html += '</div></div>';
+  }
+  if (results.length > 50) {
+    html += '<div style="text-align:center;padding:12px;color:var(--text-light);font-size:13px;">'+t('search_count_prefix')+results.length+t('search_count_suffix')+'</div>';
+  }
+  return html;
+}
+
+// 2026-11-11：题库页常驻搜索框的输入处理。只重画结果区（不整页 render），否则输入框会失焦；
+// 有关键词时先把菜单卡隐去，让结果占满视线，清空后菜单自动回来。
+function bankSearchInput(el) {
+  state.searchKeyword = el.value;
+  var clearEl = document.getElementById('bankSearchClear');
+  if (clearEl) clearEl.style.display = el.value ? 'block' : 'none';
+  var gridEl = document.getElementById('bankMenuGrid');
+  if (gridEl) gridEl.style.display = el.value.trim() ? 'none' : '';
+  var resultsEl = document.getElementById('searchResults');
+  if (!resultsEl) return;
+  resultsEl.innerHTML = searchResultsHtml(el.value, state.currentBank, false);
+}
+
+function bankSearchClear() {
+  state.searchKeyword = '';
+  var inputEl = document.getElementById('bankSearchInput');
+  if (inputEl) { inputEl.value = ''; inputEl.focus(); }
+  var clearEl = document.getElementById('bankSearchClear');
+  if (clearEl) clearEl.style.display = 'none';
+  var gridEl = document.getElementById('bankMenuGrid');
+  if (gridEl) gridEl.style.display = '';
+  var resultsEl = document.getElementById('searchResults');
+  if (resultsEl) resultsEl.innerHTML = '';
 }
 
 function performSearchQuery(keyword, bank) {
