@@ -5958,7 +5958,7 @@ var I18N = {
   rv_task_go: {cn:'开始今日复习', en:"Start today's review"},
   rv_task_go_n: {cn:'开始今日复习（{n} 道）', en:"Start today's review ({n})"},
   rv_redo_all: {cn:'重做错题', en:'Review mistakes'},
-  rv_hub_title: {cn:'我的错题本', en:'My Error Notebook'},
+  rv_hub_title: {cn:'温故而知新', en:'Review to Progress'},
   rv_hub_browse: {cn:'打开错题本', en:'Open'},
   rv_hub_mastery_short: {cn:'巩固完成率', en:'Mastery rate'},
   rv_hub_sub: {cn:'已巩固完成 {g} 道 · 错题本现有 {n} 道', en:'{g} cleared · {n} in the book'},
@@ -18593,17 +18593,21 @@ function renderWrongAll() {
   var redoIds = wrongRedoIdsScoped();
   var redoIsAll = (tab === 'all') && !state.wrongSrc;
   html += '<div class="rv-blk" id="rvBlkBank">';
-  // 「共 N 道」贴标题右上角（2026-11-11 领导：三个板块角标统一）。
+  // 右上角：小号「重做全部错题（N 道）」按钮（2026-11-11 领导：撤大按钮与 N 道角标，二合一）。
+  // 无题可重做时回落成纯计数。
   var _unit = t('rv_paper_unit');
-  html += rvBlkHeadHtml('📚', t('rv_bk_t3'), t('rv_bk_d3'),
-    '<b style="font-size:14px;color:#000;">' + redoIds.length + '</b>'
-    + (_unit ? ' <span style="color:#5a6473;">' + escapeHtml(_unit) + '</span>' : ''));
+  var _corner;
+  if (redoIds.length) {
+    _corner = '<button class="nav-btn secondary" style="padding:5px 10px;font-size:11px;border-radius:999px;flex:0 0 auto;margin:0;" '
+      + 'onclick="wrongStartScopedRedo()">🔁 '
+      + escapeHtml(t(redoIsAll ? 'rv_bk_redo_all' : 'rv_bk_redo_now').replace('{n}', String(redoIds.length))) + '</button>';
+  } else {
+    _corner = '<b style="font-size:14px;color:#000;">0</b>'
+      + (_unit ? ' <span style="color:#5a6473;">' + escapeHtml(_unit) + '</span>' : '');
+  }
+  html += rvBlkHeadHtml('📚', t('rv_bk_t3'), t('rv_bk_d3'), _corner);
   html += '<div class="rv-blk-b">';
   html += rvFilterBarHtml();
-  if (redoIds.length) {
-    html += '<button class="nav-btn secondary" style="width:100%;padding:11px;margin-bottom:12px;" onclick="wrongStartScopedRedo()">🔁 '
-      + escapeHtml(t(redoIsAll ? 'rv_bk_redo_all' : 'rv_bk_redo_now').replace('{n}', String(redoIds.length))) + '</button>';
-  }
 
   if (tab === 'fav') {
     html += wrongFavListHtml();
