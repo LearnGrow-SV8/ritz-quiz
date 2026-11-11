@@ -339,20 +339,21 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .rv-chip.on .c { color:#dbe7f4; }
 .rv-chip .c { font-size:10.5px; opacity:.8; }
 .rv-blk details summary::-webkit-details-marker { display:none; }
-/* 筛选：两个并行按钮，点开其中一个才展开选项（2026-11-11 领导：上下两排常显太占地方） */
+/* 筛选：两个并行按钮，点开其中一个才展开选项（2026-11-11 领导：上下两排常显太占地方）。
+   按钮一行放下：标签 + 当前值 + 箭头同排（原来是标签一行、值一行，占两行）。 */
 .rv-filter-bar { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:10px; }
-.rv-flt { border:1.5px solid var(--border); border-radius:11px; padding:8px 11px; background:#fff; cursor:pointer; min-width:0; box-sizing:border-box; transition:all .15s; }
+.rv-flt { display:flex; align-items:center; gap:6px; border:1.5px solid var(--border); border-radius:999px; padding:7px 11px; background:#fff; cursor:pointer; min-width:0; box-sizing:border-box; transition:all .15s; }
 .rv-flt:active { transform:scale(.98); }
 .rv-flt.on { border-color:#000; background:#F2F7FD; }
-.rv-flt .k { font-size:10.5px; font-weight:700; color:#8a97a4; letter-spacing:.4px; }
-.rv-flt .v { font-size:12.5px; font-weight:700; color:#1a1a1a; margin-top:3px; display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.rv-flt .k { font-size:11px; font-weight:700; color:#8a97a4; letter-spacing:.2px; flex:0 0 auto; white-space:nowrap; }
+.rv-flt .v { flex:1; min-width:0; font-size:12.5px; font-weight:700; color:#1a1a1a; display:flex; align-items:center; justify-content:flex-end; gap:5px; }
 .rv-flt .v .tx { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .rv-flt .v .ar { color:#8a97a4; font-size:10px; flex:0 0 auto; transition:transform .15s; }
 .rv-flt.on .v .ar { transform:rotate(180deg); }
 /* 二级菜单（点开筛选后展开的选项）：必须和一级按钮一眼分得开。
-   一级 = 白底、实线描边、两列小卡片；二级 = 浅蓝底、虚线边的下拉菜单、竖排选项行，
-   并带一行「选择…」小标题。曾经二级也做成同样的两列卡片，学员分不清哪层是哪层。 */
-.rv-flt-panel { margin:0 0 10px; padding:4px 12px 6px; background:#F1F7FD; border:1px dashed #9FC3E4; border-radius:11px; }
+   一级 = 白底、实线描边的胶囊按钮；二级 = 白底、虚线边的下拉菜单、竖排选项行（领导：
+   不要蓝色底色），并带一行「选择…」小标题。曾经二级也做成同样的两列卡片，学员分不清哪层是哪层。 */
+.rv-flt-panel { margin:0 0 10px; padding:4px 12px 6px; background:#fff; border:1px dashed #b9c6d4; border-radius:11px; }
 .rv-flt-panel .cap { font-size:10.5px; font-weight:800; color:#4a7196; letter-spacing:.5px; padding:7px 0 1px; }
 .rv-opt { display:flex; align-items:center; gap:9px; padding:10px 1px; border-bottom:1px solid #dbe8f5; cursor:pointer; font-size:13.5px; font-weight:700; color:#3c4b59; transition:color .15s; }
 .rv-opt:last-child { border-bottom:0; }
@@ -6019,7 +6020,7 @@ var I18N = {
   rv_chart_doing: {cn:'巩固中', en:'In Progress'},
   rv_chart_todo: {cn:'待开启', en:'Pending'},
   rv_chart_unit: {cn:'道', en:''},
-  rv_chart_rule: {cn:'遵循记忆曲线，于第 1、3、5 天对错题进行复习巩固；三次全部答对，系统即判定该题已被熟练掌握，题目将自动移出错题本。', en:'Following the forgetting curve, review your incorrect questions on Day 1, Day 3 and Day 5. If you get all three attempts right, the system will mark the question as fully mastered and it will be automatically removed from the error notebook.'},
+  rv_chart_rule: {cn:'请遵循记忆曲线，于第 1、3、5 天对错题进行复习巩固；若三次全部答对，系统即判定该题已被熟练掌握，题目将自动移出错题本。', en:'Please follow the forgetting curve, and review your incorrect questions on Day 1, Day 3 and Day 5. If you get all three attempts right, the system will mark the question as fully mastered and it will be automatically removed from the error notebook.'},
   // 答完一题后的即时说明：告诉学员「这一答到底推进了什么」，否则做了还是 0/3 会以为坏了
   rv_h_promote: {cn:'本题已巩固 {n}/{m} 阶 · 下次复习：{d}', en:'Stage {n} of {m} · next review in {d}'},
   rv_h_promote_today: {cn:'本题已巩固 {n}/{m} 阶 · 明天可再复习', en:'Stage {n} of {m} · due again tomorrow'},
@@ -6042,7 +6043,7 @@ var I18N = {
   rv_bk_gen: {cn:'生成练习卷（{n} 道）', en:'Create paper ({n})'},
   rv_bk_gen_none: {cn:'这一类暂时没有题', en:'Nothing in this category yet'},
   rv_bk_eb3: {cn:'错题归档', en:'My Error Bank'},
-  rv_bk_t3: {cn:'错题归档', en:'My Error Bank'},
+  rv_bk_t3: {cn:'当前错题总览', en:'My Error Bank'},
   rv_bk_d3: {cn:'按来源与分类筛选，查看仍在错题本中的全部题目。', en:'Filter by source and category to browse every question still in your notebook.'},
   rv_bk_cat_title: {cn:'错题分类', en:'Category'},
   rv_bk_src_title: {cn:'题目来源', en:'Question source'},
@@ -6193,7 +6194,7 @@ function collectSyncSnapshot() {
     collectedIds: (state.collectedQuestions || []).slice(0, 150),
     // 复习闭环（2026-11-05）：管理端要看「错题掌握率 / 本周复习任务完成度」，
     // 只带三个短字段，不带题号明细（题号已经在 wrongIds 里）。
-    mt: (function () { try { var m = masteryOf(); return m < 0 ? null : m; } catch (e) { return null; } })(),
+    mt: (function () { try { var m = masteryRateOf(); return m < 0 ? null : m; } catch (e) { return null; } })(),
     mas: (function () { try { return masteredCount(); } catch (e) { return 0; } })(),
     rt: (function () {
       try {
@@ -17863,25 +17864,21 @@ function reviewWeakTags(bank) {
 // ---- 错题掌握率：脱离排名的第二维度 ----
 // 定义 = (巩固完成题数 + Σ掌握阶/4) ÷ (巩固完成题数 + 错题本现有题数)。
 // 为什么不用"503 道题做分母"：平台没有逐题正确历史，答对过的题根本不留痕，
-// 用全量做分母会让练了 100 题的人显示 0% —— 那是个假指标。
-// 只算产品知识：21 天培训和优质服务三步骤的错题本按需求保持不变，不参与这个口径。
-// 没有任何错题时返回 -1（页面上显示「—」），而不是 0%。
-function masteryOf() {
-  var book = (state.wrongAnswers && state.wrongAnswers.manual) || {};
-  var grad = masteredCount(), sum = grad, left = 0;
-  for (var qid in book) {
-    if (!Object.prototype.hasOwnProperty.call(book, qid)) continue;
-    sum += wrongStageOf(book[qid]) / (WRONG_STAGE_MAX + 1);
-    left++;
-  }
-  var denom = grad + left;
-  if (!denom) return -1;
-  return Math.round(sum / denom * 1000) / 10;
-}
 function masteredCount() {
   var mas = state.mastered || {}, n = 0;
   for (var k in mas) if (Object.prototype.hasOwnProperty.call(mas, k) && mas[k]) n++;
   return n;
+}
+// 全平台唯一「巩固完成率」口径（2026-11-11 领导：首页、个人页、错题本三处必须同一个数）。
+// = 已巩固完成 ÷（已巩固完成 + 仍在错题本的题），分母含全部题库（21 天 / 三步法 / 答题赛），
+// 整数百分比；错题本为空时返回 -1（界面显示「—」）。
+// 旧 masteryOf() 只看 manual 库、还把巩固中的题按阶数折算进度，和错题本进度卡对不上，已全部换掉。
+function masteryRateOf() {
+  var grad = 0, rows = [];
+  try { grad = masteredCount(); rows = wrongRowsAll({}); } catch (e) { return -1; }
+  var nAll = grad + rows.length;
+  if (!nAll) return -1;
+  return Math.round(grad / nAll * 100);
 }
 
 // ---- 复习行为账本（2026-11-05）：积分制的唯一取数口 ----
@@ -18036,7 +18033,7 @@ function reviewRingHtml(pct, size, label) {
 }
 function reviewHubCardHtml() {
   var m = -1, left = 0, grad = 0;
-  try { m = masteryOf(); left = wrongRowsAll({ bank: 'manual' }).length; grad = masteredCount(); } catch (e) {}
+  try { m = masteryRateOf(); left = wrongRowsAll({}).length; grad = masteredCount(); } catch (e) {}
   var dueN = 0;
   try { dueN = wrongDueCount('manual'); } catch (e) { dueN = 0; }
 
@@ -18071,7 +18068,7 @@ function reviewTaskSwap() { reviewTaskSkip(); render(); }
 // 点进去就是错题合集 —— 领导问"我的错题在哪"时，这一下就能到。
 function masteryCardHtml() {
   var m = -1;
-  try { m = masteryOf(); } catch (e) {}
+  try { m = masteryRateOf(); } catch (e) {}
   var total = { reviewed: 0, promoted: 0, graduated: 0, failed: 0 };
   try { total = reviewTotalsOf(); } catch (e2) {}
   var grad = 0, left = 0;
@@ -18108,26 +18105,24 @@ function openWrongFromKey(skey, qid) {
   state.recGuards = {};
   var bank = wrongBankOfKey(skey);
   if (bank !== 'day21' && bank !== 'tsos' && bank !== 'manual') return;
-  state.currentBank = bank;
-  state.currentPaper = skey.indexOf('_kitchen') > 0 ? 'kitchen' : 'all';
-  var allQuestions = getBankQuestions(bank, 'all');
-  var idx = -1;
-  for (var i = 0; i < allQuestions.length; i++) { if (allQuestions[i].id === qid) { idx = i; break; } }
-  if (idx < 0) {
-    // 兜底：换另一个试卷版本找，再不行直接在全量题库数组里找
-    state.currentPaper = skey.indexOf('_kitchen') > 0 ? 'all' : 'kitchen';
-    allQuestions = getBankQuestions(bank, 'all');
-    for (var j = 0; j < allQuestions.length; j++) { if (allQuestions[j].id === qid) { idx = j; break; } }
-    if (idx < 0) {
-      state.currentPaper = 'all';
-      allQuestions = QUESTION_DATA[bank] || [];
-      for (var k = 0; k < allQuestions.length; k++) { if (allQuestions[k].id === qid) { idx = k; break; } }
-    }
+  // 下一题只在错题本里走（2026-11-11 领导：以前把整个题库装进来，做完一道点
+  // 「下一题」就跳出错题本了）。范围 = 当前筛选命中的错题、按错题次数从多到少，
+  // 限定与被点题目同一个题库（练习记账都挂在 currentBank 上，不能混库）。
+  var rows = wrongFilteredRows();
+  var list = [], idx = -1;
+  for (var i = 0; i < rows.length; i++) {
+    if (wrongBankOfKey(rows[i].skey) !== bank) continue;
+    var q = findByIdAllBanks(rows[i].qid);
+    if (!q) continue;
+    list.push(q);
+    if (rows[i].qid === qid && idx < 0) idx = list.length - 1;
   }
-  if (idx < 0) return;
+  if (!list.length) return;
+  state.currentBank = bank;
+  state.currentPaper = 'all';
   state.currentMode = 'practice';
-  state.questions = prepareQuestions(allQuestions);
-  state.currentIndex = idx;
+  state.questions = prepareQuestions(list);
+  state.currentIndex = idx < 0 ? 0 : idx;
   state.selectedAnswers = {};
   state.showAnswer = false;
   navigate('question');
@@ -18583,17 +18578,18 @@ function renderWrongAll() {
   }
   html += '</div></div>';
 
-  // ---- 板块三｜错题归档：两个筛选按钮 + 当前命中的清单 ----
-  html += '<div class="rv-blk" id="rvBlkBank">';
-  html += rvBlkHeadHtml('📚', t('rv_bk_t3'), t('rv_bk_d3'));
-  html += '<div class="rv-blk-b">';
-  html += rvFilterBarHtml();
+  // ---- 板块三｜当前错题总览：两个筛选按钮 + 当前命中的清单 ----
   var redoIds = wrongRedoIdsScoped();
   var redoIsAll = (tab === 'all') && !state.wrongSrc;
+  html += '<div class="rv-blk" id="rvBlkBank">';
+  // 「共 N 道」贴标题右上角（2026-11-11 领导：三个板块角标统一）。
+  var _unit = t('rv_paper_unit');
+  html += rvBlkHeadHtml('📚', t('rv_bk_t3'), t('rv_bk_d3'),
+    '<b style="font-size:14px;color:#000;">' + redoIds.length + '</b>'
+    + (_unit ? ' <span style="color:#5a6473;">' + escapeHtml(_unit) + '</span>' : ''));
+  html += '<div class="rv-blk-b">';
+  html += rvFilterBarHtml();
   if (redoIds.length) {
-    html += '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:2px 0 8px;">'
-      + '<span style="font-size:11.5px;color:#8a97a4;font-weight:600;">'
-      + escapeHtml(t('rv_bk_total').replace('{n}', String(redoIds.length))) + '</span></div>';
     html += '<button class="nav-btn secondary" style="width:100%;padding:11px;margin-bottom:12px;" onclick="wrongStartScopedRedo()">🔁 '
       + escapeHtml(t(redoIsAll ? 'rv_bk_redo_all' : 'rv_bk_redo_now').replace('{n}', String(redoIds.length))) + '</button>';
   }
@@ -18609,32 +18605,10 @@ function renderWrongAll() {
   }
   html += '</div></div>';
 
-  // ---- 板块四｜自主组卷：分类 + 题量 → 生成练习卷（用得少，排最后）----
-  var pSrc = state.paperSource || 'all';
-  var pIds = paperSourceIds(pSrc, state.wrongTag);
-  var pCnt = state.paperCount || 10;
-  var pTake = (pCnt === 0 || pCnt > pIds.length) ? pIds.length : pCnt;
-  html += '<div class="rv-blk" id="rvBlkPaper">';
-  html += rvBlkHeadHtml('📝', t('rv_bk_t2'), t('rv_bk_d2'));
-  html += '<div class="rv-blk-b">';
-  html += '<div class="rv-label">' + t('rv_bk_pick_cat') + '</div>';
-  html += rvCatGridHtml(pSrc, 'paper');
-  if (pSrc === 'tag') html += rvWeakPillsHtml('paper');
-  html += '<div class="rv-label">' + t('rv_bk_pick_cnt') + '</div>';
-  html += '<div style="display:flex;gap:7px;margin-bottom:12px;">';
-  var counts = [5, 10, 20, 0];
-  for (var ci = 0; ci < counts.length; ci++) {
-    var lab = counts[ci] === 0 ? t('rv_all_q') : String(counts[ci]) + ' ' + t('rv_paper_unit');
-    html += '<div class="rv-chip' + (pCnt === counts[ci] ? ' on' : '') + '" style="flex:1;justify-content:center;padding:8px 0;" onclick="setPaperCount(' + counts[ci] + ')">' + lab + '</div>';
-  }
-  html += '</div>';
-  if (pIds.length) {
-    html += '<button class="nav-btn primary" style="width:100%;padding:13px;" onclick="startWrongPaper()">🎯 '
-      + escapeHtml(t('rv_bk_gen').replace('{n}', String(pTake))) + '</button>';
-  } else {
-    html += '<button class="nav-btn primary" style="width:100%;padding:13px;" disabled>' + t('rv_bk_gen_none') + '</button>';
-  }
-  html += '</div></div>';
+  // ---- 自主组卷已下线（2026-11-11 领导：这个功能可以下线了）----
+  // 错题本现在三块：错题复习进度 / 每日巩固练习 / 当前错题总览。
+  // setPaperCat / setPaperCount / startWrongPaper / rvCatGridHtml 等函数保留在文件里，
+  // 组卷相关的「一键重做错题」（wrongStartScopedRedo）不受影响。
 
   html += '</div>';
   return html;
