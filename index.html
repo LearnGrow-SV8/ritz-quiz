@@ -18394,8 +18394,13 @@ function wrongRowListHtml(rows) {
     h += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(stNow)).replace('{m}', String(WRONG_STAGE_DOTS)) + (stNow >= WRONG_STAGE_MAX ? t('rv_stage_last') : '') + '</span>';
     h += '<span>' + t('rv_wrong_times').replace('{n}', String(row.e.n || 1)) + '</span>';
     h += '</div>';
+    // 🏷 知识点标签只在「与上面 meta 行的章节/题库名不重复」时才显示：
+    // 默认回落值就是章节名（reviewTagOf → section），重复展示一行占地方（2026-11-11 领导确认）。
+    // 后台手动配置了自定义标签（adminState.tags）时仍照常显示。
     var qtags = q ? questionTagsOf(q) : [];
-    if (qtags.length) h += '<div style="margin-top:6px;font-size:11px;color:#5b6b7a;">🏷 ' + escapeHtml(qtags.map(reviewTagName).join(' · ')) + '</div>';
+    var _tagDisp = qtags.map(reviewTagName).join(' · ');
+    var _dispSec = sectionDisplay || wrongBankLabel(row.skey);
+    if (_tagDisp && _tagDisp !== _dispSec) h += '<div style="margin-top:6px;font-size:11px;color:#5b6b7a;">🏷 ' + escapeHtml(_tagDisp) + '</div>';
     h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:9px;">';
     h += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRedoOne(&quot;' + row.qid + '&quot;)">🔁 ' + t('rv_redo_one') + '</button>';
     h += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRemoveOne(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)">🗑 ' + t('remove_one') + '</button>';
