@@ -86,8 +86,13 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .section-filter { margin-bottom:16px; }
 .section-filter h4 { font-size:14px; margin-bottom:8px; color:var(--text-light); }
 .section-chips { display:flex; flex-wrap:wrap; gap:8px; }
-/* 2026-11-11：部门筛选从 chip 墙改为单行下拉（方案 A），31 个部门占七八行的问题解决 */
-.section-select { width:100%; padding:11px 12px; font-size:14px; border:1px solid var(--border); border-radius:10px; background:var(--card-bg); color:var(--text); -webkit-appearance:auto; appearance:auto; }
+/* 2026-11-11：部门筛选从 chip 墙改单行收起 + 页内自绘展开面板。
+   弃用原生 <select>：它的弹层宽度由手机浏览器决定，CSS 管不到，长部门名会被折成两行；
+   自绘面板每部门严格一行（超长省略号），全宽展示。选项行复用错题本筛选的 .rv-opt。 */
+.sec-sel-bar { display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box; padding:11px 12px; border:1px solid var(--border); border-radius:10px; background:var(--card-bg); cursor:pointer; font-size:14px; color:var(--text); }
+.sec-sel-bar .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sec-sel-bar .ar { flex:0 0 auto; color:var(--text-light); font-size:12px; }
+.sec-sel-panel { margin-top:8px; max-height:280px; overflow-y:auto; }
 .chip { background:var(--card-bg); border:1px solid var(--border); padding:6px 14px; border-radius:20px; font-size:13px; cursor:pointer; transition:all 0.15s; color:var(--text); }
 .chip.active { background:var(--primary); color:#fff; border-color:var(--primary); }
 .chip:active { transform:scale(0.95); }
@@ -757,6 +762,8 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .adm-logout-btn:hover { background:rgba(255,255,255,.1); color:#fff; }
 /* --- 顶栏 --- */
 .adm-main { flex:1; min-width:0; display:flex; flex-direction:column; }
+/* 内容滚动区：桌面下它是唯一滚动容器（顶栏是它的兄弟节点，物理上不可能被内容盖住） */
+.adm-scroll { min-width:0; }
 .adm-topbar { position:sticky; top:0; z-index:90; height:56px; background:#fff; border-bottom:1px solid var(--a-line);
   display:flex; align-items:center; gap:14px; padding:0 26px; }
 .adm-crumb { font-size:13px; color:var(--a-i3); }
@@ -1264,12 +1271,17 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
 .adm-tb-back svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.9;
   stroke-linecap:round; stroke-linejoin:round; }
 @media (min-width:901px) {
-  /* 桌面 = 容器滚动：窗口永不滚，滚动只发生在 .adm-main 内。
-     侧边栏 / 顶栏 / 页头 / 吸底操作条因此全部确定性常驻。 */
-  .adm-root { height:100vh; }
-  .adm-main { height:100vh; overflow-y:auto; overflow-x:hidden; }
-  /* 页头吸在顶栏下方：滚到任何位置，返回与主操作都在视口里 */
-  .ap-head { position:sticky; top:56px; z-index:78; background:#fff;
+  /* 桌面 = 三段式固定布局：顶栏（固定行）/ 内容滚动区（唯一滚动容器）。
+     🔴 顶栏必须留在滚动区外侧。把顶栏做成「同一个滚动容器里的 sticky」时，
+     真机 Edge 上滚出去的内容会盖到顶栏上重影（2026-11-11 用户实测两次）。
+     结构上分开后，内容被滚动区的裁剪边界挡住，永远不可能画到顶栏区域。 */
+  .adm-root { height:100vh; overflow:hidden; }
+  .adm-main { height:100vh; overflow:hidden; }
+  .adm-topbar { position:relative; top:auto; flex:0 0 56px; }
+  .adm-scroll { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; }
+  /* 页头走正常流（不再 sticky）：标题与主操作随内容滚动，返回按钮常驻顶栏，
+     🔴 内容区里一律不留 sticky 吸顶条 —— 那是重影的唯一来源 */
+  .ap-head { position:relative; background:#fff;
     margin:-24px -26px 18px; padding:15px 26px 13px; border-bottom:1px solid var(--a-line); }
 }
 .ed-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; padding:12px 0 4px;
@@ -1284,18 +1296,15 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
   .ap-head { margin:0 0 16px; padding:0; border-bottom:0; }
 }
 
-/* ===== 学员管理 v5：页签组（侧边栏子项已上移为页面顶部页签）+ 工具条/表头吸顶 ===== */
+/* ===== 学员管理 v5：页签组（侧边栏子项已上移为页面顶部页签）+ 表格独立滚动 ===== */
 @media (min-width:901px) {
-  /* 工具条（页签/状态/搜索）钉在页头下方；top 由 adminPinRefresh 实测注入 */
-  .stu-pin { position:sticky; z-index:70; top:136px; background:#fff;
+  /* 🔴 工具条不再 sticky：sticky 在合成滚动期会被滚出的行穿透重影（真机 Edge 实测两次）。
+     改为正常流 + 表格自己在 .stu-table-wrap 里滚动，行被 wrap 的裁剪边界挡住，
+     物理上画不到工具条/顶栏上。max-height 由 adminPinRefresh 按可视高度实测注入。 */
+  .stu-pin { background:#fff;
     margin:0 -26px 10px; padding:0 26px 8px; border-bottom:1px solid var(--a-line2); }
-  /* 🔴 别再给吸顶条加 translateZ/will-change 等 GPU 提升 hack：
-     真机 Edge 上合成层错序，滚出去的表格行会穿透吸顶条重影（2026-11-11 用户实测）。
-     普通绘制次序下 z-index 就够用了 —— headless 里看到的"行穿透"当年也被误判过一次。 */
-  /* sticky 表头：wrap 的 overflow:hidden 会吞掉 sticky，改 clip（不产生滚动容器）；
-     垂直方向保持 visible——clip 的垂直裁剪边界在合成滚动时同样会重影穿透 */
-  .adm-content .stu-table-wrap { overflow-x:clip; overflow-y:visible; }
-  .adm-content .stu-table thead th { position:sticky; top:var(--stuThTop, 190px); background:#fff; z-index:5;
+  .adm-content .stu-table-wrap { overflow:auto; max-height:calc(100vh - 300px); }
+  .adm-content .stu-table thead th { position:sticky; top:0; background:#fff; z-index:2;
     box-shadow:0 1px 0 var(--a-line); }
   .adm-content .stu-table thead th:first-child { border-top-left-radius:12px; }
   .adm-content .stu-table thead th:last-child { border-top-right-radius:12px; }
@@ -16933,17 +16942,28 @@ function renderBank(bank) {
   
   if (bank === 'manual') {
     var sections = getManualSections();
-    // 2026-11-11（方案 A）：chip 墙改为单行下拉选择——同事反馈 31 个部门平铺太长占位置。
-    // 「全部」保留为第一项默认值；选中项显示在框内，点开是系统原生选择列表。
-    html += '<div class="section-filter"><h4>📂 '+t('section_filter')+'</h4>';
-    html += '<select class="section-select" onchange="selectSectionBySel(this)">';
-    html += '<option value="all"'+(state.currentSection==='all'?' selected':'')+'>'+t('section_all')+' ('+getBankQuestions(bank, 'all').length+')</option>';
-    for (var i=0; i<sections.length; i++) {
-      var s = sections[i];
-      var dispName = state.lang === 'en' ? (s.en || s.name) : s.name;
-      html += '<option value="'+escapeHtml(s.name)+'"'+(state.currentSection===s.name?' selected':'')+'>'+escapeHtml(dispName)+' ('+getBankQuestions(bank, s.name).length+')</option>';
+    // 2026-11-11 16:10 二改：原生 select 的弹层宽度是手机浏览器自己画的，CSS 管不到，
+    // 长部门名（丽思卡尔顿集团信息概述等）在弹层里被折成两行。改为页内自绘展开面板：
+    // 收起 = 一行全宽横条（当前部门+题数+箭头）；展开 = 全宽面板，每部门一行（超长省略号），
+    // 选项行复用错题本筛选的 .rv-flt-panel/.rv-opt 样式，选完自动收起。
+    var curDisp = state.currentSection === 'all' ? t('section_all') : state.currentSection;
+    for (var k=0; k<sections.length; k++) {
+      if (sections[k].name === state.currentSection && state.lang === 'en' && sections[k].en) curDisp = sections[k].en;
     }
-    html += '</select></div>';
+    var curCnt = getBankQuestions(bank, state.currentSection).length;
+    html += '<div class="section-filter"><h4>📂 '+t('section_filter')+'</h4>';
+    html += '<div class="sec-sel-bar" onclick="toggleSecSel()"><span class="nm">'+escapeHtml(curDisp)+' ('+curCnt+')</span><span class="ar">'+(state.secSelOpen?'▴':'▾')+'</span></div>';
+    if (state.secSelOpen) {
+      html += '<div class="rv-flt-panel sec-sel-panel">';
+      html += secOptRowHtml('all', t('section_all'), getBankQuestions(bank, 'all').length);
+      for (var i=0; i<sections.length; i++) {
+        var s = sections[i];
+        var dispName = state.lang === 'en' ? (s.en || s.name) : s.name;
+        html += secOptRowHtml(s.name, dispName, getBankQuestions(bank, s.name).length);
+      }
+      html += '</div>';
+    }
+    html += '</div>';
   }
   
   if (isPaperBank(bank)) {
@@ -19489,10 +19509,26 @@ function selectSection(section) {
   render();
 }
 
-// 2026-11-11（方案 A）：部门下拉的 onchange 入口。select 的 value 属性由浏览器自动
-// 解码实体，不会像 onclick 内联字符串那样被引号截断，所以直接取 el.value 即可。
-function selectSectionBySel(el) {
-  state.currentSection = el.value || 'all';
+// 2026-11-11 16:10 二改：部门筛选展开面板的选项行（样式复用错题本筛选的 .rv-opt）。
+// 部门名放 data-sec 属性由浏览器自动解码实体，不走 onclick 内联字符串拼接，不会被引号截断。
+function secOptRowHtml(secName, dispName, cnt) {
+  var on = state.currentSection === secName;
+  return '<div class="rv-opt'+(on?' on':'')+'" data-sec="'+escapeHtml(secName)+'" onclick="pickSectionByRow(this)">'
+    + '<span class="nm">'+escapeHtml(dispName)+'</span>'
+    + '<span class="ct">('+cnt+')</span>'
+    + '<span class="tick">'+(on?'✓':'')+'</span></div>';
+}
+
+// 收起/展开部门选择面板（展开状态记在 state.secSelOpen，render 重画时保持）
+function toggleSecSel() {
+  state.secSelOpen = !state.secSelOpen;
+  render();
+}
+
+// 点选某个部门：写 currentSection、收起面板、重画
+function pickSectionByRow(el) {
+  state.currentSection = el.getAttribute('data-sec') || 'all';
+  state.secSelOpen = false;
   render();
 }
 
@@ -25086,7 +25122,7 @@ function renderAdminStudents() {
 
   // ===== Tabs =====
   // 页签已上移到页面外壳顶部（adminShellTabsHtml：学员列表 / 有效工号 / 注册核查 / 人员变动），
-  // 这里不再重复渲染 chip 页签条；.stu-pin 继续负责工具条吸顶。
+  // 这里不再重复渲染 chip 页签条；.stu-pin 只负责工具条的排版与分隔线（不吸顶）。
   var recs = adminStudentRecords();
   html += '<div class="stu-pin" id="stuPin">';
 
@@ -25109,7 +25145,7 @@ function renderAdminStudents() {
       ? (en ? listRecs.length + ' of ' + recs.length : '筛出 ' + listRecs.length + ' / ' + recs.length + ' 人')
       : (en ? recs.length + ' students' : '共 ' + recs.length + ' 人')) + '</span>';
     html += '</div>';
-    html += '</div>'; // /stu-pin —— 表头及以下照常滚动，滚走时被本条与表头钉住
+    html += '</div>'; // /stu-pin —— 表格在 .stu-table-wrap 内部滚动，表头贴住 wrap 顶部
     if (!listRecs.length) {
       html += '<div class="empty-state"><div class="icon">👥</div><p>' + (en ? 'No matching student.' : '没有匹配的学员。') + '</p></div>';
     } else {
@@ -25124,26 +25160,24 @@ function renderAdminStudents() {
   setTimeout(adminPinRefresh, 30);
   return html;
 }
-// 学员管理页吸顶测量：把 .stu-pin 钉在页头正下方，表头（thead）钉在工具条正下方。
-// 页头/工具条高度随内容与换行变化，全部用实测值，不写死像素。
+// 学员管理页布局测量：算出表格滚动区的可用高度（视口高 - 工具条占位）。
+// 🔴 这里**不再**注入任何 sticky top —— 吸顶条已改成正常流 + 表格自身滚动（见 CSS 注释），
+// 内容被 .stu-table-wrap 的裁剪边界挡住，结构上不可能再出现"滚出的行穿透到上面"。
 function adminPinRefresh() {
   try {
-    var main = document.querySelector('.adm-main');
-    if (!main || !main.getBoundingClientRect) return;
-    var head = main.querySelector('.ap-head');
+    var scr = document.querySelector('.adm-scroll') || document.querySelector('.adm-main');
+    if (!scr || !scr.getBoundingClientRect) return;
     var pin = document.getElementById('stuPin');
-    if (!head || !pin || !pin.style) return;
-    var hb = head.getBoundingClientRect();
-    var mTop = main.getBoundingClientRect().top;
-    if (!isFinite(hb.bottom) || !isFinite(mTop)) return;
-    var pinTop = Math.max(57, hb.bottom - mTop + (main.scrollTop || 0) + 1);
-    pin.style.top = pinTop + 'px';
-    var wrap = main.querySelector('.stu-table-wrap');
-    if (wrap && wrap.style && wrap.style.setProperty) {
-      var pb = pin.getBoundingClientRect();
-      var h = pb.height;
-      if (isFinite(h) && h > 0) wrap.style.setProperty('--stuThTop', (pinTop + h) + 'px');
-    }
+    var wrap = scr.querySelector('.stu-table-wrap');
+    if (!pin || !pin.getBoundingClientRect || !wrap || !wrap.style) return;
+    var sb = scr.getBoundingClientRect();
+    var pb = pin.getBoundingClientRect();
+    if (!isFinite(sb.bottom) || !isFinite(pb.bottom)) return;
+    // 滚动到顶时表格起点在视口里的位置（扣掉已滚动的距离）
+    var wrapTopAtZero = pb.bottom - (scr.scrollTop || 0);
+    var avail = Math.round(sb.bottom - wrapTopAtZero - 44); // 44 = 底部说明留白
+    if (!isFinite(avail)) return;
+    wrap.style.maxHeight = Math.max(220, avail) + 'px';
   } catch (e) {}
   if (!adminPinRefresh._bound) {
     adminPinRefresh._bound = true;
@@ -27921,10 +27955,10 @@ function adminResetDataContinue() {
 // ===== 管理端桌面外壳 v2（2026-11-09 重做）=====
 // 结构：左侧分组导航 + 顶栏（面包屑 / 全局搜索），内容区各页自带 .ap-head 页头。
 // 只负责容器与导航，业务逻辑仍由各 renderAdminXxx() 产出。
-// v3 桌面：滚动发生在 .adm-main 容器内；小屏仍整页滚动。两套统一走这里。
+// v3 桌面：滚动发生在 .adm-scroll 容器内（顶栏在它外面，永不跟随滚动）；小屏仍整页滚动。
 function adminScroller() {
   try {
-    var m = document.querySelector('.adm-main');
+    var m = document.querySelector('.adm-scroll');
     if (m && m.scrollHeight > m.clientHeight + 1) return m;
   } catch (e) {}
   return null;
@@ -28229,10 +28263,10 @@ function adminShellHtml(page, inner) {
   } else if (page === 'adminPaperPicker') {
     subActs = '<button class="ap-btn" onclick="adminBack(\'adminPaper\')">← ' + (en ? 'Back' : '返回') + '</button>';
   }
-  h += '<div class="adm-content">'
+  h += '<div class="adm-scroll" id="admScroll"><div class="adm-content">'
     + adminShellTabsHtml(page)
     + (SELF_HEAD[page] ? '' : adminHead(adminPageTitleOf(page), adminSubOf(page), subActs))
-    + inner + '</div>';
+    + inner + '</div></div>';
   h += '</div></div>';
   return h;
 }
