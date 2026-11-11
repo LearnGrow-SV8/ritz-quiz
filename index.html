@@ -323,7 +323,6 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .rv-blk-t { font-size:15.5px; font-weight:800; color:#111; margin-top:7px; letter-spacing:.2px; }
 .rv-blk-d { font-size:12.5px; color:#5a6473; line-height:1.6; margin-top:4px; }
 .rv-blk-b { margin-top:12px; }
-.rv-due-num { font-size:30px; font-weight:800; color:#000; line-height:1; }
 /* minmax(0,1fr) 而不是 1fr：1fr 的最小值是 min-content，长标签（英文/长部门名）
    会把格子顶宽，整页就多出横向滚动条 —— 这是"左右推得动"最常见的来源。 */
 .rv-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:13px; }
@@ -350,7 +349,20 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .rv-flt .v .tx { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .rv-flt .v .ar { color:#8a97a4; font-size:10px; flex:0 0 auto; transition:transform .15s; }
 .rv-flt.on .v .ar { transform:rotate(180deg); }
-.rv-flt-panel { padding:2px 0 4px; }
+/* 二级菜单（点开筛选后展开的选项）：必须和一级按钮一眼分得开。
+   一级 = 白底、实线描边、两列小卡片；二级 = 浅蓝底、虚线边的下拉菜单、竖排选项行，
+   并带一行「选择…」小标题。曾经二级也做成同样的两列卡片，学员分不清哪层是哪层。 */
+.rv-flt-panel { margin:0 0 10px; padding:4px 12px 6px; background:#F1F7FD; border:1px dashed #9FC3E4; border-radius:11px; }
+.rv-flt-panel .cap { font-size:10.5px; font-weight:800; color:#4a7196; letter-spacing:.5px; padding:7px 0 1px; }
+.rv-opt { display:flex; align-items:center; gap:9px; padding:10px 1px; border-bottom:1px solid #dbe8f5; cursor:pointer; font-size:13.5px; font-weight:700; color:#3c4b59; transition:color .15s; }
+.rv-opt:last-child { border-bottom:0; }
+.rv-opt:active { color:#000; }
+.rv-opt .em { flex:0 0 auto; width:19px; text-align:center; font-size:14px; }
+.rv-opt .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rv-opt .ct { flex:0 0 auto; font-size:11.5px; font-weight:800; color:#7d8fa1; }
+.rv-opt .tick { flex:0 0 auto; width:14px; text-align:center; font-size:12.5px; font-weight:800; color:#000; }
+.rv-opt.on { color:#000; }
+.rv-opt.on .ct { color:#000; }
 
 /* Paper version selection */
 .paper-tag { display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:600; margin-right:6px; vertical-align:middle; }
@@ -6034,6 +6046,9 @@ var I18N = {
   rv_bk_d3: {cn:'按来源与分类筛选，查看仍在错题本中的全部题目。', en:'Filter by source and category to browse every question still in your notebook.'},
   rv_bk_cat_title: {cn:'错题分类', en:'Category'},
   rv_bk_src_title: {cn:'题目来源', en:'Question source'},
+  // 二级菜单的小标题（点开筛选按钮后，展开面板顶部那行）
+  rv_flt_pick_src: {cn:'选择题目来源', en:'Pick a source'},
+  rv_flt_pick_cat: {cn:'选择错题分类', en:'Pick a category'},
   rv_bk_redo_all: {cn:'重做全部错题（{n} 道）', en:'Redo all mistakes ({n})'},
   rv_bk_redo_now: {cn:'一键重做当前 {n} 道', en:'Redo these {n}'},
   rv_bk_total: {cn:'共 {n} 道', en:'{n} total'},
@@ -18300,21 +18315,44 @@ function rvWeakPillsHtml(kind) {
   h += '</div>';
   return h;
 }
-function rvSrcChipsHtml() {
-  var opts = [['', 'rv_src_all_opt'], ['manual', 'rv_src_bank_manual'], ['day21', 'rv_src_bank_day21'], ['tsos', 'rv_src_bank_tsos'], ['race', 'rv_src_race']];
-  var h = '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;">';
+// 二级菜单的一行：竖排选项 + 右侧计数 + 选中勾。
+// 一级筛选按钮是「白底描边卡片」，二级刻意做成「浅蓝底菜单行」—— 两级长得一样学员会懵。
+function rvOptRowHtml(on, em, name, count, fn) {
+  var h = '<div class="rv-opt' + (on ? ' on' : '') + '" onclick="' + fn + '">';
+  h += '<span class="em">' + em + '</span><span class="nm">' + escapeHtml(name) + '</span>';
+  if (count) h += '<span class="ct">' + escapeHtml(count) + '</span>';
+  h += '<span class="tick">' + (on ? '✓' : '') + '</span></div>';
+  return h;
+}
+function rvSrcMenuHtml() {
+  var opts = [['', 'rv_src_all_opt', '📚'], ['manual', 'rv_src_bank_manual', '📖'], ['day21', 'rv_src_bank_day21', '📅'], ['tsos', 'rv_src_bank_tsos', '🎯'], ['race', 'rv_src_race', '🏁']];
+  var h = '<div class="cap">' + escapeHtml(t('rv_flt_pick_src')) + '</div>';
   for (var i = 0; i < opts.length; i++) {
     var on = (state.wrongSrc || '') === opts[i][0];
-    h += '<div class="rv-chip' + (on ? ' on' : '') + '" onclick="wrongSrcSet(&quot;' + opts[i][0] + '&quot;)">' + escapeHtml(t(opts[i][1])) + '</div>';
+    h += rvOptRowHtml(on, opts[i][2], t(opts[i][1]), '', 'wrongSrcSet(&quot;' + opts[i][0] + '&quot;)');
   }
-  h += '</div>';
+  return h;
+}
+function rvCatMenuHtml(active) {
+  var c = rvCatCounts();
+  var u = t('rv_paper_unit');
+  function cnt(n) { return u ? (n + ' ' + u) : String(n); }
+  var h = '<div class="cap">' + escapeHtml(t('rv_flt_pick_cat')) + '</div>';
+  h += rvOptRowHtml(active === 'all', '📚', t('rv_cat_all'), cnt(c.all), 'wrongTabSet(&quot;all&quot;)');
+  h += rvOptRowHtml(active === 'due', '⏰', t('rv_cat_due'), cnt(c.due), 'wrongTabSet(&quot;due&quot;)');
+  h += rvOptRowHtml(active === 'fav', '⭐', t('rv_cat_fav'), cnt(c.fav), 'wrongTabSet(&quot;fav&quot;)');
+  h += rvOptRowHtml(active === 'tag', '🏷', t('rv_cat_tag'), '', 'wrongTabSet(&quot;tag&quot;)');
   return h;
 }
 // 三块功能的统一头部：emoji + 标题一层（2026-11-11 领导：不要上面再压一行小字，
 // 两层标题占地方），需要解释就把说明放在标题下面当正文。
 // 三块是并列关系（2026-11-09 领导要求：不是 1→2→3 的流程）。
-function rvBlkHeadHtml(icon, title, desc) {
-  var h = '<div class="rv-blk-t" style="margin-top:0;">' + icon + ' ' + escapeHtml(title) + '</div>';
+// right：标题右侧的角标文字（如「3 道待复习」），用来替掉单独占一行的数字。
+function rvBlkHeadHtml(icon, title, desc, right) {
+  var h = '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">'
+    + '<div class="rv-blk-t" style="margin-top:0;">' + icon + ' ' + escapeHtml(title) + '</div>'
+    + (right ? '<div style="flex:0 0 auto;font-size:12px;color:#5a6473;font-weight:600;">' + right + '</div>' : '')
+    + '</div>';
   if (desc) h += '<div class="rv-blk-d">' + escapeHtml(desc) + '</div>';
   return h;
 }
@@ -18413,9 +18451,9 @@ function rvFilterBarHtml() {
   h += rvFltBtnHtml('src', 'rv_bk_src_title', rvSrcLabelOf(state.wrongSrc || ''), srcOpen);
   h += rvFltBtnHtml('cat', 'rv_bk_cat_title', rvCatLabelOf(tab), catOpen);
   h += '</div>';
-  if (srcOpen) h += '<div class="rv-flt-panel">' + rvSrcChipsHtml() + '</div>';
+  if (srcOpen) h += '<div class="rv-flt-panel">' + rvSrcMenuHtml() + '</div>';
   if (catOpen) {
-    h += '<div class="rv-flt-panel">' + rvCatGridHtml(tab, 'bank');
+    h += '<div class="rv-flt-panel">' + rvCatMenuHtml(tab);
     if (tab === 'tag') h += rvWeakPillsHtml('bank');
     h += '</div>';
   }
@@ -18502,11 +18540,12 @@ function renderWrongAll() {
   // 周任务（本周推进 N 道）已从这块撤掉（2026-11-11 领导：这块叫每日巩固，
   // 混一个"本周 1/1"反而看不懂）；数据仍在，只是不再占版面。
   html += '<div class="rv-blk" id="rvBlkSmart">';
-  html += rvBlkHeadHtml('⏰', t('rv_bk_t1'), t('rv_bk_d1'));
-  html += '<div style="display:flex;align-items:flex-end;gap:10px;margin:13px 0 12px;">';
-  html += '<div style="flex:0 0 auto;"><span class="rv-due-num">' + dueTotal + '</span>'
-    + '<span style="font-size:12px;color:#3c4b59;font-weight:700;margin-left:4px;">' + t('rv_bk_due_unit') + '</span></div>';
-  html += '</div>';
+  // 待复习数字挪到卡片右上角（2026-11-11 领导：单独一行太占地方，仿照进度卡的
+  // 「巩固完成率 62%」那样贴右上角）。数字本身加重，读起来还是第一眼能看到。
+  html += rvBlkHeadHtml('⏰', t('rv_bk_t1'), t('rv_bk_d1'),
+    '<b style="font-size:14px;color:#000;">' + dueTotal + '</b> '
+    + escapeHtml(t('rv_bk_due_unit')));
+  html += '<div class="rv-blk-b">';
   if (dueTotal > 0) {
     html += '<button class="nav-btn primary" style="width:100%;padding:13px;" onclick="wrongStartDueRedo()">▶ '
       + escapeHtml(t('rv_bk_start').replace('{n}', String(dueTotal))) + '</button>';
@@ -18542,7 +18581,7 @@ function renderWrongAll() {
     html += '<button class="nav-btn primary" style="width:100%;padding:13px;" disabled>'
       + escapeHtml(_didToday ? t('rv_bk_done_today') : t('rv_bk_none')) + '</button>';
   }
-  html += '</div>';
+  html += '</div></div>';
 
   // ---- 板块三｜错题归档：两个筛选按钮 + 当前命中的清单 ----
   html += '<div class="rv-blk" id="rvBlkBank">';
