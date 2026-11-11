@@ -5909,7 +5909,6 @@ var I18N = {
   // 「掌握」这个词在学员端全部退役 —— 任务一叫「错题巩固完成」，错题本就该用同一套词。
   rv_stage_hint: {cn:'规则：第 1 天答对记 1 阶，第 2 天再答对记 2 阶，第 5 天再答对一次即巩固完成、自动移出错题本。同一道错题每天最多推进 1 阶；中途又答错，就回到第 1 阶重来。巩固完成后仍会被抽查：练习、模拟考试、限时答题赛里都可能再遇到它，答错就重新回到第 1 阶。', en:'How it works: correct on day 1 (stage 1), correct on day 2 (stage 2), then one more correct answer on day 5 clears it and removes it from the book. At most one stage per day; a wrong answer sends it back to stage 1. Clearing does not mean it is never asked again: practice, mock exams and timed races may still bring it back \u2014 answer wrong and it returns to stage 1.'},
   rv_stage_n: {cn:'已巩固 {n}/{m} 阶', en:'stage {n} of {m}'},
-  rv_stage_last: {cn:' · 再答对 1 次即巩固完成', en:' · one more answer to clear'},
   rv_wrong_times: {cn:'您做错过 {n} 次', en:'{n} wrong attempts'},
   rv_redo_due: {cn:'复习这 {n} 道题', en:'Review these {n}'},
   rv_redo_due_sub: {cn:'复习时间已到，现在练记得最牢。', en:'Due now — the best time to review.'},
@@ -18448,7 +18447,7 @@ function wrongRowListHtml(rows) {
         ? '<b style="color:#e65100;">⏰ ' + t('rv_due_now') + '</b>'
         : '<span style="white-space:nowrap;">⏳ ' + t('rv_due_in').replace('{n}', String(doneDays)) + '</span>')) + '</span>';
     h += '</div>';    h += '<div class="q-meta" style="margin-top:5px;">';
-    h += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(stNow)).replace('{m}', String(WRONG_STAGE_DOTS)) + (stNow >= WRONG_STAGE_MAX ? t('rv_stage_last') : '') + '</span>';
+    h += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(stNow)).replace('{m}', String(WRONG_STAGE_DOTS)) + '</span>';
     h += '<span>' + t('rv_wrong_times').replace('{n}', String(row.e.n || 1)) + '</span>';
     h += '</div>';
     // 🏷 知识点标签只在「与上面 meta 行的章节/题库名不重复」时才显示：
@@ -18837,7 +18836,10 @@ function paperBackSnapshot() {
     section: state.currentSection, paper: state.currentPaper,
     questions: state.questions, selectedAnswers: state.selectedAnswers,
     examAnswers: state.examAnswers, currentIndex: state.currentIndex,
-    showAnswer: state.showAnswer
+    showAnswer: state.showAnswer,
+    // 记下进入重做会话前的栈深：小结→错题本后按返回，用栈深把 question/paperDone
+    // 这两层从历史里撤掉，直接回到做题之前的原页面（避免 小结↔错题本 来回打转）。
+    stackLen: (state.navStack || []).length
   };
 }
 function paperSkeyFor(qid) {
@@ -18968,6 +18970,14 @@ function paperDoneBack() {
   var target = b.page;
   if (!target || target === 'question' || target === 'paperDone') target = 'wrongAll';
   navigate(target);
+  // 把重做会话的中间页（重做题 question、小结 paperDone，以及来时页自己）从返回历史里撤掉：
+  // 从小结进错题本后再按返回 = 回到**进入做题之前**的页面，而不是又弹回小结，
+  // 造成「小结 → 错题本 → 小结 → …」的打转（2026-11-11 领导反馈）。
+  // stackLen = 拍快照时的栈深（当时 currentPage = 来时页 X）⇒ 裁回这个深度，
+  // 栈顶就是 X 的上一页；goBack() 弹栈即落在 X 之前。
+  if (typeof b.stackLen === 'number' && (state.navStack || []).length > b.stackLen) {
+    state.navStack = state.navStack.slice(0, b.stackLen);
+  }
 }
 function collectedBankOf(qid) {
   var order = ['day21', 'tsos', 'manual'];
