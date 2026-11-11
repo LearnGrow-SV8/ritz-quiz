@@ -5234,6 +5234,9 @@ var I18N = {
   desc_day21: {cn:'新员工21天产品知识考试题库', en:'New Employee Day 21 Product Knowledge Exam'},
   desc_tsos: {cn:'优质服务三步骤考试题库', en:'The Three Steps of Service Exam Bank'},
   desc_manual: {cn:'酒店全产品知识手册（按部门分类）', en:'Hotel Product Knowledge Manual (by Department)'},
+  hub_lusty: {cn:'让我们常在您心', en:'Let Us Stay With You'},
+  desc_hub_lusty: {cn:'新员工入职培训项目（为期一年）· 含 21 天考试、优质服务三步骤培训考试', en:'New employee onboarding program (one year) · Day 21 Exam, The Three Steps of Service Training Exam'},
+  lusty_sub: {cn:'请选择考试模块', en:'Select an exam module'},
   // Bank page
   stat_total: {cn:'总题数', en:'Total'},
   stat_practiced: {cn:'已练习', en:'Practiced'},
@@ -9471,6 +9474,12 @@ function getBankDesc(bank) {
   return {day21:t('desc_day21'),tsos:t('desc_tsos'),manual:t('desc_manual')}[bank] || '';
 }
 
+// 「让我们常在您心」（Let Us Stay With You，2026-11-11）：新员工入职培训项目的
+// 合并入口。首页只放一张聚合卡，点进来（lusty 页）再选具体考试。
+// 后续入职培训相关的考试（如 FSQM、第 365 天试卷）直接往这个数组里加 bank key，
+// 首页聚合卡和 lusty 选择页都会自动带上 —— 题库本身照旧走 QUESTION_DATA + goToBank。
+var LUSTY_BANKS = ['day21', 'tsos'];
+
 function getManualSections() {
   var sections = [];
   var seen = {};
@@ -9691,10 +9700,21 @@ function renderHome() {
   var displayName = profileDisplayName();
   
   var banks = [
-    {key:'day21', icon:'📅', name:t('bank_day21'), desc:t('desc_day21'), count: QUESTION_DATA.day21.length},
-    {key:'tsos', icon:'⭐', name:t('bank_tsos'), desc:t('desc_tsos'), count: QUESTION_DATA.tsos.length},
     {key:'manual', icon:'🏨', name:t('bank_manual'), desc:t('desc_manual'), count: QUESTION_DATA.manual.length},
   ];
+
+  // 「让我们常在您心」聚合入口卡（2026-11-11）：21 天考试 + 优质服务三步骤培训考试
+  // 合并成一张卡，统计口径为两组题库的合计（题数 / 错题数 / 练习进度）。
+  // 具体考试在 lusty 选择页里选，点选后仍走 goToBank 原链路。
+  var lustyCount = 0, lustyWrong = 0, lustyDone = 0;
+  for (var li=0; li<LUSTY_BANKS.length; li++) {
+    var lb = LUSTY_BANKS[li];
+    lustyCount += QUESTION_DATA[lb].length;
+    if (state.wrongAnswers[lb]) lustyWrong += Object.keys(state.wrongAnswers[lb]).length;
+    lustyDone += (state.practiceProgress[lb] || 0);
+  }
+  var lustyPct = lustyCount > 0 ? Math.round(lustyDone / lustyCount * 100) : 0;
+
   
   // 2026-11-05：首页整页包上 .page（其他页面都有，唯独首页漏了）。.home-hero 的
   // 负边距（margin:-16px -16px）本来就是设计来抵消 .page 的 16px 内边距做通栏头的，
@@ -9744,7 +9764,17 @@ function renderHome() {
   // 复习闭环：复习中心摆在题库入口之前 —— 先复习该复习的，再刷新的。
   // 2026-11-05 改：今日复习 + 错题掌握率合并成一张卡，整卡可点进错题本。
   html += reviewHubCardHtml();
-  
+
+  // 「让我们常在您心」聚合入口卡：点进 lusty 选择页再挑具体考试
+  html += '<div class="bank-card" onclick="navigate(\'lusty\')">';
+  html += '<h3>💙 '+t('hub_lusty')+'</h3>';
+  html += '<div class="desc">'+t('desc_hub_lusty')+'</div>';
+  html += '<div class="meta">';
+  html += '<span>📝 '+lustyCount+t('questions_unit')+'</span>';
+  if (lustyWrong > 0) html += '<span style="color:var(--danger)">❌ '+lustyWrong+t('questions_unit')+'</span>';
+  html += '<span>📊 '+lustyPct+'%</span>';
+  html += '</div></div>';
+
   for (var i=0; i<banks.length; i++) {
     var b = banks[i];
     var wrongCount = 0;
@@ -9777,6 +9807,33 @@ function renderHome() {
   html += '</div></div>';
 
   return html + '</div>';   // 闭合 .page（见函数开头：2026-11-05 补上的整页包裹层）
+}
+
+// 「让我们常在您心」选择页（2026-11-11）：首页聚合卡点进来，再选具体考试。
+// 卡片渲染和旧首页 bank-card 完全同款（题数 / 错题数 / 练习进度），
+// 点击仍走 goToBank —— 顺序练习 / 模拟考 / 错题本等后续链路一概不变。
+// 新考试（如 FSQM、第 365 天试卷）只需加进 LUSTY_BANKS，这里自动出现。
+function renderLusty() {
+  var html = renderAppHeader({ title: '💙 '+t('hub_lusty'), subtitle: t('lusty_sub') });
+  html += '<div class="page">';
+  for (var i=0; i<LUSTY_BANKS.length; i++) {
+    var bk = LUSTY_BANKS[i];
+    var wrongCount = 0;
+    if (state.wrongAnswers[bk]) wrongCount = Object.keys(state.wrongAnswers[bk]).length;
+    var count = QUESTION_DATA[bk].length;
+    var progress = state.practiceProgress[bk] || 0;
+    var progressPct = count > 0 ? Math.round(progress / count * 100) : 0;
+    html += '<div class="bank-card" onclick="goToBank(\''+bk+'\')">';
+    html += '<h3>'+getBankIcon(bk)+' '+getBankName(bk)+'</h3>';
+    html += '<div class="desc">'+getBankDesc(bk)+'</div>';
+    html += '<div class="meta">';
+    html += '<span>📝 '+count+t('questions_unit')+'</span>';
+    if (wrongCount > 0) html += '<span style="color:var(--danger)">❌ '+wrongCount+t('questions_unit')+'</span>';
+    html += '<span>📊 '+progressPct+'%</span>';
+    html += '</div></div>';
+  }
+  html += '</div>';
+  return html;
 }
 
 // ============================================================================
@@ -19168,7 +19225,7 @@ var ROUTE_STORE_KEY = '__quizRouteV1';
 // 30 分钟足够覆盖"刷一下看最新榜单"，又不至于第二天打开还停在榜上。
 var ROUTE_STORE_TTL = 30 * 60 * 1000;
 var ROUTE_RESTORABLE = {
-  home: 1, bank: 1, paperSelect: 1, search: 1, wrongList: 1, wrongAll: 1,
+  home: 1, lusty: 1, bank: 1, paperSelect: 1, search: 1, wrongList: 1, wrongAll: 1,
   collectedList: 1, race: 1, raceBoard: 1, raceCalendar: 1, myBadges: 1,
   examHistory: 1, profile: 1, avatar: 1
 };
@@ -28262,6 +28319,7 @@ function render() {
   }
   switch(state.currentPage) {
     case 'home': app.innerHTML = renderHome(); break;
+    case 'lusty': app.innerHTML = renderLusty(); break;
     case 'profile': app.innerHTML = renderProfile(); break;
     case 'avatar': app.innerHTML = renderAvatarPage(); break;
     case 'paperSelect': app.innerHTML = renderPaperSelect(state.currentBank); break;
