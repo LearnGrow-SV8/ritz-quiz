@@ -274,6 +274,9 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .wrong-item .q-preview { font-size:14px; line-height:1.5; margin-bottom:4px; }
 /* 两段文字靠两端对齐，窄屏放不下时要能换行 —— 不能只靠 nowrap，否则整行比容器宽 */
 .wrong-item .q-meta { font-size:12px; color:var(--text-light); display:flex; justify-content:space-between; flex-wrap:wrap; gap:2px 8px; }
+/* 左侧文字太长把右侧信息挤到下一行时，第二行也要右对齐（2026-11-11 领导）：
+   margin-left:auto 让落单的 span 靠右，text-align:right 保证它自己内部也右对齐。 */
+.wrong-item .q-meta > span:last-child { margin-left:auto; text-align:right; }
 .empty-state { text-align:center; padding:40px 20px; color:var(--text-light); }
 .empty-state .icon { font-size:48px; margin-bottom:12px; }
 .empty-state p { font-size:14px; }
@@ -5955,7 +5958,7 @@ var I18N = {
   rv_task_go: {cn:'开始今日复习', en:"Start today's review"},
   rv_task_go_n: {cn:'开始今日复习（{n} 道）', en:"Start today's review ({n})"},
   rv_redo_all: {cn:'重做错题', en:'Review mistakes'},
-  rv_hub_title: {cn:'我的错题', en:'My mistakes'},
+  rv_hub_title: {cn:'我的错题本', en:'My Error Notebook'},
   rv_hub_browse: {cn:'打开错题本', en:'Open'},
   rv_hub_mastery_short: {cn:'巩固完成率', en:'Mastery rate'},
   rv_hub_sub: {cn:'已巩固完成 {g} 道 · 错题本现有 {n} 道', en:'{g} cleared · {n} in the book'},
@@ -6020,7 +6023,7 @@ var I18N = {
   rv_chart_doing: {cn:'巩固中', en:'In Progress'},
   rv_chart_todo: {cn:'待开启', en:'Pending'},
   rv_chart_unit: {cn:'道', en:''},
-  rv_chart_rule: {cn:'请遵循记忆曲线，于第 1、3、5 天对错题进行复习巩固；若三次全部答对，系统即判定该题已被熟练掌握，题目将自动移出错题本。', en:'Please follow the forgetting curve, and review your incorrect questions on Day 1, Day 3 and Day 5. If you get all three attempts right, the system will mark the question as fully mastered and it will be automatically removed from the error notebook.'},
+  rv_chart_rule: {cn:'请遵循记忆曲线，于第 1、3、5 天对错题进行复习巩固；若三次全部答对，系统即判定该题已被熟练掌握，题目将自动移出错题本。', en:'Please follow the memory curve, and review your incorrect questions on Day 1, Day 3 and Day 5. If you get all three attempts right, the system will mark the question as fully mastered and it will be automatically removed from the error notebook.'},
   // 答完一题后的即时说明：告诉学员「这一答到底推进了什么」，否则做了还是 0/3 会以为坏了
   rv_h_promote: {cn:'本题已巩固 {n}/{m} 阶 · 下次复习：{d}', en:'Stage {n} of {m} · next review in {d}'},
   rv_h_promote_today: {cn:'本题已巩固 {n}/{m} 阶 · 明天可再复习', en:'Stage {n} of {m} · due again tomorrow'},
@@ -17443,6 +17446,10 @@ function reviewTagName(tag) {
 // 中途一断就前功尽弃；5 天的节奏既保住「隔天回忆」的记忆价值，也不至于劝退。
 var WRONG_STAGE_MAX = 2;                       // 走满两阶（隔 1 天、隔 3 天）= 巩固完成
 var WRONG_INTERVALS = [1, 3];                  // 第 1/2 阶通过后的复习间隔（天）
+// 展示层的「点点」是三个（2026-11-11 领导）：答对一次点亮一个，三个都点亮 =
+// 巩固完成移出错题本。内部阶数是 2（第 3 次答对直接巩固完成），所以点数 = 阶数 + 1；
+// 只改展示不改调度，别动 WRONG_STAGE_MAX。
+var WRONG_STAGE_DOTS = WRONG_STAGE_MAX + 1;    // 错题行显示的点点个数（= 一共要答对 3 次）
 var WRONG_DAY_MS = 86400000;
 var WRONG_MIN_GAP_MS = 4 * 3600 * 1000;        // 同一天里刷两次不算通过，至少隔 4 小时
 var WRONG_MASTER_CAP = 400;                    // 巩固完成名单上限（只影响掌握度精度）
@@ -18136,7 +18143,7 @@ function removeFromWrong(skey, qid) {
 // 掌握阶小圆点：●●●○○ 这种一眼能看懂的形式，比写「2/3」更像进度
 function wrongStageDotsHtml(e) {
   var st = wrongStageOf(e), out = '';
-  for (var i = 0; i < WRONG_STAGE_MAX; i++) {
+  for (var i = 0; i < WRONG_STAGE_DOTS; i++) {
     out += '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:2px;'
       + 'background:' + (i < st ? '#27ae60' : '#dfe4ea') + ';"></span>';
   }
@@ -18384,7 +18391,7 @@ function wrongRowListHtml(rows) {
         ? '<b style="color:#e65100;">⏰ ' + t('rv_due_now') + '</b>'
         : '<span style="white-space:nowrap;">⏳ ' + t('rv_due_in').replace('{n}', String(doneDays)) + '</span>')) + '</span>';
     h += '</div>';    h += '<div class="q-meta" style="margin-top:5px;">';
-    h += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(stNow)).replace('{m}', String(WRONG_STAGE_MAX)) + (stNow >= WRONG_STAGE_MAX ? t('rv_stage_last') : '') + '</span>';
+    h += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(stNow)).replace('{m}', String(WRONG_STAGE_DOTS)) + (stNow >= WRONG_STAGE_MAX ? t('rv_stage_last') : '') + '</span>';
     h += '<span>' + t('rv_wrong_times').replace('{n}', String(row.e.n || 1)) + '</span>';
     h += '</div>';
     var qtags = q ? questionTagsOf(q) : [];
@@ -18520,13 +18527,17 @@ function renderWrongAll() {
     + '<div style="width:' + wGrad + '%;background:#2e7d32;"></div>'
     + '<div style="width:' + wDoing + '%;background:#000;"></div>'
     + '</div>';
-  html += '<div style="display:flex;margin-top:11px;text-align:center;">';
-  html += '<div style="flex:1;"><div style="font-size:19px;font-weight:800;color:#2e7d32;line-height:1.2;">' + grad + '</div>'
-    + '<div style="font-size:11.5px;color:#5a6473;margin-top:2px;">' + t('rv_chart_grad') + '</div></div>';
-  html += '<div style="flex:1;border-left:1px solid var(--border);"><div style="font-size:19px;font-weight:800;color:#000;line-height:1.2;">' + nDoing + '</div>'
-    + '<div style="font-size:11.5px;color:#5a6473;margin-top:2px;">' + t('rv_chart_doing') + '</div></div>';
-  html += '<div style="flex:1;border-left:1px solid var(--border);"><div style="font-size:19px;font-weight:800;color:#5a6473;line-height:1.2;">' + nTodo + '</div>'
-    + '<div style="font-size:11.5px;color:#5a6473;margin-top:2px;">' + t('rv_chart_todo') + '</div></div>';
+  // 数字与说明同一行（2026-11-11 领导：上下结构多占一行；字号字体都不变，只是改左右排）
+  html += '<div style="display:flex;margin-top:11px;align-items:center;text-align:center;">';
+  html += '<div style="flex:1;display:flex;align-items:baseline;justify-content:center;gap:5px;min-width:0;">'
+    + '<span style="font-size:19px;font-weight:800;color:#2e7d32;line-height:1.2;">' + grad + '</span>'
+    + '<span style="font-size:11.5px;color:#5a6473;white-space:nowrap;">' + t('rv_chart_grad') + '</span></div>';
+  html += '<div style="flex:1;display:flex;align-items:baseline;justify-content:center;gap:5px;min-width:0;border-left:1px solid var(--border);">'
+    + '<span style="font-size:19px;font-weight:800;color:#000;line-height:1.2;">' + nDoing + '</span>'
+    + '<span style="font-size:11.5px;color:#5a6473;white-space:nowrap;">' + t('rv_chart_doing') + '</span></div>';
+  html += '<div style="flex:1;display:flex;align-items:baseline;justify-content:center;gap:5px;min-width:0;border-left:1px solid var(--border);">'
+    + '<span style="font-size:19px;font-weight:800;color:#5a6473;line-height:1.2;">' + nTodo + '</span>'
+    + '<span style="font-size:11.5px;color:#5a6473;white-space:nowrap;">' + t('rv_chart_todo') + '</span></div>';
   html += '</div>';
   html += '<div style="font-size:11.5px;color:#8a97a4;margin-top:10px;line-height:1.6;">' + escapeHtml(t('rv_chart_rule')) + '</div>';
   html += '</div>';
@@ -18730,8 +18741,8 @@ function attemptHintHtml(q, res) {
       if (e) { st = wrongStageOf(e); due = wrongDueInDays(e); }
     }
     txt = '✅ ' + (due > 0
-      ? t('rv_h_promote').replace('{n}', String(st)).replace('{m}', String(WRONG_STAGE_MAX)).replace('{d}', String(due))
-      : t('rv_h_promote_today').replace('{n}', String(st)).replace('{m}', String(WRONG_STAGE_MAX)));
+      ? t('rv_h_promote').replace('{n}', String(st)).replace('{m}', String(WRONG_STAGE_DOTS)).replace('{d}', String(due))
+      : t('rv_h_promote_today').replace('{n}', String(st)).replace('{m}', String(WRONG_STAGE_DOTS)));
     color = '#2e7d32';
   } else if (res === 'early') {
     txt = '⏳ ' + t('rv_h_early'); color = '#8a5a00';
