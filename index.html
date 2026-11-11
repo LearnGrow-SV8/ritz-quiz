@@ -5500,7 +5500,7 @@ var I18N = {
   race_cal_hide_q: {cn:'收起答题清单', en:'Hide the questions'},
   race_cal_your: {cn:'你的作答', en:'Your answer'},
   race_cal_ans_lost: {cn:'（旧版记录，未保存你当时的选项）', en:'(legacy record — your choice was not saved)'},
-  race_cal_legend: {cn:'有底色代表当日已打卡，点开可查看当日挑战与答题明细。', en:'Dates with background color indicate a finished check-in; tap to view the day\u2019s challenge and quiz details.'},
+  race_cal_legend: {cn:'有底色代表当日已打卡，点开可查看当日挑战与答题明细；虚线金边（✍）为可补签的日子，点开即可补签。', en:'Dates with background color indicate a finished check-in; tap to view the day\u2019s challenge and quiz details. Dashed gold cells (✍) can be restored with a make-up.'},
   race_cal_week: {cn:'一二三四五六日', en:'M T W T F S S'},
   race_board_days: {cn:'📅 打卡天数', en:'📅 Check-in days'},
   race_board_days_hint_period: {cn:'统计范围：本届赛事全体参赛绅士淑女的打卡天数。单日多次答题仅计一日，榜单依打卡天数排序；天数相同时，则比对累计挑战总次数。', en:'Scope: Check-in days of all participating Ladies and Gentlemen for the current contest. Multiple attempts on the same day count as one day only. Ranking is determined by total check-in days; total quiz attempts serve as the tiebreaker.'},
@@ -5657,17 +5657,19 @@ var I18N = {
   race_makeup_no_need: {cn:'没有需要补签的日子。', en:'No missed day to restore.'},
   // 2026-11-10 补签额度制 + 赚补签任务
   race_makeup_left: {cn:'剩余补签次数：{n} 次', en:'Make-ups left: {n}'},
-  race_makeup_card_desc2: {cn:'答 {n} 题产品知识题、答对 {m} 题以上，即可补回漏掉那一天的打卡。请在打卡日历中选择要补签的日期。', en:'Answer {n} product-knowledge questions (get {m}+ right) to restore a missed check-in. Pick the day in the calendar.'},
+  race_makeup_card_desc2: {cn:'自选一个题库范围，抽取 {n} 题并答对 {m} 题以上，即可补回所选日期的打卡。', en:'Pick a question bank and get {m}+ of {n} drawn questions right to restore the selected day.'},
   race_mk_task_entry: {cn:'补签机会与任务', en:'Make-ups & tasks'},
   race_mk_task_title: {cn:'🎯 补签机会与任务', en:'🎯 Make-ups & tasks'},
   race_mk_task_sub: {cn:'完成任务赚取额外补签次数', en:'Complete tasks to earn extra make-ups'},
-  race_mk_task_card_desc: {cn:'复习错题直至巩固完成，或完成产品知识模块挑战，均可赚取额外补签次数；每届最多 {cap} 次。', en:'Clear wrong answers or pass a module challenge to earn extra make-ups, up to {cap} per round.'},
+  race_mk_task_card_desc: {cn:'复习错题直至巩固完成，或完成产品知识模块挑战，均可获得补签机会；每届最多 {cap} 次，全部通过任务获得。', en:'Clear wrong answers or pass a module challenge to earn make-ups, up to {cap} per round. All make-ups are earned via tasks.'},
   race_mk_task_open: {cn:'查看任务与进度', en:'View tasks & progress'},
   race_mk_task_full: {cn:'本届 {cap} 次补签机会已全部用完。', en:'All {cap} make-ups for this round are used.'},
   // 2026-11-10 方案A：补签放宽到「本届任意漏打卡日」，入口在打卡日历
-  race_mk_home_missed: {cn:'本届已漏打卡 {n} 天 · 剩余补签 {m} 次', en:'{n} missed day(s) this round \u00b7 {m} make-up(s) left'},
-  race_mk_home_btn: {cn:'📅 去日历选日子补签', en:'📅 Pick a day in the calendar'},
+  // 2026-11-11 领导调整：首页入口卡只做「任务→赚机会」的简版引导（race_mk_home_*）
+  race_mk_home_title: {cn:'✍ 补签机会', en:'✍ Make-up credits'},
+  race_mk_home_desc: {cn:'完成学习任务可获得补签机会，漏掉的打卡用补签机会补回。', en:'Complete learning tasks to earn make-ups, then restore any missed check-in.'},
   race_mk_day_btn: {cn:'✍ 补签这一天（剩余 {n} 次）', en:'✍ Restore this day ({n} left)'},
+  race_makeup_choose_desc: {cn:'选择一个题库范围，抽取 {n} 题并答对 {m} 题，即可补回所选日期的打卡。答错的题会自动进入错题集。', en:'Pick a question bank and get {m}+ of {n} drawn questions right to restore the selected day. Wrong answers go to your wrong-answer book.'},
   race_mk_day_future: {cn:'只能补签今天之前漏掉的日子。', en:'Only past missed days can be restored.'},
   race_mk_use_hint: {cn:'使用方式：打卡日历中漏掉的日子可直接补签。点选该日期，用 1 次补签机会完成挑战（答对 {m} 题以上），该日打卡即补回。', en:'How to use: in the calendar, tap a missed day and spend 1 make-up on the challenge (get {m}+ right) to restore that day.'},
   // 补签额度说明（2026-11-10 二次改写）：原来「剩余 0 + 已达上限」两句并列，
@@ -13968,28 +13970,6 @@ function renderRaceHome() {
       html += '<button class="action-btn primary" style="width:100%;margin-top:6px;" onclick="raceStart()">⚡ ' + t('race_start') + '</button>';
     }
   }
-  // 补签卡（2026-11-03 引入；2026-11-10 额度制 + 方案A）：首页只做汇总提醒 ——
-  // 本届存在漏打卡日就亮卡，点按钮去打卡日历挑日子补（具体补哪天在日历里选）。
-  var mkConf = raceConfOf() || {};
-  var mkRec = {};
-  var mkMissed = [], mkAllow = null;
-  try { mkRec = raceLocalRecord() || {}; } catch (eMk0) { mkRec = {}; }
-  try { mkAllow = raceMkAllowance(mkRec, mkConf); } catch (eMk1) { mkAllow = null; }
-  try { mkMissed = raceMkMissedDays(mkRec, mkConf); } catch (eMk2) { mkMissed = []; }
-  if (mkMissed.length) {
-    html += '<div class="q-card" style="border:1px solid #f0b357;background:#fffdf5;">';
-    html += '<div style="font-size:13.5px;font-weight:700;color:#8a5a00;">' + t('race_makeup_card_title') + '</div>';
-    html += '<div style="font-size:12px;color:#9a7b4f;margin-top:4px;line-height:1.6;">'
-      + t('race_makeup_card_desc2').replace('{n}', String(RACE_MAKEUP_N)).replace('{m}', String(RACE_MAKEUP_PASS)) + '</div>';
-    html += '<div style="font-size:12px;color:#8a5a00;margin-top:6px;font-weight:600;">✍ '
-      + t('race_mk_home_missed').replace('{n}', String(mkMissed.length)).replace('{m}', String(mkAllow ? mkAllow.left : 0)) + '</div>';
-    if (mkAllow && mkAllow.left > 0) {
-      html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenCalendar()">📅 ' + t('race_mk_home_btn') + '</button>';
-    } else {
-      html += '<div style="font-size:11.5px;color:#9a7b4f;margin-top:6px;line-height:1.6;">' + escapeHtml(raceMkNoteOf(mkAllow)) + '</div>';
-    }
-    html += '</div>';
-  }
   html += '<div style="display:flex;gap:8px;margin-top:10px;">';
   html += '<button class="action-btn secondary" style="flex:1;" onclick="raceOpenBoard()">🏆 ' + t('race_board') + '</button>';
   html += '<button class="action-btn secondary" style="flex:1;" onclick="raceOpenCalendar()">' + t('race_cal_open') + '</button>';
@@ -13997,6 +13977,21 @@ function renderRaceHome() {
   // 名人堂暂时下架（2026-11-04）：入口收起，页面与数据保留
   // 页面最底部：参赛语境的考前热身入口，直达产品知识题库
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">📖 ' + t('race_study_home') + '</button>';
+  // 补签入口卡（2026-11-11 领导三次调整）：常驻简版 —— 只说「做任务可得补签机会」，
+  // 不展开使用规则；按钮直达补签任务页（怎么补、去哪补放在任务页和打卡日历里讲，
+  // 免得首页卡片和日历界面重复）。位置：考前热身按钮下面，页面最底部。
+  var mkConf = raceConfOf() || {};
+  var mkRec = {}, mkAllow = null;
+  try { mkRec = raceLocalRecord() || {}; } catch (eMk0) { mkRec = {}; }
+  try { mkAllow = raceMkAllowance(mkRec, mkConf); } catch (eMk1) { mkAllow = null; }
+  if (mkConf.id && mkAllow) {
+    html += '<div class="q-card" style="border:1px solid #f0b357;background:#fffdf5;margin-top:14px;">';
+    html += '<div style="font-size:13.5px;font-weight:700;color:#8a5a00;">' + t('race_mk_home_title') + '</div>';
+    html += '<div style="font-size:12px;color:#9a7b4f;margin-top:4px;line-height:1.6;">' + t('race_mk_home_desc') + '</div>';
+    html += '<div style="font-size:12px;color:#8a5a00;margin-top:6px;font-weight:600;">✍ ' + t('race_makeup_left').replace('{n}', String(mkAllow.left)) + '</div>';
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceMkTask\')">🎯 ' + t('race_mk_task_open') + '</button>';
+    html += '</div>';
+  }
   html += '</div>';
   return html;
 }
@@ -14300,8 +14295,9 @@ function renderRaceCalendar() {
     var bdg = hit ? raceBadgesOnDay(rec, key) : [];
     var isToday = key === todayKey;
     var isSel = state.raceCalDay === key;
-    // 可补签的空白日（本届窗口内、今天之前、还有额度）：虚线金边 + ✍ 提示，点开就能补
-    var mkCell = !hit && !isToday && calMk && calMk.left > 0 && calStartK && key >= calStartK && key < todayKey;
+    // 可补签的空白日（本届窗口内、今天之前）：虚线金边 + ✍ 提示，**有没有补签卡都可点** ——
+    // 没卡时点开给「完成任务可获得补签机会」的指引，别让学员猜格子为什么亮（2026-11-11）
+    var mkCell = !hit && !isToday && calStartK && key >= calStartK && key < todayKey;
     // 解锁徽章的日子用金色底 + 🏅，比"打了几次"更值得被看见；补签日用 ✍ 标出
     var bg = !hit ? (mkCell ? '#fffdf5' : '#fff') : (bdg.length ? '#fff8e1' : (isMk ? '#f3f0ff' : '#e8f5e9'));
     var bd = isSel ? '#000' : (mkCell ? '#f0b357' : (isToday ? '#f0b357' : (hit ? (bdg.length ? '#f0b357' : (isMk ? '#9575cd' : '#a5d6a7')) : '#eceff1')));
@@ -15060,10 +15056,11 @@ var RACE_MK_MOD_N = 10, RACE_MK_MOD_PASS = 8;
 // 补签资格：返回 {ok, why, day, rid}。why: today=今天还没打卡 / filled=昨天已有记录
 // / noid=没有届次可挂 / used=本期已补过。
 // ---- 补签额度制（2026-11-10）----
-// 每届原生 1 次补签；完成任务可再赚，总上限 cap 次（管理端可配，默认 3）。
+// 🔴 2026-11-11 领导定稿：**没有原生免费次数** —— 全部补签机会都靠任务赚取，
+// 总上限 cap 次（管理端发布赛事时可配，默认 3）。
 //   任务A · 错题巩固完成：本届期间通过复习让 gradN 道错题巩固完成（默认 5 道/次）。
 //           只认 reviewLog 里的 'g'（巩固完成）事件 —— 手动移出错题本不走这条账，天然不计。
-//   任务B · 模块挑战：任选产品知识模块抽 5 题一次全对，每模块每届 1 次（rec.mkModules 记账）。
+//   任务B · 模块挑战：任选产品知识模块抽题达标，每模块每届 1 次（rec.mkModules 记账）。
 // 额度全部**按状态推导**，不另存"已赚"字段：改门槛 / 换届都不用做数据迁移，也不会重复发。
 function raceMkGradCount(since) {
   var log = Array.isArray(state.reviewLog) ? state.reviewLog : [];
@@ -15093,10 +15090,10 @@ function raceMkAllowance(rec, conf) {
   var used = 0;
   if (rec.mkUsed && typeof rec.mkUsed[rid] === 'number') used = rec.mkUsed[rid];
   else if (rec.makeups && rec.makeups[rid]) used = 1;   // 旧数据：每届一次，记过即用过
-  var allow = Math.min(cap, 1 + earnedA + earnedB);
+  var allow = Math.min(cap, earnedA + earnedB);
   return {
     cap: cap, gradN: gradN, taskOn: taskOn, rid: rid,
-    grad: grad, earnedA: Math.max(0, Math.min(earnedA, cap - 1 - earnedB)),
+    grad: grad, earnedA: Math.max(0, Math.min(earnedA, cap - earnedB)),
     earnedB: earnedB, mods: mods, used: used, allow: allow, left: Math.max(0, allow - used)
   };
 }
@@ -15112,9 +15109,12 @@ function raceMkNoteOf(mk) {
     ? t('race_mk_note_used_can').replace('{r}', String(can))
     : t('race_mk_task_full').replace('{cap}', String(mk.cap));
 }
-// ---- 补签目标日（2026-11-10 方案A：本届任意漏打卡日）----
-// 不再限定"昨天"：本届窗口内、今天之前、且在「本机最早活动日」之后的任何无记录日都可补。
-// 以最早活动日为下界：从没打过卡就没有要保的连续，参赛前的日子一律不算"漏"。
+// ---- 补签目标日（2026-11-10 方案A；2026-11-11 二次放宽）----
+// 本届窗口内、今天之前的任何无记录日都可补。
+// 🔴 不再以「本机最早活动日」为下界（2026-11-11 Andrea 案例：学习记录被清空后
+//    最早活动日后移，赛季初的日子被误判成"参赛前"而无法补签）——
+//    防刷靠每届额度封顶（全部任务获得，默认 3 次），不靠时间窗收紧。
+// 无 startTime 的配置回落为最近 30 天，避免无限枚举。
 function raceMkStartDayOf(rec, conf) {
   rec = rec || {}; conf = conf || {};
   if (!conf.id) return '';
@@ -15122,16 +15122,8 @@ function raceMkStartDayOf(rec, conf) {
   try {
     if (conf.startTime) { var st = Date.parse(conf.startTime); if (isFinite(st)) startK = raceDayKey(st); }
   } catch (e0) { startK = ''; }
-  if (!startK) startK = raceDayKey(Date.now() - 29 * 86400000);   // 无开始时间：最多回看 30 天
-  var firstK = '';
-  var days = rec.days || {};
-  for (var k in days) {
-    if (!Object.prototype.hasOwnProperty.call(days, k)) continue;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) continue;
-    if (!firstK || k < firstK) firstK = k;
-  }
-  if (!firstK) return '';
-  return firstK > startK ? firstK : startK;
+  if (!startK) startK = raceDayKey(Date.now() - 29 * 86400000);
+  return startK;
 }
 // 本届的漏打卡日列表（日期倒序，最近的在前）：最早活动日 ~ 昨天 之间无记录的日子。
 function raceMkMissedDays(rec, conf) {
@@ -15186,13 +15178,27 @@ function raceMakeupBegin(day) {
       : 'race_makeup_no_need'));
     return;
   }
-  var pool = racePoolOf('all');
-  if (pool.length < RACE_MAKEUP_N) { alert(t('no_questions')); return; }
-  // 抽 5 道不重复的
-  var picked = [], i;
-  for (i = 0; i < pool.length && picked.length < RACE_MAKEUP_N; i++) picked.push(pool[i]);
-  state.raceMakeup = { pool: picked, idx: 0, correct: 0, day: info.day, rid: info.rid };
+  // 2026-11-11：抽题范围改学员自选（全题库随机难度不可控）——先选题库范围再开跑
+  state.raceMakeup = { day: info.day, rid: info.rid, choose: true, pool: [], idx: 0, correct: 0 };
   navigate('raceMakeup');
+}
+// 选定板块后开跑：该板块抽 RACE_MAKEUP_N 题，答对 RACE_MAKEUP_PASS 题即补回所选日期
+function raceMakeupStartSec(secKey) {
+  var mk = state.raceMakeup;
+  if (!mk || !mk.day) return;
+  var pool = raceQuestionsOf(secKey);
+  if (pool.length < RACE_MAKEUP_N) { alert(t('race_mk_mod_none').replace('{n}', String(RACE_MAKEUP_N))); return; }
+  mk.pool = prepareQuestions(shuffleArray(pool.slice()).slice(0, RACE_MAKEUP_N));
+  mk.sec = secKey; mk.mode = '';
+  mk.idx = 0; mk.correct = 0; mk.cur = null; mk.results = []; mk.choose = false;
+  render();
+}
+// 补签失败 → 回到题库范围选择页（换个板块再试，或同板块换一套题）
+function raceMakeupChoose() {
+  var mk = state.raceMakeup;
+  if (!mk) return;
+  mk.choose = true; mk.pool = []; mk.idx = 0; mk.correct = 0; mk.cur = null; mk.results = []; mk.mode = '';
+  render();
 }
 function renderRaceMakeup() {
   var mk = state.raceMakeup;
@@ -15206,6 +15212,31 @@ function renderRaceMakeup() {
   });
   html += '<div class="page">';
   if (!mk) { html += '<div class="q-card" style="text-align:center;color:#888;">' + t('race_makeup_no_need') + '</div></div>'; return html; }
+  // 选题库范围页（2026-11-11）：补签挑战不再全题库随机抽（范围太大难度不可控）——
+  // 学员自选一个板块，抽 RACE_MAKEUP_N 题答对 RACE_MAKEUP_PASS 题即补回。
+  if (mk.choose) {
+    html += '<div class="q-card" style="font-size:12.5px;color:#666;line-height:1.7;">'
+      + t('race_makeup_choose_desc').replace('{n}', String(RACE_MAKEUP_N)).replace('{m}', String(RACE_MAKEUP_PASS)) + '</div>';
+    for (var si = 0; si < RACE_SECTIONS.length; si++) {
+      var sk = RACE_SECTIONS[si];
+      if (sk.key === 'all') continue;
+      var sz = 0;
+      try { sz = raceQuestionsOf(sk.key).length; } catch (eSz) { sz = 0; }
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:12px;margin-bottom:8px;border:1px solid #d8dee4;border-radius:10px;background:#fff;">';
+      html += '<div style="font-size:20px;">' + raceSecIcon(sk.key) + '</div>';
+      html += '<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:600;">' + raceSecName(sk.key) + '</div>'
+        + '<div style="font-size:12px;color:#888;">' + sz + ' ' + (en ? 'questions' : '题') + '</div></div>';
+      if (sz >= RACE_MAKEUP_N) {
+        html += '<button class="action-btn secondary" style="font-size:12px;padding:5px 14px;" onclick="raceMakeupStartSec(\'' + sk.key + '\')">🎯 ' + t('race_mk_task_go') + '</button>';
+      } else {
+        html += '<div style="font-size:12px;color:#b0b8bf;">' + (en ? 'Too few questions' : '题量不足') + '</div>';
+      }
+      html += '</div>';
+    }
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="state.raceMakeup=null;goBack()">' + (en ? 'Back' : '返回') + '</button>';
+    html += '</div>';
+    return html;
+  }
   // 答完 → 结算页
   if (mk.idx >= mk.pool.length) {
     // 补签挑战：答对 RACE_MAKEUP_PASS 题即过；模块挑战：10 题答对 RACE_MK_MOD_PASS 题即过
@@ -15243,7 +15274,7 @@ function renderRaceMakeup() {
       html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="state.raceMakeup=null;navigate(' + (isMod ? "'raceMkTask'" : "'raceCalendar'") + ')">'
         + (isMod ? '🎯 ' + t('race_mk_task_entry') : '📅 ' + t('race_cal_open')) + '</button>';
     } else {
-      html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="' + (isMod ? 'raceMkTaskBegin(\'' + mk.module + '\')' : 'raceMakeupBegin(\'' + mk.day + '\')') + '">🔄 ' + t('race_makeup_start') + '</button>';
+      html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="' + (isMod ? 'raceMkTaskBegin(\'' + mk.module + '\')' : 'raceMakeupChoose()') + '">🔄 ' + t('race_makeup_start') + '</button>';
     }
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="state.raceMakeup=null;goBack()">' + (en ? 'Back' : '返回') + '</button>';
     html += '</div>';
@@ -15486,7 +15517,7 @@ function renderAdminRace() {
     + '<span>' + (en ? 'Enable make-up earning tasks' : '启用赚补签任务（错题巩固 / 模块挑战）') + '</span></label>';
   html += '<label style="font-size:12px;color:#666;margin-top:8px;display:block;">' + (en ? 'Wrong answers to clear per make-up (Task 1)' : '任务一：每巩固完成多少道错题记 1 次补签') + '</label>';
   html += '<input id="raceMkGradN" type="number" min="1" max="50" step="1" style="width:100%;padding:8px;margin:4px 0 4px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((parseInt(c.mkGradN, 10) || 0) > 0 ? parseInt(c.mkGradN, 10) : 5) + '">';
-  html += '<label style="font-size:12px;color:#666;margin-top:8px;display:block;">' + (en ? 'Make-up limit per round (incl. the free one)' : '每届补签次数上限（含原生 1 次）') + '</label>';
+  html += '<label style="font-size:12px;color:#666;margin-top:8px;display:block;">' + (en ? 'Make-up limit per round (earned via tasks)' : '每届补签次数上限（全部由任务获得）') + '</label>';
   html += '<input id="raceMkCap" type="number" min="1" max="10" step="1" style="width:100%;padding:8px;margin:4px 0 4px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((parseInt(c.mkCap, 10) || 0) > 0 ? parseInt(c.mkCap, 10) : 3) + '">';
   html += '<div style="font-size:11px;color:#888;margin:4px 0 2px;line-height:1.5;">'
     + (en ? 'Task 2: pick a module, answer 5 drawn questions all correct — once per module per round.'
