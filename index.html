@@ -5665,9 +5665,7 @@ var I18N = {
   race_mk_task_open: {cn:'查看任务与进度', en:'View tasks & progress'},
   race_mk_task_full: {cn:'本届 {cap} 次补签机会已全部用完。', en:'All {cap} make-ups for this round are used.'},
   // 2026-11-10 方案A：补签放宽到「本届任意漏打卡日」，入口在打卡日历
-  // 2026-11-11 领导调整：首页入口卡只做「任务→赚机会」的简版引导（race_mk_home_*）
-  race_mk_home_title: {cn:'✍ 补签机会', en:'✍ Make-up credits'},
-  race_mk_home_desc: {cn:'完成学习任务可获得补签机会，漏掉的打卡用补签机会补回。', en:'Complete learning tasks to earn make-ups, then restore any missed check-in.'},
+  // 2026-11-11 领导调整：首页补签入口卡整体下架（race_mk_home_* 已删）
   race_mk_day_btn: {cn:'✍ 补签这一天（剩余 {n} 次）', en:'✍ Restore this day ({n} left)'},
   race_makeup_choose_desc: {cn:'选择一个题库范围，抽取 {n} 题并答对 {m} 题，即可补回所选日期的打卡。答错的题会自动进入错题集。', en:'Pick a question bank and get {m}+ of {n} drawn questions right to restore the selected day. Wrong answers go to your wrong-answer book.'},
   race_mk_day_future: {cn:'只能补签今天之前漏掉的日子。', en:'Only past missed days can be restored.'},
@@ -13977,21 +13975,8 @@ function renderRaceHome() {
   // 名人堂暂时下架（2026-11-04）：入口收起，页面与数据保留
   // 页面最底部：参赛语境的考前热身入口，直达产品知识题库
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">📖 ' + t('race_study_home') + '</button>';
-  // 补签入口卡（2026-11-11 领导三次调整）：常驻简版 —— 只说「做任务可得补签机会」，
-  // 不展开使用规则；按钮直达补签任务页（怎么补、去哪补放在任务页和打卡日历里讲，
-  // 免得首页卡片和日历界面重复）。位置：考前热身按钮下面，页面最底部。
-  var mkConf = raceConfOf() || {};
-  var mkRec = {}, mkAllow = null;
-  try { mkRec = raceLocalRecord() || {}; } catch (eMk0) { mkRec = {}; }
-  try { mkAllow = raceMkAllowance(mkRec, mkConf); } catch (eMk1) { mkAllow = null; }
-  if (mkConf.id && mkAllow) {
-    html += '<div class="q-card" style="border:1px solid #f0b357;background:#fffdf5;margin-top:14px;">';
-    html += '<div style="font-size:13.5px;font-weight:700;color:#8a5a00;">' + t('race_mk_home_title') + '</div>';
-    html += '<div style="font-size:12px;color:#9a7b4f;margin-top:4px;line-height:1.6;">' + t('race_mk_home_desc') + '</div>';
-    html += '<div style="font-size:12px;color:#8a5a00;margin-top:6px;font-weight:600;">✍ ' + t('race_makeup_left').replace('{n}', String(mkAllow.left)) + '</div>';
-    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceMkTask\')">🎯 ' + t('race_mk_task_open') + '</button>';
-    html += '</div>';
-  }
+  // 补签入口卡已从首页下架（2026-11-11 领导四次调整）：入口只保留在打卡日历（可补日格子
+  // 点开补签）与日历底部任务卡（赚机会）。首页不再出现任何补签卡，等定稿后再议。
   html += '</div>';
   return html;
 }
@@ -14299,7 +14284,8 @@ function renderRaceCalendar() {
     // 没卡时点开给「完成任务可获得补签机会」的指引，别让学员猜格子为什么亮（2026-11-11）
     var mkCell = !hit && !isToday && calStartK && key >= calStartK && key < todayKey;
     // 解锁徽章的日子用金色底 + 🏅，比"打了几次"更值得被看见；补签日用 ✍ 标出
-    var bg = !hit ? (mkCell ? '#fffdf5' : '#fff') : (bdg.length ? '#fff8e1' : (isMk ? '#f3f0ff' : '#e8f5e9'));
+    // 可补签日：白底 + 虚线金边 + ✍（2026-11-11 领导五调：有底色 = 已打卡，补签日绝不能带底色）
+    var bg = !hit ? '#fff' : (bdg.length ? '#fff8e1' : (isMk ? '#f3f0ff' : '#e8f5e9'));
     var bd = isSel ? '#000' : (mkCell ? '#f0b357' : (isToday ? '#f0b357' : (hit ? (bdg.length ? '#f0b357' : (isMk ? '#9575cd' : '#a5d6a7')) : '#eceff1')));
     var fg = hit ? '#1b5e20' : (mkCell ? '#b7791f' : '#9aa3ad');
     html += '<div onclick="' + ((hit || mkCell) ? 'raceCalPickDay(\'' + key + '\')' : '') + '"'
