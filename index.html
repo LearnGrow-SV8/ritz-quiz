@@ -480,6 +480,18 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .primary-btn { display:inline-block; margin-top:18px; padding:12px 28px; background:var(--primary); color:#fff; border:none; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer; }
 .primary-btn:active { transform:scale(0.98); }
 .confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:9999; padding:20px; }
+/* 补签弹窗（2026-11-12）：遮罩点击可关，卡片自身阻止冒泡；右上角 × 常驻 */
+.mk-mask { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:9999; display:flex; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; animation:mkFade .16s ease-out; }
+.mk-box { position:relative; width:100%; max-width:352px; background:#fff; border-radius:16px; padding:22px 20px 18px; box-sizing:border-box; box-shadow:0 16px 48px rgba(0,0,0,.26); animation:mkPop .18s ease-out; }
+.mk-x { position:absolute; top:8px; right:8px; width:32px; height:32px; border:0; background:transparent; font-size:22px; line-height:30px; color:#9aa3ad; cursor:pointer; border-radius:50%; }
+.mk-x:active { background:#f0f3f6; }
+.mk-day { font-size:11.5px; font-weight:700; color:#8a5a00; letter-spacing:.3px; }
+.mk-title { font-size:17px; font-weight:800; color:#000; margin-top:3px; padding-right:26px; }
+.mk-desc { font-size:12.5px; color:#5b6470; line-height:1.7; margin-top:8px; }
+.mk-btn { width:100%; margin-top:16px; }
+.mk-btn2 { width:100%; margin-top:9px; }
+@keyframes mkFade { from { opacity:0 } to { opacity:1 } }
+@keyframes mkPop { from { transform:scale(.94); opacity:0 } to { transform:scale(1); opacity:1 } }
 .confirm-box { background:#fff; border-radius:12px; padding:24px; max-width:360px; width:100%; box-shadow:0 12px 32px rgba(0,0,0,0.2); }
 .confirm-title { font-size:17px; font-weight:600; color:var(--text-dark); margin-bottom:12px; }
 .confirm-body { font-size:14px; color:var(--text-light); line-height:1.6; word-break:break-all; }
@@ -5608,7 +5620,6 @@ var I18N = {
   race_dept_days_mode: {cn:'部门打卡天数统计口径', en:'Department check-in ranking'},
   race_dept_days_sum: {cn:'部门总打卡天数（鼓励更多人参与）', en:'Total days (rewards headcount)'},
   race_dept_days_avg: {cn:'部门人均打卡天数（大小部门更公平）', en:'Average per person (fairer across sizes)'},
-  race_badge_wall: {cn:'我的徽章', en:'My badges'},
   race_badge_s7: {cn:'连续打卡 7 天', en:'7-day streak'},
   race_badge_s14: {cn:'连续打卡 14 天', en:'14-day streak'},
   race_badge_s21: {cn:'连续打卡 21 天', en:'21-day streak'},
@@ -5985,6 +5996,7 @@ var I18N = {
   rv_due_in: {cn:'{n} 天后再复习', en:'in {n}d'},
   rv_done_today_tag: {cn:'今日已作答', en:'answered today'},
   rv_done_today_next: {cn:'明天可再进阶', en:'next stage tomorrow'},
+  rv_done_today_grad: {cn:'今天内可巩固完成', en:'can clear today'},
   rv_due_n: {cn:'{n} 道该复习', en:'{n} due'},
   rv_tab_due: {cn:'该复习', en:'Due'},
   rv_tab_all: {cn:'全部错题', en:'All'},
@@ -14217,11 +14229,37 @@ function raceCalPickDay(k) {
   state.raceCalDay = (state.raceCalDay === k) ? '' : k;
   render();
 }
+// 一条挑战明细在 DOM 里的锚点 id（okey = 日期|时间戳，含 '|' 不能直接当 id）
+function raceCalRunDomId(k) {
+  return 'calRun_' + String(k == null ? '' : k).replace(/[^0-9a-zA-Z_-]/g, '_');
+}
+// 展开/收起答题清单后把这条记录带回视线（2026-11-12）：
+// 收起时清单整块消失，页面高度骤减 → 浏览器把滚动位置夹到页面末尾，学员看到的是
+// 底部那几个按钮，以为自己点错了。收起后统一把这张卡片顶到吸顶栏下沿，
+// 也就是「点开答题清单」时所在的位置。
+function raceCalFocusRun(id) {
+  var go = function () {
+    try {
+      var el = document.getElementById(id);
+      if (!el || !el.getBoundingClientRect) return;
+      var hd = document.querySelector('#app .app-header');
+      var top = (hd && hd.getBoundingClientRect) ? Math.max(0, hd.getBoundingClientRect().bottom) : 0;
+      var dy = el.getBoundingClientRect().top - top - 8;
+      if (Math.abs(dy) < 4) return;
+      var y = (window.pageYOffset || document.documentElement.scrollTop || 0) + dy;
+      window.scrollTo(0, Math.max(0, y));
+    } catch (e) {}
+  };
+  if (typeof setTimeout === 'function') setTimeout(go, 0); else go();
+}
 function raceCalToggleRun(k) {
   if (!state.raceCalOpen) state.raceCalOpen = {};
-  if (state.raceCalOpen[k]) delete state.raceCalOpen[k];
+  var wasOpen = !!state.raceCalOpen[k];
+  if (wasOpen) delete state.raceCalOpen[k];
   else state.raceCalOpen[k] = true;
   render();
+  // 只在「收起」时归位：展开时清单往下长，卡片本身不动，无需滚动。
+  if (wasOpen) raceCalFocusRun(raceCalRunDomId(k));
 }
 // 删除一条挑战明细（2026-11-10）：误触进去没答题、或学员想清掉某条记录。
 // 只动 rec.log 这条流水 + 当天打卡次数（归零且非补签日则整日移除）；
@@ -14346,55 +14384,44 @@ function raceBadgeProgText(def, prg, en) {
   }
   return cur + '/' + max + (en ? ' d' : ' 天');
 }
-// 徽章墙：一眼看到拿到了什么、下一枚还差多少。进度用**历史最长连续**算 ——
-// 「你做到过的最好成绩」比「这几天断了没有」更能说明离目标多远。
-function raceBadgeWallHtml(rec, rid) {
-  var en = state.lang === 'en';
-  var unit = en ? 'd' : '天';
-  var defs = raceBadgeDefs(false);
-  // 徽章墙是「集锦」：按历届全部算（×N 才有意义），进度行才看本期
-  var counts = raceBadgeCounts(rec, '');
-  var st = raceStreakInfo(rec, '');
-  var totalDays = raceDaysCount(rec, '');
-  var periodDays = raceDaysCount(rec, (raceConfOf() || {}).id);
-  var html = '<div class="q-card" style="padding:12px;margin-bottom:10px;">';
-  html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">';
-  html += '<div style="font-size:14px;font-weight:700;">🏅 ' + t('race_badge_wall') + '</div>';
-  html += '<div style="flex:1;"></div>';
-  // 主页这面墙每个大类只露「1 枚已拿到 + 1 枚最近的未解锁」：五类都看得见，
-  // 又始终有"下一枚还差多少"可追。完整 22 枚去「我的徽章」看。
-  var wall = [];
-  for (var ci2 = 0; ci2 < BADGE_CATS.length; ci2++) {
-    var earned = [], todo = [], wi;
-    for (wi = 0; wi < defs.length; wi++) {
-      if (badgeCatOf(defs[wi].rule) !== BADGE_CATS[ci2].key) continue;
-      if (counts[defs[wi].id]) earned.push(defs[wi]); else todo.push(defs[wi]);
-    }
-    earned.sort(function (a, b) {
-      return String(counts[b.id].last) < String(counts[a.id].last) ? -1 : 1;
-    });
-    if (earned.length) wall.push(earned[0]);
-    if (todo.length) wall.push(todo[0]);
+// 补签弹窗（2026-11-12 领导九调）：日历里点「金边 / 灰边虚线」日期时盖一层弹窗，
+// 三个出口 —— 去完成任务、直接补签、右上角 ×。上一版是页面内的一张说明卡，要往下滚
+// 才看得到，等于没有入口；弹窗居中压屏，一眼就知道这里能操作。
+// 内容只留「自选题库，抽 N 题答对 M 题即可补回本日打卡」，剩余次数写在按钮上，不再重复。
+function raceMkDayModalHtml(day, rec, conf, mk, en) {
+  if (!day) return '';
+  var chk = null;
+  try { chk = raceMkDayCheck(day, rec, conf, mk); } catch (e) { chk = null; }
+  var canEarn = !!mk && mk.taskOn && mk.used < mk.cap;
+  var okMk = !!(chk && chk.ok);
+  if (!okMk && !canEarn) return '';   // 用满上限的漏打卡日不弹（与「不画框」同一口径）
+  var dnum = parseInt(day.slice(8, 10), 10);
+  var head = day.slice(0, 4) + (en ? '/' : '年') + parseInt(day.slice(5, 7), 10) + (en ? '/' : '月') + dnum + (en ? '' : '日');
+  var html = '<div class="mk-mask" onclick="raceMkDayClose()">';
+  html += '<div class="mk-box" onclick="event.stopPropagation();">';
+  html += '<button class="mk-x" onclick="raceMkDayClose()" aria-label="Close">×</button>';
+  html += '<div class="mk-day">' + escapeHtml(head) + '</div>';
+  html += '<div class="mk-title">' + escapeHtml(t(okMk ? 'race_mk_day_title' : 'race_mk_hint_title')) + '</div>';
+  if (okMk) {
+    html += '<div class="mk-desc">'
+      + escapeHtml(t('race_makeup_card_desc2').replace('{n}', String(RACE_MAKEUP_N)).replace('{m}', String(RACE_MAKEUP_PASS)))
+      + '</div>';
+    html += '<button class="action-btn primary mk-btn" onclick="state.raceCalDay=\'\';raceMakeupBegin(\'' + day + '\')">'
+      + escapeHtml(t('race_mk_day_btn').replace('{n}', String(mk.left))) + '</button>';
+    html += '<button class="action-btn secondary mk-btn2" onclick="state.raceCalDay=\'\';navigate(\'raceMkTask\')">'
+      + escapeHtml(t('race_mk_task_open')) + '</button>';
+  } else {
+    html += '<div class="mk-desc">' + escapeHtml(t('race_mk_hint_desc')) + '</div>';
+    html += '<button class="action-btn primary mk-btn" onclick="state.raceCalDay=\'\';navigate(\'raceMkTask\')">'
+      + escapeHtml(t('race_mk_task_open')) + '</button>';
   }
-  html += '<div style="font-size:11px;color:#888;">' + t('race_badge_cur') + ' ' + st.cur + unit
-    + ' · ' + t('race_badge_max') + ' ' + st.max + unit + '</div>';
-  html += '</div>';
-  html += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">';
-  for (var i = 0; i < wall.length; i++) {
-    var d = wall[i], got = counts[d.id];
-    var prg = raceBadgeProgressOf(rec, d);
-    html += raceBadgeChipHtml(d, !!got, got ? got.last : '',
-      raceBadgeProgText(d, prg, en), got ? got.count : 0);
-  }
-  html += '</div>';
-  if (!defs.length) {
-    html += '<div style="font-size:11px;color:#999;margin-top:8px;">' + t('race_badge_none') + '</div>';
-  }
-  html += '</div>';
-  html += '<div style="text-align:right;margin:-4px 2px 10px;">'
-    + '<span style="font-size:12px;color:#000;font-weight:600;cursor:pointer;" onclick="navigate(\'myBadges\')">'
-    + t('race_badge_all') + ' ›</span></div>';
+  html += '</div></div>';
   return html;
+}
+// 关闭弹窗：只清选中日，不动日历月份与其它状态
+function raceMkDayClose() {
+  state.raceCalDay = '';
+  render();
 }
 function renderRaceCalendar() {
   var en = state.lang === 'en';
@@ -14437,8 +14464,8 @@ function renderRaceCalendar() {
   html += '</div>';
   // 日历 ⇄ 排行榜 互相直达：入口放页面**最底部**（2026-11-04 从顶部挪下来，
   // 顶部统计卡才是日历的主角，跳转属于次级动作，不值得占一整行首屏）。
-  // 「我的徽章」墙挪到日历格子 + 当天明细之后：选中的日期内容夹在日历和徽章中间，
-  // 复盘完答题清单往下顺手就是徽章，不用先滚过一长排徽章才看到日历。
+  // 「我的徽章」墙已退役（2026-11-12）：入口改为 日期格子（🏅 金底）→「当天获得徽章」
+  // 卡片 → 「查看完整徽章集锦」，跟着语境走；全站兜底入口在个人主页的徽章卡。
 
   // 星期表头（周一起始）
   var wk = t('race_cal_week');
@@ -14501,6 +14528,9 @@ function renderRaceCalendar() {
   // 选中某天 → 当天的挑战流水
   if (state.raceCalDay) {
     var day = state.raceCalDay;
+    // 漏打卡日（当天无记录）→ 只弹窗，不再在页面里塞说明卡（2026-11-12 领导九调）
+    var gapDay = !days[day];
+    if (gapDay) html += raceMkDayModalHtml(day, rec, calConf, calMk, en);
     var runs2 = [];
     var log = Array.isArray(rec.log) ? rec.log : [];
     for (var li = 0; li < log.length; li++) {
@@ -14508,6 +14538,7 @@ function renderRaceCalendar() {
     }
     // 最新的挑战排最前：学员打开日历最关心「我刚才那次考得怎么样」
     runs2.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+    if (!gapDay) {
     var dnum = parseInt(day.slice(8, 10), 10);
     html += '<h4 style="margin:6px 0 8px;">🗓 ' + mm + (en ? '/' : '月') + dnum + (en ? '' : '日') + ' · '
       + t('race_cal_day_runs').replace('{n}', runs2.length) + '</h4>';
@@ -14527,6 +14558,11 @@ function renderRaceCalendar() {
         html += '<div style="font-size:10.5px;color:#b7791f;">' + escapeHtml(bb.date) + '</div>';
         html += '</div>';
       }
+      // 全部徽章入口（2026-11-12）：点带 🏅 的日期看到当天拿的徽章后，顺势进「我的徽章」
+      // 看完整集锦（全站另一入口在个人主页的徽章卡）。
+      html += '<div style="text-align:center;margin-top:10px;padding-top:8px;border-top:1px dashed #f0d9a8;">'
+        + '<span style="font-size:12.5px;color:#8a5a00;font-weight:600;cursor:pointer;" onclick="navigate(\'myBadges\')">'
+        + t('race_badge_all') + ' ›</span></div>';
       html += '</div>';
     }
     if (!runs2.length) {
@@ -14539,7 +14575,8 @@ function renderRaceCalendar() {
       var okey = day + '|' + (it.ts || ri);
       // 有明细的挑战，标题整行可点：展开↔收起，不用滚到卡片末尾找按钮
       var hasQ = Array.isArray(it.q) && it.q.length;
-      html += '<div class="q-card" style="margin-bottom:8px;">';
+      // id 供收起时归位用（raceCalFocusRun）：收起后把这张卡片顶回吸顶栏下沿
+      html += '<div class="q-card" id="' + raceCalRunDomId(okey) + '" style="margin-bottom:8px;">';
       html += '<div' + (hasQ
         ? ' onclick="raceCalToggleRun(\'' + okey + '\')" style="display:flex;align-items:center;gap:8px;cursor:pointer;"'
         : ' style="display:flex;align-items:center;gap:8px;"') + '>';
@@ -14561,8 +14598,32 @@ function renderRaceCalendar() {
         if (ok[okey]) {
           // 重做状态分两组（2026-11-10）：runWrong = 还在错题本里的「可再练」；
           // runDone = 重做后已巩固完成出错的题本「已掌握」，收进次级按钮供自愿巩固。
+          // 2026-11-12：先扫一遍把两组分好，因为「一键重做本次错题」要排在具体题目**上方**
+          // —— 点开清单第一眼就能直接练，不用滚到清单末尾才找到按钮。
           var runWrong = [], runDone = [];
+          for (var qc = 0; qc < it.q.length; qc++) {
+            var tc0 = it.q[qc];
+            if (!tc0 || !findByIdAllBanks(tc0[0])) continue;
+            if (tc0[1] === 1) continue;
+            var mc0 = false;
+            try { mc0 = wrongSkeysForQid(tc0[0]).length === 0; } catch (eM0) { mc0 = false; }
+            if (mc0) runDone.push(String(tc0[0])); else runWrong.push(String(tc0[0]));
+          }
           html += '<div style="margin-top:10px;">';
+          html += '<div style="background:var(--primary-soft);border-radius:10px;padding:10px;margin-bottom:14px;">';
+          if (runWrong.length) {
+            html += '<button class="action-btn primary" style="width:100%;" onclick="startWrongRedoIds([' + runWrong.map(function (x) { return "'" + x + "'"; }).join(',') + '],{kind:\'cal\',title:\'' + t('rv_cal_redo_run') + '\'})">'
+              + '🔁 ' + t('rv_cal_redo_run').replace('{n}', String(runWrong.length)) + '</button>';
+          } else if (runDone.length) {
+            html += '<div style="font-size:12px;color:#27ae60;text-align:center;">✓ ' + t('rv_cal_redo_all_done') + '</div>';
+          } else {
+            html += '<div style="font-size:12px;color:#27ae60;text-align:center;">✓ ' + t('rv_cal_redo_none') + '</div>';
+          }
+          if (runDone.length) {
+            html += '<button class="action-btn secondary" style="width:100%;' + (runWrong.length ? 'margin-top:6px;' : '') + '" onclick="startWrongRedoIds([' + runDone.map(function (x) { return "'" + x + "'"; }).join(',') + '],{kind:\'cal\',title:\'' + t('rv_cal_redo_done_btn') + '\'})">'
+              + t('rv_cal_redo_done_btn').replace('{n}', String(runDone.length)) + '</button>';
+          }
+          html += '</div>';
           for (var qi = 0; qi < it.q.length; qi++) {
             var trip = it.q[qi];
             var q = findByIdAllBanks(trip[0]);
@@ -14577,7 +14638,6 @@ function renderRaceCalendar() {
             var mastered = false;
             if (!good) {
               try { mastered = wrongSkeysForQid(trip[0]).length === 0; } catch (eM) { mastered = false; }
-              if (mastered) runDone.push(String(trip[0])); else runWrong.push(String(trip[0]));
             }
             html += '<div style="border-left:3px solid ' + (good ? '#27ae60' : '#c0392b') + ';padding:8px 0 8px 10px;margin-bottom:8px;">';
             html += '<div style="font-size:13px;font-weight:600;">' + (qi + 1) + '. ' + escapeHtml(raceQText(q)).replace(/\n/g, '<br>') + '</div>';
@@ -14602,18 +14662,6 @@ function renderRaceCalendar() {
             html += '</div>';
           }
           html += '</div>';
-          if (runWrong.length) {
-            html += '<button class="action-btn primary" style="width:100%;margin-top:4px;" onclick="startWrongRedoIds([' + runWrong.map(function (x) { return "'" + x + "'"; }).join(',') + '],{kind:\'cal\',title:\'' + t('rv_cal_redo_run') + '\'})">'
-              + '🔁 ' + t('rv_cal_redo_run').replace('{n}', String(runWrong.length)) + '</button>';
-          } else if (runDone.length) {
-            html += '<div style="font-size:12px;color:#27ae60;text-align:center;margin:2px 0 6px;">✓ ' + t('rv_cal_redo_all_done') + '</div>';
-          } else {
-            html += '<div style="font-size:12px;color:#27ae60;text-align:center;margin:2px 0 6px;">✓ ' + t('rv_cal_redo_none') + '</div>';
-          }
-          if (runDone.length) {
-            html += '<button class="action-btn secondary" style="width:100%;margin-top:4px;" onclick="startWrongRedoIds([' + runDone.map(function (x) { return "'" + x + "'"; }).join(',') + '],{kind:\'cal\',title:\'' + t('rv_cal_redo_done_btn') + '\'})">'
-              + t('rv_cal_redo_done_btn').replace('{n}', String(runDone.length)) + '</button>';
-          }
           html += '<button class="action-btn secondary" style="width:100%;margin-top:4px;" onclick="raceCalToggleRun(\'' + okey + '\')">' + t('race_cal_hide_q') + '</button>';
         } else {
           html += '<button class="action-btn secondary" style="width:100%;margin-top:8px;" onclick="raceCalToggleRun(\'' + okey + '\')">' + t('race_cal_show_q') + '</button>';
@@ -14630,34 +14678,12 @@ function renderRaceCalendar() {
       }
       html += '</div>';
     }
-    // 漏打卡日的补签卡（2026-11-10 方案A；2026-11-11 领导七调加"暂无次数"引导）
-    if (!days[day]) {
-      var mkChk = null;
-      try { mkChk = raceMkDayCheck(day, rec, calConf, calMk); } catch (eMk3) { mkChk = null; }
-      var canEarnMk = !!calMk && calMk.taskOn && calMk.used < calMk.cap;
-      if (mkChk && mkChk.ok) {
-        html += '<div class="q-card" style="border:1px solid #f0b357;background:#fffdf5;">';
-        html += '<div style="font-size:13.5px;font-weight:700;color:#8a5a00;">' + t('race_mk_day_title') + '</div>';
-        html += '<div style="font-size:11.5px;color:#9a7b4f;margin-top:4px;line-height:1.6;">'
-          + t('race_makeup_card_desc2').replace('{n}', String(RACE_MAKEUP_N)).replace('{m}', String(RACE_MAKEUP_PASS)) + '</div>';
-        // 额度明细（2026-11-12）：能不能补、用了几次、还剩几次，在同一张卡里说清
-        html += '<div style="font-size:11.5px;color:#9a7b4f;margin-top:2px;line-height:1.6;">'
-          + t('race_mk_used_stat').replace('{a}', String(calMk.allow)).replace('{u}', String(calMk.used)) + '</div>';
-        html += '<button class="action-btn primary" style="width:100%;margin-top:10px;" onclick="raceMakeupBegin(\'' + day + '\')">'
-          + t('race_mk_day_btn').replace('{n}', String(calMk.left)) + '</button>';
-        html += '</div>';
-      } else if (canEarnMk) {
-        // 暂无补签次数但还能赚：点开就把"怎么获得"讲清楚，顺带把任务页导过去
-        html += '<div class="q-card" style="border:1px solid #d9d2c7;background:#fcfbf9;">';
-        html += '<div style="font-size:13.5px;font-weight:700;color:#6b5f52;">' + t('race_mk_hint_title') + '</div>';
-        html += '<div style="font-size:11.5px;color:#8d8377;margin-top:4px;line-height:1.6;">' + t('race_mk_hint_desc') + '</div>';
-        html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceMkTask\')">' + t('race_mk_task_open') + '</button>';
-        html += '</div>';
-      }
+    // 漏打卡日的补签入口已改为弹窗（2026-11-12）：说明卡从页面里搬到 raceMkDayModalHtml，
+    // 这里只剩闭合 if (!gapDay) —— 别再往页面里加内联补签卡。
     }
   }
-  // 徽章墙放在页面最底部：日历 → 当天明细 → 我的徽章，选中的日期内容正好夹在中间
-  html += raceBadgeWallHtml(rec, curRid);
+  // 「我的徽章」墙已退役（2026-11-12）：徽章入口改为 当天明细里的「当天获得徽章」卡片
+  // 底部的「查看完整徽章集锦」，不再在页面底部重复一面墙。
   // 看完日历顺手再来一局：一步回到挑战主页
   html += '<button class="action-btn primary" style="width:100%;margin-top:2px;" onclick="navigate(\'race\')">⚡ ' + t('race_cal_retry') + '</button>';
   // 复盘语境：温故知新后再刷一遍产品知识题库
@@ -18733,13 +18759,18 @@ function wrongRowListHtml(rows) {
     // 只写「该复习了」会让人以为现在再点一次就能涨阶，其实今天点多少次都不会动。
     var doneToday = !!(row.e.pd && row.e.pd === raceDayKey(Date.now()));
     var doneDays = wrongDueInDays(row.e);
-    h += '<div class="wrong-item" style="' + (dueNow ? 'border-left-color:#e65100;' : '') + '" onclick="openWrongFromKey(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)">';
+    // 徽章口径与每日巩固完全同源（2026-11-12 领导：两边不能打架）：
+    // 今天答对过（pd=今日）一律「今日已作答」，哪怕 st 已到顶（early 答对、还差一次
+    // 间隔达标的巩固完成）——旧逻辑 st=MAX 时落回「该复习了」，结果每日巩固显示
+    // 「今日巩固已完成」、列表却标「该复习了」，两个数字当面打架。
+    h += '<div class="wrong-item" style="' + (!doneToday && dueNow ? 'border-left-color:#e65100;' : '') + '" onclick="openWrongFromKey(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)">';
     h += '<div class="q-preview">' + escapeHtml(preview ? preview.substring(0, 100) : '') + '</div>';
     h += '<div class="q-meta">';
     h += '<span>' + escapeHtml(wrongBankLabel(row.skey)) + (sectionDisplay ? ' · ' + escapeHtml(sectionDisplay) : '') + ' · ' + getTypeShort(row.e.type) + '</span>';
-    h += '<span>' + (doneToday && stNow < WRONG_STAGE_MAX
+    h += '<span>' + (doneToday
       ? '<b style="color:#2e7d32;">✓ ' + t('rv_done_today_tag') + '</b>'
-        + (doneDays > 0 ? ' · ' + t('rv_due_in').replace('{n}', String(doneDays)) : ' · ' + t('rv_done_today_next'))
+        + (doneDays > 0 ? ' · ' + t('rv_due_in').replace('{n}', String(doneDays))
+          : ' · ' + (stNow < WRONG_STAGE_MAX ? t('rv_done_today_next') : t('rv_done_today_grad')))
       : (dueNow
         ? '<b style="color:#e65100;">⏰ ' + t('rv_due_now') + '</b>'
         : '<span style="white-space:nowrap;">⏳ ' + t('rv_due_in').replace('{n}', String(doneDays)) + '</span>')) + '</span>';
