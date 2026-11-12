@@ -6764,10 +6764,13 @@ function accountLookupJson(rowKey) {
     return cloudFetch(ACCOUNTS_URL + '/by-phone/' + encodeURIComponent(rowKey), { cache: 'no-store' }, NET_CLOUD_TIMEOUT_MS, 'acct-lookup')
       .then(function(r) { if (!r.ok) return null; return r.json(); });
   }
-  // SB_ON=false 时 Supabase 整条关闭，EdgeOne KV 就是唯一通道（老设备 / 测试
-  // 环境走这条），不能当成"网络不可达"。
+  // SB_ON=false 有两种来源：① 本来是老通道模式（老设备 / 测试环境）② 连续
+  // 失败后熔断。两种情况 Supabase 都问不了，只能看 EdgeOne KV 的答复：
+  // 拿到 {success:…} 才算"云端答复过了"；连它也返回空，就是整条不通。
   if (typeof SB_ON === 'undefined' || !SB_ON) {
     return viaEdgeKv().then(function(e) {
+      var answered = !!(e && typeof e === 'object' && ('success' in e));
+      ACCOUNT_LOOKUP_UNREACHABLE = !answered;
       return e; // 老通道返回 {success,hit} 或 null，调用方按原语义处理
     }, function() {
       ACCOUNT_LOOKUP_UNREACHABLE = true;
