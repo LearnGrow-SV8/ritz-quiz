@@ -4211,6 +4211,31 @@ var CLOUD_SYNC_READY = false; // true after the first relay round-trip settles
 })();
 
 // ============ User & Login System ============
+// ===== 现场诊断：手机上没有控制台 =====
+// 任何未捕获异常 / 未处理的 Promise 拒绝都留一条痕，登录页底部会显示最后一条
+// （登录成功即清除）。这样下次再出怪现象，用户截一张图就能定位，不必靠猜。
+(function () {
+  function note(msg) {
+    msg = msg ? String(msg).slice(0, 200) : '';
+    if (!msg) return;
+    try { state.lastError = msg; } catch (e) {}
+    try { localStorage.setItem('__lastError', msg + ' @ ' + new Date().toISOString()); } catch (e) {}
+  }
+  try {
+    if (typeof window !== 'undefined' && window && typeof window.addEventListener === 'function') {
+      window.addEventListener('error', function (ev) {
+        note((ev && (ev.message || (ev.error && ev.error.message))) || '');
+      });
+      window.addEventListener('unhandledrejection', function (ev) {
+        var r = ev && ev.reason;
+        note((r && (r.message || r)) || '');
+      });
+    }
+    var prev = null;
+    try { prev = localStorage.getItem('__lastError'); } catch (e) {}
+    if (prev) { try { state.lastError = String(prev).slice(0, 200); } catch (e2) {} }
+  } catch (eDiag) {}
+})();
 function getCurrentUser() {
   return localStorage.getItem('currentUser') || '';
 }
@@ -4913,17 +4938,68 @@ function showEmpConflictModal(conflictKey, emp, existingProf) {
   };
 }
 
+// 读一条本机 JSON 记录，绝不因为内容坏了就抛异常。
+//
+// 为什么必须有这个入口（2026-11-12 现场）：手机上有一次写入被截断（系统清理 /
+// 存储写满 / 杀进程），`JSON.parse` 就会抛 SyntaxError。以前 loadUserData 里
+// 前三行没有 try 包，异常一路冒到 completePinLogin 的 catch —— 那时
+// state.currentUser 已经写好了、loginStep 却被 finishEmpLogin 复位成 1、profile
+// 又还没读出来，于是 render() 判定成"未登录 + 资料不全"，画出一张空白的
+// 工号 / 验证码页；而 catch 里那句提示写在 render 之前，被整页重绘冲掉。
+// 用户看到的就是"输完密码瞬间弹回空白首页，什么都没发生过"。
+//
+// 解析失败的处理：原文另存一份 `<key>__corrupt`（只存第一次，绝不覆盖更早的
+// 那份），然后把该键清空，用空值继续。数据不丢（原文还在），登录也不再被一条
+// 坏记录挡住。
+function lsJsonSafe(key, fallback) {
+  var raw = null;
+  try { raw = localStorage.getItem(key); } catch (e) { return { v: fallback, bad: false }; }
+  if (raw === null || raw === undefined || raw === '') return { v: fallback, bad: false };
+  try {
+    var v = JSON.parse(raw);
+    if (v === null || v === undefined) return { v: fallback, bad: false };
+    return { v: v, bad: false };
+  } catch (e) {
+    try {
+      var q = key + '__corrupt';
+      if (localStorage.getItem(q) === null) localStorage.setItem(q, raw);
+      localStorage.removeItem(key);
+    } catch (e2) {}
+    try { state.localRepaired = (state.localRepaired || 0) + 1; } catch (e3) {}
+    try { console.warn('[local] 已隔离损坏记录：' + key); } catch (e4) {}
+    return { v: fallback, bad: true };
+  }
+}
+
 function loadUserData() {
   var uk = userKey();
-  state.wrongAnswers = JSON.parse(localStorage.getItem(uk + 'wrongAnswers') || '{}');
-  state.collectedQuestions = JSON.parse(localStorage.getItem(uk + 'collectedQuestions') || '[]');
-  state.practiceProgress = JSON.parse(localStorage.getItem(uk + 'practiceProgress') || '{}');
-  try { state.mastered = JSON.parse(localStorage.getItem(uk + 'mastered') || '{}') || {}; } catch (e) { state.mastered = {}; }
-  try { state.mcheck = JSON.parse(localStorage.getItem(uk + 'mcheck') || '{}') || {}; } catch (e5) { state.mcheck = {}; }
-  try { state.reviewTask = JSON.parse(localStorage.getItem(uk + 'reviewTask') || 'null'); } catch (e2) { state.reviewTask = null; }
+  // 整段兜住：即便将来又有人在这里加了一行裸 parse，也不能让登录流程崩掉。
+  try {
+  var rWA = lsJsonSafe(uk + 'wrongAnswers', {});
+  state.wrongAnswers = (rWA.v && typeof rWA.v === 'object' && !Array.isArray(rWA.v)) ? rWA.v : {};
+  var rCQ = lsJsonSafe(uk + 'collectedQuestions', []);
+  state.collectedQuestions = Array.isArray(rCQ.v) ? rCQ.v : [];
+  var rPP = lsJsonSafe(uk + 'practiceProgress', {});
+  state.practiceProgress = (rPP.v && typeof rPP.v === 'object' && !Array.isArray(rPP.v)) ? rPP.v : {};
+  var rMd = lsJsonSafe(uk + 'mastered', {});
+  state.mastered = (rMd.v && typeof rMd.v === 'object') ? rMd.v : {};
+  var rMc = lsJsonSafe(uk + 'mcheck', {});
+  state.mcheck = (rMc.v && typeof rMc.v === 'object') ? rMc.v : {};
+  var rTk = lsJsonSafe(uk + 'reviewTask', null);
+  state.reviewTask = rTk.v;
   // 复习账本：积分制的唯一数据源，必须跟错题本一起载入/保存
-  try { state.reviewLog = JSON.parse(localStorage.getItem(uk + 'reviewLog') || '[]') || []; } catch (e3) { state.reviewLog = []; }
-  try { state.reviewStats = JSON.parse(localStorage.getItem(uk + 'reviewStats') || 'null'); } catch (e4) { state.reviewStats = null; }
+  var rLg = lsJsonSafe(uk + 'reviewLog', []);
+  state.reviewLog = Array.isArray(rLg.v) ? rLg.v : [];
+  var rSt = lsJsonSafe(uk + 'reviewStats', null);
+  state.reviewStats = rSt.v;
+  } catch (eLoad) {
+    // 兜底：单项都坏了也继续往下走，宁可这次少显示一点历史，也不能挡住进入。
+    state.wrongAnswers = state.wrongAnswers || {};
+    state.collectedQuestions = state.collectedQuestions || [];
+    state.practiceProgress = state.practiceProgress || {};
+    state.reviewLog = Array.isArray(state.reviewLog) ? state.reviewLog : [];
+    try { console.warn('[local] loadUserData 异常：' + (eLoad && eLoad.message)); } catch (e5) {}
+  }
   if (!Array.isArray(state.reviewLog)) state.reviewLog = [];
   if (!state.mastered || typeof state.mastered !== 'object') state.mastered = {};
   if (!state.mcheck || typeof state.mcheck !== 'object') state.mcheck = {};
@@ -9069,6 +9145,9 @@ function resolveEmpAccount(emp, force) {
 // Land in an account: write the profile, switch the active user, load data.
 function finishEmpLogin(akey, p) {
   if (!akey) return;
+  // 进账号成功 ⇒ 上一次的故障痕迹作废，别把旧报错一直挂在页面上。
+  try { localStorage.removeItem('__lastError'); } catch (e0) {}
+  state.lastError = '';
   try { localStorage.setItem(akey + '_profile', JSON.stringify(p)); } catch (e) {}
   try { localStorage.setItem('currentUser', akey); } catch (e) {}
   state.currentUser = akey;
@@ -9118,6 +9197,7 @@ function loginSubmit() {
     emp = normEmpNo(empOfKey(state.pendingQuickKey) || empFromLegacyKey(state.pendingQuickKey));
   }
   loginErr('');
+  state.loginMsg = '';   // 新一轮提交：清掉上一轮留在页面上的提示
   // Access code first: no point complaining about a missing employee ID when
   // the code is wrong too (it gates the question bank).
   if (!code) { loginErr(t('err_code')); return; }
@@ -9218,10 +9298,25 @@ function completePinLogin(emp, akey, want) {
   try { migrateLegacyToEmpKey(emp); } catch (e) {}
   finishEmpLogin(akey, p);
   } catch (err) {
+    // 进账号过程中的任何异常都必须把状态**还原到密码页**。
+    // finishEmpLogin 已经把 currentUser 写进去、loginStep 复位成 1、小提示清空，
+    // 如果只把 loginBusy 收拾一下就 render，界面会判成"未登录 + 资料不全"，
+    // 画出一张空白的工号 / 验证码页 —— 用户看到的是"弹回首页、什么都没发生"。
+    try { localStorage.removeItem('currentUser'); } catch (eR) {}
+    state.currentUser = '';
+    state.profile = null;
+    state.requireProfile = false;
+    state.pendingProfile = false;
+    state.pendingQuickKey = '';
     state.loginBusy = false;
+    state.loginEmp = emp;
+    state.loginStep = 2;
     state.loginMode = 'pin';
-    loginErr(t('login_enter_fail'));
+    // 提示写进 state（renderLoginStep2 会画出来），不能只写 #loginError ——
+    // 那是个会被整页重绘冲掉的 DOM 节点。
+    state.loginMsg = t('login_enter_fail');
     render();
+    loginErr(t('login_enter_fail'));
   }
 }
 function loginPinSubmit() {
@@ -9498,6 +9593,13 @@ function renderLogin() {
   html += '<button class="' + (state.lang==='en'?'active':'') + '" onclick="setLang(\'en\')">EN</button>';
   html += '</div></div>';
   html += (state.loginStep === 2) ? renderLoginStep2() : renderLoginStep1();
+  // 上一次未捕获异常的尾巴（登录成功即清除）。只给一行灰字，方便截图定位；
+  // 没有异常时完全不出现，正常用户看不到。
+  var diag = '';
+  try { diag = state.lastError || ''; } catch (eD) { diag = ''; }
+  if (diag) {
+    html += '<div style="margin-top:10px;font-size:10px;line-height:1.5;color:var(--text-light);word-break:break-all;opacity:.75;">🩺 ' + escapeHtml(String(diag).slice(0, 160)) + '</div>';
+  }
   html += '<div class="login-divider"><span>' + (en ? 'or' : '或') + '</span></div>';
   html += '<div class="admin-entry"><a href="javascript:void(0)" onclick="navigate(\'adminLogin\')">🔐 ' + (en ? 'Admin Panel' : '管理后台') + '</a></div>';
   html += '</div></div>';
@@ -9531,7 +9633,9 @@ function renderLoginStep1() {
       ? 'Selected: <b>' + escapeHtml(pqName) + '</b> — enter the access code to continue'
       : '已选择 <b>' + escapeHtml(pqName) + '</b>，请输入验证码进入该账号') + '</div>';
   }
-  html += '<div class="login-error" id="loginError"></div>';
+  // 提示既从 DOM 写（loginErr），也从 state 渲染 —— 只走 DOM 的话，任何一次
+  // 整页重绘都会把话冲掉，用户就只看得到一张空白表单，以为"什么都没发生"。
+  html += '<div class="login-error" id="loginError">' + escapeHtml(state.loginMsg || '') + '</div>';
   html += '<button onclick="loginSubmit()"' + (state.loginBusy ? ' disabled' : '') + '>' + t('login_step_next') + '</button>';
   html += '</div>';
   html += '<div class="login-hint">💡 ' + t('login_hint') + '</div>';
