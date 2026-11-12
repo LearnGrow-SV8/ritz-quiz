@@ -19621,6 +19621,10 @@ function navigate(page, opts) {
   if (page === 'adminBank' && prev !== 'adminBank' && adminState.bankScrollY > 0) {
     var y = adminState.bankScrollY;
     setTimeout(function () { try { adminScrollTo(y); } catch (e) {} }, 60);
+  } else if (typeof o.scrollY === 'number') {
+    // 侧滑退回来：直接落到原来看到的位置。以前是"先回顶、下一帧再滚回来"，
+    // 两次排版正好压在手势动画收尾那一帧上 —— 手感就是"松手之后顿一下"（2026-11-12）。
+    adminScrollTo(o.scrollY);
   } else {
     adminScrollTo(0);
   }
@@ -19758,7 +19762,8 @@ function histHold() {
   histPut('push');
 }
 // 手势退 n 格（连滑两下 = n 2）。确认与清理跟「←」按钮共用 navLeaveGuard。
-function histGoBackSteps(n) {
+// sy = 目标页原来看到的位置，一次到位，避免"回顶再滚回来"的二次排版。
+function histGoBackSteps(n, sy) {
   if (n < 1) return;
   var from = state.currentPage;
   if (!navLeaveGuard(from)) { histHold(); return; }
@@ -19772,7 +19777,7 @@ function histGoBackSteps(n) {
   if (!target || target === from) target = 'home';
   if ((target === 'raceResult' || target === 'racePlay') && !state.race) target = 'race';
   if (target === 'examResult' && !state.lastExamReplay) target = 'home';
-  navigate(target, { replace: true, hist: 'none' });
+  navigate(target, { replace: true, hist: 'none', scrollY: sy || 0 });
 }
 function histOnPop(e) {
   var st = e && e.state;
@@ -19783,8 +19788,7 @@ function histOnPop(e) {
   var delta = d - histDepth();
   if (delta === 0) { histRestoreScroll(id); return; }  // 同一层：位置已对上，只还原滚动
   if (delta > 0) { histPut('push'); return; }          // 右滑"前进"：内存态恢复不了，原地补一条
-  histGoBackSteps(-delta);
-  histRestoreScroll(id);
+  histGoBackSteps(-delta, HIST_SY[id] || 0);
 }
 // 注册一次即可；测试沙箱里的 window 可能没有 addEventListener，不能因此炸掉整页
 try {
