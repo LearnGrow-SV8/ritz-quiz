@@ -19508,16 +19508,28 @@ function routeRestoreTargetOf(page) {
   return 'home';
 }
 function routeClearStored() {
+  ROUTE_SIG = '';   // 签名一起清掉，下次进页面一定会重写（不然清完就再也不写了）
   try { sessionStorage.removeItem(ROUTE_STORE_KEY); } catch (e0) {}
   try { localStorage.removeItem(ROUTE_STORE_KEY); } catch (e1) {}
 }
 // 每次 render 都记一次：不管是从按钮、返回键还是异步刷新进的页面，都能跟上。
+// 🔴 但 render 是全站最热的一条路径（每次选项点击都走），而这里是两次**同步**存储写。
+// 手机侧滑退回来时，这段写操作正好压在 Safari 手势动画的收尾帧上 —— 会明显顿一下。
+// 所以加一道签名去重：页面和筛选状态都没变就不重复写；两分钟刷一次 t，保住 30 分钟有效期。
+var ROUTE_SIG = '', ROUTE_SIG_AT = 0;
 function routeSnapshotNow() {
   // 未登录（登录页 / 扫码页）和管理端页面不记：刷新后该回登录页或首页，
   // 别把后台界面顶给员工。
   if (!state.currentUser || adminState.authenticated) { routeClearStored(); return; }
   var page = routeRestoreTargetOf(state.currentPage || 'home');
   if (page === 'home') { routeClearStored(); return; }
+  var sig = [page, state.currentBank || '', state.currentPaper || '',
+    state.currentSection || '', state.raceBoardTab || '', state.raceBoardSec || '',
+    state.wrongTab || '', state.wrongSec || '', state.wrongSrc || '',
+    state.searchKeyword || ''].join('|');
+  if (sig === ROUTE_SIG && (Date.now() - ROUTE_SIG_AT) < 120000) return;
+  ROUTE_SIG = sig;
+  ROUTE_SIG_AT = Date.now();
   var snap = {
     p: page,
     b: state.currentBank || '',
@@ -19587,6 +19599,9 @@ var NAV_STACK_LIMIT = 20;
 function navigate(page, opts) {
   var o = opts || {};
   var prev = state.currentPage;
+  // 记下"正要离开的这一页"看到哪儿了，退回来时还原（必须在 render 之前取，
+  // 否则新页面更短会把滚动位置夹到顶，记下来就是错的）
+  if (o.hist !== 'none') { try { histRememberScroll(); } catch (eHs) {} }
   // Remember the question-list scroll position so that returning from the
   // editor lands back where the admin left off (not at the top).
   if (prev === 'adminBank' && page !== 'adminBank') {
@@ -19678,8 +19693,30 @@ function navHome() {
 // goBack 的语义全部不变，两套入口共用同一个栈。管理端与未登录状态不接，保持原样。
 var HIST_SEQ = 0;    // 每条历史记录的递增 id
 var HIST_CUR = 0;    // 当前这条记录的 id；0 = 还没初始化
+var HIST_SY = {};    // 每条历史记录离开时的滚动位置（id → y），退回去时还原
+// Safari 会自己还原历史记录的滚动位置，跟我们 navigate() 里的 scrollTo(0) 抢 ——
+// 抢的结果就是手势退回去之后页面先跳顶再被拉回（或反过来），看着"顿一下"。
+// 交给脚本自己管，行为才确定。
+try {
+  if (typeof history !== 'undefined' && 'scrollRestoration' in history) history.scrollRestoration = 'manual';
+} catch (eSr) {}
 function histArmed() {
   try { return !!state.currentUser && !adminState.authenticated; } catch (e) { return false; }
+}
+function histScrollY() {
+  try { return window.pageYOffset || document.documentElement.scrollTop || 0; } catch (e) { return 0; }
+}
+function histRememberScroll() {
+  if (!HIST_CUR) return;
+  HIST_SY[HIST_CUR] = histScrollY();
+}
+// 还原目标页的滚动位置。原生 App 退回上一页当然回到原来的位置，
+// 一律回顶部会让人以为"滑回去之后页面跳了一下"（2026-11-12）。
+function histRestoreScroll(id) {
+  if (!id) return;
+  var y = HIST_SY[id] || 0;
+  var run = function () { try { if (y > 0) window.scrollTo(0, y); } catch (e) {} };
+  try { requestAnimationFrame(run); } catch (e) { setTimeout(run, 0); }
 }
 function histDepth() { return (state.navStack || []).length; }
 // push = 前进一格；replace = 原地改写（同页重绘 / 被 replace 的切页）
@@ -19739,13 +19776,15 @@ function histGoBackSteps(n) {
 }
 function histOnPop(e) {
   var st = e && e.state;
-  if (st && st.qz && st.id) HIST_CUR = st.id;
+  var id = (st && st.qz && st.id) ? st.id : 0;
+  if (id) HIST_CUR = id;
   if (!histArmed()) return;
   var d = (st && st.qz && typeof st.d === 'number') ? st.d : 0;
   var delta = d - histDepth();
-  if (delta === 0) return;                      // 同一层：页面本来就没动，不用重画
-  if (delta > 0) { histPut('push'); return; }   // 右滑"前进"：内存里的题面 / 计时恢复不了，原地补一条
+  if (delta === 0) { histRestoreScroll(id); return; }  // 同一层：位置已对上，只还原滚动
+  if (delta > 0) { histPut('push'); return; }          // 右滑"前进"：内存态恢复不了，原地补一条
   histGoBackSteps(-delta);
+  histRestoreScroll(id);
 }
 // 注册一次即可；测试沙箱里的 window 可能没有 addEventListener，不能因此炸掉整页
 try {
