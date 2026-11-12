@@ -5725,6 +5725,8 @@ var I18N = {
   race_mk_day_future: {cn:'只能补签今天之前漏掉的日子。', en:'Only past missed days can be restored.'},
   race_mk_use_hint: {cn:'在日历页选择漏签日期消耗次数补打卡；挑战答对 ≥{m} 题即补签成功', en:'Use credits on missed dates in calendar. Pass the quiz (≥{m}/{n} correct) to make up check in.'},
   race_mk_cap_note: {cn:'本届上限 {cap} 次', en:'Season cap: {cap}.'},
+  // 额度明细（2026-11-12）：只报「剩余」看不出用了多少次，三数并列才说得清
+  race_mk_used_stat: {cn:'已获得 {a} 次｜已使用 {u} 次', en:'Earned {a} | Used {u}'},
   // race_mk_note_can / race_mk_note_full / race_mk_note_used_can 已随 raceMkNoteOf 退役（2026-11-11 八调）
   race_mk_task_a_name: {cn:'任务一｜错题巩固', en:'Task 1 | Error Mastery'},
   race_mk_task_a_desc: {cn:'每巩固完成 {x} 道错题，获得 1 次补签机会（手动移出不计）', en:'Earn one credit for every {x} fully mastered errors. Manual removal excluded.'},
@@ -14564,6 +14566,9 @@ function renderRaceCalendar() {
         html += '<div style="font-size:13.5px;font-weight:700;color:#8a5a00;">' + t('race_mk_day_title') + '</div>';
         html += '<div style="font-size:11.5px;color:#9a7b4f;margin-top:4px;line-height:1.6;">'
           + t('race_makeup_card_desc2').replace('{n}', String(RACE_MAKEUP_N)).replace('{m}', String(RACE_MAKEUP_PASS)) + '</div>';
+        // 额度明细（2026-11-12）：能不能补、用了几次、还剩几次，在同一张卡里说清
+        html += '<div style="font-size:11.5px;color:#9a7b4f;margin-top:2px;line-height:1.6;">'
+          + t('race_mk_used_stat').replace('{a}', String(calMk.allow)).replace('{u}', String(calMk.used)) + '</div>';
         html += '<button class="action-btn primary" style="width:100%;margin-top:10px;" onclick="raceMakeupBegin(\'' + day + '\')">'
           + t('race_mk_day_btn').replace('{n}', String(calMk.left)) + '</button>';
         html += '</div>';
@@ -14594,6 +14599,9 @@ function renderRaceCalendar() {
       + t('race_mk_task_card_desc').replace('{cap}', String(calMk.cap)) + '</div>';
     html += '<div style="font-size:12.5px;color:#8a5a00;margin-top:8px;font-weight:700;">'
       + t('race_makeup_left').replace('{n}', String(calMk.left)) + '</div>';
+    // 额度明细（2026-11-12）：只给"剩余"看不出用过几次，补一行「已获得 / 已使用」
+    html += '<div style="font-size:11.5px;color:#9a7b4f;margin-top:3px;line-height:1.6;">'
+      + t('race_mk_used_stat').replace('{a}', String(calMk.allow)).replace('{u}', String(calMk.used)) + '</div>';
     html += '<button class="action-btn primary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceMkTask\')">'
       + t('race_mk_task_open') + '</button>';
     html += '</div>';
@@ -15480,6 +15488,9 @@ function renderRaceMkTask() {
   // 顶部信息栏（2026-11-11 领导八调文案）：剩余次数 + 上限一行，使用方式一行
   html += '<div style="font-size:13px;font-weight:700;color:#000;">' + t('race_makeup_left').replace('{n}', String(mk.left))
     + (en ? ' (' : '（') + t('race_mk_cap_note').replace('{cap}', String(mk.cap)) + (en ? ')' : '）') + '</div>';
+  // 额度明细（2026-11-12）：已获得 / 已使用一眼看清，不用自己拿上限减剩余去推
+  html += '<div style="font-size:11.5px;color:rgba(0,0,0,.62);margin-top:3px;line-height:1.6;">'
+    + escapeHtml(t('race_mk_used_stat').replace('{a}', String(mk.allow)).replace('{u}', String(mk.used))) + '</div>';
   html += '<div style="font-size:11.5px;color:rgba(0,0,0,.6);margin-top:6px;line-height:1.6;">'
     + escapeHtml(t('race_mk_use_hint').replace('{m}', String(RACE_MAKEUP_PASS)).replace('{n}', String(RACE_MAKEUP_N))) + '</div>';
   html += '</div>';
