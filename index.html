@@ -1124,6 +1124,12 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
 .adm-content .stu-table thead th { text-align:left; font-size:11.5px; font-weight:600; color:var(--a-i3);
   padding:11px 14px; background:#FAFBFC; border-bottom:1px solid var(--a-line); white-space:nowrap; }
 .adm-content .stu-table tbody td { padding:11px 14px; border-bottom:1px solid var(--a-line2); vertical-align:middle; color:var(--a-i2); }
+/* 列宽拖动（2026-11-12 用户反馈）：fixed 布局下列宽变窄时，单元格内容必须跟着收缩，
+   否则 input 按默认 177px 宽溢出、和右邻列叠在一起。 */
+.adm-content .stu-table tbody td { overflow:hidden; }
+.adm-content .stu-table td input.cell { width:100%; max-width:100%; min-width:0; box-sizing:border-box;
+  padding:6px 9px; border:1px solid var(--a-line); border-radius:7px; font-size:13px; font-family:inherit; background:#fff; outline:none; }
+.adm-content .stu-table td input.cell:focus { border-color:var(--a-blue-d,#8FB8E4); }
 .adm-content .stu-table tbody tr:last-child td { border-bottom:0; }
 .adm-content .stu-table tbody tr.st-row:hover { background:#F8FBFE; }
 .adm-content .stu-table tbody tr.st-row { cursor:pointer; }
@@ -1262,13 +1268,9 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
   border:1px solid var(--a-line) !important; background:#fff !important; color:var(--a-i2) !important;
   cursor:pointer; font-family:inherit; }
 .adm-content .admin-cloud-btn:hover { border-color:var(--a-blue-d) !important; background:#FAFCFE !important; }
-.adm-content #paperGradingCard, .adm-content #paperStatsCard { display:inline-block; width:calc(50% - 7px);
-  vertical-align:top; margin-bottom:12px; }
-.adm-content #paperStatsCard { margin-left:12px; }
-.adm-content #paperGradingCard input, .adm-content #paperStatsCard input { border:1px solid var(--a-line) !important; border-radius:8px !important; font-family:inherit; }
-@media (max-width:1180px) {
-  .adm-content #paperGradingCard, .adm-content #paperStatsCard { display:block; width:auto; margin-left:0; }
-}
+/* 2026-11-12 v8b：评分与统计合并为一张整行卡片（原两张大卡 50% 并排已移除） */
+.adm-content #paperGradingCard { margin-bottom:12px; }
+.adm-content #paperGradingCard input { border:1px solid var(--a-line) !important; border-radius:8px !important; font-family:inherit; }
 
 /* ===== 系统设置 / 部门目录 / 部门统计 ===== */
 .ap-note { font-size:12px; line-height:1.75; color:var(--a-i3); background:#F7FAFD;
@@ -2106,9 +2108,9 @@ function sbSaveChannel(channel, payload) {
     .then(function() { sbMarkOk(); return { success: true }; },
           function(e) { sbMarkFail('channel:' + channel); throw e; });
 }
-function sbGetChannelJson(channel) {
+function sbGetChannelJson(channel, timeoutMs) {
   if (!SB_ON) return Promise.reject(new Error('sb off'));
-  return sbJson('/rest/v1/channels?select=payload,ver&channel=eq.' + encodeURIComponent(channel) + '&limit=1', null, SB_EDGE_TIMEOUT_MS, 'sb-channel-get')
+  return sbJson('/rest/v1/channels?select=payload,ver&channel=eq.' + encodeURIComponent(channel) + '&limit=1', null, timeoutMs || SB_EDGE_TIMEOUT_MS, 'sb-channel-get')
     .then(function(rows) {
       if (!Array.isArray(rows) || !rows.length || !rows[0] || rows[0].payload == null) return { success: false };
       sbMarkOk();
@@ -5284,6 +5286,7 @@ var I18N = {
   login_req_emp: {cn:'请先填写工号', en:'Please enter your employee ID'},
   login_busy: {cn:'⏳ 正在查找账号…', en:'⏳ Looking up your account…'},
   login_cloud_retry: {cn:'⚠️ 无法连接云端，请检查网络后重试', en:'⚠️ Could not reach the cloud — check your connection and try again'},
+  login_enter_fail: {cn:'⚠️ 进入账号失败，请重试；若反复失败请联系培训部', en:'⚠️ Could not open your account — please retry, or contact the training team if it keeps failing'},
   login_pin_label: {cn:'登录密码（6 位数字）', en:'Login password (6 digits)'},
   login_pin_ph: {cn:'请输入登录密码', en:'Enter your password'},
   login_pin_new: {cn:'设置登录密码', en:'Choose a password'},
@@ -6746,11 +6749,30 @@ function normalizePhoneString(raw) {
 // { success, hit, key, pin, snap, events, details } shape. `rowKey` is the
 // value of the "phone" column: "e<empNo>" since Stage 9, an 11-digit phone for
 // pre-Stage-9 rows.
+// 「云端完全没应答」（两个通道都不通）和「云端应答了但没有这个工号」必须分开。
+// 以前两者都退化成 hit:false，于是云端不通时会把老员工判成"新员工"，弹出
+// 注册表单 —— 她一旦填了，云端密码和历史就被覆盖了。
+var ACCOUNT_LOOKUP_UNREACHABLE = false;
+// fetchCloudAccountByEmp 的结论：这次查工号时云端是否整条不通（供登录页判断
+// 「是网络问题」还是「真的没有这个人」）。
+var CLOUD_EMP_LOOKUP_UNREACHABLE = false;
+
 function accountLookupJson(rowKey) {
   if (!rowKey) return Promise.resolve(null);
+  ACCOUNT_LOOKUP_UNREACHABLE = false;
   function viaEdgeKv() {
     return cloudFetch(ACCOUNTS_URL + '/by-phone/' + encodeURIComponent(rowKey), { cache: 'no-store' }, NET_CLOUD_TIMEOUT_MS, 'acct-lookup')
       .then(function(r) { if (!r.ok) return null; return r.json(); });
+  }
+  // SB_ON=false 时 Supabase 整条关闭，EdgeOne KV 就是唯一通道（老设备 / 测试
+  // 环境走这条），不能当成"网络不可达"。
+  if (typeof SB_ON === 'undefined' || !SB_ON) {
+    return viaEdgeKv().then(function(e) {
+      return e; // 老通道返回 {success,hit} 或 null，调用方按原语义处理
+    }, function() {
+      ACCOUNT_LOOKUP_UNREACHABLE = true;
+      return null;
+    });
   }
   return sbGetAccountJson(rowKey).then(function(j) {
     // A MISS in Supabase is NOT proof the account does not exist, so it must
@@ -6762,7 +6784,15 @@ function accountLookupJson(rowKey) {
     // Only a real HIT is authoritative.
     if (j && j.success && j.hit && j.key) return j;
     return viaEdgeKv().then(function(e) { return (e && e.hit) ? e : j; });
-  }, function() { return viaEdgeKv(); });
+  }, function() {
+    // Supabase 报错（超时 / 连接被重置 / CORS）—— 这不是"没有这个账号"。
+    // 连 EdgeOne 也指不上时，才能判定"云端整条不通"。
+    return viaEdgeKv().then(function(e) {
+      if (e && e.hit) return e;
+      ACCOUNT_LOOKUP_UNREACHABLE = true;
+      return null;
+    });
+  });
 }
 // The phone a row belongs to: a "ph_<phone>" row keeps it in the key, an
 // "e<empNo>" row has none any more (Stage 9 stopped collecting phones).
@@ -6915,6 +6945,7 @@ function fetchCloudAccountByEmp(emp, force) {
   var ekey = empKeyFor(e);
   try {
     if (!force && state && state.cloudEmpRecord && normEmpNo(state.cloudEmpRecord.emp || '') === e && state.cloudEmpRecord.key) {
+      CLOUD_EMP_LOOKUP_UNREACHABLE = false;
       return Promise.resolve(state.cloudEmpRecord);
     }
   } catch (err) {}
@@ -6926,11 +6957,19 @@ function fetchCloudAccountByEmp(emp, force) {
     if (olds[i] === ekey) continue;
     if (/^ph_/.test(olds[i])) legacyRows.push(olds[i]);
   }
-  var prom = [fetchKvAccountByRowKey(ekey), fetchNtfyAccountByEmp(e)];
-  for (var r = 0; r < legacyRows.length && r < 2; r++) {
-    prom.push(fetchKvAccountByRowKey(legacyRows[r]));
-  }
-  return Promise.all(prom).then(function(arr) {
+  // 2026-11-12: 先只查权威源（Supabase accounts）。只有「应答了但没有这个工号」
+  // 才值得再等 ntfy（12 h 保留期的老通道）；如果云端根本连不上，ntfy.sh 在同一
+  // 张网里必然也连不上，还去等它只是把「正在查找账号」再拖 30 秒。
+  var kvP = fetchKvAccountByRowKey(ekey);
+  return kvP.then(function(kvHit) {
+    var cloudDead = !kvHit && ACCOUNT_LOOKUP_UNREACHABLE;
+    CLOUD_EMP_LOOKUP_UNREACHABLE = cloudDead;
+    var prom = [Promise.resolve(kvHit), cloudDead ? Promise.resolve(null) : fetchNtfyAccountByEmp(e)];
+    for (var r = 0; r < legacyRows.length && r < 2; r++) {
+      prom.push(fetchKvAccountByRowKey(legacyRows[r]));
+    }
+    return Promise.all(prom);
+  }).then(function(arr) {
     var best = null;
     for (var i2 = 0; i2 < arr.length; i2++) {
       var hit = arr[i2];
@@ -7376,9 +7415,9 @@ function applyRosterMessage(m) {
   saveRoster({ ver: m.ver, ids: m.ids || [], ts: m.ts || 0 });
   return true;
 }
-function refreshRoster() {
+function refreshRoster(timeoutMs) {
   if (!SB_ON) return Promise.resolve(false);
-  return sbGetChannelJson(ROSTER_CHANNEL).then(function (j) {
+  return sbGetChannelJson(ROSTER_CHANNEL, timeoutMs).then(function (j) {
     if (!(j && j.success && j.data)) return false;
     var changed = applyRosterMessage(j.data);
     // 同一个 admin_state 行里还带着答题赛配置 —— 顺手应用，省一次请求。
@@ -9012,12 +9051,15 @@ function resolveEmpAccount(emp, force) {
       pin: cloudPin || localPin,
       nameHint: hint,
       rec: rec || null,
-      localPin: localPin
+      localPin: localPin,
+      // 云端整条不通（不是"查无此人"）：调用方必须据此拦住注册表单，
+      // 否则老员工会被当成新员工、把云端密码覆盖掉。
+      cloudUnreachable: !rec && (!!CLOUD_EMP_LOOKUP_UNREACHABLE || !!ACCOUNT_LOOKUP_UNREACHABLE)
     };
   }).catch(function() {
     // Offline: fall back to what this device knows. A brand-new ID can still
     // register (the submit re-checks the cloud before it creates anything).
-    return { exists: localExists, pin: localPin, nameHint: localName, rec: null, localPin: localPin };
+    return { exists: localExists, pin: localPin, nameHint: localName, rec: null, localPin: localPin, cloudUnreachable: true };
   });
 }
 
@@ -9106,7 +9148,7 @@ function loginSubmit() {
   // 有效工号名单：进账号前先拉一次最新名单再判定。名单为空 / 拉不到时一律放行
   //（fail-open），所以网络抖动永远不会把全员锁在门外；但名单有内容且不含该工号
   // 时，说明这个人已经离职，直接拒绝进入。
-  refreshRoster().catch(function() { return false; }).then(function() {
+  refreshRoster(7000).catch(function() { return false; }).then(function() {
     if (!state.loginEmp || normEmpNo(state.loginEmp) !== emp) return; // superseded
     if (isEmpNotInRoster(emp)) {
       state.loginBusy = false;
@@ -9117,6 +9159,14 @@ function loginSubmit() {
     return resolveEmpAccount(emp).then(function(r) {
       state.loginBusy = false;
       if (!state.loginEmp || normEmpNo(state.loginEmp) !== emp) return; // superseded
+      // 云端整条不通 ≠ 这个工号不存在。以前两者都走「查无此人」，云端被网络
+      // 拦掉时会把老员工判成新员工、直接弹注册表单 —— 她一旦提交就把云端
+      // 密码和历史覆盖了。这里必须停在第一步，只报网络问题。
+      if (!r.exists && r.cloudUnreachable) {
+        loginErr(t('login_cloud_retry'));
+        render();
+        return;
+      }
       if (isEmpBlacklisted(emp)) { loginErr(t('profile_phone_blacklisted')); }
       state.loginMode = !r.exists ? 'register' : (r.pin ? 'pin' : 'claim');
       state.loginPinHash = r.pin || '';
@@ -9148,6 +9198,10 @@ function loginBackToEmp() {
 function completePinLogin(emp, akey, want) {
   state.loginBusy = true;
   render();
+  // 整段用 try/catch 兜住：这里任何一处同步抛错（脏数据、存储配额、某一
+  // 段渲染）以前会把界面永久留在「⏳ 正在查找账号…」，用户在手机上只能
+  // 看到转不动的一屏。出错必须回到密码页并给出提示。
+  try {
   var rec = null;
   try { rec = state.cloudEmpRecord && normEmpNo(state.cloudEmpRecord.emp || '') === normEmpNo(emp) ? state.cloudEmpRecord : null; } catch (e) {}
   if (rec) { try { applyCloudAccountData(akey, rec); } catch (e) {} }
@@ -9160,6 +9214,12 @@ function completePinLogin(emp, akey, want) {
   if (!p.pinSetAt) p.pinSetAt = (rec && rec.pinSetAt) || Date.now();
   try { migrateLegacyToEmpKey(emp); } catch (e) {}
   finishEmpLogin(akey, p);
+  } catch (err) {
+    state.loginBusy = false;
+    state.loginMode = 'pin';
+    loginErr(t('login_enter_fail'));
+    render();
+  }
 }
 function loginPinSubmit() {
   var d = loginDraft();
@@ -9181,6 +9241,15 @@ function loginPinSubmit() {
   state.loginBusy = true;
   render();
   resolveEmpAccount(emp, true).then(function(r) {
+    // 复核也拿不到云端结论（网络被拦）：既不能判"密码错了"，更不能转去
+    // 设置新密码 —— 那会把云端密码覆盖掉。只报网络问题，留在密码页重试。
+    if (r.cloudUnreachable && !r.rec) {
+      state.loginBusy = false;
+      state.loginMode = 'pin';
+      render();
+      loginErr(t('login_cloud_retry'));
+      return;
+    }
     var fresh = r.pin || '';
     // Stage 9.3: only a channel that CAN carry the hash is allowed to declare
     // "there is no password". Supabase / EdgeOne KV always send the field (an
@@ -25786,13 +25855,14 @@ function renderAdminStudents() {
     : '';
   var html = adminHead(
     adminState.studentDetail ? (en ? 'Student Profile' : '学员档案') : (en ? 'Student Management' : '学员管理'),
+    // 2026-11-12 用户反馈：固定页头只留标题一行，说明文字与筛选全部随内容滚动
     adminState.studentDetail
       ? (en ? 'Full profile, exam history and question reports' : '完整档案、考试记录与报错记录')
-      : (en ? 'Roster is the whitelist — only listed employee IDs can register. Click a row for the full profile.'
-            : '名册即白名单：只有名单内的工号才能注册。点击任意一行查看完整档案。'),
+      : '',
     // 页头不再放「立即全量重拉」——状态行里已有同款按钮，两处重复反而不知道点哪个
     _stuBack
   );
+  html += '<!--PHSPLIT-->';
   html += '<div class="page">';
 
   // Kick off (or re-kick) the cloud fetch; the placeholder below shows status.
@@ -26091,8 +26161,8 @@ function adminUnifiedRosterHtml(statusLine, en) {
   }
   html += '</div>';
   html += '</div>'; // /stu-pin
-  // 固定页头分割：标题 + 状态行 + 搜索/部门/状态筛选进固定区，名单表格滚动（2026-11-12）
-  html += '<!--PHSPLIT-->';
+  // PHSPLIT 已上移到 renderAdminStudents 的标题之后（2026-11-12 用户反馈：
+  // 固定区只留标题一行，状态行/搜索/筛选 chips 全部随内容滚动）
 
   // ---- 过滤 ----
   var shown = [];
@@ -27001,13 +27071,16 @@ function renderAdminPaper() {
   paperGradingDraftGet(gradingKey);
 
   var _enP = state.lang === 'en';
+  // 固定页头只留「标题 + 导出/保存按钮」一行（2026-11-12 用户反馈：固定太多看不到内容）。
+  // 副标题与试卷切换条（全员版/厨房版 + 切换下拉）随内容滚动。
   var html = adminHead(
     _enP ? 'Paper Composer' : '试卷编排',
-    escapeHtml(paperName) + ' · ' + refs.length + (_enP ? ' questions' : ' 题'),
+    '',
     '<button class="ap-btn" onclick="adminExportPaperWord(\'' + escapeHtml(paperKey) + '\')">'
       + (_enP ? 'Export Word' : '导出 Word') + '</button>'
     + '<button class="ap-btn pri" onclick="adminPaperGradePublishClick()">' + (_enP ? 'Save & publish' : '保存并发布') + '</button>'
   );
+  html += '<!--PHSPLIT-->';
   html += '<div class="page">';
   // 试卷切换（2026-11-12 用户问「是不是只能编排三步骤卷」——不是，所有试卷都可编排，
   // 只是此前切换入口只在 day21/tsos 两库出现且不显眼。现在顶部下拉列出全部试卷。）
@@ -27036,111 +27109,69 @@ function renderAdminPaper() {
     }
     html += '<select class="ap-sel" style="max-width:280px;" onchange="adminGoToPaper(this.value)">'
       + '<option value="" disabled>' + (_enP ? 'Switch paper…' : '切换到其他试卷…') + '</option>' + pkOpts + '</select>';
-    html += '<span class="ap-count">' + escapeHtml(getBankName(bankKey)) + '</span>';
+    html += '<span class="ap-count">' + escapeHtml(paperName) + ' · ' + refs.length + (_enP ? ' Q' : ' 题') + '</span>';
     html += '</div>';
   }
   html += adminCloudSyncBanner();
   html += adminPaperSaveBanner();
-  // 固定页头分割：标题 + 试卷切换进固定区，评分卡/统计卡/双栏编排区滚动（2026-11-12）
-  html += '<!--PHSPLIT-->';
 
-  // ===== Stage-13: paper-grading summary card =============================
-  // One row per question that contributes to the paper's total points, plus
-  // batch-rule edits and a publish button — all in one place so the admin
-  // never sees a number that disagrees with the dedicated grading page.
+  // ===== Stage-13 + 14 合并：评分与统计一行式卡片 ==========================
+  // 2026-11-12 用户反馈「试卷总分与评分 / 试卷统计」两张大卡太占空间（已画叉）。
+  // 合并成一行：及格分/每题分值内联输入 + 题型/板块 pills 铺开；
+  // 「保存并发布」「导出 Word」已固定在页头，不再重复按钮。
   var totalScore = 0;
   for (var _ti = 0; _ti < refs.length; _ti++) {
     var _tq = adminPaperRefQuestion(refs[_ti]);
     if (_tq) totalScore += gradePointsForQ(_tq, g);
   }
   var dirty = paperGradingDraftDirty(gradingKey);
-  var passPct = totalScore > 0 ? Math.round(g.pass / totalScore * 100) / 10 : 0;
   var passWarn = g.pass > totalScore && totalScore > 0;
-  html += '<div class="admin-bank-card" id="paperGradingCard" data-grading-key="' + escapeHtml(gradingKey) + '">';
-  html += '<h3 style="display:flex;align-items:center;justify-content:space-between;">';
-  html += '<span>\ud83c\udfaf ' + (state.lang === 'en' ? 'Paper total & grading' : '\u8bd5\u5377\u603b\u5206\u4e0e\u8bc4\u5206') + '</span>';
+  html += '<div class="admin-bank-card" id="paperGradingCard" data-grading-key="' + escapeHtml(gradingKey) + '" style="padding:12px 16px;">';
+  html += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">';
+  html += '<b style="font-size:13px;">🎯 ' + (state.lang === 'en' ? 'Grading & stats' : '评分与统计') + '</b>';
+  var _gdK = escapeHtml(gradingKey);
+  html += '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-light);">' + (state.lang === 'en' ? 'Pass' : '及格分')
+    + '<input type="number" min="0" step="0.1" value="' + g.pass + '" data-grade-batch="pass" data-grading-key="' + _gdK + '" style="width:64px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:13px;"></label>';
+  html += '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-light);">' + (state.lang === 'en' ? 'Per choice' : '每题·选择')
+    + '<input type="number" min="0.1" max="100" step="0.1" value="' + g.ppq + '" data-grade-batch="ppq" data-grading-key="' + _gdK + '" style="width:64px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:13px;"></label>';
+  html += '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-light);">' + (state.lang === 'en' ? 'Per fill-blank' : '每题·填空')
+    + '<input type="number" min="0.1" max="100" step="0.1" value="' + g.ppBlank + '" data-grade-batch="ppBlank" data-grading-key="' + _gdK + '" style="width:64px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:13px;"></label>';
+  html += '<span style="font-size:12px;color:var(--a-i4);">' + (state.lang === 'en'
+    ? ('Full ' + totalScore + ' pts · ' + refs.length + ' Q')
+    : ('满分 ' + totalScore + ' 分 · ' + refs.length + ' 题')) + '</span>';
   if (dirty) {
-    html += '<span style="font-size:11px;font-weight:500;color:var(--danger-deep, #b3261e);background:var(--danger-soft, #fdecea);padding:2px 10px;border-radius:10px;">\u26a0\ufe0f ' + (state.lang === 'en' ? 'Unsaved changes · pending publish' : '\u6709\u672a\u53d1\u5e03\u4fee\u6539') + '</span>';
+    html += '<span style="font-size:11px;font-weight:500;color:var(--danger-deep, #b3261e);background:var(--danger-soft, #fdecea);padding:2px 10px;border-radius:10px;">\u26a0\ufe0f ' + (state.lang === 'en' ? 'Unsaved changes' : '有未发布修改') + '</span>';
+    html += '<button type="button" class="admin-cloud-btn" style="background:var(--bg-secondary);color:var(--text);" onclick="adminPaperGradeDiscard()">' + (state.lang === 'en' ? 'Discard changes' : '\u653e\u5f03\u4fee\u6539') + '</button>';
   }
-  html += '</h3>';
-  html += '<div class="count">' + (state.lang === 'en'
-    ? (refs.length + ' questions · full ' + totalScore + ' pts · pass ' + g.pass + ' (' + passPct + '%)')
-    : (refs.length + ' \u9898 \u00b7 \u6ee1\u5206 ' + totalScore + ' \u5206 \u00b7 \u53ca\u683c ' + g.pass + ' \u5206\uff08' + passPct + '%\uff09')) + '</div>';
+  html += '</div>';
   if (passWarn) {
     html += '<div style="margin-top:8px;font-size:11px;color:var(--danger-deep, #b3261e);">\u26a0\ufe0f ' + (state.lang === 'en'
       ? 'Passing score is higher than the full score — students can never pass this paper.'
       : '\u53ca\u683c\u5206\u9ad8\u4e8e\u6ee1\u5206 \u2014 \u5b66\u5458\u65e0\u6cd5\u901a\u8fc7\u3002') + '</div>';
   }
-  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">';
-  html += '<label style="flex:1;min-width:130px;font-size:12px;color:var(--text-light);">' + (state.lang === 'en' ? 'Per choice' : '\u6bcf\u9898\uff08\u9009\u62e9\uff09') +
-    '<input type="number" min="0.1" max="100" step="0.1" value="' + g.ppq + '" data-grade-batch="ppq" data-grading-key="' + escapeHtml(gradingKey) + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:2px;"></label>';
-  html += '<label style="flex:1;min-width:130px;font-size:12px;color:var(--text-light);">' + (state.lang === 'en' ? 'Per fill-blank' : '\u6bcf\u7a7a\uff08\u586b\u7a7a\uff09') +
-    '<input type="number" min="0.1" max="100" step="0.1" value="' + g.ppBlank + '" data-grade-batch="ppBlank" data-grading-key="' + escapeHtml(gradingKey) + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:2px;"></label>';
-  html += '<label style="flex:1;min-width:130px;font-size:12px;color:var(--text-light);">' + (state.lang === 'en' ? 'Passing score' : '\u53ca\u683c\u5206') +
-    '<input type="number" min="0" step="0.1" value="' + g.pass + '" data-grade-batch="pass" data-grading-key="' + escapeHtml(gradingKey) + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:2px;"></label>';
-  html += '</div>';
-  // Quick "reset" affordance: clears the in-memory draft for this paper and
-  // re-renders so the inputs snap back to the LAST PUBLISHED values. The
-  // dedicated grading page is unaffected (it's a different reset story).
-  var dirtyCount = dirty ? (function(){
-    var pub = (adminLoadExamGrading().list[gradingKey]) || {};
-    var pk = (pub.ppq || 0) !== g.ppq ? 1 : 0;
-    var pb = (pub.ppBlank || 0) !== g.ppBlank ? 1 : 0;
-    var ps = (pub.pass || 0) !== g.pass ? 1 : 0;
-    var pubQov = (pub.qov && typeof pub.qov === 'object') ? pub.qov : {};
-    var draftQov = (g.qov && typeof g.qov === 'object') ? g.qov : {};
-    var qovDiff = 0;
-    for (var k in draftQov) if (pubQov[k] !== draftQov[k]) qovDiff++;
-    qovDiff += Math.abs(Object.keys(pubQov).length - Object.keys(draftQov).length);
-    return pk + pb + ps + qovDiff;
-  })() : 0;
-  html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;">';
-  if (dirty) {
-    html += '<span style="font-size:11px;color:var(--text-light);">' + (state.lang === 'en'
-      ? ('\u26a0\ufe0f ' + dirtyCount + ' unsaved change' + (dirtyCount === 1 ? '' : 's'))
-      : ('\u26a0\ufe0f ' + dirtyCount + ' \u9879\u4fee\u6539\u5c1a\u672a\u53d1\u5e03')) + '</span>';
-    html += '<button type="button" class="admin-cloud-btn" style="background:var(--bg-secondary);color:var(--text);" onclick="adminPaperGradeDiscard()">' + (state.lang === 'en' ? 'Discard changes' : '\u653e\u5f03\u4fee\u6539') + '</button>';
-  }
-  html += '<button type="button" class="admin-cloud-btn" style="background:var(--primary);color:#fff;" onclick="adminPaperGradePublishClick()">\ud83d\udce4 ' + (state.lang === 'en' ? 'Save & Publish to Students' : '\u4fdd\u5b58\u5e76\u53d1\u5e03\u5230\u5b66\u5458\u7aef') + '</button>';
-  html += '</div>';
-  html += '</div>';
-
-
-  // ===== Stage 14 / Batch 5 — paper statistics card ========================
-  // Batch-4 修订：「题号缺口」警告已移除——它检查的是题库全局序号（产品知识题
-  // 是 200~505 这类编号），而学员看到的是卷面顺序 1..N，永远连续，该警告对试卷
-  // 纯属误报（优质服务厨房卷报 289 处缺口即此误报）。「按部门」同步改为「按板块」。
+  // 统计 pills：题型构成 + 按板块，一行铺开（原来各占一整张卡）
   var stats = adminPaperStats(paperKey);
-  html += '<div class="admin-bank-card" id="paperStatsCard" data-paper-key="' + escapeHtml(paperKey) + '">';
-  html += '<h3 style="display:flex;align-items:center;justify-content:space-between;">';
-  html += '<span>\ud83d\udcca ' + (state.lang === 'en' ? 'Paper statistics' : '\u8bd5\u5377\u7edf\u8ba1') + '</span>';
-  html += '</h3>';
   var typeOrder = ['single', 'multiple', 'judge', 'fill', 'essay'];
   var typeLabels = state.lang === 'en'
     ? { single: 'Single', multiple: 'Multiple', judge: 'True/False', fill: 'Fill', essay: 'Essay', unknown: 'Other' }
     : { single: '\u5355\u9009', multiple: '\u591a\u9009', judge: '\u5224\u65ad', fill: '\u586b\u7a7a', essay: '\u7b80\u7b54', unknown: '\u5176\u4ed6' };
-  var typePills = [];
+  var statPills = [];
   for (var ti = 0; ti < typeOrder.length; ti++) {
     var tk = typeOrder[ti];
     var tv = stats.byType[tk];
     if (tv) {
       var pts = stats.pointsByType[tk] || 0;
-      typePills.push('<span style="font-size:12px;color:var(--text);background:#f1f5f9;padding:3px 10px;border-radius:10px;">' +
+      statPills.push('<span style="font-size:12px;color:var(--text);background:#f1f5f9;padding:3px 10px;border-radius:10px;">' +
         escapeHtml(typeLabels[tk] || tk) + ' \u00b7 ' + tv + ' (' + Math.round(pts * 10) / 10 + (state.lang === 'en' ? ' pts' : ' \u5206') + ')</span>');
     }
   }
   if (stats.byType.unknown) {
-    typePills.push('<span style="font-size:12px;color:var(--text);background:#f1f5f9;padding:3px 10px;border-radius:10px;">' +
+    statPills.push('<span style="font-size:12px;color:var(--text);background:#f1f5f9;padding:3px 10px;border-radius:10px;">' +
       escapeHtml(typeLabels.unknown) + ' \u00b7 ' + stats.byType.unknown + '</span>');
-  }
-  if (typePills.length) {
-    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">' + typePills.join('') + '</div>';
   }
   var deptKeys = Object.keys(stats.byDept).sort(function (a, b) { return stats.byDept[b] - stats.byDept[a]; });
   if (deptKeys.length) {
-    html += '<div style="margin-top:10px;font-size:12px;color:var(--text-light);">' +
-      (state.lang === 'en' ? 'By section:' : '\u6309\u677f\u5757\uff1a') + '</div>';
-    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">';
+    statPills.push('<span style="font-size:12px;color:var(--text-light);">' + (state.lang === 'en' ? 'By section:' : '\u6309\u677f\u5757\uff1a') + '</span>');
     var shownDepts = deptKeys.slice(0, 6);
     for (var di = 0; di < shownDepts.length; di++) {
       var dk = shownDepts[di];
@@ -27148,21 +27179,15 @@ function renderAdminPaper() {
       var label = dk === '_uncategorized'
         ? (state.lang === 'en' ? 'Uncategorised' : '\u672a\u5206\u7c7b')
         : escapeHtml(dk);
-      html += '<span style="font-size:12px;color:var(--text);background:#ecfdf5;padding:3px 10px;border-radius:10px;">' +
-        label + ' \u00b7 ' + dv + '</span>';
+      statPills.push('<span style="font-size:12px;color:var(--text);background:#ecfdf5;padding:3px 10px;border-radius:10px;">' +
+        label + ' \u00b7 ' + dv + '</span>');
     }
     if (deptKeys.length > 6) {
-      html += '<span style="font-size:12px;color:var(--text-light);">' +
-        (state.lang === 'en' ? '+' + (deptKeys.length - 6) + ' more' : '\u5176\u4f59 ' + (deptKeys.length - 6) + ' \u4e2a') + '</span>';
+      statPills.push('<span style="font-size:12px;color:var(--text-light);">' +
+        (state.lang === 'en' ? '+' + (deptKeys.length - 6) + ' more' : '\u5176\u4f59 ' + (deptKeys.length - 6) + ' \u4e2a') + '</span>');
     }
-    html += '</div>';
   }
-  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">';
-  // Batch-4c: JSON 导出按钮已按用户要求移除（用不上跨设备导入场景），只留 Word 导出。
-  // Batch-4: Word 版试卷导出——题干/选项/答案/解析全量可读，用于打印和审校。
-  html += '<button type="button" class="admin-cloud-btn" style="background:var(--primary);color:#fff;" onclick="adminExportPaperWord(\'' + escapeHtml(paperKey) + '\')">\ud83d\udcc4 ' +
-    (state.lang === 'en' ? 'Export as Word' : '\u5bfc\u51fa Word \u8bd5\u5377') + '</button>';
-  html += '</div>';
+  if (statPills.length) html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">' + statPills.join('') + '</div>';
   html += '</div>';
 
   // Batch-4: 预填充提示已移除（后台不再使用黄金标准默写预填充，相关引用也已
@@ -27171,10 +27196,10 @@ function renderAdminPaper() {
   html += '<div style="font-size:12px;color:var(--text-light);margin:10px 0 14px;line-height:1.6;">' + (state.lang === 'en'
     ? (isAll
       ? 'This is the complete All-Employee paper — all questions in one ordered list. Use Up/Down to reorder, remove questions, or add more from the banks. Each card now shows the answer key and per-question point value; click \u201cOverride\u201d to customise an individual question before publishing.'
-      : 'Compose the Culinary paper by referencing questions from the Hotel Product Knowledge bank. Culinary employees will see exactly this paper. The header card below doubles as a light-weight grading editor and stays in sync with Exam Publishing \u2192 Exam Grading.')
+      : 'Compose the Culinary paper by referencing questions from the Hotel Product Knowledge bank. Culinary employees will see exactly this paper. The grading card above doubles as a light-weight grading editor and stays in sync with Exam Publishing \u2192 Exam Grading.')
     : (isAll
       ? '这是全员版完整试卷——所有题目在同一个列表里，可用"上移/下移"调整顺序、移除题目，或从题库添加。每张卡片现在显示答案预览与单题分值；在"覆盖分值"输入即可自定义该题分值（保存后才会下发）。'
-      : '试卷题目引用自"酒店产品知识"题库。厨房部员工进入"厨房部员工版试卷"时看到的就是这套题目。下方"试卷总分与评分"卡片同时充当轻量评分编辑器，与"考试发布 → 评分设置"页面共享同一份数据。')) + '</div>';
+      : '试卷题目引用自"酒店产品知识"题库。厨房部员工进入"厨房部员工版试卷"时看到的就是这套题目。上方"评分与统计"卡片同时充当轻量评分编辑器，与"考试发布 → 评分设置"页面共享同一份数据。')) + '</div>';
 
   // Batch-4: 两个入口并列——从题库挑题 / 直接新建题目（新题落入对应题库，
   // 全员版试卷会自动追加到卷尾；厨房版再从「从题库添加」里勾选）。
