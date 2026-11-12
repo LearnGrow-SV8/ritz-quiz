@@ -17763,6 +17763,10 @@ var WRONG_MASTER_CAP = 400;                    // 巩固完成名单上限（只
 // 答错原样回错题本第 1 阶），两次都答对才算彻底过关，之后不再出现。
 var WRONG_CHECK_GAPS = [7, 30];                // 巩固完成后第 1/2 次抽查的间隔（天）
 var WRONG_CHECK_CAP = 3;                       // 每轮练习最多混入几道抽查题，别喧宾夺主
+// 「您做错过 N 次」的视觉分级（2026-11-12 领导要求加强注意）：
+// ≥3 次标红加粗；≥5 次再加浅红底色药丸，一眼看出反复出错的重点题。
+var WRONG_TIMES_ALERT = 3;
+var WRONG_TIMES_ALERT_HARD = 5;
 var WRONG_CHECK_EXAM_CAP = 2;                  // 模拟考卷里最多换进几道抽查题（占 30% 预算内）
 
 function wrongStageOf(e) {
@@ -18705,7 +18709,15 @@ function wrongRowListHtml(rows) {
         : '<span style="white-space:nowrap;">⏳ ' + t('rv_due_in').replace('{n}', String(doneDays)) + '</span>')) + '</span>';
     h += '</div>';    h += '<div class="q-meta" style="margin-top:5px;">';
     h += '<span>' + wrongStageDotsHtml(row.e) + ' ' + t('rv_stage_n').replace('{n}', String(stNow)).replace('{m}', String(WRONG_STAGE_DOTS)) + '</span>';
-    h += '<span>' + t('rv_wrong_times').replace('{n}', String(row.e.n || 1)) + '</span>';
+    // 做错次数分级强化：≥3 次红字加粗，≥5 次再叠浅红底药丸（WRONG_TIMES_ALERT*）
+    var _wn = row.e.n || 1;
+    if (_wn >= WRONG_TIMES_ALERT) {
+      h += '<span><b style="color:#c0392b;font-weight:700;white-space:nowrap;'
+        + (_wn >= WRONG_TIMES_ALERT_HARD ? 'background:rgba(192,57,43,.10);padding:1px 7px;border-radius:999px;' : '')
+        + '">' + t('rv_wrong_times').replace('{n}', String(_wn)) + '</b></span>';
+    } else {
+      h += '<span>' + t('rv_wrong_times').replace('{n}', String(_wn)) + '</span>';
+    }
     h += '</div>';
     // 🏷 知识点标签只在「与上面 meta 行的章节/题库名不重复」时才显示：
     // 默认回落值就是章节名（reviewTagOf → section），重复展示一行占地方（2026-11-11 领导确认）。
@@ -27881,6 +27893,12 @@ function adminEditValidate() {
   }
 
   var ok = msgs.length === 0;
+  // 🔴 #edValidate 在 .admin-edit-form 内部，而表单挂了 MutationObserver；
+  // innerHTML 赋值即使内容不变也会产生 childList 变更 → observer → 再 validate → 死循环（真机卡死）。
+  // 内容没变就绝不写入。
+  var sig = (ok ? 'ok|' : 'warn|') + msgs.join('\u0001');
+  if (el.__vSig === sig) return ok;
+  el.__vSig = sig;
   el.className = 'ed-validate ' + (ok ? 'ok' : 'warn');
   el.innerHTML = ok
     ? '✓ ' + (en ? 'Complete — ready to save' : '内容完整，可以保存')
