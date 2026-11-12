@@ -1135,6 +1135,16 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
 @media (min-width:901px) {
   .pc-grid { grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr); }
   .ed-grid { grid-template-columns:minmax(0,1.15fr) minmax(340px,1fr); }
+  /* 编排页双栏各自内部滚动（2026-11-12）：两栏都钉在视口高度内，
+     解决「左边题目列表拉到头、右边还停在标签区」的错位 ——
+     右栏题库浏览器整体定高，标签区/题目列表在栏内自己滚。 */
+  .adm-content .pc-col.pc-left { max-height:calc(100vh - 300px); min-height:260px; overflow-y:auto; padding-right:4px; }
+  .adm-content .pc-col.pc-right { max-height:calc(100vh - 300px); min-height:260px; display:flex; flex-direction:column; overflow:hidden; }
+  /* 🔴 右栏头部不再用 position:sticky（管理端内容区禁 sticky，防合成滚动穿透重影），改普通流 */
+  .adm-content .pc-col.pc-right .pc-sticky { position:static; flex:0 0 auto; }
+  /* 标签 chip 区块单独限高，几十个部门标签不再把题目列表顶到屏幕外 */
+  .adm-content .pc-col.pc-right .admin-section-chips { max-height:96px; overflow-y:auto; }
+  .adm-content .pc-col.pc-right #adminBankList { flex:1 1 auto; min-height:0; max-height:none; }
 }
 @media (max-width:900px) {
   .pc-right, .ed-preview { display:none !important; }
@@ -5130,6 +5140,7 @@ var adminState = {
   cloudStatus: '',     // '' | 'loading' | 'ok' | 'error' — last cloud fetch state
   reportTab: 'formal', // 'formal' | 'practice' — report center top tab
   reportPaper: 'all',  // 'all' | day21 | day21_kitchen | tsos | tsos_kitchen | manual
+  reportSession: 'all', // 'all' | 场次 key（ev.id || ev.title）— 正式考试场次筛选（2026-11-12）
   reportDetail: null,  // { key: <userKey>, eid: <exam event id> } — replay view
   bankScrollY: 0,       // scroll position to restore when returning to adminBank
   sectionPanel: '',     // manual bank tool panel: '' | 'order' | 'limit'
@@ -23159,11 +23170,12 @@ function adminAllExamRows() {
   return rows;
 }
 // Pure filter used by the table AND the CSV export (unit-tested).
-function filterReportRows(rows, tab, paper) {
+function filterReportRows(rows, tab, paper, session) {
   return rows.filter(function (r) {
     var mode = r.ev.mode === 'formal' ? 'formal' : 'practice';
     if (tab && tab !== 'all' && mode !== tab) return false;
     if (paper && paper !== 'all' && r.ev.paper !== paper) return false;
+    if (session && session !== 'all' && ((r.ev.id || r.ev.title || '') !== session)) return false;
     return true;
   });
 }
@@ -23225,7 +23237,7 @@ function buildReportCSV(rows, lang) {
 }
 function adminExportReportCSV() {
   var en = state.lang === 'en';
-  var rows = filterReportRows(adminAllExamRows(), adminState.reportTab, adminState.reportPaper);
+  var rows = filterReportRows(adminAllExamRows(), adminState.reportTab, adminState.reportPaper, adminState.reportSession);
   if (!rows.length) { adminToast(en ? 'No records to export.' : '暂无可导出的记录。'); return; }
   var csv = '\uFEFF' + buildReportCSV(rows, state.lang); // BOM so Excel opens UTF-8 correctly
   try {
@@ -24398,11 +24410,38 @@ function renderAdminReports() {
     for (var c2 = 0; c2 < allRows.length; c2++) {
       if (allRows[c2].ev.paper === pkKey && (adminState.reportTab === 'all' ? true : (adminState.reportTab === 'formal') === (allRows[c2].ev.mode === 'formal'))) pkN++;
     }
-    html += '<div class="chip ' + (adminState.reportPaper === pkKey ? 'active' : '') + '" onclick="adminState.reportPaper=\'' + pkKey + '\';render()">' + escapeHtml(syncPaperLabel(pkKey)) + ' (' + pkN + ')</div>';
+    html += '<div class="chip ' + (adminState.reportPaper === pkKey ? 'active' : '') + '" onclick="adminState.reportPaper=\'' + pkKey + '\';adminState.reportSession=\'all\';render()">' + escapeHtml(syncPaperLabel(pkKey)) + ' (' + pkN + ')</div>';
   }
   html += '</div>';
 
-  var rows = filterReportRows(allRows, adminState.reportTab, adminState.reportPaper);
+  // 场次筛选（2026-11-12）：正式考按「考试 id / 标题」分场次，场次可单独查看与导出
+  adminState.reportSession = adminState.reportSession || 'all';
+  var sessCounts = {}, sessOrder = [];
+  for (var sc = 0; sc < allRows.length; sc++) {
+    var evS = allRows[sc].ev;
+    if (evS.mode !== 'formal') continue;
+    if (adminState.reportPaper !== 'all' && evS.paper !== adminState.reportPaper) continue;
+    var sk = evS.id || evS.title || '';
+    if (!sk) continue;
+    if (!sessCounts[sk]) { sessCounts[sk] = { n: 0, title: evS.title || '', paper: evS.paper, ts: evS.ts || 0 }; sessOrder.push(sk); }
+    sessCounts[sk].n++;
+    if ((evS.ts || 0) > sessCounts[sk].ts) sessCounts[sk].ts = evS.ts || 0;
+  }
+  sessOrder.sort(function (a, b) { return sessCounts[b].ts - sessCounts[a].ts; });
+  if (sessOrder.length > 1) {
+    html += '<div class="tab-bar">';
+    html += '<div class="chip ' + (adminState.reportSession === 'all' ? 'active' : '') + '" onclick="adminState.reportSession=\'all\';render()">🗂 ' + (en ? 'All sessions' : '全部场次') + '</div>';
+    for (var so = 0; so < sessOrder.length && so < 12; so++) {
+      var sk2 = sessOrder[so], sc2 = sessCounts[sk2];
+      var lbl = sc2.title || (syncPaperLabel(sc2.paper) + ' · ' + fmtSyncTime(sc2.ts));
+      html += '<div class="chip ' + (adminState.reportSession === sk2 ? 'active' : '') + '" onclick="adminState.reportSession=\'' + jsKey(sk2) + '\';render()">🗂 ' + escapeHtml(lbl) + ' (' + sc2.n + ')</div>';
+    }
+    html += '</div>';
+  } else if (adminState.reportSession !== 'all' && sessOrder.length <= 1) {
+    adminState.reportSession = 'all'; // 场次只剩一个时不再额外筛
+  }
+
+  var rows = filterReportRows(allRows, adminState.reportTab, adminState.reportPaper, adminState.reportSession);
 
   // Stats summary — uses gradeExam() so pass-rate follows whatever threshold
   // is currently configured for each paper key. Old events that lack
@@ -24423,7 +24462,7 @@ function renderAdminReports() {
   html += '<div class="stat-card"><div class="num" style="color:var(--success);">' + (statN ? Math.round(statPass / statN * 100) + '%' : '-') + '</div><div class="label">' + (en ? 'Pass rate' : '及格率') + '</div></div>';
   html += '</div>';
 
-  html += '<button class="admin-cloud-btn" style="background:var(--primary);color:#fff;" onclick="adminExportReportCSV()">📤 ' + (en ? 'Export CSV' : '导出 CSV 成绩表') + '</button>';
+  html += '<button class="admin-cloud-btn" style="background:var(--primary);color:#fff;" onclick="adminExportReportCSV()">📤 ' + (en ? 'Export CSV (current filter)' : '下载当前筛选的成绩报表（CSV）') + '</button>';
 
   if (!rows.length) {
     html += '<div class="empty-state"><div class="icon">📊</div><p>' + (en ? 'No exam records yet for this filter.' : '该筛选条件下暂无考试记录。') + '</p></div>';
