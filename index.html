@@ -5763,6 +5763,11 @@ var I18N = {
   // 额度明细（2026-11-12）：只报「剩余」看不出用了多少次，三数并列才说得清
   race_mk_used_stat: {cn:'已获得 {a} 次｜已使用 {u} 次', en:'Earned {a} | Used {u}'},
   // race_mk_note_can / race_mk_note_full / race_mk_note_used_can 已随 raceMkNoteOf 退役（2026-11-11 八调）
+  // 两个任务并行不是先后（2026-11-12）：卡头必须留「任务一 / 任务二」字样，否则学员
+  // 会以为要先做完任务一才能做任务二；再配一句总说明，把「可任选」讲在明面上。
+  race_mk_task_a_tag: {cn:'任务一', en:'Task 1'},
+  race_mk_task_b_tag: {cn:'任务二', en:'Task 2'},
+  race_mk_parallel_note: {cn:'以下两个任务相互独立，可任选其一完成，也可全部完成。', en:'The two tasks below are independent: do either one, or both.'},
   race_mk_task_a_name: {cn:'错题巩固', en:'Error Mastery'},
   // 2026-11-12 任务一改版：从「每巩固完成 N 道」改为「错题本抽 5 题全对得 1 次」
   race_mk_task_a_desc: {cn:'从错题本中随机抽取 5 道已开启巩固的错题，全部答对即可获得 1 次补签机会。仅限已开启巩固（至少答对过一次）的错题；刚进入错题本、还未复习的错题不参与抽取。', en:'Draw 5 consolidated wrong answers at random from your Error Notebook. Get all 5 right to earn one make-up credit. Only consolidated errors (answered right at least once) are eligible; brand-new mistakes must be reviewed first.'},
@@ -5772,8 +5777,8 @@ var I18N = {
   race_mk_a_sub: {cn:'抽 5 道错题 · 全部答对即可', en:'5 drawn errors \u00b7 all correct to pass'},
   race_mk_a_pass: {cn:'挑战成功！补签机会 +1。', en:'Challenge passed. Make-ups +1.'},
   // 2026-11-12：已达上限还继续挑战的，成绩照记但额度不再增加，提示必须说实话
-  race_mk_pass_capped: {cn:'挑战成功！本届补签次数已达上限（{cap} 次），本次不再增加。', en:'Challenge passed. The season cap ({cap} credits) is already reached, so no extra credit was added.'},
-  race_mk_task_full_note: {cn:'本届补签次数已达上限（{cap} 次）；继续挑战只计入战绩，不再增加补签次数。', en:'Season cap ({cap} credits) reached. Further challenges only count for your record and add no credits.'},
+  race_mk_pass_capped: {cn:'挑战成功！本届补签次数已达上限（{cap} 次），本次不增加补签次数；挑战成功次数照常累计。', en:'Challenge passed. The season cap ({cap} credits) is already reached, so no credit was added — your pass count still went up.'},
+  race_mk_task_full_note: {cn:'本届补签次数已达上限（{cap} 次）；继续挑战成功不再增加补签次数，挑战成功次数照常累计。', en:'Season cap ({cap} credits) reached: further passes add no credits, but still count towards your pass total.'},
   race_mk_a_fail: {cn:'请加强复习，期待下次挑战成功。', en:'Keep reviewing \u2014 good luck next time.'},
   race_mk_task_a_go: {cn:'前往错题本复习', en:'Review Error Notebook'},
   race_mk_task_b_name: {cn:'模块挑战', en:'Module Challenge'},
@@ -5781,7 +5786,11 @@ var I18N = {
   race_mk_state_ready: {cn:'可挑战', en:'Ready'},
   race_mk_state_locked: {cn:'未解锁', en:'Locked'},
   race_mk_state_cool: {cn:'今日已挑战', en:'Done for today'},
-  race_mk_state_full: {cn:'次数已满', en:'Cap reached'},
+  race_mk_state_alldone: {cn:'已全部完成', en:'All done'},
+  // race_mk_state_full 已删（2026-11-12）：额度满了也能继续挑战，写「次数已满」跟
+  // 头上的「可挑战」自相矛盾，学员以为不能做了。
+  race_mk_task_b_pool: {cn:'本次有 {n} 个模块可供挑战', en:'{n} modules open for challenge'},
+  race_mk_task_b_stat: {cn:'本届挑战成功 {n} 次', en:'{n} passed this season'},
   race_mk_task_b_desc: {cn:'选定模块，答对 ≥{m}/{n} 题，获取一次补签；同一模块本届仅可领取一次', en:'Earn one credit by scoring ≥{m}/{n} in a module. One credit per module each season.'},
   race_mk_task_go: {cn:'开始挑战', en:'Start challenge'},
   race_mk_task_done: {cn:'已完成 ✓', en:'Completed ✓'},
@@ -15235,10 +15244,12 @@ function raceMkAllowance(rec, conf) {
   if (rec.mkUsed && typeof rec.mkUsed[rid] === 'number') used = rec.mkUsed[rid];
   else if (rec.makeups && rec.makeups[rid]) used = 1;   // 旧数据：每届一次，记过即用过
   var allow = Math.min(cap, aTasks + earnedB);
+  // 🔴 aTasks 一律报**原始**挑战成功次数（2026-11-12 学员实测）：上一版把 aTasks 钳到
+  // cap-earnedB，额度满或模块做完后就会显示「本届挑战成功 0 次」，明明赢了却像没赢，
+  // 直接打击挑战积极性。额度口径只看 allow（已经封顶），战绩口径看 aTasks（不封顶）。
   return {
     cap: cap, taskOn: taskOn, rid: rid,
-    aTasks: Math.max(0, Math.min(aTasks, cap - earnedB)),
-    earnedB: earnedB, mods: mods, used: used, allow: allow, left: Math.max(0, allow - used)
+    aTasks: aTasks, earnedB: earnedB, mods: mods, used: used, allow: allow, left: Math.max(0, allow - used)
   };
 }
 // 2026-11-11 八调：raceMkNoteOf 及 race_mk_note_* / race_mk_task_full 已删 ——
@@ -15628,15 +15639,15 @@ function raceMkATaskFailMark(rid) {
   rec.mkAFailDay[rid] = raceDayKey(Date.now());
   raceSaveLocalRecord(rec);
 }
-// 任务卡卡头（2026-11-12 重做）：编号圆牌 + 任务名 + 右侧状态 pill。
-// 上一版是「黑底任务一 pill + 任务一｜错题巩固」，同一个名字写了两遍；现在编号只用
-// 序号圆牌，任务名只出现一次，右侧 pill 直接回答「现在能不能做」。
-function raceMkTaskHeadHtml(num, name, stateText, tone) {
+// 任务卡卡头（2026-11-12 二次调整）：左侧「任务一」标签 + 任务名 + 右侧状态 pill。
+// 🔴 必须保留「任务一 / 任务二」字样（学员要求）：只写任务名，读起来像是先后两步；
+// 标签只用一处，任务名只出现一次，所以不会再出现上一版「任务一 任务一」的重复。
+function raceMkTaskHeadHtml(tag, name, stateText, tone) {
   var pillBg = tone === 'ready' ? '#000' : 'rgba(0,0,0,.10)';
   var pillFg = tone === 'ready' ? '#fff' : '#5b6470';
-  return '<div style="display:flex;align-items:center;gap:10px;background:#C7DDF3;padding:11px 14px;">'
-    + '<span style="flex:none;width:24px;height:24px;border-radius:50%;background:#000;color:#fff;'
-    + 'font-size:13px;font-weight:800;line-height:24px;text-align:center;">' + num + '</span>'
+  return '<div style="display:flex;align-items:center;gap:9px;background:#C7DDF3;padding:11px 14px;">'
+    + '<span style="flex:none;font-size:11px;font-weight:800;color:#fff;background:#000;'
+    + 'border-radius:5px;padding:3px 7px;letter-spacing:.5px;white-space:nowrap;">' + tag + '</span>'
     + '<span style="flex:1;min-width:0;font-size:15.5px;font-weight:800;color:#000;">' + name + '</span>'
     + '<span style="flex:none;font-size:11px;font-weight:700;color:' + pillFg + ';background:' + pillBg
     + ';border-radius:999px;padding:3px 9px;white-space:nowrap;">' + stateText + '</span></div>';
@@ -15660,41 +15671,49 @@ function renderRaceMkTask() {
   html += '<div class="page">';
   // 额度总览：剩余次数放大做主角，上限用一句话解释（2026-11-12：「本届上限 3 次」太抽象，
   // 改成「本届最多可补打卡 3 次」，学员一眼知道这个数字管的是能补几天）
+  // 2026-11-12 再调：小字顺序互换 —— 上排是大字 + 「已获得 / 已使用」（跟着数字走），
+  // 下排单独放「本届最多可补打卡 N 次」（读的是上限，不该夹在剩余次数旁边）。
   html += '<div class="q-card" style="background:linear-gradient(135deg,var(--primary-soft) 0%,var(--primary-light) 100%);border:1px solid rgba(0,0,0,.06);">';
   html += '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">';
   html += '<span style="font-size:18px;font-weight:800;color:#000;">' + t('race_makeup_left').replace('{n}', String(mk.left)) + '</span>';
-  html += '<span style="font-size:12px;color:rgba(0,0,0,.62);">' + t('race_mk_cap_note').replace('{cap}', String(mk.cap)) + '</span>';
-  html += '</div>';
   // 额度明细（2026-11-12）：已获得 / 已使用一眼看清，不用自己拿上限减剩余去推
+  html += '<span style="font-size:12px;color:rgba(0,0,0,.62);">'
+    + escapeHtml(t('race_mk_used_stat').replace('{a}', String(mk.allow)).replace('{u}', String(mk.used))) + '</span>';
+  html += '</div>';
   html += '<div style="font-size:11.5px;color:rgba(0,0,0,.62);margin-top:4px;line-height:1.6;">'
-    + escapeHtml(t('race_mk_used_stat').replace('{a}', String(mk.allow)).replace('{u}', String(mk.used))) + '</div>';
+    + escapeHtml(t('race_mk_cap_note').replace('{cap}', String(mk.cap))) + '</div>';
   html += '<div style="font-size:11.5px;color:rgba(0,0,0,.6);margin-top:6px;line-height:1.6;">'
     + escapeHtml(t('race_mk_use_hint').replace('{m}', String(RACE_MAKEUP_PASS)).replace('{n}', String(RACE_MAKEUP_N))) + '</div>';
   html += '</div>';
+  // 已达上限：整页只提示一次（2026-11-12）——两张卡各写一遍太吵，且学员要的是
+  // 「还能不能玩」的答案：可以玩，次数不再加，战绩照记。
+  if (full) {
+    html += '<div class="q-card" style="border:1px solid #f0d9a8;background:#fffdf5;padding:11px 14px;font-size:11.5px;color:#8a5a00;line-height:1.65;">'
+      + escapeHtml(t('race_mk_task_full_note').replace('{cap}', String(mk.cap))) + '</div>';
+  }
+  html += '<div style="font-size:11.5px;color:#7a828c;line-height:1.65;padding:2px 4px 4px;">'
+    + escapeHtml(t('race_mk_parallel_note')) + '</div>';
   // 任务A · 错题巩固挑战（2026-11-12 改版：抽 5 道已开启巩固的错题、全对得 1 次补签）
   var poolIds = [];
   try { poolIds = raceMkATaskPool(); } catch (ePool) { poolIds = []; }
   var aEnough = poolIds.length >= RACE_MK_A_N;
   var aCooled = false;
   try { aCooled = !!(rec.mkAFailDay && rec.mkAFailDay[conf.id] === raceDayKey(Date.now())); } catch (eCd) { aCooled = false; }
+  // 状态 pill 只说「现在能不能点」（2026-11-12）：额度满了不再报「次数已满」，
+  // 因为挑战照样能做、成功次数照样记，写满反而挡住学员。
   var aTone = 'ready', aState = t('race_mk_state_ready');
   if (!aEnough) { aTone = 'mute'; aState = t('race_mk_state_locked'); }
   else if (aCooled) { aTone = 'mute'; aState = t('race_mk_state_cool'); }
-  else if (full) { aTone = 'mute'; aState = t('race_mk_state_full'); }
   html += '<div class="q-card" style="padding:0;overflow:hidden;">';
-  html += raceMkTaskHeadHtml('1', t('race_mk_task_a_name'), aState, aTone);
+  html += raceMkTaskHeadHtml(t('race_mk_task_a_tag'), t('race_mk_task_a_name'), aState, aTone);
   html += '<div style="padding:14px;">';
   html += '<div style="font-size:12px;color:#666;line-height:1.65;">' + t('race_mk_task_a_desc') + '</div>';
   // 资格池 + 本届战绩（学员要求：获得过几次要能看见）—— 两枚小标签并排
+  // 🔴 战绩口径不封顶（2026-11-12）：额度满了还赢，数字也要涨，否则「赢了显示 0 次」
   html += '<div style="margin-top:10px;">'
     + raceMkChipHtml(t('race_mk_task_a_pool').replace('{n}', String(poolIds.length)), aEnough ? '' : 'warn')
     + raceMkChipHtml(t('race_mk_task_a_stat').replace('{n}', String(mk.aTasks)), '')
     + '</div>';
-  if (full) {
-    // 已达上限：挑战照旧可以玩，但要说清"不再增加次数"，免得学员以为额度丢了
-    html += '<div style="font-size:11.5px;color:#8a5a00;margin-top:2px;line-height:1.6;">'
-      + escapeHtml(t('race_mk_task_full_note').replace('{cap}', String(mk.cap))) + '</div>';
-  }
   if (!aEnough) {
     // 资格不够：明说无法开启 + 指路错题本（2026-11-12 学员反馈：不直观、容易想放弃）
     html += '<div style="font-size:11.5px;color:#c0392b;margin-top:8px;line-height:1.6;">' + t('race_mk_task_a_poor') + '</div>';
@@ -15714,16 +15733,20 @@ function renderRaceMkTask() {
     modTotal++;
     if (mk.mods && mk.mods[RACE_SECTIONS[i].key]) modDone++;
   }
-  var bState = en ? (modDone + '/' + modTotal + ' done') : ('已完成 ' + modDone + '/' + modTotal);
+  var modLeft = Math.max(0, modTotal - modDone);
+  // 卡头状态改成「能不能做」（2026-11-12）：「已完成 5/8」放在卡头既像进度条又像额度，
+  // 学员会误以为满 8 才算成功；进度改由下面两枚标签说明，卡头只回答能不能点。
+  var bState = modLeft > 0 ? t('race_mk_state_ready') : t('race_mk_state_alldone');
   html += '<div class="q-card" style="padding:0;overflow:hidden;">';
-  html += raceMkTaskHeadHtml('2', t('race_mk_task_b_name'), bState, modDone < modTotal ? 'ready' : 'mute');
+  html += raceMkTaskHeadHtml(t('race_mk_task_b_tag'), t('race_mk_task_b_name'), bState, modLeft > 0 ? 'ready' : 'mute');
   html += '<div style="padding:14px;">';
   html += '<div style="font-size:12px;color:#666;line-height:1.65;">' + t('race_mk_task_b_desc')
     .replace('{n}', String(RACE_MK_MOD_N)).replace('{m}', String(RACE_MK_MOD_PASS)) + '</div>';
-  if (full) {
-    html += '<div style="font-size:11.5px;color:#8a5a00;margin-top:8px;line-height:1.6;">'
-      + escapeHtml(t('race_mk_task_full_note').replace('{cap}', String(mk.cap))) + '</div>';
-  }
+  // 与任务一同一套口径（学员要求）：还剩几个模块能挑战 + 本届已经赢了几次
+  html += '<div style="margin-top:10px;">';
+  if (modLeft > 0) html += raceMkChipHtml(t('race_mk_task_b_pool').replace('{n}', String(modLeft)), '');
+  html += raceMkChipHtml(t('race_mk_task_b_stat').replace('{n}', String(modDone)), '');
+  html += '</div>';
   for (i = 0; i < RACE_SECTIONS.length; i++) {
     var s = RACE_SECTIONS[i];
     if (s.key === 'all') continue;
@@ -18838,8 +18861,11 @@ function renderWrongAll() {
   var grad = 0;
   try { grad = masteredCount(); } catch (e0) {}
 
-  // 页头只留 emoji + 标题一层（2026-11-11 领导：不要副标题那层，占地方）
-  var html = renderAppHeader({ title: '❌ ' + t('wrong_title') });
+  // 页头副标题复原（2026-11-12 领导：昨天说删可能表达错了，恢复「共 N 道 · 该复习 D 道」）
+  var html = renderAppHeader({
+    title: '❌ ' + t('wrong_title'),
+    subtitle: t('rv_book_sub').replace('{n}', String(allRows.length)).replace('{d}', String(dueTotal))
+  });
   html += '<div class="page">';
 
   // 板块一｜错题复习进度已挪到页面最底部（2026-11-12 领导：进度卡沉底，
@@ -25765,7 +25791,9 @@ function adminUnifiedRosterHtml(statusLine, en) {
       var rr = shown[i2];
       var sst = adminRosterRowStatus(rr);
       var isLeft2 = !!rr.off && nameRosterReasonOf(rr.emp) === 'left';
-      html += '<tr>';
+      // 刚从档案返回的那一行给淡底色（与旧学员列表同一体验）
+      var justBack = rr.reg && rr.reg.key === adminState.studentListLastKey && !adminState.studentDetail;
+      html += '<tr' + (justBack ? ' style="background:#f7fbff;"' : '') + '>';
       html += '<td><span class="st-name" style="font-family:monospace;">' + escapeHtml(rr.emp) + '</span><br>'
         + (isLeft2 ? adminRosterLeftChip(en) : adminRosterStatusChip(sst)) + '</td>';
       html += '<td><input class="cell" value="' + escapeHtml(rr.rosterCn) + '" placeholder="—" onchange="adminRosterRowEdit(\'' + jsKey(rr.emp) + '\',\'cn\',this.value)"></td>';
