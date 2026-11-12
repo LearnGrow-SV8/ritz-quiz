@@ -839,6 +839,29 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
   color:var(--a-i3); cursor:pointer; font-family:inherit; }
 .ap-seg button.on { background:#fff; color:var(--a-ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.07); }
 .ap-count { margin-left:auto; font-size:12px; color:var(--a-i4); }
+/* 分页条（题库列表；每页 50 题，翻页不重排整页） */
+.ap-pager { display:flex; align-items:center; justify-content:center; gap:5px; flex-wrap:wrap;
+  margin:14px 0 4px; padding-top:12px; border-top:1px solid var(--a-line2); }
+.ap-pg { height:30px; min-width:30px; padding:0 10px; border:1px solid var(--a-line); background:#fff;
+  border-radius:7px; font-size:12.5px; color:var(--a-i2); cursor:pointer; font-family:inherit; }
+.ap-pg:hover:not(:disabled) { border-color:var(--a-blue-d); color:var(--a-ink); }
+.ap-pg:disabled { opacity:.4; cursor:default; }
+.ap-pg.on { background:#C7DDF3; border-color:#C7DDF3; color:#000; font-weight:600; }
+.ap-pg-dots { font-size:12px; color:var(--a-i4); padding:0 2px; }
+.ap-pg-info { margin-left:8px; font-size:12px; color:var(--a-i4); }
+
+/* 考试与场次：卡片可折叠（默认只展开「进行中」的那一场，其余收起看摘要） */
+.exam-card { padding:0; overflow:hidden; }
+.exam-card-head { display:flex; align-items:center; gap:10px; padding:14px 16px; cursor:pointer; user-select:none; }
+.exam-card-head:hover { background:#FAFBFC; }
+.exam-card-head .ec-title { display:flex; align-items:center; gap:8px; font-size:14.5px; font-weight:600; color:var(--a-ink); }
+.exam-card-head .ec-sub { font-size:12px; color:var(--a-i4); margin-top:3px; }
+.exam-card-head .ec-sum { margin-left:auto; font-size:12px; color:var(--a-i4); white-space:nowrap; }
+.exam-card-head .ec-caret { width:15px; height:15px; flex:0 0 15px; stroke:var(--a-i3); fill:none;
+  stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; transition:transform .15s; }
+.exam-card.open .ec-caret { transform:rotate(180deg); }
+.exam-card-body { display:none; padding:0 16px 16px; }
+.exam-card.open .exam-card-body { display:block; }
 
 /* --- 表格 --- */
 .ap-tbl-wrap { background:#fff; border:1px solid var(--a-line); border-radius:12px; overflow:hidden; }
@@ -1299,6 +1322,11 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
 }
 .ed-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; padding:12px 0 4px;
   border-top:1px solid var(--a-line); background:#fff; }
+/* 编辑页实时校验条：保存前就知道缺什么，不用点了才弹 toast */
+.ed-validate { display:flex; align-items:center; gap:7px; margin-top:16px; padding:9px 12px;
+  border-radius:9px; font-size:12.5px; line-height:1.5; border:1px solid transparent; }
+.ed-validate.ok { background:#F0F7F3; border-color:#CFE7DA; color:#1E7A4E; }
+.ed-validate.warn { background:#FDF6EC; border-color:#F1DCC0; color:#8A5410; }
 .ed-actions .admin-btn-save { flex:1 0 100%; width:auto; }
 .ed-actions .admin-btn-copy, .ed-actions .admin-btn-next, .ed-actions .admin-btn-delete, .ed-actions .admin-btn-cancel {
   flex:1 1 0; width:auto; min-width:0; }
@@ -5731,24 +5759,29 @@ var I18N = {
   race_makeup_choose_desc: {cn:'选择一个题库范围，抽取 {n} 题并答对 {m} 题，即可补回所选日期的打卡。答错的题会自动进入错题集。', en:'Pick a question bank and get {m}+ of {n} drawn questions right to restore the selected day. Wrong answers go to your wrong-answer book.'},
   race_mk_day_future: {cn:'只能补签今天之前漏掉的日子。', en:'Only past missed days can be restored.'},
   race_mk_use_hint: {cn:'在日历页选择漏签日期消耗次数补打卡；挑战答对 ≥{m} 题即补签成功', en:'Use credits on missed dates in calendar. Pass the quiz (≥{m}/{n} correct) to make up check in.'},
-  race_mk_cap_note: {cn:'本届上限 {cap} 次', en:'Season cap: {cap}.'},
+  race_mk_cap_note: {cn:'本届最多可补打卡 {cap} 次', en:'Up to {cap} make-ups this season'},
   // 额度明细（2026-11-12）：只报「剩余」看不出用了多少次，三数并列才说得清
   race_mk_used_stat: {cn:'已获得 {a} 次｜已使用 {u} 次', en:'Earned {a} | Used {u}'},
   // race_mk_note_can / race_mk_note_full / race_mk_note_used_can 已随 raceMkNoteOf 退役（2026-11-11 八调）
-  race_mk_task_a_name: {cn:'任务一｜错题巩固', en:'Task 1 | Error Mastery'},
+  race_mk_task_a_name: {cn:'错题巩固', en:'Error Mastery'},
   // 2026-11-12 任务一改版：从「每巩固完成 N 道」改为「错题本抽 5 题全对得 1 次」
   race_mk_task_a_desc: {cn:'从错题本中随机抽取 5 道已开启巩固的错题，全部答对即可获得 1 次补签机会。仅限已开启巩固（至少答对过一次）的错题；刚进入错题本、还未复习的错题不参与抽取。', en:'Draw 5 consolidated wrong answers at random from your Error Notebook. Get all 5 right to earn one make-up credit. Only consolidated errors (answered right at least once) are eligible; brand-new mistakes must be reviewed first.'},
   race_mk_task_a_stat: {cn:'本届挑战成功 {n} 次', en:'{n} passed this season'},
-  race_mk_task_a_pool: {cn:'符合条件的错题：{n} 道（需至少 5 道）', en:'Eligible wrong answers: {n} (at least 5 required)'},
-  race_mk_task_a_poor: {cn:'符合条件的错题不足 5 道，暂时无法开启此任务。请前往错题本开启复习，让符合条件的错题数量满足要求后再来挑战。', en:'Fewer than 5 eligible wrong answers — this task is locked for now. Review in the Error Notebook first, then come back once you have at least 5.'},
+  race_mk_task_a_pool: {cn:'符合条件的错题：{n} 道（需至少 5 道）', en:'Eligible wrong answers: {n} (at least 5 required)'},  race_mk_task_a_poor: {cn:'符合条件的错题不足 5 道，暂时无法开启此任务。请前往错题本开启复习，让符合条件的错题数量满足要求后再来挑战。', en:'Fewer than 5 eligible wrong answers — this task is locked for now. Review in the Error Notebook first, then come back once you have at least 5.'},
   race_mk_task_a_cool: {cn:'本次挑战未通过，请先加强复习，明天再来看看。', en:'Not passed this time. Review first and come back tomorrow.'},
   race_mk_a_sub: {cn:'抽 5 道错题 · 全部答对即可', en:'5 drawn errors \u00b7 all correct to pass'},
   race_mk_a_pass: {cn:'挑战成功！补签机会 +1。', en:'Challenge passed. Make-ups +1.'},
+  // 2026-11-12：已达上限还继续挑战的，成绩照记但额度不再增加，提示必须说实话
+  race_mk_pass_capped: {cn:'挑战成功！本届补签次数已达上限（{cap} 次），本次不再增加。', en:'Challenge passed. The season cap ({cap} credits) is already reached, so no extra credit was added.'},
+  race_mk_task_full_note: {cn:'本届补签次数已达上限（{cap} 次）；继续挑战只计入战绩，不再增加补签次数。', en:'Season cap ({cap} credits) reached. Further challenges only count for your record and add no credits.'},
   race_mk_a_fail: {cn:'请加强复习，期待下次挑战成功。', en:'Keep reviewing \u2014 good luck next time.'},
-  race_mk_task_tag_a: {cn:'任务一', en:'Task 1'},
-  race_mk_task_tag_b: {cn:'任务二', en:'Task 2'},
   race_mk_task_a_go: {cn:'前往错题本复习', en:'Review Error Notebook'},
-  race_mk_task_b_name: {cn:'任务二｜模块挑战', en:'Task 2 | Module Challenge'},
+  race_mk_task_b_name: {cn:'模块挑战', en:'Module Challenge'},
+  // 卡头状态 pill（2026-11-12 任务卡重做）：一眼看出这个任务现在能不能做
+  race_mk_state_ready: {cn:'可挑战', en:'Ready'},
+  race_mk_state_locked: {cn:'未解锁', en:'Locked'},
+  race_mk_state_cool: {cn:'今日已挑战', en:'Done for today'},
+  race_mk_state_full: {cn:'次数已满', en:'Cap reached'},
   race_mk_task_b_desc: {cn:'选定模块，答对 ≥{m}/{n} 题，获取一次补签；同一模块本届仅可领取一次', en:'Earn one credit by scoring ≥{m}/{n} in a module. One credit per module each season.'},
   race_mk_task_go: {cn:'开始挑战', en:'Start challenge'},
   race_mk_task_done: {cn:'已完成 ✓', en:'Completed ✓'},
@@ -15351,10 +15384,22 @@ function renderRaceMakeup() {
     // 重渲染都会重复发额度（2026-11-12 测试踩出）。done 标记直接挂在会话上。
     if (!mk.done) {
       mk.done = true;
+      mk.gain = false; mk.capNow = 0;
+      if (passed && (isA || isMod)) {
+        // 发放前先看额度还剩不剩位置（2026-11-12）：已经赚满 cap 的，挑战成绩照记，
+        // 但额度不再 +1 —— 提示必须说实话，否则会出现「说好 +1 却没到账」的错觉。
+        try {
+          var mkBefore = raceMkAllowance(raceLocalRecord() || {}, raceConfOf() || {});
+          mk.capNow = mkBefore.cap;
+          mk.gain = mkBefore.allow < mkBefore.cap;
+        } catch (eGain) { mk.gain = true; }
+      }
       if (isA) { if (passed) raceMkATaskGrant(mk.rid); else raceMkATaskFailMark(mk.rid); }
       else if (isMod) { if (passed) raceMkModuleGrant(mk.rid, mk.module); }
       else if (passed) raceMakeupGrant(mk.day, mk.rid);
     }
+    // 结算说明（按是否真的加了额度分开写）
+    var gained = !!mk.gain;
     // ① 成绩卡
     html += '<div class="q-card" style="text-align:center;padding:24px 16px;">';
     html += '<div style="font-size:46px;">' + (passed ? '🎉' : '💪') + '</div>';
@@ -15362,7 +15407,11 @@ function renderRaceMakeup() {
       + (en ? 'Correct ' : '答对 ') + mk.correct + '/' + mk.pool.length + '</div>';
     html += '<div style="font-size:13px;color:#666;margin-top:8px;">'
       + (passed
-        ? (isA ? t('race_mk_a_pass') : isMod ? t('race_mk_mod_pass') : t('race_makeup_pass'))
+        ? ((isA || isMod)
+          ? (gained
+            ? (isA ? t('race_mk_a_pass') : t('race_mk_mod_pass'))
+            : t('race_mk_pass_capped').replace('{cap}', String(mk.capNow || 3)))
+          : t('race_makeup_pass'))
         : (isA ? t('race_mk_a_fail') : t('race_makeup_fail'))) + '</div>';
     html += '</div>';
     // ② 挑战小结：逐题判定 + 你的作答 + 正确答案 + 解析（2026-11-10），
@@ -15577,12 +15626,25 @@ function raceMkATaskFailMark(rid) {
   rec.mkAFailDay[rid] = raceDayKey(Date.now());
   raceSaveLocalRecord(rec);
 }
-// 任务卡 banner（2026-11-12 学员反馈）：两个任务标题一眼可辨——黑底任务徽标 + 品牌蓝底横条，
-// 一进任务页就能看到「有两个任务可以做」。
-function raceMkTaskBannerHtml(tag, rest) {
-  return '<div style="display:flex;align-items:center;gap:9px;background:#C7DDF3;border-radius:8px;padding:10px 12px;">'
-    + '<span style="flex:none;font-size:14px;font-weight:800;color:#fff;background:#000;border-radius:6px;padding:3px 10px;">' + tag + '</span>'
-    + '<span style="font-size:15px;font-weight:700;color:#000;">' + rest + '</span></div>';
+// 任务卡卡头（2026-11-12 重做）：编号圆牌 + 任务名 + 右侧状态 pill。
+// 上一版是「黑底任务一 pill + 任务一｜错题巩固」，同一个名字写了两遍；现在编号只用
+// 序号圆牌，任务名只出现一次，右侧 pill 直接回答「现在能不能做」。
+function raceMkTaskHeadHtml(num, name, stateText, tone) {
+  var pillBg = tone === 'ready' ? '#000' : 'rgba(0,0,0,.10)';
+  var pillFg = tone === 'ready' ? '#fff' : '#5b6470';
+  return '<div style="display:flex;align-items:center;gap:10px;background:#C7DDF3;padding:11px 14px;">'
+    + '<span style="flex:none;width:24px;height:24px;border-radius:50%;background:#000;color:#fff;'
+    + 'font-size:13px;font-weight:800;line-height:24px;text-align:center;">' + num + '</span>'
+    + '<span style="flex:1;min-width:0;font-size:15.5px;font-weight:800;color:#000;">' + name + '</span>'
+    + '<span style="flex:none;font-size:11px;font-weight:700;color:' + pillFg + ';background:' + pillBg
+    + ';border-radius:999px;padding:3px 9px;white-space:nowrap;">' + stateText + '</span></div>';
+}
+// 任务卡里的小标签（资格池 / 本届战绩）：并排两枚比竖排两行更省地方
+function raceMkChipHtml(text, tone) {
+  var bg = tone === 'warn' ? '#FDECEA' : '#F2F5F8';
+  var fg = tone === 'warn' ? '#c0392b' : '#4a5560';
+  return '<span style="display:inline-block;background:' + bg + ';color:' + fg + ';border-radius:6px;'
+    + 'padding:3px 8px;font-size:11.5px;font-weight:600;margin:0 6px 6px 0;">' + text + '</span>';
 }
 // 任务页：额度总览 + 任务A进度 + 任务B模块列表
 function renderRaceMkTask() {
@@ -15591,15 +15653,18 @@ function renderRaceMkTask() {
   var rec = {};
   try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
   var mk = raceMkAllowance(rec, conf);
+  var full = mk.allow >= mk.cap;   // 本届补签次数已赚满（2026-11-12）：还能挑战，但不再 +1
   var html = renderAppHeader({ title: t('race_mk_task_title'), subtitle: t('race_mk_task_sub') });
   html += '<div class="page">';
-  // 额度总览（2026-11-10 二次改写）：一行「剩余几次」+ 一行说明（还能不能赚）
+  // 额度总览：剩余次数放大做主角，上限用一句话解释（2026-11-12：「本届上限 3 次」太抽象，
+  // 改成「本届最多可补打卡 3 次」，学员一眼知道这个数字管的是能补几天）
   html += '<div class="q-card" style="background:linear-gradient(135deg,var(--primary-soft) 0%,var(--primary-light) 100%);border:1px solid rgba(0,0,0,.06);">';
-  // 顶部信息栏（2026-11-11 领导八调文案）：剩余次数 + 上限一行，使用方式一行
-  html += '<div style="font-size:13px;font-weight:700;color:#000;">' + t('race_makeup_left').replace('{n}', String(mk.left))
-    + (en ? ' (' : '（') + t('race_mk_cap_note').replace('{cap}', String(mk.cap)) + (en ? ')' : '）') + '</div>';
+  html += '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">';
+  html += '<span style="font-size:18px;font-weight:800;color:#000;">' + t('race_makeup_left').replace('{n}', String(mk.left)) + '</span>';
+  html += '<span style="font-size:12px;color:rgba(0,0,0,.62);">' + t('race_mk_cap_note').replace('{cap}', String(mk.cap)) + '</span>';
+  html += '</div>';
   // 额度明细（2026-11-12）：已获得 / 已使用一眼看清，不用自己拿上限减剩余去推
-  html += '<div style="font-size:11.5px;color:rgba(0,0,0,.62);margin-top:3px;line-height:1.6;">'
+  html += '<div style="font-size:11.5px;color:rgba(0,0,0,.62);margin-top:4px;line-height:1.6;">'
     + escapeHtml(t('race_mk_used_stat').replace('{a}', String(mk.allow)).replace('{u}', String(mk.used))) + '</div>';
   html += '<div style="font-size:11.5px;color:rgba(0,0,0,.6);margin-top:6px;line-height:1.6;">'
     + escapeHtml(t('race_mk_use_hint').replace('{m}', String(RACE_MAKEUP_PASS)).replace('{n}', String(RACE_MAKEUP_N))) + '</div>';
@@ -15610,14 +15675,24 @@ function renderRaceMkTask() {
   var aEnough = poolIds.length >= RACE_MK_A_N;
   var aCooled = false;
   try { aCooled = !!(rec.mkAFailDay && rec.mkAFailDay[conf.id] === raceDayKey(Date.now())); } catch (eCd) { aCooled = false; }
-  html += '<div class="q-card">';
-  html += raceMkTaskBannerHtml(t('race_mk_task_tag_a'), t('race_mk_task_a_name'));
-  html += '<div style="font-size:12px;color:#666;margin-top:10px;line-height:1.6;">' + t('race_mk_task_a_desc') + '</div>';
-  // 资格池 + 本届战绩（学员要求：获得过几次要能看见）
-  html += '<div style="font-size:12px;color:' + (aEnough ? '#8a5a00' : '#c0392b') + ';margin-top:8px;font-weight:600;">'
-    + t('race_mk_task_a_pool').replace('{n}', String(poolIds.length)) + '</div>';
-  html += '<div style="font-size:12px;color:#8a5a00;margin-top:4px;font-weight:600;">'
-    + t('race_mk_task_a_stat').replace('{n}', String(mk.aTasks)) + '</div>';
+  var aTone = 'ready', aState = t('race_mk_state_ready');
+  if (!aEnough) { aTone = 'mute'; aState = t('race_mk_state_locked'); }
+  else if (aCooled) { aTone = 'mute'; aState = t('race_mk_state_cool'); }
+  else if (full) { aTone = 'mute'; aState = t('race_mk_state_full'); }
+  html += '<div class="q-card" style="padding:0;overflow:hidden;">';
+  html += raceMkTaskHeadHtml('1', t('race_mk_task_a_name'), aState, aTone);
+  html += '<div style="padding:14px;">';
+  html += '<div style="font-size:12px;color:#666;line-height:1.65;">' + t('race_mk_task_a_desc') + '</div>';
+  // 资格池 + 本届战绩（学员要求：获得过几次要能看见）—— 两枚小标签并排
+  html += '<div style="margin-top:10px;">'
+    + raceMkChipHtml(t('race_mk_task_a_pool').replace('{n}', String(poolIds.length)), aEnough ? '' : 'warn')
+    + raceMkChipHtml(t('race_mk_task_a_stat').replace('{n}', String(mk.aTasks)), '')
+    + '</div>';
+  if (full) {
+    // 已达上限：挑战照旧可以玩，但要说清"不再增加次数"，免得学员以为额度丢了
+    html += '<div style="font-size:11.5px;color:#8a5a00;margin-top:2px;line-height:1.6;">'
+      + escapeHtml(t('race_mk_task_full_note').replace('{cap}', String(mk.cap))) + '</div>';
+  }
   if (!aEnough) {
     // 资格不够：明说无法开启 + 指路错题本（2026-11-12 学员反馈：不直观、容易想放弃）
     html += '<div style="font-size:11.5px;color:#c0392b;margin-top:8px;line-height:1.6;">' + t('race_mk_task_a_poor') + '</div>';
@@ -15625,30 +15700,44 @@ function renderRaceMkTask() {
     // 当日失败冷却：按钮收起，只留「明天再来」的提示
     html += '<div style="font-size:11.5px;color:#8d8377;margin-top:8px;line-height:1.6;">' + t('race_mk_task_a_cool') + '</div>';
   } else {
-    html += '<button class="action-btn primary" style="width:100%;margin-top:12px;" onclick="raceMkATaskBegin()">🎯 ' + t('race_mk_task_go') + '</button>';
+    html += '<button class="action-btn primary" style="width:100%;margin-top:12px;" onclick="raceMkATaskBegin()">' + t('race_mk_task_go') + '</button>';
   }
   // 一键进错题本（2026-11-10）：复习入口就在任务旁边，少一跳完成难度就低一分
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="wrongOpenSrc(\'manual\')">' + t('race_mk_task_a_go') + '</button>';
-  html += '</div>';
+  html += '</div></div>';
   // 任务B · 模块挑战
-  html += '<div class="q-card">';
-  html += raceMkTaskBannerHtml(t('race_mk_task_tag_b'), t('race_mk_task_b_name'));
-  html += '<div style="font-size:12px;color:#666;margin-top:4px;line-height:1.6;">' + t('race_mk_task_b_desc')
+  var modDone = 0, modTotal = 0, i;
+  for (i = 0; i < RACE_SECTIONS.length; i++) {
+    if (RACE_SECTIONS[i].key === 'all') continue;
+    modTotal++;
+    if (mk.mods && mk.mods[RACE_SECTIONS[i].key]) modDone++;
+  }
+  var bState = en ? (modDone + '/' + modTotal + ' done') : ('已完成 ' + modDone + '/' + modTotal);
+  html += '<div class="q-card" style="padding:0;overflow:hidden;">';
+  html += raceMkTaskHeadHtml('2', t('race_mk_task_b_name'), bState, modDone < modTotal ? 'ready' : 'mute');
+  html += '<div style="padding:14px;">';
+  html += '<div style="font-size:12px;color:#666;line-height:1.65;">' + t('race_mk_task_b_desc')
     .replace('{n}', String(RACE_MK_MOD_N)).replace('{m}', String(RACE_MK_MOD_PASS)) + '</div>';
-  for (var i = 0; i < RACE_SECTIONS.length; i++) {
+  if (full) {
+    html += '<div style="font-size:11.5px;color:#8a5a00;margin-top:8px;line-height:1.6;">'
+      + escapeHtml(t('race_mk_task_full_note').replace('{cap}', String(mk.cap))) + '</div>';
+  }
+  for (i = 0; i < RACE_SECTIONS.length; i++) {
     var s = RACE_SECTIONS[i];
     if (s.key === 'all') continue;
     var done = !!(mk.mods && mk.mods[s.key]);
-    html += '<div style="display:flex;align-items:center;gap:9px;padding:7px 0;' + (i > 1 ? 'border-top:1px dashed #eef1f4;' : '') + '">';
-    html += '<div style="flex:1;min-width:0;font-size:13px;font-weight:600;">' + s.icon + ' ' + escapeHtml(en ? s.en : s.cn) + '</div>';
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;' + (i > 1 ? 'border-top:1px solid #F0F3F6;' : '') + '">';
+    html += '<span style="flex:none;font-size:17px;line-height:1;">' + s.icon + '</span>';
+    html += '<span style="flex:1;min-width:0;font-size:13.5px;font-weight:600;color:#000;">' + escapeHtml(en ? s.en : s.cn) + '</span>';
     if (done) {
-      html += '<div style="font-size:12px;color:#2e7d32;font-weight:600;">' + t('race_mk_task_done') + '</div>';
+      html += '<span style="flex:none;font-size:11.5px;font-weight:700;color:#1b5e20;background:#E8F5E9;'
+        + 'border-radius:999px;padding:3px 9px;white-space:nowrap;">' + t('race_mk_task_done') + '</span>';
     } else {
-      html += '<button class="action-btn secondary" style="font-size:12px;padding:5px 14px;" onclick="raceMkTaskBegin(\'' + s.key + '\')">🎯 ' + t('race_mk_task_go') + '</button>';
+      html += '<button class="action-btn secondary" style="font-size:12px;padding:5px 14px;margin:0;" onclick="raceMkTaskBegin(\'' + s.key + '\')">' + t('race_mk_task_go') + '</button>';
     }
     html += '</div>';
   }
-  html += '</div>';
+  html += '</div></div>';
   html += '<button class="action-btn secondary" style="width:100%;" onclick="goBack()">' + (en ? 'Back' : '返回') + '</button>';
   html += '</div>';
   return html;
@@ -20967,6 +21056,8 @@ function adminGoToBank(bank) {
   adminState.bank = bank;
   adminState.section = 'all';
   adminState.search = '';
+  adminState.qPage = 1;
+  adminState.qTypeFilter = 'all';
   adminState.bankScrollY = 0; // different bank -> start at the top
   navigate('adminBank');
 }
@@ -21027,6 +21118,21 @@ function adminRoundTakenCount(pk, sess) {
     return n;
   } catch (e) { return 0; }
 }
+// 考试场次卡片的展开状态：默认只展开「进行中」的那一场，其余收起。
+// 折叠只切 DOM class（不整页重绘）—— 别的卡片里填到一半的内容不会丢。
+function adminExamCardIsOpen(pk, ws) {
+  var m = adminState.examCardOpen;
+  if (m && typeof m === 'object' && Object.prototype.hasOwnProperty.call(m, pk)) return !!m[pk];
+  return ws === 'open';
+}
+function adminToggleExamCard(pk) {
+  var card = document.getElementById('examCard_' + pk);
+  var on = card ? !card.classList.contains('open') : true;
+  if (!adminState.examCardOpen || typeof adminState.examCardOpen !== 'object') adminState.examCardOpen = {};
+  adminState.examCardOpen[pk] = on;
+  if (card) card.classList.toggle('open', on);
+}
+
 function renderAdminExams() {
   if (!adminState.authenticated) return renderAdminLogin();
   var cfg = autoCloseExpiredExams(); // 过了截止时间的已发布考试 → 自动关闭
@@ -21092,10 +21198,25 @@ function renderAdminExams() {
     var curStart = (sess ? toLocalInputValue(sess.startTime) : '') || defaultStartInput(0);
     var curEnd = (sess ? toLocalInputValue(sess.endTime) : '') || defaultEndInput(DEFAULT_WINDOW_MIN);
 
-    html += '<div class="admin-bank-card">';
-    html += '<h3>' + formalPaperLabel(pk) + ' ' + statusBadge + '</h3>';
-    html += '<div class="count">' + (state.lang === 'en' ? cnt + ' questions' : cnt + ' 题') + '</div>';
-    html += '<div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">';
+    // 折叠：4 场全展开时一屏放不下，先看摘要，点开再改。
+    // 默认只展开「进行中」的那一场（管理员进来多数是看正在考的）。
+    var wsCard = !sess ? '' : (sess.status === 'closed' ? 'closed' : examWindowState(sess));
+    var cardOpen = adminExamCardIsOpen(pk, wsCard);
+    function _fb(t2) { return t2 ? String(t2).replace('T', ' ').slice(5) : ''; }
+    var winTxt = sess
+      ? (_fb(curStart) + ' → ' + _fb(curEnd) + ' · ' + curLimit + (state.lang === 'en' ? ' min' : ' 分钟'))
+      : (state.lang === 'en' ? 'not set yet' : '尚未设置');
+
+    html += '<div class="admin-bank-card exam-card' + (cardOpen ? ' open' : '') + '" id="examCard_' + pk + '">';
+    html += '<div class="exam-card-head" onclick="adminToggleExamCard(\'' + pk + '\')">';
+    html += '<div style="min-width:0;"><div class="ec-title">' + formalPaperLabel(pk) + ' ' + statusBadge + '</div>';
+    html += '<div class="ec-sub">' + (state.lang === 'en' ? cnt + ' questions' : cnt + ' 题')
+      + (curTitle ? ' · ' + escapeHtml(curTitle) : '') + '</div></div>';
+    html += '<span class="ec-sum">' + escapeHtml(winTxt) + '</span>';
+    html += '<svg class="ec-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';
+    html += '</div>';
+    html += '<div class="exam-card-body">';
+    html += '<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">';
     html += '<input id="fx_title_' + pk + '" type="text" placeholder="' + (state.lang === 'en' ? 'Exam title (e.g. Sept Day-21 Formal Exam)' : '考试标题（如：9月21天培训正式考试）') + '" value="' + escapeHtml(curTitle) + '" style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;" oninput="adminRecomputeSizeBadge(\'' + pk + '\')">';
     html += '<div style="display:flex;gap:8px;">';
     html += '<input id="fx_limit_' + pk + '" type="number" min="5" max="240" value="' + curLimit + '" style="flex:0 0 90px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;" title="' + (state.lang === 'en' ? 'Time limit (minutes)' : '限时（分钟）') + '">';
@@ -21147,7 +21268,7 @@ function renderAdminExams() {
       html += '<button class="nav-btn secondary" style="flex:0 0 auto;padding:10px 12px;font-size:13px;color:#c0392b;" onclick="adminDeleteExam(\'' + pk + '\')">🗑 ' + (state.lang === 'en' ? 'Delete' : '删除') + '</button>';
     }
     html += '</div>';
-    html += '</div></div>';
+    html += '</div></div></div>'; // /flex, /exam-card-body, /exam-card
   }
 
   html += '<p style="font-size:12px;color:var(--text-light);margin-top:10px;">' + (state.lang === 'en'
@@ -22147,6 +22268,22 @@ function renderAdminDashboard() {
     h += '<div class="sync-note" style="margin:-8px 0 14px;">'
       + (en ? 'Local list may be incomplete. ' : '本地列表可能不完整。 ')
       + '<button class="admin-mini-btn" onclick="adminForceFullSync()">' + (en ? 'Full re-sync' : '立即全量重拉') + '</button></div>';
+  }
+
+  // 空态引导：0 学员时四个 KPI 全是 0，容易被当成"系统坏了"。
+  // 这里直接给出下一步动作：拉云端数据 / 维护有效工号。
+  if (m.total === 0) {
+    h += '<div class="ap-card" style="margin-bottom:14px;border-color:#C7DDF3;background:#F7FBFF;">'
+      + '<div class="ap-card-b" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'
+      + '<div style="flex:1;min-width:240px;">'
+      + '<div style="font-size:14px;font-weight:600;color:var(--a-ink);">' + (en ? 'No student data yet' : '还没有学员数据') + '</div>'
+      + '<div class="ap-sub" style="margin:4px 0 0;">' + (en
+        ? 'Records upload automatically the first time a student signs in, practises or submits. If students are already using the platform, pull the cloud data once; if the roster has never been imported, start there.'
+        : '学员首次登录、刷题或交卷时会自动上传学习记录。如果已经有学员在使用，先拉取一次云端数据；如果名册还没导入，从「有效工号」开始。') + '</div>'
+      + '</div>'
+      + '<button class="ap-btn pri" onclick="adminForceFullSync()">' + (en ? 'Pull cloud data' : '立即拉取云端数据') + '</button>'
+      + '<button class="ap-btn" onclick="adminState.studentsTab=\'roster\';navigate(\'adminStudents\')">' + (en ? 'Edit valid IDs' : '维护有效工号') + '</button>'
+      + '</div></div>';
   }
 
   h += '<div class="ap-kpis">';
@@ -25756,7 +25893,16 @@ function renderAdminBank() {
   }
   h += '<div class="ap-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>'
     + '<input type="text" id="adminSearch" value="' + escapeHtml(adminState.search) + '" autocomplete="off" placeholder="'
-    + (en ? 'Search questions…' : '搜索题目…') + '" oninput="adminState.search=this.value;adminUpdateList()"></div>';
+    + (en ? 'Search questions…' : '搜索题目…') + '" oninput="adminState.search=this.value;adminState.qPage=1;adminUpdateList()"></div>';
+  // 题型筛选：只在大题库（>100 题）时才值得占位
+  if (questions.length > 100) {
+    h += '<select class="ap-sel" title="' + (en ? 'Filter by type' : '按题型筛选') + '" onchange="adminState.qTypeFilter=this.value;adminState.qPage=1;render()">';
+    h += '<option value="all"' + (!adminState.qTypeFilter || adminState.qTypeFilter === 'all' ? ' selected' : '') + '>' + (en ? 'All types' : '全部题型') + '</option>';
+    h += '<option value="single"' + (adminState.qTypeFilter === 'single' ? ' selected' : '') + '>' + t('type_single') + '</option>';
+    h += '<option value="multiple"' + (adminState.qTypeFilter === 'multiple' ? ' selected' : '') + '>' + t('type_multiple') + '</option>';
+    h += '<option value="fill"' + (adminState.qTypeFilter === 'fill' ? ' selected' : '') + '>' + t('type_fill') + '</option>';
+    h += '</select>';
+  }
   h += '<span class="ap-count">' + (en
     ? filtered.length + ' / ' + questions.length + ' shown'
     : (adminState.search ? '筛出 ' + filtered.length + ' / ' + questions.length + ' 题' : '共 ' + questions.length + ' 题')) + '</span>';
@@ -27044,10 +27190,17 @@ function adminFilteredQuestions(questions) {
   if (adminState.bank === 'manual' && adminState.section !== 'all') {
     filtered = filtered.filter(function(q) { return q.section === adminState.section; });
   }
+  // 题型筛选：581 题里单找填空/多选时，比逐页翻快得多
+  if (adminState.qTypeFilter && adminState.qTypeFilter !== 'all') {
+    var tf = adminState.qTypeFilter;
+    filtered = filtered.filter(function(q) { return (q.type || 'single') === tf; });
+  }
   if (adminState.search) {
     var kw = adminState.search.toLowerCase();
     filtered = filtered.filter(function(q) {
       if (q.question && q.question.toLowerCase().indexOf(kw) >= 0) return true;
+      if (q.question_cn && String(q.question_cn).toLowerCase().indexOf(kw) >= 0) return true;
+      if (q.question_en && String(q.question_en).toLowerCase().indexOf(kw) >= 0) return true;
       if (q.id && q.id.toLowerCase().indexOf(kw) >= 0) return true;
       if (q.explanation && q.explanation.toLowerCase().indexOf(kw) >= 0) return true;
       return false;
@@ -27096,12 +27249,55 @@ function adminAnswerPreviewHtml(q) {
   return html + '</div>';
 }
 
+// 题库列表每页题数。581 题一次全渲染，滚动找题和浏览器重排都吃力；
+// 分 50 题一页后单页 DOM 量降到 1/12，翻页也只重画列表容器，不整页刷新。
+var ADMIN_Q_PER_PAGE = 50;
+
+function adminQPageGo(p) {
+  var n = parseInt(p, 10);
+  if (!isFinite(n) || n < 1) n = 1;
+  adminState.qPage = n;
+  adminUpdateList();
+  // 翻页后回到列表顶部（滚动发生在 .adm-scroll 容器内）
+  try {
+    var el = document.getElementById('adminQList');
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start' });
+  } catch (e) {}
+}
+
+function adminQPagerHtml(page, pages, total, en) {
+  var from = (page - 1) * ADMIN_Q_PER_PAGE + 1;
+  var to = Math.min(page * ADMIN_Q_PER_PAGE, total);
+  function btn(p) {
+    return '<button class="ap-pg' + (p === page ? ' on' : '') + '" onclick="adminQPageGo(' + p + ')">' + p + '</button>';
+  }
+  var h = '<div class="ap-pager">';
+  h += '<button class="ap-pg"' + (page <= 1 ? ' disabled' : '') + ' onclick="adminQPageGo(' + (page - 1) + ')">\u2039 ' + (en ? 'Prev' : '\u4e0a\u4e00\u9875') + '</button>';
+  var lo = Math.max(1, page - 2), hi = Math.min(pages, page + 2);
+  if (lo > 1) { h += btn(1); if (lo > 2) h += '<span class="ap-pg-dots">\u2026</span>'; }
+  for (var p = lo; p <= hi; p++) h += btn(p);
+  if (hi < pages) { if (hi < pages - 1) h += '<span class="ap-pg-dots">\u2026</span>'; h += btn(pages); }
+  h += '<button class="ap-pg"' + (page >= pages ? ' disabled' : '') + ' onclick="adminQPageGo(' + (page + 1) + ')">' + (en ? 'Next' : '\u4e0b\u4e00\u9875') + ' \u203a</button>';
+  h += '<span class="ap-pg-info">' + from + '\u2013' + to + ' / ' + total + '</span>';
+  h += '</div>';
+  return h;
+}
+
 function adminRenderQList(questions) {
   var filtered = adminFilteredQuestions(questions);
   var en = state.lang === 'en';
+  var total = filtered.length;
+  var pages = Math.max(1, Math.ceil(total / ADMIN_Q_PER_PAGE));
+  var page = parseInt(adminState.qPage, 10) || 1;
+  if (page < 1) page = 1;
+  if (page > pages) page = pages;
+  adminState.qPage = page; // 归一化：删题/改筛选后页码越界要落回有效值
+  var start = (page - 1) * ADMIN_Q_PER_PAGE;
+  var slice = filtered.slice(start, start + ADMIN_Q_PER_PAGE);
   var html = '';
-  for (var i = 0; i < filtered.length; i++) {
-    var q = filtered[i];
+  for (var i = 0; i < slice.length; i++) {
+    var q = slice[i];
+    var gi = start + i; // 全局序号：↑/↓ 的可用性按全库判断，不是按本页
     // 列表直接显示中文题干（英文作为第二行备用信息），管理员不用点进去就能扫内容
     var qCn = q.question_cn || legacyCnStem(q.question);
     var qEn = q.question_en || '';
@@ -27115,16 +27311,17 @@ function adminRenderQList(questions) {
     if (qEn) html += '<div class="q-en" title="' + escapeHtml(qEn) + '">' + escapeHtml(qEn) + '</div>';
     html += adminAnswerPreviewHtml(q);
     html += '<div class="q-actions">';
-    html += '<button class="move"' + (i === 0 ? ' disabled' : '') + ' onclick="adminMoveQuestion(\'' + q.id + '\',-1)" title="' + (en ? 'Move up' : '上移') + '">↑</button>';
-    html += '<button class="move"' + (i === filtered.length - 1 ? ' disabled' : '') + ' onclick="adminMoveQuestion(\'' + q.id + '\',1)" title="' + (en ? 'Move down' : '下移') + '">↓</button>';
+    html += '<button class="move"' + (gi === 0 ? ' disabled' : '') + ' onclick="adminMoveQuestion(\'' + q.id + '\',-1)" title="' + (en ? 'Move up' : '上移') + '">↑</button>';
+    html += '<button class="move"' + (gi === total - 1 ? ' disabled' : '') + ' onclick="adminMoveQuestion(\'' + q.id + '\',1)" title="' + (en ? 'Move down' : '下移') + '">↓</button>';
     html += '<button onclick="adminEdit(\'' + q.id + '\')">' + (en ? 'Edit' : '编辑') + '</button>';
     html += '<button onclick="adminDuplicate(\'' + q.id + '\')">' + (en ? 'Copy' : '复制') + '</button>';
     html += '<button class="delete" onclick="adminDelete(\'' + q.id + '\')">' + (en ? 'Delete' : '删除') + '</button>';
     html += '</div></div>';
   }
-  if (filtered.length === 0) {
+  if (total === 0) {
     html += '<div class="empty-state"><div class="icon">📝</div><p>' + (en ? 'No questions found' : '未找到题目') + '</p></div>';
   }
+  if (pages > 1) html += adminQPagerHtml(page, pages, total, en);
   return html;
 }
 
@@ -27606,6 +27803,48 @@ function adminDiscardDraft(bank, id) {
   render();
 }
 
+// 编辑页实时校验：读当前 DOM，把「保存时会失败的原因」提前列在按钮上方。
+// 保存失败时也调它（force），比一闪而过的 toast 更容易看到。
+function adminEditValidate() {
+  var el = document.getElementById('edValidate');
+  if (!el) return true; // 不在编辑页
+  var en = state.lang === 'en';
+  var cnEl = document.getElementById('qTextCn');
+  var enEl = document.getElementById('qTextEn');
+  var cn = cnEl ? cnEl.value : '';
+  var qe = enEl ? enEl.value : '';
+  var typeEl = document.getElementById('qType');
+  var type = typeEl ? typeEl.value : 'single';
+  var cur = adminReadCurrentOptions();
+  var msgs = [];
+
+  if (!String(cn).trim() && !String(qe).trim()) msgs.push(en ? 'Question text is empty' : '题干为空');
+
+  if (type === 'fill') {
+    var anyAns = false;
+    for (var i = 0; i < cur.items.length; i++) if (String(cur.items[i].text || '').trim()) anyAns = true;
+    if (!anyAns) msgs.push(en ? 'No acceptable answer' : '填空答案为空');
+  } else {
+    var filled = 0, correct = 0, correctEmpty = 0;
+    for (var j = 0; j < cur.items.length; j++) {
+      var it = cur.items[j] || {};
+      var has = !!(String(it.cn || '').trim() || String(it.en || '').trim());
+      if (has) filled++;
+      if (it.correct) { correct++; if (!has) correctEmpty++; }
+    }
+    if (filled < 2) msgs.push(en ? 'Fewer than 2 options' : '不足 2 个选项');
+    if (!correct) msgs.push(en ? 'No correct answer marked' : '未标记正确答案');
+    else if (correctEmpty) msgs.push(en ? 'A correct option has no text' : '正确选项的文字为空');
+  }
+
+  var ok = msgs.length === 0;
+  el.className = 'ed-validate ' + (ok ? 'ok' : 'warn');
+  el.innerHTML = ok
+    ? '✓ ' + (en ? 'Complete — ready to save' : '内容完整，可以保存')
+    : '⚠️ ' + (en ? 'Fix before saving: ' : '保存前需补全：') + escapeHtml(msgs.join(' · '));
+  return ok;
+}
+
 function renderAdminEdit() {
   if (!adminState.authenticated) return renderAdminLogin();
 
@@ -27673,7 +27912,7 @@ function renderAdminEdit() {
   }
 
   html += '<div class="ed-grid">';
-  html += '<div class="ed-form-col"><div class="admin-edit-form" oninput="adminDraftAutoSave();adminEditPreviewRefresh()" onchange="adminDraftAutoSave();adminEditPreviewRefresh()">';
+  html += '<div class="ed-form-col"><div class="admin-edit-form" oninput="adminDraftAutoSave();adminEditPreviewRefresh();adminEditValidate()" onchange="adminDraftAutoSave();adminEditPreviewRefresh();adminEditValidate()">';
 
   // 编号信息一行放下（ID 只读 · 序号 · 题型）——原来纵排三个字段占了近半屏，
   // 批量整理题库时每题都要滚过一遍，收成一行后题干直接进入视野。
@@ -27725,6 +27964,9 @@ function renderAdminEdit() {
   html += '<textarea id="qExplanationCn" style="min-height:60px;">' + escapeHtml(eSplit.cn) + '</textarea>';
   html += '<label>' + (state.lang === 'en' ? 'Explanation — English' : '答案解析 — 英文') + '</label>';
   html += '<textarea id="qExplanationEn" style="min-height:60px;">' + escapeHtml(eSplit.en) + '</textarea>';
+
+  // 保存前的实时校验（题干 / 选项数 / 正确答案），边填边看，不用点了保存才知道缺什么
+  html += '<div class="ed-validate" id="edValidate"></div>';
 
   // Buttons (Batch-3: labels carry the keyboard shortcut hints)
   html += '<div class="ed-actions">';
@@ -27792,9 +28034,10 @@ function adminAttachEditPreview(root) {
   var form = root && root.querySelector ? root.querySelector('.admin-edit-form') : null;
   if (!form) return;
   adminEditPreviewRefresh();
+  adminEditValidate();
   if (form._pvObs) { try { form._pvObs.disconnect(); } catch (e0) {} form._pvObs = null; }
   try {
-    var mo = new MutationObserver(function () { adminEditPreviewRefresh(); });
+    var mo = new MutationObserver(function () { adminEditPreviewRefresh(); adminEditValidate(); });
     mo.observe(form, { childList: true, subtree: true });
     form._pvObs = mo;
   } catch (e) {}
@@ -28058,8 +28301,9 @@ function adminSaveQuestion(saveThenNext) {
   // draft, the validation and the stored question can never disagree.
   var snap = adminDraftSnapshot();
   if (!snap) return;
+  var wasNew = !!adminState.isNew; // 新建保存后要跳到最后一页，否则新题在末页看不见
   adminSaveBtnBusy(true);
-  var fail = function(msg) { adminSaveBtnBusy(false); adminToast(msg); return false; };
+  var fail = function(msg) { adminSaveBtnBusy(false); adminToast(msg); adminEditValidate(); return false; };
   var questionCn = snap.questionCn;
   var questionEn = snap.questionEn;
 
@@ -28109,6 +28353,7 @@ function adminSaveQuestion(saveThenNext) {
   return adminSaveData(data).then(function(ok) {
     if (!ok) { adminSaveBtnBusy(false); return false; } // conflict — draft kept, alert shown
     adminDraftClear(bank, newQ.id); // stored for real — the draft is done its job
+    if (wasNew) adminState.qPage = 999999; // 归一化后落在末页，刚好是新题所在的那一页
     if (ok === 'pending') {
       adminToast(state.lang === 'en'
         ? '\u2705 Saved on this device. Syncing to students in the background \u2014 no need to keep this page open.'
