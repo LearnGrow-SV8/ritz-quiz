@@ -405,7 +405,8 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .action-btn.secondary { background:#fff; color:var(--primary); border:1px solid var(--border); }
 .action-btn:active { transform:scale(0.98); }
 
-.stats-summary { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:20px; }
+/* 2026-11-12: 统计卡改自适应一行（4 张卡不再 3+1 折行） */
+.stats-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:20px; }
 .stat-card { background:var(--card-bg); padding:16px 12px; border-radius:10px; text-align:center; box-shadow:var(--shadow); border:1px solid var(--border); }
 .stat-card .num { font-size:22px; font-weight:700; color:var(--primary); }
 .stat-card .label { font-size:11px; color:var(--text-light); margin-top:2px; }
@@ -800,6 +801,44 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .adm-tb-btn:hover { background:#F7F9FB; border-color:var(--a-blue-d); }
 .adm-tb-btn svg { width:16px; height:16px; stroke:var(--a-i2); fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
 .adm-content { flex:1; padding:24px 26px 70px; }
+/* --- 固定页头槽（2026-11-12）：页面标题 + 主筛选放滚动区外，结构隔离固定，🔴 绝不用 sticky --- */
+.adm-pagehead { flex:0 0 auto; padding:16px 26px 0; background:transparent; }
+.adm-pagehead .ap-head { margin-bottom:10px; }
+.adm-pagehead .ap-bar { margin-bottom:10px; }
+.adm-pagehead .ap-sub { display:none; }
+.adm-pagehead + .adm-scroll .adm-content { padding-top:14px; }
+/* 场次日历弹层（成绩与评分） */
+.sess-calpop { position:absolute; top:calc(100% + 6px); left:0; z-index:40; background:#fff; border:1px solid var(--a-line);
+  border-radius:12px; box-shadow:0 10px 28px rgba(20,40,80,.16); padding:12px 14px; width:320px; max-width:calc(100vw - 80px); }
+.sess-calpop .sc-title { font-size:12.5px; font-weight:600; color:var(--a-ink); display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.sess-calpop .sc-title button { border:1px solid var(--a-line); background:#fff; border-radius:6px; width:24px; height:24px;
+  font-size:13px; cursor:pointer; line-height:1; color:var(--a-i2); }
+.sess-calpop .sc-title button:hover { border-color:var(--a-blue-d); background:#FAFCFE; }
+.sess-cal { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+.sess-cal .sc-h { font-size:10.5px; color:var(--a-i4); text-align:center; padding:4px 0; }
+.sess-cal .sc-d { position:relative; text-align:center; font-size:12px; padding:6px 0; border-radius:7px; color:var(--a-i3); }
+.sess-cal .sc-d.pad { visibility:hidden; }
+.sess-cal .sc-d.has { background:var(--a-blue-soft,#EAF2FB); color:var(--a-ink); font-weight:600; cursor:pointer; }
+.sess-cal .sc-d.has:hover { background:var(--a-blue,#C7DDF3); }
+.sess-cal .sc-d.has::after { content:attr(data-n); position:absolute; top:0; right:3px; font-size:9px; color:#1f6fb2; font-weight:500; }
+.sess-cal .sc-d.sel { outline:2px solid var(--a-blue-d,#8FB8E4); }
+.sess-cal-empty { font-size:11.5px; color:var(--a-i4); margin-top:8px; }
+.sess-day-list { margin-top:8px; border-top:1px solid var(--a-line2); padding-top:8px; max-height:180px; overflow-y:auto; }
+.sess-day-item { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--a-ink); padding:7px 9px; border-radius:8px; cursor:pointer; }
+.sess-day-item:hover { background:#F2F6FB; }
+.sess-day-item .n { margin-left:auto; font-size:11px; color:var(--a-i4); }
+/* 学员名单列宽拖动手柄 */
+.stu-table thead th { position:relative; }
+.stu-table thead th .col-grip { position:absolute; right:0; top:0; width:9px; height:100%; cursor:col-resize; user-select:none; z-index:3; }
+.stu-table thead th .col-grip::after { content:''; position:absolute; right:3px; top:22%; height:56%; width:2px; background:#D6DBE1; border-radius:2px; }
+.stu-table thead th .col-grip:hover::after { background:var(--a-blue-d,#8FB8E4); }
+/* 题库浏览器（试卷编排右栏）紧凑化：默认只显示题干一行，答案预览悬停才展开 */
+.pc-bank-item { padding:7px 10px; margin-bottom:6px; }
+.pc-bank-item .q-text { font-size:12.5px; }
+.pc-bank-item .q-ans { display:none; }
+.pc-bank-item:hover .q-ans { display:flex; flex-wrap:wrap; max-width:none; margin-top:4px; }
+.pc-bank-item .pc-add-btn { opacity:.5; }
+.pc-bank-item:hover .pc-add-btn { opacity:1; }
 
 /* --- 页签组（学员管理 / 部门管理 的子页面切换，并排在页面顶部）--- */
 .adm-tabs { display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin:0 0 18px; padding:4px;
@@ -7892,7 +7931,7 @@ function adminRosterTableData() {
     var prev = byEmp[emp];
     if (!prev || (s.ts || 0) > (prev.ts || 0)) {
       byEmp[emp] = { key: recs[i].key, cn: String(s.cn || ''), en: String(s.en || ''), ts: s.ts || 0, nv: String(s.needsVerify || ''),
-        div: String(s.div || ''), divEn: String(s.divEn || ''), dept: String(s.dept || ''), exams: (recs[i].exams || []).length };
+        div: String(s.div || ''), divEn: String(s.divEn || ''), dept: String(s.dept || ''), deptEn: String(s.deptEn || ''), exams: (recs[i].exams || []).length };
     }
   }
   var out = [], seen = {};
@@ -8033,7 +8072,101 @@ function adminRosterReadd(emp) {
   adminRosterMsg(en ? 'Saving…' : '正在保存…');
   adminPublishNameRoster(rows).then(function (ok) {
     adminRosterMsg(ok ? (en ? '✅ ' + e + ' is back on the list.' : '✅ 工号 ' + e + ' 已重新加入名单。') : (en ? '⚠️ Failed — try again.' : '⚠️ 操作失败，请重试。'), !ok);
+    // 重新加入 = 同时解除黑名单（否则学员端还是注册不进来）
+    if (ok) { try { adminBlacklistRemove(e); } catch (eB) {} }
     render();
+  });
+}
+// ===== 统一名单：列宽记忆 / 行内编辑 / 删除账号 / 预留范围（2026-11-12）=====
+// 列宽：存 localStorage 'adminRosterColW'（7 列 px 数组），下次进入按上次的尺寸显示
+function adminRosterColWs() {
+  try { var v = JSON.parse(localStorage.getItem('adminRosterColW') || '[]'); if (Array.isArray(v)) return v; } catch (e) {}
+  return [];
+}
+function adminColGrip(e, idx) {
+  e.preventDefault(); e.stopPropagation();
+  var ths = document.querySelectorAll('.stu-table thead th');
+  if (!ths || ths.length < 7) return;
+  var ws = adminRosterColWs();
+  var firstSet = ws.length < 7;
+  if (firstSet) {
+    ws = [];
+    for (var i = 0; i < 7; i++) ws.push(Math.round(ths[i].getBoundingClientRect().width) || 120);
+  }
+  var tbl = document.querySelector('.stu-table');
+  if (tbl && !tbl.querySelector('colgroup')) {
+    var cg = document.createElement('colgroup');
+    for (var k2 = 0; k2 < 7; k2++) {
+      var col = document.createElement('col');
+      if (ws[k2]) col.style.width = ws[k2] + 'px';
+      cg.appendChild(col);
+    }
+    tbl.insertBefore(cg, tbl.firstChild);
+    tbl.style.tableLayout = 'fixed';
+  }
+  var cols = tbl ? tbl.querySelectorAll('colgroup col') : null;
+  var startW = ws[idx], startX = e.clientX;
+  function mv(ev) {
+    ws[idx] = Math.max(64, Math.round(startW + ev.clientX - startX));
+    if (cols && cols.length === 7) for (var k = 0; k < 7; k++) if (ws[k]) cols[k].style.width = ws[k] + 'px';
+  }
+  function up() {
+    document.removeEventListener('mousemove', mv);
+    document.removeEventListener('mouseup', up);
+    try { localStorage.setItem('adminRosterColW', JSON.stringify(ws)); } catch (e2) {}
+    render();
+  }
+  document.addEventListener('mousemove', mv);
+  document.addEventListener('mouseup', up);
+}
+// 行内展开/收起「编辑基本资料」表单（复用旧学员列表的 se* 三写链路）
+function adminRosterEditToggle(key) {
+  adminState.editStudent = adminState.editStudent === key ? '' : key;
+  render();
+}
+// 删除账号：移出名册（进「被拦截」筛选）+ 加入黑名单，学员端无法再用该工号注册。
+// 历史记录保留（无云端删除权限，也不该删）。「重新加入」会同步解除黑名单。
+function adminRosterDeleteAccount(emp) {
+  var en = state.lang === 'en';
+  var e = normEmpNo(emp);
+  if (!e) return;
+  if (!confirm(en
+    ? 'Delete this account?\n\n· The ID leaves the roster and is BLACKLISTED — it cannot register again.\n· All existing history is kept.\n· Use "Re-add" to undo.'
+    : '确定删除该账号？\n\n· 工号会移出名册并加入黑名单，之后不能用这个工号重新注册。\n· 历史记录全部保留。\n· 误删可用「重新加入」撤销。')) return;
+  adminBlacklistAdd(e, en ? 'deleted by admin' : '管理员删除账号');
+  var nr = loadNameRoster(), rows = {};
+  for (var k in (nr.rows || {})) rows[k] = { cn: nr.rows[k].cn || '', en: nr.rows[k].en || '' };
+  delete rows[e];
+  adminRosterMsg(en ? 'Deleting…' : '正在删除…');
+  adminPublishNameRoster(rows).then(function (ok) {
+    adminRosterMsg(ok
+      ? (en ? '🗑 Account deleted — see the "Blocked" filter.' : '🗑 账号已删除，可在「被拦截」筛选里查看。')
+      : (en ? '⚠️ Publish failed — retry.' : '⚠️ 发布失败，请重试。'), !ok);
+    render();
+  });
+}
+// 预留工号按范围批量添加：区间内不在名册的工号以「预留」加入
+function adminRosterAddRange() {
+  var en = state.lang === 'en';
+  var msgEl = document.getElementById('rsvRangeMsg');
+  var a = parseInt((document.getElementById('rsvFrom') || {}).value, 10);
+  var b = parseInt((document.getElementById('rsvTo') || {}).value, 10);
+  function say(m, bad) { if (msgEl) { msgEl.textContent = m; msgEl.style.color = bad ? '#b3261e' : '#2e7d32'; } }
+  if (!isFinite(a) || !isFinite(b) || b < a) { say(en ? 'Enter a valid start and end ID.' : '请输入有效的起止工号。', true); return; }
+  if (b - a > 500) { say(en ? 'Range too large — max 500 IDs at a time.' : '一次最多添加 500 个工号。', true); return; }
+  var nr = loadNameRoster(), rows = {};
+  for (var k in (nr.rows || {})) rows[k] = { cn: nr.rows[k].cn || '', en: nr.rows[k].en || '' };
+  var added = 0;
+  for (var i = a; i <= b; i++) {
+    var e2 = normEmpNo(String(i));
+    if (!e2) continue;
+    if (!rows[e2]) { rows[e2] = { cn: '', en: '' }; added++; }
+  }
+  if (!added) { say(en ? 'These IDs are already on the roster.' : '该范围内的工号已在名册中。', true); return; }
+  say(en ? 'Publishing…' : '正在保存…');
+  adminPublishNameRoster(rows).then(function (ok) {
+    if (ok) { say(en ? '✅ Added ' + added + ' reserved ID(s).' : '✅ 已添加 ' + added + ' 个预留工号。', false); render(); }
+    else say(en ? 'Publish failed — check the cloud connection and retry.' : '发布失败，请检查云端连接后重试。', true);
   });
 }
 function adminRosterSetReason(emp, why) {
@@ -14692,22 +14825,9 @@ function renderRaceCalendar() {
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">🔁 ' + t('race_study_cal') + '</button>';
   // 看完自己的打卡记录，顺手就能看自己在榜上第几（页面底部，次级入口）
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
-  // 补签机会与任务卡（日历页底部，2026-11-11 领导八调文案）：标题 + 简述 + 状态行 + 按钮，
-  // 四个元素各说一件事，不再堆解释行。
-  if (calConf.id && calMk) {
-    html += '<div class="q-card" style="border:1px solid #f0b357;background:#fffdf5;margin-top:14px;">';
-    html += '<div style="font-size:14px;font-weight:700;color:#8a5a00;">' + t('race_mk_task_title') + '</div>';
-    html += '<div style="font-size:12px;color:#9a7b4f;margin-top:5px;line-height:1.65;">'
-      + t('race_mk_task_card_desc').replace('{cap}', String(calMk.cap)) + '</div>';
-    html += '<div style="font-size:12.5px;color:#8a5a00;margin-top:8px;font-weight:700;">'
-      + t('race_makeup_left').replace('{n}', String(calMk.left)) + '</div>';
-    // 额度明细（2026-11-12）：只给"剩余"看不出用过几次，补一行「已获得 / 已使用」
-    html += '<div style="font-size:11.5px;color:#9a7b4f;margin-top:3px;line-height:1.6;">'
-      + t('race_mk_used_stat').replace('{a}', String(calMk.allow)).replace('{u}', String(calMk.used)) + '</div>';
-    html += '<button class="action-btn primary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceMkTask\')">'
-      + t('race_mk_task_open') + '</button>';
-    html += '</div>';
-  }
+  // 「补签机会与任务」卡已退役（2026-11-12 领导十一调）：补签入口全部收敛到
+  // 虚线日期弹窗（金框=可补 / 灰框=可赚），弹窗里都有「查看任务与进度」按钮，
+  // 页面底部再放一张卡纯属重复 —— 大多数人滑不到那么低，看到的还以为是另一套入口。
   html += '</div>';
   return html;
 }
@@ -15467,8 +15587,10 @@ function renderRaceMakeup() {
         : (isA ? t('race_mk_a_fail') : t('race_makeup_fail'))) + '</div>';
     html += '</div>';
     // ② 挑战小结：逐题判定 + 你的作答 + 正确答案 + 解析（2026-11-10），
-    //    做错了也要知道对的是什么，挑战才算真正学到东西（模块挑战 / 任务A挑战共用）
-    if ((isMod || isA) && Array.isArray(mk.results) && mk.results.length) {
+    //    做错了也要知道对的是什么，挑战才算真正学到东西。
+    //    2026-11-12：普通补签挑战（日历补打卡那条线）同样给出小结 —— 平台的目的是
+    //    通过做题巩固知识，任何一次作答都该能复盘，不再只给模块/任务A两条线。
+    if (Array.isArray(mk.results) && mk.results.length) {
       html += '<div class="q-card">';
       html += '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">📋 ' + t('race_mk_mod_review') + '</div>';
       for (var ri2 = 0; ri2 < mk.results.length; ri2++) {
@@ -19754,6 +19876,13 @@ function navigate(page, opts) {
   // editor lands back where the admin left off (not at the top).
   if (prev === 'adminBank' && page !== 'adminBank') {
     try { adminState.bankScrollY = adminScrollY(); } catch (e) {}
+  } else if (prev && String(prev).indexOf('admin') === 0 && page !== prev) {
+    // 管理端通用滚动记忆（2026-11-12 用户要求：所有返回都回到进入前的位置，
+    // 不用重新下拉找）。学员档案/编辑页等二级视图由各自专属逻辑还原，这里记的是页面级。
+    try {
+      adminState.pageScrollY = adminState.pageScrollY || {};
+      adminState.pageScrollY[prev] = adminScrollY();
+    } catch (e) {}
   }
   var grew = false;
   if (!o.replace && prev && prev !== page) {
@@ -19769,6 +19898,11 @@ function navigate(page, opts) {
   if (page === 'adminBank' && prev !== 'adminBank' && adminState.bankScrollY > 0) {
     var y = adminState.bankScrollY;
     setTimeout(function () { try { adminScrollTo(y); } catch (e) {} }, 60);
+  } else if (String(page).indexOf('admin') === 0 && prev !== page
+      && adminState.pageScrollY && (adminState.pageScrollY[page] || 0) > 0) {
+    // 回到管理端某页时还原上次离开时的滚动位置
+    var yAdmin = adminState.pageScrollY[page];
+    setTimeout(function () { try { adminScrollTo(yAdmin); } catch (e) {} }, 60);
   } else if (typeof o.scrollY === 'number') {
     // 侧滑退回来：直接落到原来看到的位置。以前是"先回顶、下一帧再滚回来"，
     // 两次排版正好压在手势动画收尾那一帧上 —— 手感就是"松手之后顿一下"（2026-11-12）。
@@ -22454,6 +22588,8 @@ function renderAdminDashboard() {
     + '<button class="ap-btn pri" onclick="navigate(\'adminExams\')">'
     + '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>' + (en ? 'Publish exam' : '发布考试') + '</button>'
   );
+  // 固定页头分割（2026-11-12）：标题进固定区，KPI 与内容滚动
+  h += '<!--PHSPLIT-->';
 
   if (adminState.cloudStatus === 'partial' || adminState.cloudStatus === 'error') {
     h += '<div class="sync-note" style="margin:-8px 0 14px;">'
@@ -24505,13 +24641,29 @@ function renderAdminReports() {
   }
   sessOrder.sort(function (a, b) { return sessCounts[b].ts - sessCounts[a].ts; });
   if (sessOrder.length > 1) {
-    html += '<div class="tab-bar">';
-    html += '<div class="chip ' + (adminState.reportSession === 'all' ? 'active' : '') + '" onclick="adminState.reportSession=\'all\';render()">🗂 ' + (en ? 'All sessions' : '全部场次') + '</div>';
-    for (var so = 0; so < sessOrder.length && so < 12; so++) {
-      var sk2 = sessOrder[so], sc2 = sessCounts[sk2];
-      var lbl = sc2.title || (syncPaperLabel(sc2.paper) + ' · ' + fmtSyncTime(sc2.ts));
-      html += '<div class="chip ' + (adminState.reportSession === sk2 ? 'active' : '') + '" onclick="adminState.reportSession=\'' + jsKey(sk2) + '\';render()">🗂 ' + escapeHtml(lbl) + ' (' + sc2.n + ')</div>';
+    // 场次选择改日历（2026-11-12 用户要求：场次一多 chips 会排成长长一排）：
+    // 「📅 选择场次」弹出小日历，有考试的日期有标注，选日期再挑该日的场次。
+    var sessByDay = {}, dayOrder = [];
+    for (var so0 = 0; so0 < sessOrder.length; so0++) {
+      var sk0 = sessOrder[so0], sc0 = sessCounts[sk0];
+      var dk0 = sessDayKeyOf(sc0.title, sc0.ts);
+      if (!dk0) continue;
+      if (!sessByDay[dk0]) { sessByDay[dk0] = []; dayOrder.push(dk0); }
+      sessByDay[dk0].push({ sk: sk0, n: sc0.n, title: sc0.title || '' });
     }
+    dayOrder.sort();
+    adminState.reportCalDays = sessByDay;
+    var curSess = adminState.reportSession !== 'all' ? sessCounts[adminState.reportSession] : null;
+    if (adminState.reportSession !== 'all' && !curSess) { adminState.reportSession = 'all'; curSess = null; }
+    html += '<div class="tab-bar" style="position:relative;flex-wrap:wrap;gap:6px;">';
+    html += '<div class="chip ' + (adminState.reportSession === 'all' ? 'active' : '') + '" onclick="adminState.reportSession=\'all\';render()">🗂 ' + (en ? 'All sessions' : '全部场次') + '</div>';
+    if (curSess) {
+      var curLbl = curSess.title || (syncPaperLabel(curSess.paper) + ' · ' + fmtSyncTime(curSess.ts));
+      html += '<div class="chip active" title="' + escapeHtml(curLbl) + '">📅 ' + escapeHtml(curLbl) + ' (' + curSess.n + ')'
+        + ' <b style="cursor:pointer;margin-left:4px;" onclick="adminState.reportSession=\'all\';render()">✕</b></div>';
+    }
+    html += '<div class="chip' + (adminState.reportCalOpen ? ' active' : '') + '" onclick="adminState.reportCalOpen=!adminState.reportCalOpen;adminState.reportCalDay=\'\';render()">📅 ' + (en ? 'Pick a session' : '选择场次') + '</div>';
+    if (adminState.reportCalOpen) html += adminReportCalHtml(dayOrder, en);
     html += '</div>';
   } else if (adminState.reportSession !== 'all' && sessOrder.length <= 1) {
     adminState.reportSession = 'all'; // 场次只剩一个时不再额外筛
@@ -24568,6 +24720,96 @@ function renderAdminReports() {
     : '学员交卷后记录自动上传。答题回放需等答题卡分片上传完成后即可查看。') + '</div>';
   html += '</div>';
   return html;
+}
+
+// ===== 场次日历（成绩与评分，2026-11-12）================================
+// 场次标题形如「2026-10-27 正式考试」——优先从标题取日期，取不到再退回
+// 该场次最近一次答题的时间。dayKey = 'YYYY-MM-DD'（本地时区）。
+function sessDayKeyOf(title, ts) {
+  var m = /(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(title || ''));
+  if (m) {
+    return m[1] + '-' + (m[2].length < 2 ? '0' : '') + m[2] + '-' + (m[3].length < 2 ? '0' : '') + m[3];
+  }
+  var dt = new Date(ts || 0);
+  if (!ts || isNaN(dt.getTime())) return '';
+  function p(n) { return (n < 10 ? '0' : '') + n; }
+  return dt.getFullYear() + '-' + p(dt.getMonth() + 1) + '-' + p(dt.getDate());
+}
+function adminReportCalNav(d) {
+  var st = adminState;
+  st.reportCalM = (st.reportCalM || 1) + d;
+  if (st.reportCalM < 1) { st.reportCalM = 12; st.reportCalY--; }
+  if (st.reportCalM > 12) { st.reportCalM = 1; st.reportCalY++; }
+  st.reportCalDay = '';
+  render();
+}
+function adminReportCalPick(dk) {
+  var list = (adminState.reportCalDays && adminState.reportCalDays[dk]) || [];
+  if (list.length === 1) {
+    adminState.reportSession = list[0].sk;
+    adminState.reportCalOpen = false;
+    adminState.reportCalDay = '';
+  } else {
+    adminState.reportCalDay = dk;
+  }
+  render();
+}
+function adminReportCalSessionPick(sk) {
+  adminState.reportSession = sk;
+  adminState.reportCalOpen = false;
+  adminState.reportCalDay = '';
+  render();
+}
+function adminReportCalHtml(dayOrder, en) {
+  var st = adminState;
+  var byDay = st.reportCalDays || {};
+  if (!st.reportCalY || !st.reportCalM) {
+    var last = dayOrder.length ? dayOrder[dayOrder.length - 1] : '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(last)) {
+      st.reportCalY = parseInt(last.slice(0, 4), 10);
+      st.reportCalM = parseInt(last.slice(5, 7), 10);
+    } else {
+      var now = new Date();
+      st.reportCalY = now.getFullYear(); st.reportCalM = now.getMonth() + 1;
+    }
+  }
+  var wd = en ? ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] : ['日', '一', '二', '三', '四', '五', '六'];
+  var first = new Date(st.reportCalY, st.reportCalM - 1, 1);
+  var days = new Date(st.reportCalY, st.reportCalM, 0).getDate();
+  var mStr = (st.reportCalM < 10 ? '0' : '') + st.reportCalM;
+  var h = '<div class="sess-calpop">';
+  h += '<div class="sc-title"><button onclick="adminReportCalNav(-1)">‹</button>'
+    + '<span style="flex:1;text-align:center;">' + st.reportCalY + '-' + mStr + '</span>'
+    + '<button onclick="adminReportCalNav(1)">›</button></div>';
+  h += '<div class="sess-cal">';
+  for (var w = 0; w < 7; w++) h += '<div class="sc-h">' + wd[w] + '</div>';
+  for (var b = 0; b < first.getDay(); b++) h += '<div class="sc-d pad"></div>';
+  var hasAny = false;
+  for (var d = 1; d <= days; d++) {
+    var dk = st.reportCalY + '-' + mStr + '-' + (d < 10 ? '0' : '') + d;
+    var list = byDay[dk] || [];
+    var n = 0;
+    for (var q = 0; q < list.length; q++) n += list[q].n;
+    if (n) hasAny = true;
+    h += '<div class="sc-d' + (n ? ' has' : '') + (st.reportCalDay === dk ? ' sel' : '') + '"'
+      + (n ? ' data-n="' + n + '" title="' + n + (en ? ' record(s)' : ' 条记录') + '" onclick="adminReportCalPick(\'' + dk + '\')"' : '')
+      + '>' + d + '</div>';
+  }
+  h += '</div>';
+  if (!hasAny) h += '<div class="sess-cal-empty">' + (en ? 'No sessions this month — use ‹ / › to switch months.' : '本月没有考试场次，用 ‹ / › 翻月看看。') + '</div>';
+  if (st.reportCalDay) {
+    var dl = byDay[st.reportCalDay] || [];
+    h += '<div class="sess-day-list">';
+    for (var q2 = 0; q2 < dl.length; q2++) {
+      var s2 = dl[q2];
+      h += '<div class="sess-day-item" onclick="adminReportCalSessionPick(\'' + jsKey(s2.sk) + '\')">'
+        + '<span>🗂 ' + escapeHtml(s2.title || (en ? 'Session' : '场次')) + '</span>'
+        + '<span class="n">' + s2.n + ' ' + (en ? 'records' : '条') + '</span></div>';
+    }
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
 }
 
 // ===== Admin: one exam's per-question answer replay =====
@@ -25306,6 +25548,12 @@ function adminDeptDivLabel(snap, en) {
 // 不许再让管理员点点点、上下拉找回原位。
 function adminOpenStudentDetail(key) {
   try { adminState.studentListScrollY = adminScrollY(); } catch (e) {}
+  // layout4 之后列表行滚动发生在 .stu-table-wrap 内部（.adm-scroll 本身几乎不滚），
+  // 所以要把表格自己的 scrollTop 也记下来，返回时两处一起还原（2026-11-12）
+  try {
+    var _w = document.querySelector('.stu-table-wrap');
+    adminState.stuWrapScrollY = (_w && _w.scrollTop) || 0;
+  } catch (e) {}
   adminState.studentListLastKey = key || '';
   adminState.studentRetPage = state.currentPage || 'adminStudents';
   adminState.studentDetail = key || '';
@@ -25362,6 +25610,11 @@ function adminRestoreStudentListScroll(y, key) {
       } catch (e) {}
     }
     try { adminScrollTo(y || 0); } catch (e) {}
+    // 表格内部滚动也要还原（固定页头后 .adm-scroll 几乎不滚，列表行滚在 wrap 里）
+    try {
+      var wrap2 = document.querySelector('.stu-table-wrap');
+      if (wrap2 && adminState.stuWrapScrollY) wrap2.scrollTop = adminState.stuWrapScrollY;
+    } catch (e) {}
     if (!row) return;
     try {
       var r = row.getBoundingClientRect();
@@ -25838,6 +26091,8 @@ function adminUnifiedRosterHtml(statusLine, en) {
   }
   html += '</div>';
   html += '</div>'; // /stu-pin
+  // 固定页头分割：标题 + 状态行 + 搜索/部门/状态筛选进固定区，名单表格滚动（2026-11-12）
+  html += '<!--PHSPLIT-->';
 
   // ---- 过滤 ----
   var shown = [];
@@ -25864,26 +26119,14 @@ function adminUnifiedRosterHtml(statusLine, en) {
     }
     shown.push(row);
   }
-
-  // ---- 导入名册（默认收起的一行入口）----
-  var impOpen = !!adminState.rosterImportOpen;
-  html += '<div class="q-card" style="margin-top:10px;">';
-  html += '<div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="adminState.rosterImportOpen=' + (!impOpen) + ';render()">'
-    + '<span>' + (impOpen ? '▾' : '▸') + '</span><b>📥 ' + (en ? 'Import roster (Excel / CSV)' : '导入 / 更新员工名册（Excel / CSV）') + '</b>'
-    + '<span style="margin-left:auto;font-size:11.5px;color:#8a8f96;">' + (nr.ver ? (en ? 'Updated ' : '更新于 ') + fmtSyncTime(nr.ver) : (en ? 'No roster yet' : '还没有名册')) + '</span></div>';
-  if (impOpen) {
-    html += '<div class="profile-form" style="margin-top:10px;">';
-    html += '<div class="sync-note" style="font-size:12px;margin-bottom:8px;">' + (en
-      ? 'Columns can be in any order — recommended: English name, Chinese name, employee ID. The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
-      : '列顺序不限（推荐：英文名、中文名、工号），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。') + '</div>';
-    html += '<label class="rz-file">📄 ' + (en ? 'Choose file & preview differences' : '选择文件并预览差异')
-      + '<input type="file" accept=".xlsx,.csv,.txt,.tsv" style="display:none" onchange="adminRosterFileChosen(this)"></label>';
-    html += '<button class="action-btn nav-btn secondary" style="width:100%;margin-top:8px;" onclick="adminRosterTemplateDl()">⬇️ '
-      + (en ? 'Download the template (EN name · CN name · ID)' : '下载名册模板（英文名 · 中文名 · 工号）') + '</button>';
-    html += '</div>';
-  }
-  html += '</div>';
-  if (adminState.rosterPending) html += adminRosterPendingHtml(adminState.rosterPending);
+  // 默认按活跃度排（2026-11-12 用户要求）：最活跃的账号排最前，从未活跃的垫底
+  shown.sort(function (a, b) {
+    var ta = (a.reg && a.reg.ts) || 0, tb = (b.reg && b.reg.ts) || 0;
+    if (ta !== tb) return tb - ta;
+    var x = parseInt(a.emp, 10), y = parseInt(b.emp, 10);
+    if (isFinite(x) && isFinite(y) && x !== y) return x - y;
+    return a.emp < b.emp ? -1 : (a.emp > b.emp ? 1 : 0);
+  });
 
   if (!shown.length) {
     html += '<div class="empty-state"><div class="icon">👥</div><p>' + (en ? 'Nothing matches these filters.' : '没有符合筛选条件的记录。') + '</p></div>';
@@ -25893,14 +26136,29 @@ function adminUnifiedRosterHtml(statusLine, en) {
     var page = Math.min(Math.max(0, parseInt(adminState.rosterPage || 0, 10) || 0), pages - 1);
     adminState.rosterPage = page;
     var start = page * per, end = Math.min(shown.length, start + per);
-    html += '<div class="stu-table-wrap"><table class="stu-table"><thead><tr>';
-    html += '<th>' + (en ? 'Employee ID' : '工号 / 状态') + '</th>';
-    html += '<th>' + (en ? 'Roster CN' : '名册中文') + '</th>';
-    html += '<th>' + (en ? 'Roster EN' : '名册英文') + '</th>';
-    html += '<th>' + (en ? 'Registered' : '注册姓名') + '</th>';
-    html += '<th>' + (en ? 'Department' : '部门') + '</th>';
-    html += '<th>' + (en ? 'Last active' : '最近活跃') + '</th>';
-    html += '<th style="text-align:right;">' + (en ? 'Actions' : '操作') + '</th>';
+    // 列宽记忆（2026-11-12 用户要求）：拖动表头右侧手柄调列宽，存 localStorage，
+    // 下次进入按上次的尺寸显示。全部列都有宽度时才启用 fixed 布局。
+    var colWs = adminRosterColWs();
+    html += '<div class="stu-table-wrap"><table class="stu-table"' + (colWs.length >= 7 ? ' style="table-layout:fixed;"' : '') + '>';
+    if (colWs.length) {
+      html += '<colgroup>';
+      for (var cw = 0; cw < 7; cw++) html += '<col' + (colWs[cw] ? ' style="width:' + colWs[cw] + 'px"' : '') + '>';
+      html += '</colgroup>';
+    }
+    html += '<thead><tr>';
+    var thLabels = [
+      (en ? 'Employee ID' : '工号 / 状态'),
+      (en ? 'Roster CN' : '名册中文'),
+      (en ? 'Roster EN' : '名册英文'),
+      (en ? 'Registered' : '注册姓名'),
+      (en ? 'Department' : '部门'),
+      (en ? 'Last active' : '最近活跃'),
+      (en ? 'Actions' : '操作')
+    ];
+    for (var thi = 0; thi < thLabels.length; thi++) {
+      html += '<th' + (thi === 6 ? ' style="text-align:right;"' : '') + '>' + thLabels[thi]
+        + '<span class="col-grip" title="' + (en ? 'Drag to resize column' : '拖动调整列宽') + '" onmousedown="adminColGrip(event,' + thi + ')"></span></th>';
+    }
     html += '</tr></thead><tbody>';
     for (var i2 = start; i2 < end; i2++) {
       var rr = shown[i2];
@@ -25922,6 +26180,8 @@ function adminUnifiedRosterHtml(statusLine, en) {
       if (rr.reg) {
         if (sst === 'pending') acts += '<button class="st-btn primary" onclick="adminClearNeedsVerify(\'' + jsKey(rr.reg.key) + '\')" title="' + (en ? 'Mark verified' : '标记已核实') + '">✓ ' + (en ? 'Verify' : '核实') + '</button> ';
         acts += '<button class="st-btn" onclick="adminOpenStudentDetail(\'' + jsKey(rr.reg.key) + '\')" title="' + (en ? 'Open profile' : '打开档案') + '">' + (en ? 'Profile' : '档案') + '</button> ';
+        // 简单资料编辑（2026-11-12）：行内展开编辑表单（工号/中英文名/部门），走三写链路
+        acts += '<button class="st-btn' + (adminState.editStudent === rr.reg.key ? ' primary' : '') + '" onclick="adminRosterEditToggle(\'' + jsKey(rr.reg.key) + '\')" title="' + (en ? 'Edit basic info' : '编辑基本资料') + '">✎</button> ';
         if ((rr.rosterCn || rr.rosterEn)) acts += '<button class="st-btn" onclick="adminRosterApplyNames(\'' + jsKey(rr.emp) + '\',\'' + jsKey(rr.reg.key) + '\')" title="' + (en ? 'Overwrite registered names with the roster' : '用名册姓名覆盖注册姓名') + '">⬇️</button> ';
       }
       if (isLeft2) {
@@ -25935,8 +26195,20 @@ function adminUnifiedRosterHtml(statusLine, en) {
       } else if (rr.emp) {
         acts += '<button class="st-btn" style="color:#c0392b;" onclick="adminStaffSetLeft(\'' + jsKey(rr.emp) + '\')" title="' + (en ? 'Take out of service' : '设为离职') + '">' + (en ? 'Left' : '离职') + '</button>';
       }
+      // 删除账号（2026-11-12）：移出名册 + 加入黑名单，学员端无法再用该工号注册
+      if (rr.reg && !isLeft2) {
+        acts += '<button class="st-btn" style="color:#c0392b;" onclick="adminRosterDeleteAccount(\'' + jsKey(rr.emp) + '\')" title="' + (en ? 'Delete account (blacklisted, cannot re-register)' : '删除该账号（加入黑名单，不能再注册）') + '">🗑</button>';
+      }
       html += acts + '</td>';
       html += '</tr>';
+      // 行内展开的资料编辑表单（复用旧学员列表的 se* 三写链路）
+      if (adminState.editStudent && rr.reg && rr.reg.key === adminState.editStudent) {
+        html += adminStuEditRowHtml({ key: rr.reg.key, snap: {
+          emp: rr.emp, cn: rr.reg.cn || '', en: rr.reg.en || '',
+          div: rr.reg.div || '', divEn: rr.reg.divEn || '',
+          dept: rr.reg.dept || '', deptEn: rr.reg.deptEn || ''
+        } }, en);
+      }
     }
     html += '</tbody></table></div>';
     html += '<div class="sync-note" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;">';
@@ -25945,6 +26217,43 @@ function adminUnifiedRosterHtml(statusLine, en) {
     html += '<button class="admin-mini-btn" ' + (page >= pages - 1 ? 'disabled style="opacity:.4;"' : 'onclick="adminRosterPageGo(1)"') + '>' + (en ? 'Next' : '下一页') + ' ›</button>';
     html += '</div>';
   }
+
+  // ---- 页底工具区（2026-11-12 用户要求：导入入口放页面最下面）----
+  // 预留工号按范围添加
+  html += '<div class="q-card" style="margin-top:10px;">';
+  html += '<b>➕ ' + (en ? 'Add reserved IDs by range' : '按范围添加预留工号') + '</b>';
+  html += '<div class="sync-note" style="font-size:12px;margin:6px 0 8px;">' + (en
+    ? 'Reserve a block of employee IDs for new hires: enter the start and end IDs and they join the roster as reserved placeholders (registration allowed later).'
+    : '给尚未入职的新员工预留一批工号：输入起止工号，区间内的工号会作为预留加入名册（学员之后可用它注册）。') + '</div>';
+  html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+  html += '<input type="number" id="rsvFrom" placeholder="' + (en ? 'From ID' : '起始工号') + '" style="width:130px;padding:8px 10px;border:1px solid var(--a-line);border-radius:8px;font-size:13px;">';
+  html += '<span style="color:var(--a-i4);">—</span>';
+  html += '<input type="number" id="rsvTo" placeholder="' + (en ? 'To ID' : '结束工号') + '" style="width:130px;padding:8px 10px;border:1px solid var(--a-line);border-radius:8px;font-size:13px;">';
+  html += '<button class="action-btn nav-btn secondary" style="width:auto;" onclick="adminRosterAddRange()">➕ ' + (en ? 'Add' : '添加') + '</button>';
+  html += '</div>';
+  html += '<div id="rsvRangeMsg" style="font-size:12px;margin-top:6px;min-height:16px;"></div>';
+  html += '</div>';
+
+  // 导入名册（默认收起的一行入口）
+  var impOpen = !!adminState.rosterImportOpen;
+  html += '<div class="q-card" style="margin-top:10px;">';
+  html += '<div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="adminState.rosterImportOpen=' + (!impOpen) + ';render()">'
+    + '<span>' + (impOpen ? '▾' : '▸') + '</span><b>📥 ' + (en ? 'Import roster (Excel / CSV)' : '导入 / 更新员工名册（Excel / CSV）') + '</b>'
+    + '<span style="margin-left:auto;font-size:11.5px;color:#8a8f96;">' + (nr.ver ? (en ? 'Updated ' : '更新于 ') + fmtSyncTime(nr.ver) : (en ? 'No roster yet' : '还没有名册')) + '</span></div>';
+  if (impOpen) {
+    html += '<div class="profile-form" style="margin-top:10px;">';
+    html += '<div class="sync-note" style="font-size:12px;margin-bottom:8px;">' + (en
+      ? 'Columns can be in any order — recommended: English name, Chinese name, employee ID. The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
+      : '列顺序不限（推荐：英文名、中文名、工号），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。') + '</div>';
+    html += '<label class="rz-file">📄 ' + (en ? 'Choose file & preview differences' : '选择文件并预览差异')
+      + '<input type="file" accept=".xlsx,.csv,.txt,.tsv" style="display:none" onchange="adminRosterFileChosen(this)"></label>';
+    html += '<button class="action-btn nav-btn secondary" style="width:100%;margin-top:8px;" onclick="adminRosterTemplateDl()">⬇️ '
+      + (en ? 'Download the template (EN name · CN name · ID)' : '下载名册模板（英文名 · 中文名 · 工号）') + '</button>';
+    html += '</div>';
+  }
+  html += '</div>';
+  if (adminState.rosterPending) html += adminRosterPendingHtml(adminState.rosterPending);
+
   html += '<div class="sync-note">' + (en
     ? 'The roster IS the allow-list: only listed IDs can register. "Left" removes the ID but keeps all history. Students\' data is auto-uploaded by their devices.'
     : '名册即白名单：只有名单内的工号才能注册。「离职」会把工号移出名单但保留全部历史记录。学员数据由学员端自动上传。') + '</div>';
@@ -25963,13 +26272,20 @@ function adminPinRefresh() {
     if (!scr || !scr.getBoundingClientRect) return;
     var pin = document.getElementById('stuPin');
     var wrap = scr.querySelector('.stu-table-wrap');
-    if (!pin || !pin.getBoundingClientRect || !wrap || !wrap.style) return;
+    if (!wrap || !wrap.style) return;
     var sb = scr.getBoundingClientRect();
-    var pb = pin.getBoundingClientRect();
-    if (!isFinite(sb.bottom) || !isFinite(pb.bottom)) return;
-    // 滚动到顶时表格起点在视口里的位置（扣掉已滚动的距离）
-    var wrapTopAtZero = pb.bottom - (scr.scrollTop || 0);
-    var avail = Math.round(sb.bottom - wrapTopAtZero - 44); // 44 = 底部说明留白
+    if (!isFinite(sb.bottom) || !sb.height) return;
+    var avail;
+    if (pin && scr.contains(pin)) {
+      // 旧布局兜底：pin 还在滚动区内时按原公式
+      var pb = pin.getBoundingClientRect();
+      if (!isFinite(pb.bottom)) return;
+      var wrapTopAtZero = pb.bottom - (scr.scrollTop || 0);
+      avail = Math.round(sb.bottom - wrapTopAtZero - 44); // 44 = 底部说明留白
+    } else {
+      // 固定页头布局（2026-11-12）：pin 在滚动区外，表格从滚动区顶开始
+      avail = Math.round(sb.height - 44);
+    }
     if (!isFinite(avail)) return;
     wrap.style.maxHeight = Math.max(220, avail) + 'px';
   } catch (e) {}
@@ -26290,6 +26606,8 @@ function renderAdminBank() {
     ? filtered.length + ' / ' + questions.length + ' shown'
     : (adminState.search ? '筛出 ' + filtered.length + ' / ' + questions.length + ' 题' : '共 ' + questions.length + ' 题')) + '</span>';
   h += '</div>';
+  // 固定页头分割：标题 + 题库切换 + 搜索/筛选条进固定区，题目列表滚动（2026-11-12）
+  h += '<!--PHSPLIT-->';
 
   h += '<div class="ap-sub" style="margin:-4px 0 10px;">' + (en
     ? 'Drag a row onto another to reorder — students see this exact order in sequential practice.'
@@ -26691,19 +27009,40 @@ function renderAdminPaper() {
     + '<button class="ap-btn pri" onclick="adminPaperGradePublishClick()">' + (_enP ? 'Save & publish' : '保存并发布') + '</button>'
   );
   html += '<div class="page">';
-  if (bankKey === 'day21' || bankKey === 'tsos') {
-    var _aN = ((QUESTION_DATA.papers || {})[bankKey + '_all'] || []).length;
-    var _kN = ((QUESTION_DATA.papers || {})[bankKey + '_kitchen'] || []).length;
-    html += '<div class="ap-bar"><div class="ap-seg">'
-      + '<button class="' + (isAll ? 'on' : '') + '" onclick="adminGoToPaper(\'' + bankKey + '_all\')">'
-      + (_enP ? 'All-Employee' : '全员版') + ' <span class="ap-num" style="opacity:.6">' + _aN + '</span></button>'
-      + '<button class="' + (isKitchen ? 'on' : '') + '" onclick="adminGoToPaper(\'' + bankKey + '_kitchen\')">'
-      + (_enP ? 'Culinary' : '厨房版') + ' <span class="ap-num" style="opacity:.6">' + _kN + '</span></button>'
-      + '</div><span class="ap-count">' + escapeHtml(getBankName(bankKey)) + '</span></div>';
+  // 试卷切换（2026-11-12 用户问「是不是只能编排三步骤卷」——不是，所有试卷都可编排，
+  // 只是此前切换入口只在 day21/tsos 两库出现且不显眼。现在顶部下拉列出全部试卷。）
+  var pkKeys = Object.keys(QUESTION_DATA.papers || {});
+  var pkOpts = '';
+  for (var _pk = 0; _pk < pkKeys.length; _pk++) {
+    var _pkk = pkKeys[_pk];
+    var _pkn = ((QUESTION_DATA.papers || {})[_pkk] || []).length;
+    var _pkBank = _pkk.replace(/_(all|kitchen)$/, '');
+    pkOpts += '<option value="' + escapeHtml(_pkk) + '"' + (_pkk === paperKey ? ' selected' : '') + '>'
+      + escapeHtml(getBankName(_pkBank) + ' · ' + (/_all$/.test(_pkk) ? t('paper_all') : t('paper_kitchen'))) + ' (' + _pkn + ')</option>';
   }
-
+  var _pairA = bankKey + '_all', _pairK = bankKey + '_kitchen';
+  var _hasPair = !!((QUESTION_DATA.papers || {})[_pairA]) && !!((QUESTION_DATA.papers || {})[_pairK]);
+  if (_hasPair || pkKeys.length > 1) {
+    html += '<div class="ap-bar">';
+    if (_hasPair) {
+      var _aN2 = ((QUESTION_DATA.papers || {})[_pairA] || []).length;
+      var _kN2 = ((QUESTION_DATA.papers || {})[_pairK] || []).length;
+      html += '<div class="ap-seg">'
+        + '<button class="' + (isAll ? 'on' : '') + '" onclick="adminGoToPaper(\'' + _pairA + '\')">'
+        + (_enP ? 'All-Employee' : '全员版') + ' <span class="ap-num" style="opacity:.6">' + _aN2 + '</span></button>'
+        + '<button class="' + (isKitchen ? 'on' : '') + '" onclick="adminGoToPaper(\'' + _pairK + '\')">'
+        + (_enP ? 'Culinary' : '厨房版') + ' <span class="ap-num" style="opacity:.6">' + _kN2 + '</span></button>'
+        + '</div>';
+    }
+    html += '<select class="ap-sel" style="max-width:280px;" onchange="adminGoToPaper(this.value)">'
+      + '<option value="" disabled>' + (_enP ? 'Switch paper…' : '切换到其他试卷…') + '</option>' + pkOpts + '</select>';
+    html += '<span class="ap-count">' + escapeHtml(getBankName(bankKey)) + '</span>';
+    html += '</div>';
+  }
   html += adminCloudSyncBanner();
   html += adminPaperSaveBanner();
+  // 固定页头分割：标题 + 试卷切换进固定区，评分卡/统计卡/双栏编排区滚动（2026-11-12）
+  html += '<!--PHSPLIT-->';
 
   // ===== Stage-13: paper-grading summary card =============================
   // One row per question that contributes to the paper's total points, plus
@@ -26859,7 +27198,32 @@ function renderAdminPaper() {
   html += '</div>';
 
   html += '</div>';
+  // 双栏拉满视口（2026-11-12 用户要求：编排窗口与整个页面同高，一次多看几题）
+  setTimeout(adminPaperPinRefresh, 30);
   return html;
+}
+// 试卷编排双栏高度：pc-grid 顶部到滚动区底部的实测距离 → 注入左右栏 max-height。
+// 与 adminPinRefresh 同一套路：只注入高度，🔴 不注入任何 sticky。
+function adminPaperPinRefresh() {
+  try {
+    var scr = document.querySelector('.adm-scroll') || document.querySelector('.adm-main');
+    var grid = document.querySelector('.pc-grid');
+    if (!scr || !grid || !scr.getBoundingClientRect) return;
+    var sb = scr.getBoundingClientRect();
+    var gb = grid.getBoundingClientRect();
+    var topAtZero = gb.top - sb.top + (scr.scrollTop || 0);
+    var avail = Math.round(sb.height - topAtZero - 20);
+    if (!isFinite(avail) || avail < 220) return;
+    var l = grid.querySelector('.pc-col.pc-left'), r = grid.querySelector('.pc-col.pc-right');
+    if (l) l.style.maxHeight = avail + 'px';
+    if (r) r.style.maxHeight = avail + 'px';
+    var pl = document.getElementById('adminPaperList');
+    if (pl) pl.style.maxHeight = (avail - 44) + 'px';
+  } catch (e) {}
+  if (!adminPaperPinRefresh._bound) {
+    adminPaperPinRefresh._bound = true;
+    try { window.addEventListener('resize', function () { setTimeout(adminPaperPinRefresh, 50); }); } catch (e) {}
+  }
 }
 // Single-shot wiring so the per-question + batch-rule inputs both survive
 // re-renders. The handler delegates via data-* attributes — see the inputs
@@ -27287,7 +27651,7 @@ function adminBankBrowserList() {
   }
   if (adminState.pickerOnlyNew) filtered = filtered.filter(function (q) { return !existing[q.id]; });
   var html = '';
-  var shown = filtered.slice(0, 60);
+  var shown = filtered.slice(0, 80);
   for (var j = 0; j < shown.length; j++) {
     var q = shown[j];
     var already = !!existing[q.id];
@@ -27303,9 +27667,9 @@ function adminBankBrowserList() {
     html += adminAnswerPreviewHtml(q);
     html += '</div>';
   }
-  if (filtered.length > 60) html += '<div style="font-size:11px;color:var(--text-light,#7b8896);text-align:center;padding:6px;">' + (en
-    ? 'Showing first 60 of ' + filtered.length + ' \u2014 refine with search'
-    : '\u4ec5\u663e\u793a\u524d 60 / \u5171 ' + filtered.length + ' \u9898\uff0c\u8bf7\u7528\u641c\u7d22\u7f29\u5c0f\u8303\u56f4') + '</div>';
+  if (filtered.length > 80) html += '<div style="font-size:11px;color:var(--text-light,#7b8896);text-align:center;padding:6px;">' + (en
+    ? 'Showing first 80 of ' + filtered.length + ' \u2014 refine with search'
+    : '\u4ec5\u663e\u793a\u524d 80 / \u5171 ' + filtered.length + ' \u9898\uff0c\u8bf7\u7528\u641c\u7d22\u7f29\u5c0f\u8303\u56f4') + '</div>';
   if (!filtered.length) html += '<div class="empty-state"><div class="icon">\ud83d\udcdd</div><p>' + (en ? 'No questions found' : '\u672a\u627e\u5230\u9898\u76ee') + '</p></div>';
   return html;
 }
@@ -29191,10 +29555,24 @@ function adminShellHtml(page, inner) {
   } else if (page === 'adminPaperPicker') {
     subActs = '<button class="ap-btn" onclick="adminBack(\'adminPaper\')">← ' + (en ? 'Back' : '返回') + '</button>';
   }
+  // 固定页头（2026-11-12 用户要求：下滑还能看到标题与筛选）：
+  // 结构隔离——页头放 .adm-pagehead（滚动区外，与 .adm-topbar 同级），🔴 绝不用 position:sticky
+  //（真机 Edge 合成滚动期 sticky 会被滚出内容穿透重影，教训见 layout4）。
+  // 页面可在 inner 里放 '<!--PHSPLIT-->' 标记：标记之前的部分（标题/筛选条）进固定页头，
+  // 其余进滚动区。没有标记的非 SELF_HEAD 页面仍由外壳生成默认标题。
+  var PH_SPLIT = '<!--PHSPLIT-->';
+  var phHead = adminShellTabsHtml(page);
+  var body = inner;
+  var si = inner.indexOf(PH_SPLIT);
+  if (si >= 0) {
+    phHead += inner.slice(0, si);
+    body = inner.slice(si + PH_SPLIT.length);
+  } else if (!SELF_HEAD[page]) {
+    phHead += adminHead(adminPageTitleOf(page), adminSubOf(page), subActs);
+  }
+  if (phHead) h += '<div class="adm-pagehead">' + phHead + '</div>';
   h += '<div class="adm-scroll" id="admScroll"><div class="adm-content">'
-    + adminShellTabsHtml(page)
-    + (SELF_HEAD[page] ? '' : adminHead(adminPageTitleOf(page), adminSubOf(page), subActs))
-    + inner + '</div></div>';
+    + body + '</div></div>';
   h += '</div></div>';
   return h;
 }
