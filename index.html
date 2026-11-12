@@ -5782,6 +5782,10 @@ var I18N = {
   race_mk_day_future: {cn:'只能补签今天之前漏掉的日子。', en:'Only past missed days can be restored.'},
   race_mk_use_hint: {cn:'在日历页选择漏签日期消耗次数补打卡；挑战答对 ≥{m} 题即补签成功', en:'Use credits on missed dates in calendar. Pass the quiz (≥{m}/{n} correct) to make up check in.'},
   race_mk_cap_note: {cn:'本届最多可补打卡 {cap} 次', en:'Up to {cap} make-ups this season'},
+  // 额度总览卡（2026-11-12 视觉重做）：大数字做主角，左右各一列明细
+  race_mk_hero_label: {cn:'剩余补签次数', en:'Remaining credits'},
+  race_mk_stat_earned: {cn:'已获得', en:'Earned'},
+  race_mk_stat_used: {cn:'已使用', en:'Used'},
   // 额度明细（2026-11-12）：只报「剩余」看不出用了多少次，三数并列才说得清
   race_mk_used_stat: {cn:'已获得 {a} 次｜已使用 {u} 次', en:'Earned {a} | Used {u}'},
   // race_mk_note_can / race_mk_note_full / race_mk_note_used_can 已随 raceMkNoteOf 退役（2026-11-11 八调）
@@ -5994,10 +5998,7 @@ var I18N = {
   // "移出"；掌握阶 → "第几阶"。数字后面统一用"道"，不用"题"混着。
   rv_due_now: {cn:'该复习了', en:'Due now'},
   rv_due_in: {cn:'{n} 天后再复习', en:'in {n}d'},
-  rv_done_today_tag: {cn:'今日已作答', en:'answered today'},
-  rv_done_today_next: {cn:'明天可再进阶', en:'next stage tomorrow'},
-  rv_done_today_grad: {cn:'今天内可巩固完成', en:'can clear today'},
-  rv_due_n: {cn:'{n} 道该复习', en:'{n} due'},
+  rv_done_today_tag: {cn:'今日已作答', en:'answered today'},  rv_due_n: {cn:'{n} 道该复习', en:'{n} due'},
   rv_tab_due: {cn:'该复习', en:'Due'},
   rv_tab_all: {cn:'全部错题', en:'All'},
   rv_tab_tag: {cn:'按知识点', en:'By topic'},
@@ -6008,7 +6009,7 @@ var I18N = {
   // 规则文案（2026-11-10 统一术语）：巩固 = 答对 1 次推进 1 阶；巩固完成 = 走完两阶后（第 5 天）
   // 再答对 1 次、自动移出错题本；巩固完成后仍会被练习抽查两次。
   // 「掌握」这个词在学员端全部退役 —— 任务一叫「错题巩固完成」，错题本就该用同一套词。
-  rv_stage_hint: {cn:'规则：第 1 天答对记 1 阶，第 2 天再答对记 2 阶，第 5 天再答对一次即巩固完成、自动移出错题本。同一道错题每天最多推进 1 阶；中途又答错，就回到第 1 阶重来。巩固完成后仍会被抽查：练习、模拟考试、限时答题赛里都可能再遇到它，答错就重新回到第 1 阶。', en:'How it works: correct on day 1 (stage 1), correct on day 2 (stage 2), then one more correct answer on day 5 clears it and removes it from the book. At most one stage per day; a wrong answer sends it back to stage 1. Clearing does not mean it is never asked again: practice, mock exams and timed races may still bring it back \u2014 answer wrong and it returns to stage 1.'},
+  rv_stage_hint: {cn:'规则：第 1 天答对记 1 阶，第 3 天再答对记 2 阶，第 5 天再答对一次即巩固完成、自动移出错题本。同一道错题每天最多推进 1 阶；中途又答错，就回到第 1 阶重来。巩固完成后仍会被抽查：练习、模拟考试、限时答题赛里都可能再遇到它，答错就重新回到第 1 阶。', en:'How it works: correct on day 1 (stage 1), correct on day 3 (stage 2), then one more correct answer on day 5 clears it and removes it from the book. At most one stage per day; a wrong answer sends it back to stage 1. Clearing does not mean it is never asked again: practice, mock exams and timed races may still bring it back \u2014 answer wrong and it returns to stage 1.'},
   rv_stage_n: {cn:'已巩固 {n}/{m} 阶', en:'stage {n} of {m}'},
   rv_wrong_times: {cn:'您做错过 {n} 次', en:'{n} wrong attempts'},
   rv_redo_due: {cn:'复习这 {n} 道题', en:'Review these {n}'},
@@ -6118,7 +6119,7 @@ var I18N = {
   rv_bk_none: {cn:'今天没有到期的错题', en:'Nothing due today'},
   rv_bk_done_today: {cn:'今日巩固已完成 ✓ 明天再来', en:"Today's review done ✓ see you tomorrow"},
   rv_bk_rules_sum: {cn:'复习规则', en:'How review works'},
-  rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。一道错题的节奏：第 1 天答对 → 隔 1 天，第 2 天再答对 → 隔 3 天，第 5 天再答对，即巩固完成并自动移出错题本；同一道错题每天最多推进 1 阶。巩固完成不等于不再考：之后的练习、模拟考试、限时答题赛里都可能再抽到它（共抽查两次），答对无事，答错重新进错题本。当天答对过的题不再计入当日待复习数量，按上述间隔重新出现。', en:"Due mistakes come first, while the memory is still fresh. The rhythm for each mistake: correct on day 1, again on day 2 (1 day later), again on day 5 (3 days later) \u2014 that clears it and removes it from the book. At most one stage per day. Clearing does not mean it is never asked again: practice, mock exams and timed races spot-check it twice; answer right and nothing changes, answer wrong and it returns to the book. Mistakes answered correctly today leave today's due count and return on the schedule above."},
+  rv_bk_rules: {cn:'系统优先推送需要复习的题目，趁热巩固记忆。一道错题的节奏：第 1 天答对 → 隔 2 天，第 3 天再答对 → 隔 2 天，第 5 天再答对，即巩固完成并自动移出错题本；同一道错题每天最多推进 1 阶。巩固完成不等于不再考：之后的练习、模拟考试、限时答题赛里都可能再抽到它（共抽查两次），答对无事，答错重新进错题本。当天答对过的题不再计入当日待复习数量，按上述间隔重新出现。', en:"Due mistakes come first, while the memory is still fresh. The rhythm for each mistake: correct on day 1, again on day 3 (2 days later), again on day 5 (2 days later) \u2014 that clears it and removes it from the book. At most one stage per day. Clearing does not mean it is never asked again: practice, mock exams and timed races spot-check it twice; answer right and nothing changes, answer wrong and it returns to the book. Mistakes answered correctly today leave today's due count and return on the schedule above."},
   // 错题进度图表（2026-11-10）：三个数字 + 一条分段进度条，代替原来那行「掌握度 X% | …」。
   // 学员一眼能看出「多少道学完了、多少道在复习、多少道还没开始」。
   rv_chart_title: {cn:'错题复习进度', en:'Review Progress of Error Items'},
@@ -14246,7 +14247,8 @@ function raceCalFocusRun(id) {
       var top = (hd && hd.getBoundingClientRect) ? Math.max(0, hd.getBoundingClientRect().bottom) : 0;
       var dy = el.getBoundingClientRect().top - top - 8;
       if (Math.abs(dy) < 4) return;
-      var y = (window.pageYOffset || document.documentElement.scrollTop || 0) + dy;
+      var de = document.documentElement || {};
+      var y = (window.pageYOffset || de.scrollTop || 0) + dy;
       window.scrollTo(0, Math.max(0, y));
     } catch (e) {}
   };
@@ -15676,27 +15678,39 @@ function raceMkATaskFailMark(rid) {
   rec.mkAFailDay[rid] = raceDayKey(Date.now());
   raceSaveLocalRecord(rec);
 }
-// 任务卡卡头（2026-11-12 二次调整）：左侧「任务一」标签 + 任务名 + 右侧状态 pill。
-// 🔴 必须保留「任务一 / 任务二」字样（学员要求）：只写任务名，读起来像是先后两步；
-// 标签只用一处，任务名只出现一次，所以不会再出现上一版「任务一 任务一」的重复。
+// 任务卡卡头（2026-11-12 视觉重做）：放弃整条丽思蓝色块，改白底浅蓝卡头 + 左侧 3px
+// 飘带。「任务一 / 任务二」标签必须保留（学员要求，否则像先后两步）。
 function raceMkTaskHeadHtml(tag, name, stateText, tone) {
-  var pillBg = tone === 'ready' ? '#000' : 'rgba(0,0,0,.10)';
-  var pillFg = tone === 'ready' ? '#fff' : '#5b6470';
-  return '<div style="display:flex;align-items:center;gap:9px;background:#C7DDF3;padding:11px 14px;">'
-    + '<span style="flex:none;font-size:11px;font-weight:800;color:#fff;background:#000;'
+  var pillBg = tone === 'ready' ? '#000' : 'rgba(0,0,0,.08)';
+  var pillFg = tone === 'ready' ? '#fff' : '#6b7480';
+  return '<div style="position:relative;display:flex;align-items:center;gap:9px;padding:12px 15px;'
+    + 'background:#F7FAFD;border-bottom:1px solid #EAF0F6;">'
+    + '<span style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#C7DDF3;"></span>'
+    + '<span style="flex:none;font-size:10.5px;font-weight:800;color:#fff;background:#000;'
     + 'border-radius:5px;padding:3px 7px;letter-spacing:.5px;white-space:nowrap;">' + tag + '</span>'
     + '<span style="flex:1;min-width:0;font-size:15.5px;font-weight:800;color:#000;">' + name + '</span>'
     + '<span style="flex:none;font-size:11px;font-weight:700;color:' + pillFg + ';background:' + pillBg
     + ';border-radius:999px;padding:3px 9px;white-space:nowrap;">' + stateText + '</span></div>';
 }
-// 任务卡里的小标签（资格池 / 本届战绩）：并排两枚比竖排两行更省地方
+// 任务卡里的小标签（资格池 / 本届战绩）：白底描边胶囊，比灰块更轻
 function raceMkChipHtml(text, tone) {
-  var bg = tone === 'warn' ? '#FDECEA' : '#F2F5F8';
+  var bd = tone === 'warn' ? '#F2C6C0' : '#DFE7EF';
+  var bg = tone === 'warn' ? '#FDF3F2' : '#FBFCFE';
   var fg = tone === 'warn' ? '#c0392b' : '#4a5560';
-  return '<span style="display:inline-block;background:' + bg + ';color:' + fg + ';border-radius:6px;'
-    + 'padding:3px 8px;font-size:11.5px;font-weight:600;margin:0 6px 6px 0;">' + text + '</span>';
+  return '<span style="display:inline-block;background:' + bg + ';border:1px solid ' + bd + ';color:' + fg
+    + ';border-radius:999px;padding:4px 10px;font-size:11px;font-weight:600;margin:0 6px 6px 0;">' + text + '</span>';
+}
+// 明细格（已获得 / 已使用）：数字在上、灰色小标在下，中间竖细线分隔
+function raceMkStatCell(label, n, en) {
+  return '<div style="flex:1;text-align:center;">'
+    + '<div style="font-size:15px;font-weight:800;color:#000;line-height:1.25;">' + n
+    + (en ? '' : '<span style="font-size:10.5px;font-weight:600;color:#5b6470;"> 次</span>') + '</div>'
+    + '<div style="font-size:10px;color:#8a93a0;margin-top:1px;">' + escapeHtml(label) + '</div></div>';
 }
 // 任务页：额度总览 + 任务A进度 + 任务B模块列表
+// 2026-11-12 视觉重做：上一版是蓝色大色块拼贴（渐变额度卡 + 两块实底卡头），被领导指出
+// 像初始页面。这一版回到酒店调性 —— 白卡、细虚线、留白分层；丽思蓝只做点缀
+// （卡头飘带 / 描边胶囊），狮冠纹理以水印形式垫在额度卡右上角，不再铺满底色。
 function renderRaceMkTask() {
   var en = state.lang === 'en';
   var conf = raceConfOf() || {};
@@ -15706,30 +15720,44 @@ function renderRaceMkTask() {
   var full = mk.allow >= mk.cap;   // 本届补签次数已赚满（2026-11-12）：还能挑战，但不再 +1
   var html = renderAppHeader({ title: t('race_mk_task_title'), subtitle: t('race_mk_task_sub') });
   html += '<div class="page">';
-  // 额度总览：剩余次数放大做主角，上限用一句话解释（2026-11-12：「本届上限 3 次」太抽象，
-  // 改成「本届最多可补打卡 3 次」，学员一眼知道这个数字管的是能补几天）
-  // 2026-11-12 再调：小字顺序互换 —— 上排是大字 + 「已获得 / 已使用」（跟着数字走），
-  // 下排单独放「本届最多可补打卡 N 次」（读的是上限，不该夹在剩余次数旁边）。
-  html += '<div class="q-card" style="background:linear-gradient(135deg,var(--primary-soft) 0%,var(--primary-light) 100%);border:1px solid rgba(0,0,0,.06);">';
-  html += '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">';
-  html += '<span style="font-size:18px;font-weight:800;color:#000;">' + t('race_makeup_left').replace('{n}', String(mk.left)) + '</span>';
-  // 额度明细（2026-11-12）：已获得 / 已使用一眼看清，不用自己拿上限减剩余去推
-  html += '<span style="font-size:12px;color:rgba(0,0,0,.62);">'
-    + escapeHtml(t('race_mk_used_stat').replace('{a}', String(mk.allow)).replace('{u}', String(mk.used))) + '</span>';
-  html += '</div>';
-  html += '<div style="font-size:11.5px;color:rgba(0,0,0,.62);margin-top:4px;line-height:1.6;">'
-    + escapeHtml(t('race_mk_cap_note').replace('{cap}', String(mk.cap))) + '</div>';
-  html += '<div style="font-size:11.5px;color:rgba(0,0,0,.6);margin-top:6px;line-height:1.6;">'
-    + escapeHtml(t('race_mk_use_hint').replace('{m}', String(RACE_MAKEUP_PASS)).replace('{n}', String(RACE_MAKEUP_N))) + '</div>';
-  html += '</div>';
+  // 额度总览：剩余次数放大做主角；右上角一句上限说明；虚线下「已获得 / 已使用」两格
+  html += '<div style="position:relative;overflow:hidden;background:#fff;border:1px solid #E3EAF2;'
+    + 'border-radius:14px;box-shadow:0 1px 4px rgba(14,37,69,.05);">'
+    + '<div aria-hidden="true" style="position:absolute;right:-26px;top:-24px;width:175px;height:175px;'
+    + 'background:url(\'assets/brand/pattern-white.jpg\') center/175px repeat;opacity:.75;'
+    + '-webkit-mask-image:radial-gradient(closest-side,#000 25%,transparent 80%);'
+    + 'mask-image:radial-gradient(closest-side,#000 25%,transparent 80%);pointer-events:none;"></div>'
+    + '<div style="position:relative;padding:15px 16px 13px;">'
+    + '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;">'
+    + '<div style="font-size:11px;font-weight:700;letter-spacing:2px;color:#8a93a0;">' + escapeHtml(t('race_mk_hero_label')) + '</div>'
+    + '<div style="font-size:10.5px;color:#9aa3ad;text-align:right;">'
+    + escapeHtml(t('race_mk_cap_note').replace('{cap}', String(mk.cap))) + '</div>'
+    + '</div>'
+    + '<div style="display:flex;align-items:baseline;gap:4px;margin-top:1px;">'
+    + '<span style="font-size:36px;font-weight:800;color:#000;line-height:1.2;">' + mk.left + '</span>'
+    + (en ? '' : '<span style="font-size:13px;font-weight:700;color:#5b6470;">次</span>')
+    + '</div>'
+    + '<div style="display:flex;border-top:1px dashed #E3EAF2;margin-top:10px;padding-top:9px;">'
+    + raceMkStatCell(t('race_mk_stat_earned'), mk.allow, en)
+    + '<div style="flex:none;width:1px;background:#EDF1F5;margin:2px 0;"></div>'
+    + raceMkStatCell(t('race_mk_stat_used'), mk.used, en)
+    + '</div>'
+    + '<div style="font-size:10.5px;color:#9aa3ad;line-height:1.6;margin-top:8px;">'
+    + escapeHtml(t('race_mk_use_hint').replace('{m}', String(RACE_MAKEUP_PASS)).replace('{n}', String(RACE_MAKEUP_N))) + '</div>'
+    + '</div></div>';
   // 已达上限：整页只提示一次（2026-11-12）——两张卡各写一遍太吵，且学员要的是
   // 「还能不能玩」的答案：可以玩，次数不再加，战绩照记。
   if (full) {
-    html += '<div class="q-card" style="border:1px solid #f0d9a8;background:#fffdf5;padding:11px 14px;font-size:11.5px;color:#8a5a00;line-height:1.65;">'
+    html += '<div style="margin-top:10px;background:#FFF9EE;border-left:3px solid #E8B84B;border-radius:8px;'
+      + 'padding:9px 12px;font-size:11.5px;color:#8a5a00;line-height:1.65;">'
       + escapeHtml(t('race_mk_task_full_note').replace('{cap}', String(mk.cap))) + '</div>';
   }
-  html += '<div style="font-size:11.5px;color:#7a828c;line-height:1.65;padding:2px 4px 4px;">'
-    + escapeHtml(t('race_mk_parallel_note')) + '</div>';
+  // 两任务并行的说明做成居中脚注（两侧细线），比一行灰字更像版式的一部分
+  html += '<div style="display:flex;align-items:center;gap:10px;margin:16px 2px 10px;">'
+    + '<div style="flex:1;height:1px;background:#E9EEF3;"></div>'
+    + '<div style="flex:none;max-width:75%;font-size:10.5px;color:#8a93a0;font-weight:600;text-align:center;line-height:1.5;">'
+    + escapeHtml(t('race_mk_parallel_note')) + '</div>'
+    + '<div style="flex:1;height:1px;background:#E9EEF3;"></div></div>';
   // 任务A · 错题巩固挑战（2026-11-12 改版：抽 5 道已开启巩固的错题、全对得 1 次补签）
   var poolIds = [];
   try { poolIds = raceMkATaskPool(); } catch (ePool) { poolIds = []; }
@@ -15741,13 +15769,14 @@ function renderRaceMkTask() {
   var aTone = 'ready', aState = t('race_mk_state_ready');
   if (!aEnough) { aTone = 'mute'; aState = t('race_mk_state_locked'); }
   else if (aCooled) { aTone = 'mute'; aState = t('race_mk_state_cool'); }
-  html += '<div class="q-card" style="padding:0;overflow:hidden;">';
+  html += '<div style="background:#fff;border:1px solid #E3EAF2;border-radius:14px;overflow:hidden;'
+    + 'box-shadow:0 1px 4px rgba(14,37,69,.05);">';
   html += raceMkTaskHeadHtml(t('race_mk_task_a_tag'), t('race_mk_task_a_name'), aState, aTone);
-  html += '<div style="padding:14px;">';
-  html += '<div style="font-size:12px;color:#666;line-height:1.65;">' + t('race_mk_task_a_desc') + '</div>';
+  html += '<div style="padding:14px 15px 15px;">';
+  html += '<div style="font-size:12px;color:#5b6470;line-height:1.7;">' + t('race_mk_task_a_desc') + '</div>';
   // 资格池 + 本届战绩（学员要求：获得过几次要能看见）—— 两枚小标签并排
   // 🔴 战绩口径不封顶（2026-11-12）：额度满了还赢，数字也要涨，否则「赢了显示 0 次」
-  html += '<div style="margin-top:10px;">'
+  html += '<div style="margin-top:11px;">'
     + raceMkChipHtml(t('race_mk_task_a_pool').replace('{n}', String(poolIds.length)), aEnough ? '' : 'warn')
     + raceMkChipHtml(t('race_mk_task_a_stat').replace('{n}', String(mk.aTasks)), '')
     + '</div>';
@@ -15758,7 +15787,7 @@ function renderRaceMkTask() {
     // 当日失败冷却：按钮收起，只留「明天再来」的提示
     html += '<div style="font-size:11.5px;color:#8d8377;margin-top:8px;line-height:1.6;">' + t('race_mk_task_a_cool') + '</div>';
   } else {
-    html += '<button class="action-btn primary" style="width:100%;margin-top:12px;" onclick="raceMkATaskBegin()">' + t('race_mk_task_go') + '</button>';
+    html += '<button class="action-btn primary" style="width:100%;margin-top:13px;" onclick="raceMkATaskBegin()">' + t('race_mk_task_go') + '</button>';
   }
   // 一键进错题本（2026-11-10）：复习入口就在任务旁边，少一跳完成难度就低一分
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="wrongOpenSrc(\'manual\')">' + t('race_mk_task_a_go') + '</button>';
@@ -15774,30 +15803,35 @@ function renderRaceMkTask() {
   // 卡头状态改成「能不能做」（2026-11-12）：「已完成 5/8」放在卡头既像进度条又像额度，
   // 学员会误以为满 8 才算成功；进度改由下面两枚标签说明，卡头只回答能不能点。
   var bState = modLeft > 0 ? t('race_mk_state_ready') : t('race_mk_state_alldone');
-  html += '<div class="q-card" style="padding:0;overflow:hidden;">';
+  html += '<div style="background:#fff;border:1px solid #E3EAF2;border-radius:14px;overflow:hidden;'
+    + 'box-shadow:0 1px 4px rgba(14,37,69,.05);margin-top:12px;">';
   html += raceMkTaskHeadHtml(t('race_mk_task_b_tag'), t('race_mk_task_b_name'), bState, modLeft > 0 ? 'ready' : 'mute');
-  html += '<div style="padding:14px;">';
-  html += '<div style="font-size:12px;color:#666;line-height:1.65;">' + t('race_mk_task_b_desc')
+  html += '<div style="padding:14px 15px 15px;">';
+  html += '<div style="font-size:12px;color:#5b6470;line-height:1.7;">' + t('race_mk_task_b_desc')
     .replace('{n}', String(RACE_MK_MOD_N)).replace('{m}', String(RACE_MK_MOD_PASS)) + '</div>';
   // 与任务一同一套口径（学员要求）：还剩几个模块能挑战 + 本届已经赢了几次
-  html += '<div style="margin-top:10px;">';
+  html += '<div style="margin-top:11px;">';
   if (modLeft > 0) html += raceMkChipHtml(t('race_mk_task_b_pool').replace('{n}', String(modLeft)), '');
   html += raceMkChipHtml(t('race_mk_task_b_stat').replace('{n}', String(modDone)), '');
   html += '</div>';
+  var rowIdx = 0;
   for (i = 0; i < RACE_SECTIONS.length; i++) {
     var s = RACE_SECTIONS[i];
     if (s.key === 'all') continue;
     var done = !!(mk.mods && mk.mods[s.key]);
-    html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;' + (i > 1 ? 'border-top:1px solid #F0F3F6;' : '') + '">';
-    html += '<span style="flex:none;font-size:17px;line-height:1;">' + s.icon + '</span>';
+    html += '<div style="display:flex;align-items:center;gap:11px;padding:10px 0;'
+      + (rowIdx ? 'border-top:1px dashed #EDF1F5;' : '') + '">';
+    html += '<span style="flex:none;width:32px;height:32px;border-radius:9px;background:#F2F7FC;'
+      + 'display:flex;align-items:center;justify-content:center;font-size:16px;">' + s.icon + '</span>';
     html += '<span style="flex:1;min-width:0;font-size:13.5px;font-weight:600;color:#000;">' + escapeHtml(en ? s.en : s.cn) + '</span>';
     if (done) {
-      html += '<span style="flex:none;font-size:11.5px;font-weight:700;color:#1b5e20;background:#E8F5E9;'
-        + 'border-radius:999px;padding:3px 9px;white-space:nowrap;">' + t('race_mk_task_done') + '</span>';
+      html += '<span style="flex:none;font-size:11px;font-weight:700;color:#2E7D32;background:#EDF7EE;'
+        + 'border:1px solid #CFE8D2;border-radius:999px;padding:3px 10px;white-space:nowrap;">' + t('race_mk_task_done') + '</span>';
     } else {
       html += '<button class="action-btn secondary" style="font-size:12px;padding:5px 14px;margin:0;" onclick="raceMkTaskBegin(\'' + s.key + '\')">' + t('race_mk_task_go') + '</button>';
     }
     html += '</div>';
+    rowIdx++;
   }
   html += '</div></div>';
   html += '<button class="action-btn secondary" style="width:100%;" onclick="goBack()">' + (en ? 'Back' : '返回') + '</button>';
@@ -17652,7 +17686,7 @@ function renderWrongList() {
 //  记答案而不记知识。光多开练习入口没用，必须让答错的题自己回来找他，而且只有
 //  隔天再答对才算数。于是：
 //    · 每道错题带一个掌握阶 st(0..2) 和下次到期时间 due；
-//    · 答对一次升一阶（1 天 / 3 天后再考），第 1、2、5 天各答对一次即巩固完成（2026-11-10 由三阶缩短）；
+//    · 答对一次升一阶（第 3 天 / 第 5 天再考），第 1、3、5 天各答对一次即巩固完成（2026-11-10 由三阶缩短）；
 //    · 巩固完成后仍会被练习抽查两次（+7 天 / +30 天），答错原样回错题本第 1 阶；
 //    · 同一局 / 同一天里重复答对不算（防连点刷掉），且间隔至少 4 小时；
 //    · 到期错题会优先出现在练习、模拟考、答题赛里，但永远只在本板块内 ——
@@ -17801,11 +17835,12 @@ function reviewTagName(tag) {
 }
 
 // ---- 掌握阶与到期调度 ----
-// 两阶走满即巩固完成（2026-11-10 用户拍板缩短）：第 1 天答对 → 1 阶，第 2 天答对 → 2 阶，
-// 第 5 天再答对一次即巩固完成。原来是三阶（1/3/7 天，最快 12 天），对酒店同事太长，
+// 两阶走满即巩固完成（2026-11-10 用户拍板缩短；2026-11-12 领导确认节奏 = 第 1/3/5 天）：
+// 第 1 天答对 → 1 阶，第 3 天答对 → 2 阶，第 5 天再答对一次即巩固完成。
+// 原来是三阶（1/3/7 天，最快 12 天），对酒店同事太长，
 // 中途一断就前功尽弃；5 天的节奏既保住「隔天回忆」的记忆价值，也不至于劝退。
-var WRONG_STAGE_MAX = 2;                       // 走满两阶（隔 1 天、隔 3 天）= 巩固完成
-var WRONG_INTERVALS = [1, 3];                  // 第 1/2 阶通过后的复习间隔（天）
+var WRONG_STAGE_MAX = 2;                       // 走满两阶（第 3 天、第 5 天）= 巩固完成
+var WRONG_INTERVALS = [2, 2];                  // 第 1/2 阶通过后的复习间隔（天）：第 1 天答对 → 第 3 天，第 3 天答对 → 第 5 天
 // 展示层的「点点」是三个（2026-11-11 领导）：答对一次点亮一个，三个都点亮 =
 // 巩固完成移出错题本。内部阶数是 2（第 3 次答对直接巩固完成），所以点数 = 阶数 + 1；
 // 只改展示不改调度，别动 WRONG_STAGE_MAX。
@@ -17870,6 +17905,17 @@ function wrongNormEntry(e) {
   if (e.due > 0) {
     var _mid = wrongDueTs(0, e.due);
     if (e.due !== _mid) e.due = _mid;
+  }
+  // 间隔改版迁移（2026-11-12 领导确认节奏 = 第 1/3/5 天）：已进阶条目的到期时间一律
+  // 按「最后一次答对日 + 新间隔」重推，存量 [1,3] 旧节奏的条目自动归到新节奏。
+  // 只动 st>=1 的条目（st=0 本来就是立即到期）；last 就是当次进阶的作答时间，幂等。
+  if (e.st >= 1) {
+    var _st2 = Math.min(e.st, WRONG_STAGE_MAX);
+    var _base = e.last || e.timestamp || 0;
+    if (_base) {
+      var _nd = wrongDueTs(WRONG_INTERVALS[_st2 - 1] || 2, _base);
+      if (e.due !== _nd) e.due = _nd;
+    }
   }
   return e;
 }
@@ -18769,8 +18815,7 @@ function wrongRowListHtml(rows) {
     h += '<span>' + escapeHtml(wrongBankLabel(row.skey)) + (sectionDisplay ? ' · ' + escapeHtml(sectionDisplay) : '') + ' · ' + getTypeShort(row.e.type) + '</span>';
     h += '<span>' + (doneToday
       ? '<b style="color:#2e7d32;">✓ ' + t('rv_done_today_tag') + '</b>'
-        + (doneDays > 0 ? ' · ' + t('rv_due_in').replace('{n}', String(doneDays))
-          : ' · ' + (stNow < WRONG_STAGE_MAX ? t('rv_done_today_next') : t('rv_done_today_grad')))
+        + (doneDays > 0 ? ' · ' + t('rv_due_in').replace('{n}', String(doneDays)) : '')
       : (dueNow
         ? '<b style="color:#e65100;">⏰ ' + t('rv_due_now') + '</b>'
         : '<span style="white-space:nowrap;">⏳ ' + t('rv_due_in').replace('{n}', String(doneDays)) + '</span>')) + '</span>';
