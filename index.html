@@ -9235,8 +9235,9 @@ function loginSubmit() {
     if (!state.loginEmp || normEmpNo(state.loginEmp) !== emp) return; // superseded
     if (isEmpNotInRoster(emp)) {
       state.loginBusy = false;
-      loginErr(t('profile_emp_off_roster'));
+      state.loginMsg = t('profile_emp_off_roster');
       render();
+      loginErr(t('profile_emp_off_roster'));
       return;
     }
     return resolveEmpAccount(emp).then(function(r) {
@@ -9246,6 +9247,9 @@ function loginSubmit() {
       // 拦掉时会把老员工判成新员工、直接弹注册表单 —— 她一旦提交就把云端
       // 密码和历史覆盖了。这里必须停在第一步，只报网络问题。
       if (!r.exists && r.cloudUnreachable) {
+        // 写进 state（renderLoginStep1 会画出来），否则下一次重绘就把话冲掉，
+        // 页面看起来又变成"什么都没发生"。
+        state.loginMsg = t('login_cloud_retry');
         loginErr(t('login_cloud_retry'));
         render();
         return;
