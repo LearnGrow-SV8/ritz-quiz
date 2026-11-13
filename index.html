@@ -5233,11 +5233,15 @@ function adminAuthRestore() {
   return false;
 }
 function adminAuthPersist() {
+  // 同学员端：写后读回，写不进去就标记，管理后台登录页亮黄条。
   try {
-    localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({
+    var v = JSON.stringify({
       exp: Date.now() + ADMIN_SESSION_HOURS * 3600 * 1000,
       at: Date.now()
-    }));
+    });
+    if (!storageWriteVerified(ADMIN_SESSION_KEY, v)) {
+      noteErr('admin-session', new Error('admin session could not be saved on this device'));
+    }
   } catch (e) {}
 }
 function adminAuthClear() {
@@ -5364,6 +5368,7 @@ var I18N = {
   login_busy: {cn:'⏳ 正在查找账号…', en:'⏳ Looking up your account…'},
   login_cloud_retry: {cn:'⚠️ 无法连接云端，请检查网络后重试', en:'⚠️ Could not reach the cloud — check your connection and try again'},
   login_enter_fail: {cn:'⚠️ 进入账号失败，请重试；若反复失败请联系培训部', en:'⚠️ Could not open your account — please retry, or contact the training team if it keeps failing'},
+  storage_ephemeral: {cn:'⚠️ 本机浏览器无法记住登录状态：刷新或重开页面都要重新登录，学习进度也不会保存在这台设备上。常见原因（按顺序检查）：\n① iPhone 储存空间已满 —— 设置 → 通用 → iPhone 储存空间，清理后再打开本页；\n② Safari 关闭了网站数据 —— 设置 → App → Safari → 拉到最底「阻止所有 Cookie」→ 关闭；\n③ 正在无痕/隐私模式浏览 —— 换普通标签页打开。', en:'⚠️ This browser cannot remember your session: every refresh signs you out and progress is not kept on this device. Check in order:\n(1) iPhone storage is full — Settings → General → iPhone Storage, free up space and reopen;\n(2) Safari website data is blocked — Settings → Apps → Safari → scroll to "Block All Cookies" → off;\n(3) You are in Private Browsing — open a normal tab.'},
   login_pin_label: {cn:'登录密码（6 位数字）', en:'Login password (6 digits)'},
   login_pin_ph: {cn:'请输入登录密码', en:'Enter your password'},
   login_pin_new: {cn:'设置登录密码', en:'Choose a password'},
@@ -9164,6 +9169,45 @@ function noteErr(label, e) {
 function safeStep(label, fn, fallback) {
   try { return fn(); } catch (e) { noteErr(label, e); return fallback; }
 }
+// ===== 存储探针（2026-11-13）=====
+// 学员端和管理后台的"记住我"都落在 localStorage，而所有写入都包着静默 try/catch；
+// 一旦本机写不进去（储存空间满 / Safari 阻止所有 Cookie / 无痕模式），员工只会看到
+// "一刷新就要重新登录"，谁也不知道原因。这里在每次开机时探测：同一个标签页里
+// sessionStorage（活过刷新的内存会话）还在、而 localStorage 的探针没了 → 数据
+// 活不过刷新；或写入直接抛错 → 标记 state.storageEphemeral，登录页 / 首页 /
+// 管理后台登录页据此亮出黄条，把修法写给员工看。
+var STORAGE_PROBE_LS = '__qzStoreProbe';
+var STORAGE_PROBE_SS = '__qzStoreProbeSess';
+function storageProbeOnBoot() {
+  try {
+    var hadSess = false, hadLocal = false;
+    try { hadSess = !!sessionStorage.getItem(STORAGE_PROBE_SS); } catch (eS) {}
+    try { hadLocal = !!localStorage.getItem(STORAGE_PROBE_LS); } catch (eL) {}
+    if (hadSess && !hadLocal) state.storageEphemeral = true;
+    try { sessionStorage.setItem(STORAGE_PROBE_SS, '1'); } catch (eS2) {}
+    try { localStorage.setItem(STORAGE_PROBE_LS, '1'); } catch (eL2) { state.storageEphemeral = true; }
+  } catch (eP) {
+    try { state.storageEphemeral = true; } catch (eP2) {}
+  }
+}
+// 写完必须读得回来才算写成功：读不回来 = 本机保存被静默丢弃。
+function storageWriteVerified(key, val) {
+  try {
+    localStorage.setItem(key, val);
+    if (localStorage.getItem(key) !== val) { state.storageEphemeral = true; return false; }
+    return true;
+  } catch (e) {
+    state.storageEphemeral = true;
+    return false;
+  }
+}
+// 黄条：只在探测到本机存不住数据时出现。
+function storageWarnHtml() {
+  if (!state.storageEphemeral) return '';
+  var en = state.lang === 'en';
+  return '<div style="background:#FFF6E0;color:#5C4400;border:1px solid #E8D08A;border-radius:10px;padding:12px 14px;margin:12px;font-size:13px;line-height:1.65;white-space:pre-line">' +
+    escapeHtml(t('storage_ephemeral')) + '</div>';
+}
 // 首页自身画不出来时的过渡页：账号已经进来了，别把人留在登录页反复输密码。
 function fallbackPageHtml() {
   var msg = '';
@@ -9182,7 +9226,9 @@ function finishEmpLogin(akey, p) {
   try { localStorage.removeItem('__lastError'); } catch (e0) {}
   state.lastError = '';
   safeStep('write-profile', function () { localStorage.setItem(akey + '_profile', JSON.stringify(p)); });
-  safeStep('write-current', function () { localStorage.setItem('currentUser', akey); });
+  // 写后读回：本机存不进去（储存空间满 / Safari 阻止 Cookie）时立刻亮黄条，
+  // 否则员工下次刷新被踢回登录页，只会觉得"平台坏了"。
+  if (!storageWriteVerified('currentUser', akey)) noteErr('write-current', new Error('session could not be saved on this device'));
   state.currentUser = akey;
   state.pendingQuickKey = '';
   state.loginStep = 1;
@@ -9635,6 +9681,7 @@ function doLogout() {
 function renderLogin() {
   var en = state.lang === 'en';
   var html = '<div class="login-page">';
+  html += storageWarnHtml();
   html += '<div class="login-card">';
   html += '<img class="login-logo" src="assets/logo.webp" alt="The Ritz-Carlton Shenzhen">';
   html += '<h2>' + t('app_title') + '</h2>';
@@ -10188,6 +10235,8 @@ function renderHome() {
   // 手机上左右一滑就拖着全部内容在白色底板上漂。包上之后宽度刚好贴合屏幕，
   // 通栏头图效果也才是设计本意。
   var html = '<div class="page">';
+  // 本机存不住数据时黄条（2026-11-13）：放在 hero 之后、同步提示之前。
+  html += storageWarnHtml();
   // 首页 hero 右上角也放"我的头像"（2026-11-06）：跟各页 banner 同款同位置，
   // 员工在任何一屏抬头都能看到自己；点击直达头像编辑页。
   html += '<div class="home-hero"><img class="hero-logo" src="assets/logo.webp" alt="The Ritz-Carlton Shenzhen">'
@@ -11241,7 +11290,7 @@ var BADGE_DESC_TEXT = {
   bd_fav:     { cn: '累计收藏 20 道题目，收纳重点知识考题', en: '20 questions saved — your own key-point shelf' },
   bd_prac:    { cn: '练习模式累计完成 100 道练习，温故巩固知识', en: '100 practice answers — review makes it stick' },
   bd_newb:    { cn: '注册首周完成 3 次打卡，开启你的学习之旅', en: '3 check-ins in your first week — the journey starts' },
-  bd_night:   { cn: '22:00–次日 5:00 完成打卡，致敬夜晚坚持学习的你', en: 'Check in between 10 PM and 5 AM — for the night learners' },
+  bd_night:   { cn: '22:00–次日 5:00 完成打卡满 3 次，致敬夜晚坚持学习的你', en: '3 night check-ins between 10 PM and 5 AM — for the night learners' },
   bd_wkend:   { cn: '累计周末完成 3 天打卡', en: '3 weekend check-ins all-time' },
   bd_perf:    { cn: '单场限时竞速答对 10 题以上，答题实力在线', en: '10+ correct in one race run — speed meets accuracy' },
   bd_fast:    { cn: '单赛季答题平均每题用时 ≤5 秒（至少答对 8 题），反应敏捷', en: 'Avg \u2264 5 sec per question (8+ answered) — lightning reflexes' },
@@ -11280,7 +11329,8 @@ function badgeDefaultCatalog() {
       badgeDef('bd_fav', FV, 20, '考点收藏家', 'Key Point Collector', '⭐', 3, '#ffe9a8', '#c08a00'),
       badgeDef('bd_prac', PR, 100, '温故知新', 'Review Master', '📖', 3, '#bfe3ff', '#1a5c96'),
       badgeDef('bd_newb', NB, 3, '初出茅庐', 'First Steps', '🌱', 1, '#c8e6c9', '#388e3c'),
-      badgeDef('bd_night', N, 1, '夜猫子', 'Night Owl', '🦉', 2, '#c5cae9', '#303f9f'),
+      // 夜猫子 2026-11-13：门槛 1 次 → 3 次（同届累计，按流水 ts 判定）
+      badgeDef('bd_night', N, 3, '夜猫子', 'Night Owl', '🦉', 2, '#c5cae9', '#303f9f'),
       badgeDef('bd_wkend', W, 3, '周末战士', 'Weekend Warrior', '⚔️', 2, '#b2dfdb', '#00695c'),
       badgeDef('bd_perf', PF, 10, '答题能手', 'Run Sharpshooter', '💯', 3, '#f8bbd0', '#ad1457'),
       badgeDef('bd_fast', F, 5, '闪电快手', 'Lightning Fast', '⚡', 3, '#ffe08a', '#ef6c00'),
@@ -11411,6 +11461,19 @@ function badgePatchThemeMc(list) {
   }
   return changed;
 }
+// 夜猫子门槛 1 次 → 3 次（2026-11-13）：与管理端发布无关，按值打补丁 —— 已发布的云端目录、
+// 各设备本地缓存里的旧目录（bd_night n=1）读到内存时统一升到 3，口径全站一致。
+function badgePatchNightN(list) {
+  var changed = false;
+  for (var i = 0; i < list.length; i++) {
+    var b = list[i];
+    if (!b || b.rule !== BADGE_RULE_NIGHT || b.id !== 'bd_night') continue;
+    if ((b.n || 0) === 3) continue;
+    b.n = 3;
+    changed = true;
+  }
+  return changed;
+}
 // v6 → v7（2026-11-04）：一枚「题库征服者」按板块拆成三枚。
 // 同样**不能靠 ver 比较**（发布过的目录 ver 是 Date.now()），按"老 id 还在不在"判定：
 // 见到 bd_depttop 就删掉、补进三枚新的，并把老徽章调过的门槛（n / lv / 配色）继承下来；
@@ -11484,6 +11547,7 @@ function raceBadgeCatalog() {
   if (ver < 5) { badgeMigrationV5(list); ver = 5; }
   // 不受 ver 限制：发布过的目录 ver 是时间戳，只能按值打补丁（见 badgePatchThemeMc）
   badgePatchThemeMc(list);
+  badgePatchNightN(list);
   badgePatchSplitDeptTop(list);
   // 已下线的 id 一律剔掉：云端目录若还是旧版（管理员没重发布 / 旧缓存），界面也不会再画出来
   badgeDropRetired(list);
@@ -11748,17 +11812,21 @@ function raceComputeAwards(rec) {
       }
     }
   }
-  // 夜猫子：按流水 ts 判断（北京时间 22:00~凌晨5点）。流水会裁剪，所以"有记录的第一次"即达成；
+  // 夜猫子：按流水 ts 判断（北京时间 22:00~凌晨5点）。2026-11-13 起门槛为**同届累计 3 次**
+  //（第 3 次那天达成，达成日记那天）。流水会裁剪，所以达成过的（box 已有）不会被重算冲掉；
   // 没有届次 id 的老流水按自然月归期，不会丢。达成日用北京日期（不跟设备时区走）。
   var log = Array.isArray(rec.log) ? rec.log : [];
+  var nightCnt = {};
   for (i = 0; i < log.length; i++) {
     var le = log[i];
     if (!le || !le.ts || !raceIsNightTs(le.ts)) continue;
     var nightDay = raceDayKeyBj(le.ts);
     var nKey = le.id || nightDay.slice(0, 7);
+    nightCnt[nKey] = (nightCnt[nKey] || 0) + 1;
     for (k = 0; k < defs.length; k++) {
       d = defs[k];
       if (d.rule !== BADGE_RULE_NIGHT) continue;
+      if (nightCnt[nKey] !== d.n) continue;   // 恰好第 N 次：只记达成那天，不重复发
       if (!out[nKey]) out[nKey] = {};
       if (!out[nKey][d.id]) out[nKey][d.id] = nightDay;
     }
@@ -12000,6 +12068,9 @@ function raceAwardBadges(rec, rid, minDays) {
       if (def && (!rid || period === rid || period === '_') && !seen[period + '|' + id]) {
         seen[period + '|' + id] = 1;
         got.push(raceBadgeAward(def, awards[period][id], period));
+        // 限定月度主题徽章拿到即自动展示（2026-11-13）：直接写 showBadge，随快照同步到云端；
+        // 只在发放时写一次，学员之后手动「设为展示」别的徽章不会被这里覆盖。
+        if (def.rule === BADGE_RULE_THEME) rec.showBadge = id;
       }
     }
   }
@@ -12150,6 +12221,8 @@ function raceTopBadgeOf(list) {
 }
 // 排行榜展示哪一枚：学员在「我的徽章」里自选的优先（rec.showBadge 随快照同步到云端，
 // 别人看他的榜单行时用同一份记录）；没选 / 选的已经拿不到了 → 退回「等级最高、同级取最新」。
+// 限定月度主题徽章在**发放那一刻**自动写入 showBadge（见 raceAwardBadges）——稀缺性先被看见，
+// 学员之后手动换别的仍以手动为准，两边不打架。
 function raceDisplayBadgeOf(rec, list) {
   list = list || [];
   var want = rec && rec.showBadge;
@@ -12195,7 +12268,7 @@ function raceBadgeDesc(b, lang) {
     : (b && b.rule) || (b && b.kind === 's' ? BADGE_RULE_STREAK : (b && b.kind === 't' ? BADGE_RULE_TOTAL : BADGE_RULE_PERIOD));
   var n = (def ? def.n : (b && (b.n || b.minDays))) || 0;
   if (L === 'en') {
-    if (rule === BADGE_RULE_NIGHT) return 'Check in after 10 PM';
+    if (rule === BADGE_RULE_NIGHT) return 'Check in ' + n + ' times between 10 PM and 5 AM (same round)';
     if (rule === BADGE_RULE_WEEKEND) return n + ' weekend days all-time';
     if (rule === BADGE_RULE_PERFECT) return n + '+ correct answers in a single race run';
     if (rule === BADGE_RULE_FAST) return 'Avg \u2264 ' + n + ' sec per question';
@@ -12218,7 +12291,7 @@ function raceBadgeDesc(b, lang) {
     return rule === BADGE_RULE_STREAK ? (n + ' days in a row')
       : rule === BADGE_RULE_PERIOD ? (n + ' days in one round') : (n + ' days all-time');
   }
-  if (rule === BADGE_RULE_NIGHT) return '22:00 后打卡（凌晨 5 点前也算）';
+  if (rule === BADGE_RULE_NIGHT) return '22:00–次日 5:00 完成打卡满 ' + n + ' 次（同届累计）';
   if (rule === BADGE_RULE_WEEKEND) return '累计周末打卡 ' + n + ' 天';
   if (rule === BADGE_RULE_PERFECT) return '单场竞速答对 ' + n + ' 题以上';
   if (rule === BADGE_RULE_FAST) return '单期平均每题不超过 ' + n + ' 秒（至少答对 ' + BADGE_FAST_MIN_ANS + ' 题）';
@@ -12269,9 +12342,17 @@ function raceBadgeProgressOf(rec, def) {
     return { cur: Math.min(n2, def.n), max: def.n };
   }
   if (def.rule === BADGE_RULE_NIGHT) {
-    var lg = Array.isArray(rec && rec.log) ? rec.log : [], hitN = false, q;
-    for (q = 0; q < lg.length; q++) if (lg[q] && lg[q].ts && raceIsNightTs(lg[q].ts)) { hitN = true; break; }
-    return { cur: hitN ? 1 : 0, max: def.n };
+    // 夜猫子门槛是**同届累计 3 次**（2026-11-13）：进度按当前届的夜间流水数算，跟发放口径一致；
+    // 没有进行中的届就报终身累计，反正只是参考。
+    var lg = Array.isArray(rec && rec.log) ? rec.log : [], cntN = 0, q;
+    var curRidN = (raceConfOf() || {}).id || '';
+    for (q = 0; q < lg.length; q++) {
+      var leN = lg[q];
+      if (!leN || !leN.ts || !raceIsNightTs(leN.ts)) continue;
+      if (curRidN && (leN.id || '') !== curRidN) continue;
+      cntN++;
+    }
+    return { cur: Math.min(cntN, def.n), max: def.n };
   }
   if (def.rule === BADGE_RULE_PERFECT) {
     // 真实进度：历史上**单场**最佳答对数（2026-11-05）——旧版只报 0/1，
@@ -14737,7 +14818,7 @@ function raceBadgeProgText(def, prg, en) {
   if (r === BADGE_RULE_PRACTICE) return cur + '/' + max + (en ? ' q' : ' 题');
   if (r === BADGE_RULE_FAST) return (en ? '\u2264' : '≤') + max + (en ? ' s/q' : ' 秒/题');
   if (r === BADGE_RULE_PERFECT) return (en ? '\u2265' : '≥') + max + (en ? ' correct' : ' 题');
-  if (r === BADGE_RULE_NIGHT) return en ? '1 run' : '1 次';
+  if (r === BADGE_RULE_NIGHT) return cur + '/' + max + (en ? ' runs' : ' 次');
   if (r === BADGE_RULE_THEME) {
     // 双条件一起报：打卡 x/N 天 · 答对 y/M 题（没有第二道门槛就只报天数）
     var dTxt = (prg.dCur || 0) + '/' + (prg.dMax || max) + (en ? 'd' : ' 天');
@@ -16357,7 +16438,7 @@ function badgeSuggestFromDesc(desc) {
   else if (/单期|本期|周期|月度|每月|月内|round|month|period/.test(low)) rule = BADGE_RULE_PERIOD;
   else if (/连续|一连|连打卡|streak|in a row|consecutive/.test(low)) rule = BADGE_RULE_STREAK;
   var m = low.match(/(\d+)\s*(天|日|day|days|题|道|秒|sec|question|questions|名)/);
-  var nDef = rule === BADGE_RULE_NIGHT ? 1 : rule === BADGE_RULE_WEEKEND ? 3
+  var nDef = rule === BADGE_RULE_NIGHT ? 3 : rule === BADGE_RULE_WEEKEND ? 3
     : rule === BADGE_RULE_PERFECT ? 10 : rule === BADGE_RULE_FAST ? 5
     : rule === BADGE_RULE_NEWBIE ? 3
     : rule === BADGE_RULE_DEPT_TOP || rule === BADGE_RULE_ALL_TOP ? 10
@@ -21625,6 +21706,7 @@ function adminGoToPaper(paperKey) {
 
 function renderAdminLogin() {
   var html = '<div class="admin-login"><div class="admin-login-card">';
+  html += storageWarnHtml();
   html += '<img class="admin-logo" src="assets/logo.webp" alt="The Ritz-Carlton Shenzhen">';
   html += '<h2>' + (state.lang === 'en' ? 'Admin Panel' : '\u7ba1\u7406\u540e\u53f0') + '</h2>';
   html += '<input type="password" id="adminPwd" placeholder="' + (state.lang === 'en' ? 'Enter password' : '\u8bf7\u8f93\u5165\u7ba1\u7406\u5bc6\u7801') + '" onkeypress="if(event.key===\'Enter\')adminLoginAttempt()" autofocus>';
@@ -29989,6 +30071,10 @@ try { raceSettleOnBoot(); } catch (eBoot) {}
 // 待补传心跳（2026-11-06）：队列里还有没传出去的成绩时，每 20 秒补一次；
 // 联网 / 回到前台立刻补一次；没有待补传就一次请求都不发。
 try { raceSyncStartLoop(); } catch (eLoop) {}
+// 存储探针（必须在第一次 render 之前）：判断本机 localStorage 能否活过刷新，
+// 活不过就在登录页 / 首页 / 管理后台登录页亮黄条说明原因，而不是让员工反复
+// 重登却不知道为什么。
+try { storageProbeOnBoot(); } catch (eProbe) {}
 // 刷新留在原页（必须在第一次 render 之前）：员工在排行榜 / 日历 / 错题本上点刷新时
 // 原地重新拉一份最新数据，而不是被送回首页。
 try { routeRestoreOnBoot(); } catch (eRoute) {}
