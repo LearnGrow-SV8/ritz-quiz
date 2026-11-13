@@ -5568,6 +5568,7 @@ var I18N = {
   race_confirm_hint: {cn:'选好后点下方「确认作答」，确认后不能修改', en:'Tap Confirm below once you choose - it cannot be changed'},
   race_need_pick: {cn:'请先选择一个答案再确认', en:'Please choose an answer first'},
   race_view_board: {cn:'查看排行榜', en:'View leaderboard'},
+  race_cal_to_wrong: {cn:'进入错题本', en:'Open error notebook'},
   race_review: {cn:'查看答案解析', en:'Review answers'},
   race_submit_ok: {cn:'成绩已提交', en:'Score submitted'},
   // 成绩上传的四种终态（2026-11-06）：以前只有一句"上传失败，将自动重试"，
@@ -15133,6 +15134,8 @@ function renderRaceCalendar() {
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">🔁 ' + t('race_study_cal') + '</button>';
   // 看完自己的打卡记录，顺手就能看自己在榜上第几（页面底部，次级入口）
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
+  // 复盘完顺手清错题：日历里当天明细只能重做单场，这里给整本错题本的入口（2026-11-13 领导）
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="wrongOpenSrc(\'\')">📖 ' + t('race_cal_to_wrong') + '</button>';
   // 「补签机会与任务」卡已退役（2026-11-12 领导十一调）：补签入口全部收敛到
   // 虚线日期弹窗（金框=可补 / 灰框=可赚），弹窗里都有「查看任务与进度」按钮，
   // 页面底部再放一张卡纯属重复 —— 大多数人滑不到那么低，看到的还以为是另一套入口。
@@ -19216,10 +19219,12 @@ function rvBlkHeadHtml(icon, title, desc, right) {
 // 归档列表排序：错题次数多的排最前（2026-11-11 领导：错 8 次的要顶到最上面）。
 // 只在**展示**时排，不动 wrongRowsAll 的到期序 —— 组卷、优先插入还依赖那个顺序。
 function wrongRowsByTimes(rows) {
+  // 排序：错的次数多在前；同次数内按**入库时间**旧的在前、新进的压轴（2026-11-13 领导：
+  // 刚入库的题放最后，学员从上往下找，新面孔一眼就能翻到）。
   return (rows || []).slice().sort(function (a, b) {
     var na = (a.e && a.e.n) || 1, nb = (b.e && b.e.n) || 1;
     if (nb !== na) return nb - na;
-    return ((b.e && (b.e.timestamp || b.e.last)) || 0) - ((a.e && (a.e.timestamp || a.e.last)) || 0);
+    return (((a.e && (a.e.timestamp || a.e.last)) || 0)) - (((b.e && (b.e.timestamp || b.e.last)) || 0));
   });
 }
 function wrongRowListHtml(rows) {
