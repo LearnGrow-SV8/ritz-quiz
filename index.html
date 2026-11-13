@@ -5003,11 +5003,12 @@ function loadUserData() {
   if (!Array.isArray(state.reviewLog)) state.reviewLog = [];
   if (!state.mastered || typeof state.mastered !== 'object') state.mastered = {};
   if (!state.mcheck || typeof state.mcheck !== 'object') state.mcheck = {};
-  wrongNormAll();   // 老版本存的错题条目没有掌握阶，这里补齐（st=0 立即到期）
+  // 归一化要在 try 里：错题条目是历史累积的，任何一条形状异常都不能挡住登录。
+  try { wrongNormAll(); } catch (eWN) { noteErr('wrong-norm', eWN); }   // 老版本存的错题条目没有掌握阶，这里补齐（st=0 立即到期）
   state.profile = loadProfile();
   // Push the latest cumulative snapshot to the admin cloud view on every login /
   // app open. Silent + throttled; retried on the next trigger if offline.
-  scheduleSync(false);
+  try { scheduleSync(false); } catch (eSy) { noteErr('schedule-sync', eSy); }
 }
 
 // ===== Personal profile (real name / English name / employee ID / department) =====
@@ -9143,13 +9144,45 @@ function resolveEmpAccount(emp, force) {
 }
 
 // Land in an account: write the profile, switch the active user, load data.
+// 记录一条故障（手机上没有控制台，日志只能写在本机 + 页面一行灰字上）。
+// 只要这里被调用，登录页底部就会显示最后一条，用户截图即可定位。
+function noteErr(label, e) {
+  var msg = '';
+  try {
+    msg = (e && (e.message || e)) ? String(e.message || e) : '';
+    var st = (e && e.stack) ? (String(e.stack).split('\n')[1] || '') : '';
+    st = st.replace(/^\s+/, '').slice(0, 90);
+    if (st) msg += ' @' + st;
+  } catch (e2) {}
+  msg = label + ': ' + msg;
+  try { state.lastError = msg.slice(0, 200); } catch (e3) {}
+  try { localStorage.setItem('__lastError', msg.slice(0, 300) + ' @ ' + new Date().toISOString()); } catch (e4) {}
+  try { console.warn('[guard] ' + msg); } catch (e5) {}
+  return msg;
+}
+// 一步一兜底：某一段出错就记下来继续走，绝不连累整个登录。
+function safeStep(label, fn, fallback) {
+  try { return fn(); } catch (e) { noteErr(label, e); return fallback; }
+}
+// 首页自身画不出来时的过渡页：账号已经进来了，别把人留在登录页反复输密码。
+function fallbackPageHtml() {
+  var msg = '';
+  try { msg = state.lastError || localStorage.getItem('__lastError') || ''; } catch (e) {}
+  return '<div style="padding:26px 18px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;color:#000;">' +
+    '<h3 style="font-size:17px;margin:0 0 10px;">已进入账号，但首页显示出错</h3>' +
+    '<p style="font-size:13px;line-height:1.7;color:#555;margin:0 0 18px;">你的账号和学习记录都在本机，这只是显示层的问题。请先截图这一页发给培训部，再点下面的按钮。</p>' +
+    '<button onclick="location.reload()" style="width:100%;padding:13px;border:0;border-radius:10px;background:#000;color:#fff;font-size:15px;margin-bottom:10px;">重新加载</button>' +
+    '<button onclick="try{localStorage.removeItem(\'currentUser\')}catch(e){};location.reload()" style="width:100%;padding:13px;border:1px solid #ddd;border-radius:10px;background:#fff;color:#000;font-size:14px;">退出，回到登录页</button>' +
+    (msg ? '<div style="margin-top:16px;font-size:10px;line-height:1.6;color:#999;word-break:break-all;">🩺 ' + escapeHtml(String(msg).slice(0, 180)) + '</div>' : '') +
+    '</div>';
+}
 function finishEmpLogin(akey, p) {
   if (!akey) return;
   // 进账号成功 ⇒ 上一次的故障痕迹作废，别把旧报错一直挂在页面上。
   try { localStorage.removeItem('__lastError'); } catch (e0) {}
   state.lastError = '';
-  try { localStorage.setItem(akey + '_profile', JSON.stringify(p)); } catch (e) {}
-  try { localStorage.setItem('currentUser', akey); } catch (e) {}
+  safeStep('write-profile', function () { localStorage.setItem(akey + '_profile', JSON.stringify(p)); });
+  safeStep('write-current', function () { localStorage.setItem('currentUser', akey); });
   state.currentUser = akey;
   state.pendingQuickKey = '';
   state.loginStep = 1;
@@ -9159,11 +9192,12 @@ function finishEmpLogin(akey, p) {
   state.loginDraft = null;
   state.loginPinHash = '';
   state.loginNameHint = '';
-  loadUserData();          // re-reads the profile we just wrote
-  rememberRecentUser(akey, profName(state.profile) || '', empOfKey(akey));
+  safeStep('load-data', function () { loadUserData(); });   // re-reads the profile we just wrote
+  safeStep('recent-users', function () { rememberRecentUser(akey, profName(state.profile) || '', empOfKey(akey)); });
   // Step 1 already verified the access code, so an incomplete profile may be
   // completed here (pendingProfile is what lets render() show the form).
-  if (!profileIsComplete()) {
+  var profileOk = safeStep('profile-check', function () { return profileIsComplete(); }, true);
+  if (!profileOk) {
     state.requireProfile = true;
     state.pendingProfile = true;
     state.currentPage = 'profile';
@@ -9184,7 +9218,19 @@ function finishEmpLogin(akey, p) {
       }).catch(function() {});
     }
   } catch (e) {}
-  render();
+  // 首页画不出来时不要把人甩回登录页：账号已经在本机了，给一张过渡页
+  //（带真实报错 + 重新加载 + 退出），比反复输密码强得多。
+  var drawn = safeStep('render-home', function () { render(); return true; }, false);
+  if (!drawn) {
+    var page = '';
+    try { page = document.getElementById('app'); } catch (e2) {}
+    if (page) {
+      safeStep('render-fallback', function () {
+        page.innerHTML = fallbackPageHtml();
+        return true;
+      }, false);
+    }
+  }
 }
 
 // ---- Step 1: employee ID + access code → decide the state ----
@@ -9303,6 +9349,7 @@ function completePinLogin(emp, akey, want) {
   finishEmpLogin(akey, p);
   } catch (err) {
     // 进账号过程中的任何异常都必须把状态**还原到密码页**。
+    noteErr('enter-account', err);
     // finishEmpLogin 已经把 currentUser 写进去、loginStep 复位成 1、小提示清空，
     // 如果只把 loginBusy 收拾一下就 render，界面会判成"未登录 + 资料不全"，
     // 画出一张空白的工号 / 验证码页 —— 用户看到的是"弹回首页、什么都没发生"。
