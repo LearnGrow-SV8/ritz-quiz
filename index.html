@@ -5918,32 +5918,33 @@ var I18N = {
   // 会以为要先做完任务一才能做任务二；再配一句总说明，把「可任选」讲在明面上。
   race_mk_task_a_tag: {cn:'任务一', en:'Task 1'},
   race_mk_task_b_tag: {cn:'任务二', en:'Task 2'},
-  race_mk_parallel_note: {cn:'以下两个任务相互独立，可任选其一完成，也可全部完成。', en:'The two tasks below are independent: do either one, or both.'},
+  race_mk_parallel_note: {cn:'两项任务相互独立，可任选或全部完成。', en:'Tasks are independent. You may complete either or both.'},
   race_mk_task_a_name: {cn:'错题巩固', en:'Error Mastery'},
   // 2026-11-12 任务一改版：从「每巩固完成 N 道」改为「错题本抽 5 题全对得 1 次」
-  race_mk_task_a_desc: {cn:'从错题本中随机抽取 5 道已开启巩固的错题，全部答对即可获得 1 次补签机会。仅限已开启巩固（至少答对过一次）的错题；刚进入错题本、还未复习的错题不参与抽取。', en:'Draw 5 consolidated wrong answers at random from your Error Notebook. Get all 5 right to earn one make-up credit. Only consolidated errors (answered right at least once) are eligible; brand-new mistakes must be reviewed first.'},
-  race_mk_task_a_stat: {cn:'本届挑战成功 {n} 次', en:'{n} passed this season'},
-  race_mk_task_a_pool: {cn:'符合条件的错题：{n} 道（需至少 5 道）', en:'Eligible wrong answers: {n} (at least 5 required)'},  race_mk_task_a_poor: {cn:'符合条件的错题不足 5 道，暂时无法开启此任务。请前往错题本开启复习，让符合条件的错题数量满足要求后再来挑战。', en:'Fewer than 5 eligible wrong answers — this task is locked for now. Review in the Error Notebook first, then come back once you have at least 5.'},
-  race_mk_task_a_cool: {cn:'本次挑战未通过，请先加强复习，明天再来看看。', en:'Not passed this time. Review first and come back tomorrow.'},
+  race_mk_task_a_desc: {cn:'从错题本中随机抽取 5 道已开启复习巩固的错题，全部答对，即可获得 1 次补签机会。', en:'Draw 5 random review-enabled questions from the error notebook. Answer all correctly to earn one make-up check-in chance.'},
+  race_mk_task_a_stat: {cn:'本届挑战成功：{n} 次', en:'Successful Attempts This Season: {n}'},
+  race_mk_task_a_pool: {cn:'符合条件错题：{n} 道', en:'Eligible Items: {n}'},  race_mk_task_a_poor: {cn:'符合条件的错题不足 5 道，暂时无法开启此任务。请前往错题本开启复习，让符合条件的错题数量满足要求后再来挑战。', en:'Fewer than 5 eligible wrong answers — this task is locked for now. Review in the Error Notebook first, then come back once you have at least 5.'},
+  race_mk_task_a_cool: {cn:'今日挑战已成功，明天再来继续挑战。', en:'Challenge passed today. Come back tomorrow for another round.'},
   race_mk_a_sub: {cn:'抽 5 道错题 · 全部答对即可', en:'5 drawn errors \u00b7 all correct to pass'},
   race_mk_a_pass: {cn:'挑战成功！补签机会 +1。', en:'Challenge passed. Make-ups +1.'},
   // 2026-11-12：已达上限还继续挑战的，成绩照记但额度不再增加，提示必须说实话
   race_mk_pass_capped: {cn:'挑战成功！本届补签次数已达上限（{cap} 次），本次不增加补签次数；挑战成功次数照常累计。', en:'Challenge passed. The season cap ({cap} credits) is already reached, so no credit was added — your pass count still went up.'},
-  race_mk_task_full_note: {cn:'本届补签次数已达上限（{cap} 次）；继续挑战成功不再增加补签次数，挑战成功次数照常累计。', en:'Season cap ({cap} credits) reached: further passes add no credits, but still count towards your pass total.'},
+  race_mk_task_full_note: {cn:'您本届补签次数已达上限，继续挑战不再获得额外补签机会。', en:'You have reached the seasonal cap for make up credits. Further challenges will not award additional credits.'},
   race_mk_a_fail: {cn:'请加强复习，期待下次挑战成功。', en:'Keep reviewing \u2014 good luck next time.'},
   race_mk_task_a_go: {cn:'前往错题本复习', en:'Review Error Notebook'},
   race_mk_task_b_name: {cn:'模块挑战', en:'Module Challenge'},
   // 卡头状态 pill（2026-11-12 任务卡重做）：一眼看出这个任务现在能不能做
   race_mk_state_ready: {cn:'可挑战', en:'Ready'},
   race_mk_state_locked: {cn:'未解锁', en:'Locked'},
-  race_mk_state_cool: {cn:'今日已挑战', en:'Done for today'},
+  race_mk_state_cool: {cn:'今日已完成', en:'Done today'},
   race_mk_state_alldone: {cn:'已全部完成', en:'All done'},
   // race_mk_state_full 已删（2026-11-12）：额度满了也能继续挑战，写「次数已满」跟
   // 头上的「可挑战」自相矛盾，学员以为不能做了。
   race_mk_task_b_pool: {cn:'本次有 {n} 个模块可供挑战', en:'{n} modules open for challenge'},
   race_mk_task_b_stat: {cn:'本届挑战成功 {n} 次', en:'{n} passed this season'},
-  race_mk_task_b_desc: {cn:'选定模块，答对 ≥{m}/{n} 题，获取一次补签；同一模块本届仅可领取一次', en:'Earn one credit by scoring ≥{m}/{n} in a module. One credit per module each season.'},
-  race_mk_task_go: {cn:'开始挑战', en:'Start challenge'},
+  race_mk_task_b_desc: {cn:'选定模块，答对 ≥{m}/{n} 题，获取一次补签；同一模块本届仅可领取一次。', en:'Earn one credit by scoring ≥{m}/{n}. One credit per module each season.'},
+  race_mk_task_go: {cn:'开始挑战', en:'Start Challenge'},
+  race_mk_task_retry: {cn:'再挑战一次', en:'Try Again'},
   race_mk_task_done: {cn:'已完成 ✓', en:'Completed ✓'},
   race_mk_mod_pass: {cn:'模块挑战通过，补签机会 +1。', en:'Module challenge passed. Make-ups +1.'},
   race_mk_mod_dup: {cn:'该模块本届已完成挑战，请更换模块。', en:'This module is already completed this round. Pick another one.'},
@@ -6123,7 +6124,7 @@ var I18N = {
   // "移出"；掌握阶 → "第几阶"。数字后面统一用"道"，不用"题"混着。
   rv_due_now: {cn:'该复习了', en:'Due now'},
   rv_due_in: {cn:'{n} 天后再复习', en:'in {n}d'},
-  rv_done_today_tag: {cn:'今日已作答', en:'answered today'},  rv_due_n: {cn:'{n} 道该复习', en:'{n} due'},
+  rv_done_today_tag: {cn:'今日已复习', en:'reviewed today'},  rv_due_n: {cn:'{n} 道该复习', en:'{n} due'},
   rv_tab_due: {cn:'该复习', en:'Due'},
   rv_tab_all: {cn:'全部错题', en:'All'},
   rv_tab_tag: {cn:'按知识点', en:'By topic'},
@@ -15877,7 +15878,7 @@ function renderRaceMakeup() {
           mk.gain = mkBefore.allow < mkBefore.cap;
         } catch (eGain) { mk.gain = true; }
       }
-      if (isA) { if (passed) raceMkATaskGrant(mk.rid); else raceMkATaskFailMark(mk.rid); }
+      if (isA) { if (passed) raceMkATaskGrant(mk.rid); }
       else if (isMod) { if (passed) raceMkModuleGrant(mk.rid, mk.module); }
       else if (passed) raceMakeupGrant(mk.day, mk.rid);
     }
@@ -15922,8 +15923,9 @@ function renderRaceMakeup() {
       html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="state.raceMakeup=null;navigate(' + ((isMod || isA) ? "'raceMkTask'" : "'raceCalendar'") + ')">'
         + ((isMod || isA) ? '🎯 ' + t('race_mk_task_entry') : '📅 ' + t('race_cal_open')) + '</button>';
     } else if (isA) {
-      // 任务A失败：当日冷却（次日才能再挑战），回任务页看复习入口
-      html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="state.raceMakeup=null;navigate(\'raceMkTask\')">🎯 ' + t('race_mk_task_entry') + '</button>';
+      // 任务A失败（2026-11-13 反转）：不设冷却，当场就能再挑战一次；复习入口照给
+      html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="raceMkATaskBegin()">🔄 ' + t('race_mk_task_retry') + '</button>';
+      html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="state.raceMakeup=null;navigate(\'raceMkTask\')">🎯 ' + t('race_mk_task_entry') + '</button>';
       html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="state.raceMakeup=null;wrongOpenSrc(\'manual\')">📚 ' + t('race_mk_task_a_go') + '</button>';
     } else {
       html += '<button class="action-btn primary" style="width:100%;margin-top:14px;" onclick="' + (isMod ? 'raceMkTaskBegin(\'' + mk.module + '\')' : 'raceMakeupChoose()') + '">🔄 ' + t('race_makeup_start') + '</button>';
@@ -15979,7 +15981,10 @@ function raceMakeupAdvance() {
   mk.results = Array.isArray(mk.results) ? mk.results : [];
   mk.results.push({ q: q, picked: cur.slice(), good: good });
   if (typeof recordAttempt === 'function') {
-    try { recordAttempt(q, cur, { ok: good, skey: 'manual', src: 'race' }); } catch (eR) {}
+    // keepStage 仅任务A（2026-11-13）：挑战答错不把错题打回第 0 阶，失败后资格池不被清空、
+    // 可以立刻再挑战；模块挑战与普通补签维持原口径（答错重进本，回错题本复习）。
+    var aKeep = !!(mk && mk.mode === 'atask');
+    try { recordAttempt(q, cur, { ok: good, skey: 'manual', src: 'race', keepStage: aKeep }); } catch (eR) {}
     try { saveState(); } catch (eS) {}
   }
   mk.cur = null;
@@ -16078,8 +16083,8 @@ function raceMkATaskBegin() {
   var rec = {};
   try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
   var rid = conf.id || '';
-  // 防刷第二道闸：当天挑战失败过 → 当日不能再挑战
-  if (rec.mkAFailDay && rec.mkAFailDay[rid] === raceDayKey(Date.now())) { alert(t('race_mk_task_a_cool')); return; }
+  // 防刷闸（2026-11-13 反转）：当天已挑战成功 → 明日再来；失败不清闸，可以立刻再挑战
+  if (rec.mkADoneDay && rec.mkADoneDay[rid] === raceDayKey(Date.now())) { alert(t('race_mk_task_a_cool')); return; }
   var ids = raceMkATaskPool();
   if (ids.length < RACE_MK_A_N) { alert(t('race_mk_task_a_poor')); return; }
   ids = shuffleArray(ids.slice()).slice(0, RACE_MK_A_N);
@@ -16092,24 +16097,18 @@ function raceMkATaskBegin() {
   state.raceMakeup = { pool: prepareQuestions(pool), idx: 0, correct: 0, day: '', rid: rid, mode: 'atask', cur: null, results: [] };
   navigate('raceMakeup');
 }
-// 任务A落库：挑战通过 → mkATask[届次] +1（每成功一次记 1 次补签额度）。
+// 任务A落库：挑战通过 → mkATask[届次] +1（每成功一次记 1 次补签额度），
+// 同时记 mkADoneDay（2026-11-13 反转：成功当天收闸，次日自动解锁，防止一天连刷）。
 function raceMkATaskGrant(rid) {
   if (!rid) return;
   var rec = {};
   try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
   rec.mkATask = (rec.mkATask && typeof rec.mkATask === 'object') ? rec.mkATask : {};
   rec.mkATask[rid] = (rec.mkATask[rid] || 0) + 1;
+  rec.mkADoneDay = (rec.mkADoneDay && typeof rec.mkADoneDay === 'object') ? rec.mkADoneDay : {};
+  rec.mkADoneDay[rid] = raceDayKey(Date.now());
   raceSaveLocalRecord(rec);
   if (typeof pushStudentSnapshotToKv === 'function') { try { pushStudentSnapshotToKv(); } catch (e) {} }
-}
-// 任务A失败记账：只记「哪天失败的」，当天不能再挑战（次日自动解锁）。
-function raceMkATaskFailMark(rid) {
-  if (!rid) return;
-  var rec = {};
-  try { rec = raceLocalRecord() || {}; } catch (e) { rec = {}; }
-  rec.mkAFailDay = (rec.mkAFailDay && typeof rec.mkAFailDay === 'object') ? rec.mkAFailDay : {};
-  rec.mkAFailDay[rid] = raceDayKey(Date.now());
-  raceSaveLocalRecord(rec);
 }
 // 任务卡卡头（2026-11-12 视觉重做）：放弃整条丽思蓝色块，改白底浅蓝卡头 + 左侧 3px
 // 飘带。「任务一 / 任务二」标签必须保留（学员要求，否则像先后两步）。
@@ -16156,10 +16155,10 @@ function renderRaceMkTask() {
   // 额度总览：剩余次数放大做主角；右上角一句上限说明；虚线下「已获得 / 已使用」两格
   html += '<div style="position:relative;overflow:hidden;background:#fff;border:1px solid #E3EAF2;'
     + 'border-radius:14px;box-shadow:0 1px 4px rgba(14,37,69,.05);">'
-    + '<div aria-hidden="true" style="position:absolute;right:-26px;top:-24px;width:175px;height:175px;'
-    + 'background:url(\'assets/brand/pattern-white.jpg\') center/175px repeat;opacity:.75;'
-    + '-webkit-mask-image:radial-gradient(closest-side,#000 25%,transparent 80%);'
-    + 'mask-image:radial-gradient(closest-side,#000 25%,transparent 80%);pointer-events:none;"></div>'
+    + '<div aria-hidden="true" style="position:absolute;right:0;top:0;width:150px;height:160px;'
+    + 'background:url(\'assets/brand/lion-head.jpg\') right top/auto 150px no-repeat;opacity:.8;'
+    + '-webkit-mask-image:radial-gradient(closest-side at 70% 45%,#000 40%,transparent 92%);'
+    + 'mask-image:radial-gradient(closest-side at 70% 45%,#000 40%,transparent 92%);pointer-events:none;"></div>'
     + '<div style="position:relative;padding:15px 16px 13px;">'
     + '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;">'
     + '<div style="font-size:11px;font-weight:700;letter-spacing:2px;color:#8a93a0;">' + escapeHtml(t('race_mk_hero_label')) + '</div>'
@@ -16196,7 +16195,8 @@ function renderRaceMkTask() {
   try { poolIds = raceMkATaskPool(); } catch (ePool) { poolIds = []; }
   var aEnough = poolIds.length >= RACE_MK_A_N;
   var aCooled = false;
-  try { aCooled = !!(rec.mkAFailDay && rec.mkAFailDay[conf.id] === raceDayKey(Date.now())); } catch (eCd) { aCooled = false; }
+  // 2026-11-13 反转：成功当天显示「今日已完成」，失败不设冷却、随时可再挑战
+  try { aCooled = !!(rec.mkADoneDay && rec.mkADoneDay[conf.id] === raceDayKey(Date.now())); } catch (eCd) { aCooled = false; }
   // 状态 pill 只说「现在能不能点」（2026-11-12）：额度满了不再报「次数已满」，
   // 因为挑战照样能做、成功次数照样记，写满反而挡住学员。
   var aTone = 'ready', aState = t('race_mk_state_ready');
@@ -18477,7 +18477,9 @@ function wrongAdd(skey, q, ans, opts) {
   if (e) {
     wrongNormEntry(e);
     e.n = (e.n || 1) + 1;
-    e.st = 0;
+    // keepStage（2026-11-13）：补签挑战（任务A）答错不降巩固阶段 —— 题目重新排队
+    // 复习（due=今天），但 st 保留；否则一次失败就把资格池清空，「失败可再挑战」落空。
+    if (!opts.keepStage) e.st = 0;
     e.due = now;
     e.last = now;
     e.timestamp = now;
