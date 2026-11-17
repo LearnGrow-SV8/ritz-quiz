@@ -5767,7 +5767,10 @@ var I18N = {
   race_vch_by_code: {cn:'输入券码核销', en:'Redeem by code'},
   race_vch_code_ph: {cn:'输券码 RC-XXXX-1001-AA，或直接输工号后几位', en:'Code RC-XXXX-1001-AA, or just the last digits of an ID'},
   race_vch_search: {cn:'输入工号或姓名（可只输工号后几位）', en:'Employee ID or name (partial ID works)'},
-  race_vch_multi: {cn:'匹配到 {n} 人，请在下方名单里点选', en:'{n} matches — pick the person from the list below'},
+  race_vch_multi: {cn:'匹配到 {n} 人，点一位核销', en:'{n} matches — tap one to redeem'},
+  race_vch_hit_hint: {cn:'输券码或工号后几位，这里会显示识别到的人', en:'Type a code or partial ID — the person shows here'},
+  race_vch_hit_none: {cn:'没有匹配到人，请核对该工号', en:'No one matches — please check the ID'},
+  race_vch_hit_bad: {cn:'券码校验未通过，请核对后重试', en:'Code failed verification — please check it'},
   race_vch_nomatch: {cn:'没有找到这个工号，请核对后重试', en:'No employee ID matches — please check and retry'},
   race_vch_redeem: {cn:'核销', en:'Redeem'},
   race_vch_ok: {cn:'已核销，可以发奖了', en:'Redeemed — hand over the gift'},
@@ -17600,28 +17603,50 @@ function vchFlushPending() {
 // 拉本届达标名单：与排行榜 / 导出同一个入口（raceBoardRowsFrom），
 // 所以"榜上是 30 分、核销页是 20 分"这种对不上永远不会发生。
 // 🔴 局部刷新必须钉住滚动位置（2026-11-17 现场反馈：输着输着页面自己上下弹）
-// 名单被筛短 / 筛长会改变文档高度，手机浏览器为了让焦点输入框"留在可见区"
-// 会自己改 scrollTop，看上去就是页面往上顶或往下掉。这里刷新前记下位置、刷新后放回。
-function vchScrollY() {
+// 名单被筛短 / 筛长会改变文档高度，浏览器为了让焦点输入框"留在可见区"会自己改滚动位置，
+// 看上去就是页面往上顶或往下掉。刷新前记位置、刷新后放回。
+// ⚠️ 管理端桌面版（>900px）真正的滚动容器是 .adm-scroll，不是 window ——
+//    只锁 window 在电脑上完全无效，所以要往上找最近的滚动祖先（含 .adm-scroll）。
+function vchScrollerEl() {
   try {
-    var se = document.scrollingElement || document.documentElement || document.body;
-    return (se && se.scrollTop) || window.pageYOffset || 0;
-  } catch (e) { return 0; }
-}
-function vchRestoreScroll(y) {
-  try {
-    if (Math.abs(vchScrollY() - y) <= 1) return;
-    if (typeof window.scrollTo === 'function') window.scrollTo(0, y);
-    else {
-      var se = document.scrollingElement || document.documentElement || document.body;
-      if (se) se.scrollTop = y;
+    var el = document.getElementById('vchListWrap');
+    while (el && el.nodeType === 1 && el !== document.body && el !== document.documentElement) {
+      var cs = null;
+      try { cs = window.getComputedStyle ? window.getComputedStyle(el) : null; } catch (e0) {}
+      var oy = cs && cs.overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) return el;
+      el = el.parentNode;
     }
+  } catch (e) {}
+  return null;
+}
+function vchScrollState() {
+  var el = vchScrollerEl();
+  if (el) return { el: el, y: el.scrollTop || 0, win: false };
+  var se = null, y = 0;
+  try {
+    se = document.scrollingElement || document.documentElement || document.body || null;
+    y = (se && se.scrollTop) || window.pageYOffset || 0;
+  } catch (e) {}
+  return { el: se, y: y, win: true };
+}
+function vchRestoreScroll(st) {
+  if (!st) return;
+  try {
+    if (st.win) {
+      var now = (st.el && st.el.scrollTop) || window.pageYOffset || 0;
+      if (Math.abs(now - st.y) <= 1) return;
+      if (typeof window.scrollTo === 'function') window.scrollTo(0, st.y);
+      else if (st.el) st.el.scrollTop = st.y;
+      return;
+    }
+    if (st.el && Math.abs((st.el.scrollTop || 0) - st.y) > 1) st.el.scrollTop = st.y;
   } catch (e) {}
 }
 function vchKeepScroll(fn) {
-  var y = vchScrollY();
+  var st = vchScrollState();
   var r = fn();
-  vchRestoreScroll(y);
+  vchRestoreScroll(st);
   return r;
 }
 // 刷新按钮的忙碌态：只改按钮本身，不重绘整页（重绘会重建搜索框、打断输入法）
@@ -17655,7 +17680,7 @@ function adminVoucherLoad(force) {
   adminState.vchRid = c.id;
   vchSetRefreshBusy(true);   // 立刻给反馈，不必等整页重绘
   var rid = c.id;
-  var keepY = vchScrollY();   // 整页重绘会改文档高度，刷完把滚动位置放回原处
+  var keepY = vchScrollState();   // 整页重绘会改文档高度，刷完把滚动位置放回原处
   sbListSnapshots(0, true).then(function (res) {
     var rows = (typeof sbSnapshotRecordList === 'function') ? sbSnapshotRecordList(res) : [];
     rows = raceBoardRosterFilter(rows);
@@ -17715,7 +17740,7 @@ function adminVoucherRedeem(emp, fromInput) {
   // 强行 focus 会弹起键盘并把页面滚回输入框 —— 又是一个"页面自己跳"的来源。
   var ip0 = document.getElementById('vchCodeInput');
   var keepFocus = !!(fromInput && ip0 && document.activeElement === ip0);
-  var keepY0 = vchScrollY();
+  var keepY0 = vchScrollState();
   adminVoucherPaint();
   // 从输入框发起的核销：成功后清空输入框、焦点留在原处，方便一张接一张地核销
   function finishClear() {
@@ -17740,6 +17765,9 @@ function adminVoucherRedeem(emp, fromInput) {
         adminState.vchMsgBad = false;
         vchMarkLocal(rid, emp, (res && res.rec) || null);
       }
+      // 记住刚处理的是谁：清空输入框后识别区继续显示这个人（含"已核销"时间），
+      // 现场发奖不用回想刚才是谁，也不会出现"清空了就什么都看不到"的空窗。
+      adminState.vchLast = emp;
       adminVoucherRefreshRows();
       if (!(res && res.dup)) finishClear();
       adminVoucherPaint();
@@ -17837,16 +17865,9 @@ function adminVoucherByCode() {
   if (m.exact) return adminVoucherRedeem(m.exact.emp, true);
   if (m.list.length === 1) return adminVoucherRedeem(m.list[0].emp, true);
   if (m.list.length > 1) {
-    // 命中多人时只报"有谁"，不去动下方名单和搜索框 —— 两处输入框互相改值
-    // 正是现场反馈"清空又不同步"的根源。把候选工号直接写在提示里，
-    // 操作员照着一搜就到，不必再猜。
-    var names = [];
-    for (var mi = 0; mi < m.list.length && mi < 3; mi++) {
-      var rr2 = m.list[mi];
-      names.push((rr2.cn || rr2.en || rr2.emp) + ' ' + rr2.emp);
-    }
-    adminState.vchMsg = t('race_vch_multi').replace('{n}', String(m.list.length))
-      + (names.length ? '（' + names.join('、') + (m.list.length > 3 ? ' 等' : '') + '）' : '');
+    // 命中多人：候选就摆在输入框下方（带「核销」按钮），这里只留一句提示，
+    // 不改下方名单、不改搜索框 —— 两处输入互相改值正是"清空又不同步"的根源。
+    adminState.vchMsg = t('race_vch_multi').replace('{n}', String(m.list.length));
     adminState.vchMsgBad = true;
     adminVoucherPaint();
     return;
@@ -17869,23 +17890,95 @@ function adminVoucherSearchInput(v) {
   else { try { render(); } catch (e) {} }
 }
 // 核销框只负责核销：不筛下方名单、不改搜索框（2026-11-17 现场反馈第二次）。
-// 原先边输边筛有两个毛病：① 名单长度变化把页面顶得上下跳；② 它会把内容写回
-// 搜索框，但清空时又提前 return 不写回 —— 联动只做一半，比不联动更让人困惑。
-// 现在两块彻底解耦：要找人就搜「达标名单」，要核销就在核销框输完回车。
+// 但"核销前必须看清是谁"——所以输入的同时只更新核销卡里的「识别结果」小条，
+// 它就在输入框正下方、高度有限，下面的达标名单完全不动，不会把页面顶得上下弹。
 function adminVoucherCodeInput(v) {
   adminState.vchCode = String(v == null ? '' : v);
   var raw = adminState.vchCode.trim();
+  // 一开始输下一个，就把"刚核销的那位"收起，避免新旧信息混在一起
+  if (raw) adminState.vchLast = '';
   // 提示要跟着输入走：清空 → 收起；重新开始输 → 收起上一次的报错（成功提示留着）
-  var dirty = false;
   if (!raw) {
-    if (adminState.vchMsg || adminState.vchMsgBad) { adminState.vchMsg = ''; adminState.vchMsgBad = false; dirty = true; }
+    if (adminState.vchMsg) { adminState.vchMsg = ''; adminState.vchMsgBad = false; }
   } else if (adminState.vchMsgBad) {
-    adminState.vchMsg = ''; adminState.vchMsgBad = false; dirty = true;
+    adminState.vchMsg = ''; adminState.vchMsgBad = false;
   }
-  if (!dirty) return;
+  vchPaintHit();
+  vchPaintMsg();
+}
+// 只重画两个小容器；输入框元素本身永远不动（重建会重置手机输入法）
+function vchPaintHit() {
+  var h = document.getElementById('vchHitWrap');
+  if (h) h.innerHTML = adminVoucherHitHtml();
+}
+function vchPaintMsg() {
   var m = document.getElementById('vchMsgWrap');
   if (m) m.innerHTML = adminVoucherMsgHtml();
-  else { try { render(); } catch (e) {} }
+}
+// 识别结果：把"输进去的东西认成了谁"摆在核销按钮旁边。
+// 现场反馈：只输工号片段就点核销，看不到是谁，心里没底。
+function adminVoucherHitHtml() {
+  var en = state.lang === 'en';
+  var raw = String(adminState.vchCode || '').trim();
+  var rows = adminState.vchRows || [];
+  function statusOf(r) {
+    if (r.rec) return '<span style="color:#2e7d32;">✅ ' + escapeHtml(t('race_vch_used')) + ' · ' + escapeHtml(fmtSyncTime(r.rec.at)) + '</span>';
+    if (r.pendingSync) return '<span style="color:#b7791f;">' + escapeHtml(t('race_vch_wait_sync')) + '</span>';
+    return '<span style="color:#8a6d00;">' + escapeHtml(t('race_vch_pending')) + '</span>';
+  }
+  function card(r, withBtn) {
+    var done = !!(r.rec || r.pendingSync);
+    var h = '<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;margin-bottom:5px;'
+      + 'border:1px solid ' + (done ? '#e2e6ea' : '#bcd3f5') + ';border-radius:9px;'
+      + 'background:' + (done ? '#fafbfc' : '#f4f9fe') + ';">';
+    h += '<div style="flex:1;min-width:0;">';
+    h += '<div style="font-size:13.5px;font-weight:600;color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+      + escapeHtml(en ? (r.en || r.cn || r.emp) : (r.cn || r.en || r.emp))
+      + ' <span style="font-family:monospace;font-size:12px;color:#888;font-weight:400;">' + escapeHtml(r.emp) + '</span></div>';
+    h += '<div style="font-size:11.5px;color:#888;margin-top:1px;">'
+      + escapeHtml(r.dept || '—') + ' · ' + statusOf(r) + '</div>';
+    h += '</div>';
+    if (withBtn && !done) {
+      h += '<button class="action-btn primary" style="flex:0 0 auto;padding:6px 13px;font-size:12.5px;" '
+        + 'onclick="adminVoucherRedeem(\'' + jsKey(r.emp) + '\')">' + t('race_vch_redeem') + '</button>';
+    }
+    h += '</div>';
+    return h;
+  }
+  // 空输入：先把"刚核销的那一位"留在原位，发奖的人不用回想刚才核的是谁；
+  // 没有刚核销记录时给一行操作提示。
+  if (!raw) {
+    var lastEmp = String(adminState.vchLast || '');
+    if (lastEmp) {
+      for (var li = 0; li < rows.length; li++) if (rows[li].emp === lastEmp) return card(rows[li], false);
+    }
+    return '<div style="font-size:12px;color:#9aa4b0;line-height:1.5;padding:2px 0;">'
+      + escapeHtml(t('race_vch_hit_hint')) + '</div>';
+  }
+  // ① 长得像券码：只校验券码本身
+  if (/^RC/i.test(raw) || raw.indexOf('-') >= 0) {
+    var c0 = raceConfOf();
+    var p = raceVoucherVerify(raw, c0 ? c0.id : '');
+    if (!p) return '<div style="font-size:12px;color:#b3261e;padding:2px 0;">⚠️ ' + escapeHtml(t('race_vch_hit_bad')) + '</div>';
+    var hit = null;
+    for (var i = 0; i < rows.length; i++) if (rows[i].emp === p.emp) { hit = rows[i]; break; }
+    if (!hit) return '<div style="font-size:12px;color:#b3261e;padding:2px 0;">⚠️ ' + escapeHtml(t('race_vch_not_eligible')) + '</div>';
+    return card(hit, false);
+  }
+  // ② 工号 / 工号后几位 / 姓名
+  var m = vchMatchRows(raw);
+  if (m.exact) return card(m.exact, false);
+  if (m.list.length === 1) return card(m.list[0], false);
+  if (m.list.length > 1) {
+    var h2 = '<div style="font-size:11.5px;color:#b7791f;margin:0 0 4px;">'
+      + escapeHtml(t('race_vch_multi').replace('{n}', String(m.list.length))) + '</div>';
+    for (var k = 0; k < m.list.length && k < 3; k++) h2 += card(m.list[k], true);
+    if (m.list.length > 3) {
+      h2 += '<div style="font-size:11.5px;color:#9aa4b0;">' + (en ? 'More matches — narrow it down.' : '还有更多，请再多输几位缩小范围。') + '</div>';
+    }
+    return h2;
+  }
+  return '<div style="font-size:12px;color:#b3261e;padding:2px 0;">⚠️ ' + escapeHtml(t('race_vch_hit_none')) + '</div>';
 }
 function adminVoucherMsgHtml() {
   if (!adminState.vchMsg) return '';
@@ -17951,14 +18044,16 @@ function adminVoucherListHtml() {
   }
   return html;
 }
-// 局部重绘：只更新提示 / 计数 / 名单三块，输入框原封不动；滚动位置也钉住
+// 局部重绘：只更新提示 / 识别结果 / 计数 / 名单，输入框原封不动；滚动位置也钉住
 function adminVoucherPaint() {
   var l = document.getElementById('vchListWrap');
   if (!l) { try { render(); } catch (e) {} return; }
   var m = document.getElementById('vchMsgWrap');
   var n = document.getElementById('vchCount');
+  var h = document.getElementById('vchHitWrap');
   vchKeepScroll(function () {
     if (m) m.innerHTML = adminVoucherMsgHtml();
+    if (h) h.innerHTML = adminVoucherHitHtml();
     if (n) n.innerHTML = adminVoucherCountHtml();
     l.innerHTML = adminVoucherListHtml();
   });
@@ -17991,6 +18086,10 @@ function renderAdminVouchers() {
     + 'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;letter-spacing:.5px;">';
   html += '<button class="action-btn primary" style="flex:0 0 auto;padding:9px 14px;font-size:13px;" onclick="adminVoucherByCode()">' + t('race_vch_redeem') + '</button>';
   html += '</div>';
+  // 识别结果区：输入框正下方，高度有限（overflow-anchor:none 防浏览器自动锚定），
+  // 只替换这一块内容，下面的达标名单不动 —— 输得再快页面也不会上下弹。
+  html += '<div id="vchHitWrap" style="margin-top:8px;max-height:150px;overflow-y:auto;overflow-anchor:none;">'
+    + adminVoucherHitHtml() + '</div>';
   html += '<div id="vchMsgWrap">' + adminVoucherMsgHtml() + '</div>';
   html += '</div>';
 
@@ -18011,7 +18110,7 @@ function renderAdminVouchers() {
     + '" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"'
     + ' oninput="adminVoucherSearchInput(this.value)"'
     + ' style="width:100%;padding:8px 10px;border:1px solid #d8dee4;border-radius:8px;font-size:13px;margin-bottom:8px;">';
-  html += '<div id="vchListWrap">' + adminVoucherListHtml() + '</div>';
+  html += '<div id="vchListWrap" style="overflow-anchor:none;">' + adminVoucherListHtml() + '</div>';
   html += '</div>';
   html += '<button class="action-btn secondary" style="width:100%;" onclick="navigate(\'adminRace\')">⚡ '
     + escapeHtml(en ? 'Back to quiz race' : '返回答题赛设置') + '</button>';
