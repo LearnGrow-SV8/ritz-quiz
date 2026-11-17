@@ -8546,15 +8546,16 @@ function adminRosterApplyNames(emp, stuKey) {
     render();
   });
 }
-// ⑥ 名册模板下载：列序固定 英文名 · 中文名 · 工号 · 级别（与导入解析列序无关，
-//    但模板按用户要求的顺序给）。首行表头会被解析器自动跳过。
+// ⑥ 名册模板下载：列序固定 级别 · 英文名 · 中文名 · 工号（2026-11-17 用户指定；
+//    导入解析本身列序无关，模板只是给管理员一个照填的样子）。首行表头会被解析器自动跳过。
 //    级别可选：L/T/S（实习/正式/主管，×1）· A/B（经理，×1.5）· G（总监，×2）。
 function adminRosterTemplateDl() {
   var rows = [
-    ['英文名', '中文名', '工号', '级别'],
-    ['David Wang', '王大伟', '1001', 'G'],
-    ['Maria Garcia Lopez', '', '1002', 'T'],
-    ['', '陈小明', '1003', 'S']
+    ['级别', '英文名', '中文名', '工号'],
+    ['G', 'David Wang', '王大伟', '1001'],
+    ['T', 'Maria Garcia Lopez', '', '1002'],
+    ['S', '', '陈小明', '1003'],
+    ['', 'Anna Lee', '李安娜', '1004']
   ];
   var lines = [];
   for (var i = 0; i < rows.length; i++) lines.push(rows[i].join(','));
@@ -24573,12 +24574,12 @@ function adminRosterPanelHtml() {
   html += '<div class="q-card" style="margin-top:10px;"><div class="profile-form">';
   html += '<h4 style="margin:0 0 6px;">📥 ' + (en ? 'Import roster (Excel / CSV)' : '一键导入员工名册（Excel / CSV）') + '</h4>';
   html += '<div class="sync-note" style="font-size:12px;margin-bottom:8px;">' + (en
-    ? 'Columns can be in any order — recommended: English name, Chinese name, employee ID, level (L/T/S/A/B/G, optional). The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
-    : '列顺序不限（推荐：英文名、中文名、工号、级别 L/T/S/A/B/G，级别可选），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。级别用于部门奖加权：L/T/S ×1、A/B ×1.5、G ×2。') + '</div>';
+    ? 'Columns can be in any order — recommended: level (L/T/S/A/B/G, optional), English name, Chinese name, employee ID. The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
+    : '列顺序不限（推荐：级别 L/T/S/A/B/G（可选）、英文名、中文名、工号），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。级别用于部门奖加权：L/T/S ×1、A/B ×1.5、G ×2。') + '</div>';
   html += '<label class="rz-file">📄 ' + (en ? 'Choose file & preview differences' : '选择文件并预览差异')
     + '<input type="file" accept=".xlsx,.csv,.txt,.tsv" style="display:none" onchange="adminRosterFileChosen(this)"></label>';
   html += '<button class="action-btn nav-btn secondary" style="width:100%;margin-top:8px;" onclick="adminRosterTemplateDl()">⬇️ '
-    + (en ? 'Download the template (EN name · CN name · ID · Level)' : '下载名册模板（英文名 · 中文名 · 工号 · 级别）') + '</button>';
+    + (en ? 'Download the template (Level · EN name · CN name · ID)' : '下载名册模板（级别 · 英文名 · 中文名 · 工号）') + '</button>';
   html += '</div></div>';
   if (adminState.rosterPending) html += adminRosterPendingHtml(adminState.rosterPending);
 
@@ -27709,12 +27710,12 @@ function adminUnifiedRosterHtml(statusLine, en) {
   if (impOpen) {
     html += '<div class="profile-form" style="margin-top:10px;">';
     html += '<div class="sync-note" style="font-size:12px;margin-bottom:8px;">' + (en
-      ? 'Columns can be in any order — recommended: English name, Chinese name, employee ID, level (L/T/S/A/B/G, optional). The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
-      : '列顺序不限（推荐：英文名、中文名、工号、级别 L/T/S/A/B/G，级别可选），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。级别用于部门奖加权：L/T/S ×1、A/B ×1.5、G ×2。') + '</div>';
+      ? 'Columns can be in any order — recommended: level (L/T/S/A/B/G, optional), English name, Chinese name, employee ID. The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
+      : '列顺序不限（推荐：级别 L/T/S/A/B/G（可选）、英文名、中文名、工号），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。级别用于部门奖加权：L/T/S ×1、A/B ×1.5、G ×2。') + '</div>';
     html += '<label class="rz-file">📄 ' + (en ? 'Choose file & preview differences' : '选择文件并预览差异')
       + '<input type="file" accept=".xlsx,.csv,.txt,.tsv" style="display:none" onchange="adminRosterFileChosen(this)"></label>';
     html += '<button class="action-btn nav-btn secondary" style="width:100%;margin-top:8px;" onclick="adminRosterTemplateDl()">⬇️ '
-      + (en ? 'Download the template (EN name · CN name · ID · Level)' : '下载名册模板（英文名 · 中文名 · 工号 · 级别）') + '</button>';
+      + (en ? 'Download the template (Level · EN name · CN name · ID)' : '下载名册模板（级别 · 英文名 · 中文名 · 工号）') + '</button>';
     html += '</div>';
   }
   html += '</div>';
