@@ -17563,6 +17563,15 @@ function vchFlushPending() {
 }
 // 拉本届达标名单：与排行榜 / 导出同一个入口（raceBoardRowsFrom），
 // 所以"榜上是 30 分、核销页是 20 分"这种对不上永远不会发生。
+// 刷新按钮的忙碌态：只改按钮本身，不重绘整页（重绘会重建搜索框、打断输入法）
+function vchSetRefreshBusy(on) {
+  var b = document.getElementById('vchRefreshBtn');
+  if (!b) return;
+  var en = state.lang === 'en';
+  try { b.disabled = !!on; } catch (e) {}
+  try { b.style.opacity = on ? '.6' : ''; } catch (e2) {}
+  try { b.textContent = on ? ('🔄 ' + (en ? 'Loading…' : '刷新中…')) : ('🔄 ' + (en ? 'Refresh' : '刷新名单')); } catch (e3) {}
+}
 function adminVoucherLoad(force) {
   var c = raceConfOf();
   if (!c || !c.id) { adminState.vchState = 'fail'; return; }
@@ -17583,6 +17592,7 @@ function adminVoucherLoad(force) {
   var ac = raceAwardCfgOf(c);
   adminState.vchState = 'loading';
   adminState.vchRid = c.id;
+  vchSetRefreshBusy(true);   // 立刻给反馈，不必等整页重绘
   var rid = c.id;
   sbListSnapshots(0, true).then(function (res) {
     var rows = (typeof sbSnapshotRecordList === 'function') ? sbSnapshotRecordList(res) : [];
@@ -17915,21 +17925,26 @@ function renderAdminVouchers() {
   html += '<div id="vchMsgWrap">' + adminVoucherMsgHtml() + '</div>';
   html += '</div>';
 
-  // 名单（标题 + 计数 + 搜索框不动，只有 #vchListWrap 会局部刷新）
+  // 名单（标题 + 刷新 + 计数 + 搜索框都不参与局部刷新，只有 #vchListWrap 会重画）
   html += '<div class="q-card">';
-  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
-  html += '<div style="flex:1;font-size:13px;font-weight:600;">📋 ' + (en ? 'Qualified list' : '达标名单') + '</div>';
-  html += '<div id="vchCount" style="font-size:11.5px;color:#888;">' + adminVoucherCountHtml() + '</div>';
+  html += '<div style="display:flex;align-items:center;gap:8px;">';
+  html += '<div style="flex:1;min-width:0;font-size:13px;font-weight:600;">📋 ' + (en ? 'Qualified list' : '达标名单') + '</div>';
+  // 刷新放在标题行右侧：不用拉到页面最下面才能刷
+  var vchBusyLoad = adminState.vchState === 'loading';
+  html += '<button id="vchRefreshBtn" class="action-btn secondary" style="flex:0 0 auto;padding:5px 10px;font-size:12px;line-height:1.3;'
+    + (vchBusyLoad ? 'opacity:.6;' : '') + '"'
+    + (vchBusyLoad ? ' disabled' : '')
+    + ' onclick="adminVoucherLoad(true)">🔄 '
+    + (vchBusyLoad ? (en ? 'Loading…' : '刷新中…') : (en ? 'Refresh' : '刷新名单')) + '</button>';
   html += '</div>';
+  html += '<div id="vchCount" style="font-size:11.5px;color:#888;margin:5px 0 8px;">' + adminVoucherCountHtml() + '</div>';
   html += '<input id="vchSearch" value="' + escapeHtml(adminState.vchQuery || '') + '" placeholder="' + escapeHtml(t('race_vch_search'))
     + '" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"'
     + ' oninput="adminVoucherSearchInput(this.value)"'
     + ' style="width:100%;padding:8px 10px;border:1px solid #d8dee4;border-radius:8px;font-size:13px;margin-bottom:8px;">';
   html += '<div id="vchListWrap">' + adminVoucherListHtml() + '</div>';
   html += '</div>';
-  html += '<button class="action-btn secondary" style="width:100%;" onclick="adminVoucherLoad(true)">🔄 '
-    + escapeHtml(en ? 'Refresh list' : '刷新名单') + '</button>';
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'adminRace\')">⚡ '
+  html += '<button class="action-btn secondary" style="width:100%;" onclick="navigate(\'adminRace\')">⚡ '
     + escapeHtml(en ? 'Back to quiz race' : '返回答题赛设置') + '</button>';
   return html;
 }
