@@ -15935,8 +15935,8 @@ function renderRaceBoard() {
   html += '<button class="action-btn ' + (tab === 'best' ? 'primary' : 'secondary') + '" style="flex:1;min-width:0;white-space:nowrap;font-size:13px;" onclick="state.raceBoardTab=\'best\';render()">' + t('race_board_best') + '</button>';
   html += '<button class="action-btn ' + (tab === 'mover' ? 'primary' : 'secondary') + '" style="flex:1;min-width:0;white-space:nowrap;font-size:13px;" onclick="state.raceBoardTab=\'mover\';render()">' + t('race_board_mover') + '</button>';
   html += '</div>';
-  // 口径说明收进 ⓘ 弹窗：常驻文字不占版面，点开才看全文（极简文案原则）。
-  // 文字仍写进页面 HTML（隐藏在 info-detail 里），既有字符串断言不受影响。
+  // 说明文字只留"统计范围"：徽章 / 段位能点这件事不另写提示，让大家自己发现。
+  html += '<div style="font-size:12px;color:#999;line-height:1.5;margin:0 0 10px;">' + raceBoardScopeHint(tab) + '</div>';
   var sec = state.raceBoardSec || '';
   // 进步之星跟板块无关（比的是自己的历届最佳），不显示板块切换条
   var isMoverTab = tab === 'mover';
@@ -15953,17 +15953,15 @@ function renderRaceBoard() {
   }
   html += '</div>';
   }
-  var scopeText = raceBoardScopeHint(tab);
-  var scopeDetail = isMoverTab ? scopeText
-    : scopeText + '<br>'
-      + (isDays ? t(tab === 'dept' ? (raceDeptDaysMode() === 'avg' ? 'race_board_days_hint_dept_avg' : 'race_board_days_hint_dept')
-                                   : (tab === 'best' ? 'race_board_days_hint_best' : 'race_board_days_hint_period'))
-         : (sec ? (raceSecIcon(sec) + ' ' + escapeHtml(raceSecName(sec)) + ' \u00b7 '
-                   + t(tab === 'dept' ? 'race_board_dept_sec_hint' : (tab === 'best' ? 'race_board_best_sec_hint' : 'race_board_sec_hint')))
-                : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 '
-                   + t(tab === 'dept' ? 'race_board_dept_mix_hint' : (tab === 'best' ? 'race_board_best_mix_hint' : 'race_board_mix_hint')))));
-  html += '<div style="font-size:12px;color:#999;margin:2px 0 10px;">'
-    + infoTipHtml('boardScopeTip', scopeDetail) + '</div>';
+  html += '<div style="font-size:12px;color:#888;margin:2px 0 10px;">'
+    + (isMoverTab ? '' :
+      (isDays ? t(tab === 'dept' ? (raceDeptDaysMode() === 'avg' ? 'race_board_days_hint_dept_avg' : 'race_board_days_hint_dept')
+                                 : (tab === 'best' ? 'race_board_days_hint_best' : 'race_board_days_hint_period'))
+       : (sec ? (raceSecIcon(sec) + ' ' + escapeHtml(raceSecName(sec)) + ' \u00b7 '
+                 + t(tab === 'dept' ? 'race_board_dept_sec_hint' : (tab === 'best' ? 'race_board_best_sec_hint' : 'race_board_sec_hint')))
+              : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 '
+                 + t(tab === 'dept' ? 'race_board_dept_mix_hint' : (tab === 'best' ? 'race_board_best_mix_hint' : 'race_board_mix_hint'))))))
+    + '</div>';
   var isDeptTab = tab === 'dept';
   var rows = isMoverTab ? raceMoverRows()
     : isDays
