@@ -5165,6 +5165,10 @@ const state = {
   raceBoardTab: 'period', // 'period' | 'dept' | 'best'
   raceBoardSec: '',    // 排行榜板块筛选，'' = 全部板块（进页面默认回这个）
   raceSyncState: null, // 'pending' | 'ok' | 'fail'
+  // 参与奖兑换券（2026-11-17）：本轮交卷达标时当场算出来的那张券
+  // { code, rid, correct, min }。只用来渲染结果页那张卡，不落盘 ——
+  // 券号是确定性算出来的，刷新页面重算一遍就又是同一张。
+  raceVoucher: null,
   raceCalMonth: '',    // 打卡日历当前显示的月份 'YYYY-MM'，空 = 本月
   raceCalDay: '',      // 打卡日历里点开的某一天 'YYYY-MM-DD'
   raceCalOpen: {},     // { 'YYYY-MM-DD|<ts>': true } 当天哪几条挑战展开了答题清单
@@ -5292,7 +5296,16 @@ var adminState = {
   dashDrawer: null,     // { key } — 右侧员工详情抽屉
   dashRaceMap: null,    // 答题赛成绩 map（akey → race record）
   dashRaceTs: 0,
-  dashRaceLoading: false
+  dashRaceLoading: false,
+  // 参与奖核销（2026-11-17）
+  vchRows: null,        // [{emp,cn,en,dept,correct,code,rec}] — 达标名单（本届）
+  vchState: '',         // '' | 'loading' | 'ready' | 'fail'
+  vchRid: '',           // 上面这份名单对应的届次 id（换届后必须重拉）
+  vchQuery: '',         // 搜索姓名 / 工号
+  vchMsg: '',           // 操作结果提示（成功/失败/重复核销）
+  vchMsgBad: false,
+  vchBusy: '',          // 正在处理中的工号（按钮置灰，防连点）
+  vchCode: ''           // 手输券码框的内容（重绘时不丢）
 };
 
 // ============ i18n System ============
@@ -5549,7 +5562,7 @@ var I18N = {
   race_board_dept: {cn:'部门排名', en:'Departments'},
   race_board_best: {cn:'历史最佳榜', en:'All-time best'},
   race_board_hint_period: {cn:'统计范围：本届赛事全体参赛绅士淑女。可多次答题，系统仅选取您得分最高的一次成绩参与排名。', en:'Scope: All Ladies and Gentlemen participating in the current contest. Multiple attempts are permitted; only your highest-scoring submission will be ranked.'},
-  race_board_hint_dept: {cn:'统计范围：本届所有参赛部门。每位绅士淑女可多次答题，仅取单次最优成绩计入部门汇总；按部门答对总题数排序，题数相同则比对准确率。<br>\ud83c\udfaf 统计口径：后线部门以一级部门（如市场销售部、财务部）为排名单位；厨房部、餐饮部、房务部以二级部门（如客房部、大堂吧）参与排名。', en:'Scope: All participating departments for the current contest. Each Lady and Gentleman may attempt repeatedly, with only one best submission counted toward the department total. Departments are ranked by total correct answers; accuracy breaks ties.<br>\ud83c\udfaf Ranking grouping guidelines: Heart-of-House Divisions are grouped as primary divisions (e.g., Sales & Marketing, Finance). Culinary, Food & Beverage and Rooms are grouped as secondary units (e.g., Housekeeping, Onyx).'},
+  race_board_hint_dept: {cn:'统计范围：本届所有参赛部门。每位绅士淑女可多次答题，仅取单次最优成绩计入部门汇总；按部门答对总题数排序，题数相同则比对准确率。<br>\ud83c\udfaf 部门奖加权：在答对题数基础上按成员级别加权后重新排名（L/T/S ×1、A/B ×1.5、G ×2；未设级别按 ×1）。<br>\ud83c\udfaf 统计口径：后线部门以一级部门（如市场销售部、财务部）为排名单位；厨房部、餐饮部、房务部以二级部门（如客房部、大堂吧）参与排名。', en:'Scope: All participating departments for the current contest. Each Lady and Gentleman may attempt repeatedly, with only one best submission counted toward the department total. Departments are ranked by total correct answers; accuracy breaks ties.<br>\ud83c\udfaf Department award weighting: correct answers are weighted by member level before ranking (L/T/S \u00d71, A/B \u00d71.5, G \u00d72; unset level counts as \u00d71).<br>\ud83c\udfaf Ranking grouping guidelines: Heart-of-House Divisions are grouped as primary divisions (e.g., Sales & Marketing, Finance). Culinary, Food & Beverage and Rooms are grouped as secondary units (e.g., Housekeeping, Onyx).'},
   race_board_hint_best: {cn:'统计范围：全体绅士淑女的历史个人最优成绩，按答题板块独立留存，新一届赛事开启后记录不清空。同一位绅士淑女可在多个板块分别上榜。', en:'Scope: Historical personal best scores of all Ladies and Gentlemen, logged separately by quiz module. Records will be preserved when a new contest launches. One Lady or Gentleman may secure rankings across multiple modules.'},
   race_board_best_mix_hint: {cn:'汇总展示每位绅士淑女在各个板块的个人最优成绩。如需查看单一板块专项排名，请切换上方对应板块。', en:'It displays each Lady and Gentleman\u2019s personal best score across all modules. To view rankings for a single module, select the corresponding tab above.'},
   race_board_best_sec_hint: {cn:'统计范围：本板块的历届个人最优成绩。同一绅士淑女在其他板块的最优成绩，计入对应板块榜单。', en:'Scope: All-time personal best within this module only. A Lady or Gentleman\u2019s best results in other modules appear on those modules\u2019 boards.'},
@@ -5729,6 +5742,47 @@ var I18N = {
   race_cal_none_day: {cn:'这一天没有挑战记录。', en:'No challenge recorded on this day.'},
   race_cal_day_runs: {cn:'当天完成 {n} 次挑战', en:'{n} challenges on this day'},
   race_cal_no_log: {cn:'更早的成绩流水已超出保存上限（仅保留最近 120 次），当天只显示打卡标记。', en:'Older attempts are beyond the storage limit (only the latest 120 are kept) — this day shows the check-in mark only.'},
+  // —— 参与奖兑换券（2026-11-17）——
+  race_vch_title: {cn:'参与奖兑换券', en:'Participation Award Voucher'},
+  race_vch_sub: {cn:'达标即可获得，凭券领取奖品', en:'Earned once qualified — show the code to collect'},
+  race_vch_new: {cn:'恭喜获得参与奖兑换券', en:'You have earned a participation voucher'},
+  race_vch_rule: {cn:'单场答对 {n} 题及以上即可获得，每人每届限一张', en:'Answer {n} or more correctly in one attempt. One voucher per person per round.'},
+  race_vch_got: {cn:'本场答对 {n} 题（达标线 {m} 题）', en:'{n} correct in this attempt (threshold {m})'},
+  race_vch_pending: {cn:'待兑换', en:'Unused'},
+  race_vch_used: {cn:'已核销', en:'Redeemed'},
+  race_vch_used_at: {cn:'已于 {t} 核销', en:'Redeemed on {t}'},
+  race_vch_tip: {cn:'请凭此券码到人力资源部领取奖品。核销后此码即失效，不可重复兑奖。', en:'Show this code to the HR team to collect your gift. It becomes invalid once redeemed — one collection per voucher.'},
+  race_vch_mine: {cn:'我的兑换券', en:'My vouchers'},
+  race_vch_none: {cn:'本届还没有兑换券。参加限时答题赛，单场答对 {n} 题即可获得。', en:'No voucher for this round yet. Take the quiz and answer {n} correctly in one attempt to earn one.'},
+  race_vch_round: {cn:'本届兑换券', en:'This round'},
+  race_vch_past: {cn:'往届兑换券', en:'Previous rounds'},
+  race_vch_unconfirmed: {cn:'核销记录尚未同步，请稍后再看', en:'Redemption not synced yet — check again later'},
+  race_vch_unused_n: {cn:'待兑换 {n} 张', en:'{n} unused'},
+  race_vch_used_n: {cn:'已核销 {n} 张', en:'{n} redeemed'},
+  race_vch_admin: {cn:'参与奖核销', en:'Voucher redemption'},
+  race_vch_admin_desc: {cn:'核销参与奖兑换券，并管理奖项参数', en:'Redeem participation vouchers and tune award settings'},
+  race_vch_by_code: {cn:'输入券码核销', en:'Redeem by code'},
+  race_vch_code_ph: {cn:'RC-XXXX-1001-AA', en:'RC-XXXX-1001-AA'},
+  race_vch_search: {cn:'搜索姓名或工号', en:'Search name or employee ID'},
+  race_vch_redeem: {cn:'核销', en:'Redeem'},
+  race_vch_ok: {cn:'已核销，可以发奖了', en:'Redeemed — hand over the gift'},
+  race_vch_dup: {cn:'这张券已于 {t} 核销，不能重复兑奖', en:'This voucher was already redeemed on {t} — do not hand out a second gift'},
+  race_vch_bad: {cn:'券码无效。请核对字母与数字后重试', en:'Invalid code. Check the letters and digits and try again'},
+  race_vch_not_eligible: {cn:'该工号本届未达标，不能核销', en:'This employee did not meet the threshold this round'},
+  race_vch_no_emp: {cn:'名册里没有这个工号', en:'That employee ID is not in the roster'},
+  race_vch_queued: {cn:'网络不稳，已先记账，联网后自动确认（可先发奖）', en:'Network is unstable — recorded locally and will sync automatically (you may hand over the gift)'},
+  race_vch_wait_sync: {cn:'待联网确认', en:'Waiting to sync'},
+  race_vch_fail: {cn:'核销失败，请重试', en:'Redemption failed — please retry'},
+  race_vch_loading: {cn:'正在读取参赛成绩…', en:'Loading participants…'},
+  race_vch_none_list: {cn:'本届还没有人达标，或成绩还没上传。', en:'Nobody has qualified this round yet, or scores have not uploaded.'},
+  race_vch_count: {cn:'达标 {n} 人 · 待兑换 {a} · 已核销 {b}', en:'{n} qualified · {a} unused · {b} redeemed'},
+  race_vch_cfg: {cn:'奖项设置', en:'Award settings'},
+  race_vch_cfg_hint: {cn:'改完点下面的「发布赛事」才生效；数字留空按默认值（参与奖 7 题 / 排名奖前 10 / 部门奖前 5）。', en:'Tap Publish below to apply. Blank fields fall back to defaults (7 correct / top 10 / top 5).'},
+  race_vch_cfg_part: {cn:'参与奖：单场答对达标题数', en:'Participation: correct answers needed'},
+  race_vch_cfg_rank: {cn:'个人排名奖：各榜单取前几名', en:'Ranking award: top N per leaderboard'},
+  race_vch_cfg_dept: {cn:'部门奖：取前几个部门', en:'Department award: top N departments'},
+  race_vch_off: {cn:'关闭', en:'Off'},
+  race_vch_to_admin: {cn:'去核销', en:'Redeem'},
   race_cal_no_detail: {cn:'这次挑战没有保存答题明细（明细仅保留最近 30 次）。', en:'No answer detail saved for this attempt (details are kept for the latest 30 attempts only).'},
   race_cal_show_q: {cn:'📋 查看答题清单', en:'📋 View the questions'},
   race_cal_hide_q: {cn:'收起答题清单', en:'Hide the questions'},
@@ -7511,6 +7565,9 @@ function refreshRoster(timeoutMs) {
     // （2026-10-28：答题赛配置以前写在独立的 'race' 通道，被 RLS 拒绝，
     //   学员端又没有拉取代码，导致"管理端发布了、学员端却无法答题"。）
     if (j.data.race && applyRaceConf(j.data.race)) changed = true;
+    // 参与奖核销记录（admin_state.awards）也搭这班车：学员点开「我的兑换券」时
+    // 要显示"待兑换 / 已核销"，靠的就是这份数据。数据量很小（一届几十上百条）。
+    if (j.data.awards && typeof applyRaceAwards === 'function' && applyRaceAwards(j.data.awards)) changed = true;
     // 徽章目录也放在这一行里（admin_state.badges）：学员只要拉到配置就能拿到最新的
     // 徽章名字 / 图标 / 达标线，不必等下次打开答题赛页面。
     if (j.data.badges && applyBadgeCatalog(j.data.badges)) changed = true;
@@ -7663,6 +7720,34 @@ var NAME_ROSTER_CACHE_KEY = 'empNameRoster';
 // · everIds   —— 历史上出现过的工号，用来判定"被拦截原因"：曾经在册、这次导进去
 //                却没有了 ⇒ 已离职；从来没出现过 ⇒ 不存在此工号
 // · reasons   —— 管理员手工改判的拦截原因（优先于 everIds 推断）
+//
+// 员工级别（2026-11-17，部门奖加权用）：L/T/S=×1、A/B=×1.5、G=×2。
+// 级别只在后台「导入名册 / 名单行内编辑」时写入，学员端不可见、不可自选；
+// 未填级别一律按 ×1（中性，不影响任何尚未配级别的老名册）。
+var RACE_LV_WEIGHT = { L: 1, T: 1, S: 1, A: 1.5, B: 1.5, G: 2 };
+var RACE_LV_KEYS = ['L', 'T', 'S', 'A', 'B', 'G'];
+// 把任意写法（l / L / L级 / 主管…）收敛成标准级别字母；认不出就返回 ''。
+function normRaceLv(v) {
+  var s = String(v == null ? '' : v).trim().toUpperCase().replace(/\s*级$/, '');
+  return RACE_LV_WEIGHT[s] != null ? s : '';
+}
+// 级别 → 权重；空 / 未知级别按 1（加法中性）。
+function raceLvWeightOf(lv) {
+  var k = normRaceLv(lv);
+  return k ? RACE_LV_WEIGHT[k] : 1;
+}
+// 从当前名册查某个工号的级别（查不到返回 ''）。
+function rosterLvOf(emp) {
+  var e = normEmpNo(emp);
+  if (!e) return '';
+  try { var r = loadNameRoster().rows || {}; return normRaceLv(r[e] && r[e].lv); } catch (x) { return ''; }
+}
+// 复制一行名册记录时**必须带上级别**：任何"读出旧名册 → 改一列 → 再发布"
+// 的链路都要用它，否则级别会在往返中被抹掉。空值按 '' 兜底。
+function rosterRowCopy(v) {
+  v = v || {};
+  return { cn: String(v.cn || ''), en: String(v.en || ''), lv: normRaceLv(v.lv) };
+}
 function loadNameRoster() {
   try {
     var s = JSON.parse(localStorage.getItem(NAME_ROSTER_CACHE_KEY) || 'null');
@@ -7834,15 +7919,23 @@ function parseRosterGrid(grid) {
     if (!cells.length) continue;
     var joined = cells.join(' ').toLowerCase(), hasDigit = false;
     for (var c2 = 0; c2 < cells.length; c2++) if (/[0-9]/.test(cells[c2])) { hasDigit = true; break; }
-    // 表头行：没有数字，且首格就是表头词（工号 / 中文名 / 英文名 / Employee ID…）。
+    // 表头行：没有数字，且首格就是表头词（工号 / 中文名 / 英文名 / 级别 / Employee ID…）。
     // 只看首格是为了不把「没有工号」这类真数据行误判成表头。
-    if (!hasDigit && /^(工号|员工编号|员工号|中文名|英文名|姓名|序号|emp|employee|name|chinese|english|id|no\.)/i.test(cells[0])) continue;
-    var emp = '', cn = '', en = '';
+    if (!hasDigit && /^(工号|员工编号|员工号|中文名|英文名|姓名|序号|级别|职级|emp|employee|name|chinese|english|level|grade|id|no\.)/i.test(cells[0])) continue;
+    var emp = '', cn = '', en = '', lv = '';
     for (var c3 = 0; c3 < cells.length; c3++) {
       var t = cells[c3];
       if (!emp) {
         var m = t.match(/^(\d{1,8})(?:\.0+)?$/);
         if (m) { emp = normEmpNo(m[1]); continue; }
+      }
+      // 级别列（必须在「英文名」之前判）：单个级别字母（L/T/S/A/B/G）或中文级别词。
+      // 单字母英文名几乎不存在，先让位给级别更安全。
+      if (!lv) {
+        var lvTry = normRaceLv(t);
+        if (lvTry) { lv = lvTry; continue; }
+        var lvCn = ({ '实习生': 'L', '正式工': 'T', '员工': 'T', '主管': 'S', '经理': 'A', '总监': 'G' })[String(t).trim()];
+        if (lvCn) { lv = lvCn; continue; }
       }
       if (!cn && /[\u4e00-\u9fff]/.test(t) && isCnNameValid(t)) { cn = t; continue; }
       if (!en && /^[A-Za-z][A-Za-z .,'\-\/]{0,39}$/.test(t)) { en = t; continue; }
@@ -7850,7 +7943,7 @@ function parseRosterGrid(grid) {
     if (!emp) { issues.push({ line: i + 1, kind: 'no-id', text: cells.join(' , ') }); continue; }
     if (seen[emp] !== undefined) { issues.push({ line: i + 1, kind: 'dup', emp: emp, text: cells.join(' , ') }); continue; }
     seen[emp] = i + 1;
-    rows[emp] = { cn: cn, en: en };
+    rows[emp] = { cn: cn, en: en, lv: lv };
   }
   var count = 0;
   for (var k in rows) count++;
@@ -7961,10 +8054,15 @@ function adminRosterParseFile(buf, name) {
 // —— 与当前名册的差异（导入前给管理员过目）——
 function adminRosterDiff(rows) {
   var cur = loadNameRoster(), old = cur.rows || {};
-  var added = [], removed = [], renamed = [], same = 0;
+  var added = [], removed = [], renamed = [], same = 0, lvChanged = [];
   for (var e in rows) {
     var o = old[e];
     if (!o) { added.push(e); continue; }
+    // 级别变更单独记一份（2026-11-17）：管理员导入级别后要能一眼核对改了几个人，
+    // 而不是和"改名"混在一起看不出来。
+    if (normRaceLv(o.lv) !== normRaceLv(rows[e].lv)) {
+      lvChanged.push({ emp: e, lv0: normRaceLv(o.lv), lv1: normRaceLv(rows[e].lv) });
+    }
     if (String(o.cn || '') !== String(rows[e].cn || '') || String(o.en || '') !== String(rows[e].en || '')) {
       renamed.push({ emp: e, cn0: String(o.cn || ''), en0: String(o.en || ''), cn1: String(rows[e].cn || ''), en1: String(rows[e].en || '') });
     } else same++;
@@ -7972,7 +8070,8 @@ function adminRosterDiff(rows) {
   for (var e2 in old) if (rows[e2] === undefined) removed.push(e2);
   added.sort(); removed.sort();
   renamed.sort(function (a, b) { return a.emp < b.emp ? -1 : (a.emp > b.emp ? 1 : 0); });
-  return { added: added, removed: removed, renamed: renamed, same: same };
+  lvChanged.sort(function (a, b) { return a.emp < b.emp ? -1 : (a.emp > b.emp ? 1 : 0); });
+  return { added: added, removed: removed, renamed: renamed, same: same, lvChanged: lvChanged };
 }
 // 已注册学员 vs 新名册：谁的姓名对不上、谁的工号不在册 —— 用与注册时完全相同的
 // 判定函数（nameRosterCheck），所以这里标红的，就是真正会被拦下 / 判为不符的人。
@@ -8007,7 +8106,8 @@ function adminPublishNameRoster(rows, opts) {
     var e = normEmpNo(k);
     if (!e) continue;
     var v = rows[k] || {};
-    rowsN[e] = { cn: String(v.cn || '').trim().slice(0, 40), en: String(v.en || '').trim().slice(0, 40) };
+    // 🔴 必须保留级别（lv）：这里若只写 cn/en，导入的级别会在发布瞬间被抹掉。
+    rowsN[e] = { cn: String(v.cn || '').trim().slice(0, 40), en: String(v.en || '').trim().slice(0, 40), lv: normRaceLv(v.lv) };
   }
   // 历史工号：旧的 everIds ∪ 旧名册 ∪ 新名册 —— 只增不减，才判得出"已离职"。
   var ever = {}, prevEver = cur.everIds || [];
@@ -8061,8 +8161,8 @@ function adminRosterTableData() {
     }
   }
   var out = [], seen = {};
-  for (var e in rows) { seen[e] = true; out.push({ emp: e, rosterCn: String(rows[e].cn || ''), rosterEn: String(rows[e].en || ''), reg: byEmp[e] || null }); }
-  for (var e2 in byEmp) if (!seen[e2]) out.push({ emp: e2, rosterCn: '', rosterEn: '', reg: byEmp[e2], off: true });
+  for (var e in rows) { seen[e] = true; out.push({ emp: e, rosterCn: String(rows[e].cn || ''), rosterEn: String(rows[e].en || ''), rosterLv: normRaceLv(rows[e].lv), reg: byEmp[e] || null }); }
+  for (var e2 in byEmp) if (!seen[e2]) out.push({ emp: e2, rosterCn: '', rosterEn: '', rosterLv: '', reg: byEmp[e2], off: true });
   out.sort(function (a, b) {
     var x = parseInt(a.emp, 10), y = parseInt(b.emp, 10);
     if (isFinite(x) && isFinite(y) && x !== y) return x - y;
@@ -8128,6 +8228,16 @@ function adminRosterStageImport(parsed, fname) {
     adminRosterMsg(en ? 'No employee IDs found in that file.' : '文件里没有解析到工号，请检查表格内容。', true);
     return;
   }
+  // 级别防丢（2026-11-17）：老模板没有「级别」列、或某行级别留空时，解析结果是 lv=空。
+  // 若直接发布会把已在名册里配好的级别抹掉。这里按工号回填——文件明确写了级别就以文件为准，
+  // 文件留空（含整列缺失）就沿用名册里已有的级别。要清空级别请在名单行的下拉里改，
+  // 避免"只改名册、顺手把加权配置清空"这种误删。
+  var curRows = loadNameRoster().rows || {};
+  for (var e2 in parsed.rows) {
+    if (!normRaceLv(parsed.rows[e2].lv) && curRows[e2] && normRaceLv(curRows[e2].lv)) {
+      parsed.rows[e2].lv = normRaceLv(curRows[e2].lv);
+    }
+  }
   adminState.rosterPending = {
     rows: parsed.rows,
     issues: parsed.issues || [],
@@ -8147,12 +8257,13 @@ function adminRosterConfirmImport() {
   var en = state.lang === 'en';
   var p = adminState.rosterPending;
   if (!p || !p.rows) return;
-  var d = p.diff || { added: [], removed: [], renamed: [] };
+  var d = p.diff || { added: [], removed: [], renamed: [], lvChanged: [] };
   var total = 0;
   for (var k in p.rows) total++;
+  var lvN = (d.lvChanged || []).length;
   var msg = en
-    ? 'Apply this roster?\n\n· ' + total + ' employee IDs in the file\n· ' + d.added.length + ' new\n· ' + d.removed.length + ' removed → marked as "left the hotel"\n· ' + d.renamed.length + ' name change(s)\n\nAfter publishing, ONLY these IDs can register and sign in.'
-    : '确认导入这份名册？\n\n· 文件里共 ' + total + ' 个工号\n· 新增 ' + d.added.length + ' 个\n· 移除 ' + d.removed.length + ' 个（自动标为「已离职」）\n· 姓名变更 ' + d.renamed.length + ' 个\n\n发布后，只有名册里的工号能注册和登录。';
+    ? 'Apply this roster?\n\n· ' + total + ' employee IDs in the file\n· ' + d.added.length + ' new\n· ' + d.removed.length + ' removed → marked as "left the hotel"\n· ' + d.renamed.length + ' name change(s)\n· ' + lvN + ' level change(s)\n\nAfter publishing, ONLY these IDs can register and sign in.'
+    : '确认导入这份名册？\n\n· 文件里共 ' + total + ' 个工号\n· 新增 ' + d.added.length + ' 个\n· 移除 ' + d.removed.length + ' 个（自动标为「已离职」）\n· 姓名变更 ' + d.renamed.length + ' 个\n· 级别变更 ' + lvN + ' 个\n\n发布后，只有名册里的工号能注册和登录。';
   if (!confirm(msg)) return;
   adminRosterMsg(en ? 'Publishing…' : '正在发布…');
   adminPublishNameRoster(p.rows).then(function (ok) {
@@ -8169,14 +8280,41 @@ function adminRosterConfirmImport() {
     render();
   });
 }
-// 一览表里直接改名册姓名（留空 = 从名册移除该工号，等于"已离职"）
+// 名单里的级别下拉：L/T/S=×1、A/B=×1.5、G=×2，空白 = 未设（按 ×1）。
+// 每级都带权重角标，管理员一眼能看出这个级别在部门奖里算几分。
+function adminRosterLvSelect(emp, lv, en) {
+  var W = RACE_LV_WEIGHT;
+  var lbl = {
+    L: (en ? 'L · Intern' : 'L · 实习生') + ' ×' + W.L,
+    T: (en ? 'T · Staff' : 'T · 正式工') + ' ×' + W.T,
+    S: (en ? 'S · Supervisor' : 'S · 主管') + ' ×' + W.S,
+    A: (en ? 'A · Manager' : 'A · 经理') + ' ×' + W.A,
+    B: (en ? 'B · Manager' : 'B · 经理') + ' ×' + W.B,
+    G: (en ? 'G · Director' : 'G · 总监') + ' ×' + W.G
+  };
+  var cur = normRaceLv(lv);
+  var h = '<select onchange="adminRosterRowEdit(\'' + jsKey(emp) + '\',\'lv\',this.value)" style="padding:4px 6px;font-size:12px;border:1px solid var(--a-line2);border-radius:6px;max-width:120px;'
+    + (cur ? '' : 'color:#8a8f96;') + '">';
+  h += '<option value=""' + (cur ? '' : ' selected') + '>' + (en ? '— none —' : '— 未设 —') + '</option>';
+  for (var i = 0; i < RACE_LV_KEYS.length; i++) {
+    var k = RACE_LV_KEYS[i];
+    h += '<option value="' + k + '"' + (cur === k ? ' selected' : '') + '>' + escapeHtml(lbl[k]) + '</option>';
+  }
+  h += '</select>';
+  return h;
+}
+// 一览表里直接改名册姓名 / 级别（姓名留空且无级别 = 从名册移除该工号，等于"已离职"）
 function adminRosterRowEdit(emp, field, val) {
   var en = state.lang === 'en';
   var e = normEmpNo(emp), nr = loadNameRoster(), rows = {};
-  for (var k in nr.rows) rows[k] = { cn: nr.rows[k].cn || '', en: nr.rows[k].en || '' };
-  var cur = rows[e] || { cn: '', en: '' };
-  cur[field === 'en' ? 'en' : 'cn'] = String(val == null ? '' : val).replace(/\s+/g, ' ').trim().slice(0, 40);
-  if (!cur.cn && !cur.en) delete rows[e]; else rows[e] = cur;
+  for (var k in nr.rows) rows[k] = rosterRowCopy(nr.rows[k]);
+  var cur = rows[e] || { cn: '', en: '', lv: '' };
+  if (field === 'lv') {
+    cur.lv = normRaceLv(val);
+  } else {
+    cur[field === 'en' ? 'en' : 'cn'] = String(val == null ? '' : val).replace(/\s+/g, ' ').trim().slice(0, 40);
+  }
+  if (!cur.cn && !cur.en && !cur.lv) delete rows[e]; else rows[e] = cur;
   adminRosterMsg(en ? 'Saving…' : '正在保存…');
   adminPublishNameRoster(rows).then(function (ok) {
     adminRosterMsg(ok ? (en ? '✅ Saved.' : '✅ 已保存。') : (en ? '⚠️ Save failed — try again.' : '⚠️ 保存失败，请重试。'), !ok);
@@ -8187,7 +8325,7 @@ function adminRosterRowEdit(emp, field, val) {
 function adminRosterReadd(emp) {
   var en = state.lang === 'en';
   var e = normEmpNo(emp), nr = loadNameRoster(), rows = {}, reg = null;
-  for (var k in nr.rows) rows[k] = { cn: nr.rows[k].cn || '', en: nr.rows[k].en || '' };
+  for (var k in nr.rows) rows[k] = rosterRowCopy(nr.rows[k]);
   var recs = adminStudentRecords();
   for (var i = 0; i < recs.length; i++) {
     if (normEmpNo(adminStudentEmp(recs[i])) !== e) continue;
@@ -8204,7 +8342,9 @@ function adminRosterReadd(emp) {
   });
 }
 // ===== 统一名单：列宽记忆 / 行内编辑 / 删除账号 / 预留范围（2026-11-12）=====
-// 列宽：存 localStorage 'adminRosterColW'（7 列 px 数组），下次进入按上次的尺寸显示
+// 列数常量：工号 / 名册中文 / 名册英文 / 级别 / 注册姓名 / 部门 / 最近活跃 / 操作 = 8 列。
+var ROSTER_COL_N = 8;
+// 列宽：存 localStorage 'adminRosterColW'（ROSTER_COL_N 列 px 数组），下次进入按上次的尺寸显示
 function adminRosterColWs() {
   try { var v = JSON.parse(localStorage.getItem('adminRosterColW') || '[]'); if (Array.isArray(v)) return v; } catch (e) {}
   return [];
@@ -8212,17 +8352,18 @@ function adminRosterColWs() {
 function adminColGrip(e, idx) {
   e.preventDefault(); e.stopPropagation();
   var ths = document.querySelectorAll('.stu-table thead th');
-  if (!ths || ths.length < 7) return;
+  var N = (ths && ths.length) ? ths.length : ROSTER_COL_N;
+  if (!ths || ths.length < 2) return;
   var ws = adminRosterColWs();
-  var firstSet = ws.length < 7;
+  var firstSet = ws.length < N;
   if (firstSet) {
     ws = [];
-    for (var i = 0; i < 7; i++) ws.push(Math.round(ths[i].getBoundingClientRect().width) || 120);
+    for (var i = 0; i < N; i++) ws.push(Math.round((ths[i] ? ths[i].getBoundingClientRect().width : 0)) || 120);
   }
   var tbl = document.querySelector('.stu-table');
   if (tbl && !tbl.querySelector('colgroup')) {
     var cg = document.createElement('colgroup');
-    for (var k2 = 0; k2 < 7; k2++) {
+    for (var k2 = 0; k2 < N; k2++) {
       var col = document.createElement('col');
       if (ws[k2]) col.style.width = ws[k2] + 'px';
       cg.appendChild(col);
@@ -8234,7 +8375,7 @@ function adminColGrip(e, idx) {
   var startW = ws[idx], startX = e.clientX;
   function mv(ev) {
     ws[idx] = Math.max(64, Math.round(startW + ev.clientX - startX));
-    if (cols && cols.length === 7) for (var k = 0; k < 7; k++) if (ws[k]) cols[k].style.width = ws[k] + 'px';
+    if (cols && cols.length === N) for (var k = 0; k < N; k++) if (ws[k]) cols[k].style.width = ws[k] + 'px';
   }
   function up() {
     document.removeEventListener('mousemove', mv);
@@ -8261,7 +8402,7 @@ function adminRosterDeleteAccount(emp) {
     : '确定删除该账号？\n\n· 工号会移出名册并加入黑名单，之后不能用这个工号重新注册。\n· 历史记录全部保留。\n· 误删可用「重新加入」撤销。')) return;
   adminBlacklistAdd(e, en ? 'deleted by admin' : '管理员删除账号');
   var nr = loadNameRoster(), rows = {};
-  for (var k in (nr.rows || {})) rows[k] = { cn: nr.rows[k].cn || '', en: nr.rows[k].en || '' };
+  for (var k in (nr.rows || {})) rows[k] = rosterRowCopy(nr.rows[k]);
   delete rows[e];
   adminRosterMsg(en ? 'Deleting…' : '正在删除…');
   adminPublishNameRoster(rows).then(function (ok) {
@@ -8281,7 +8422,7 @@ function adminRosterAddRange() {
   if (!isFinite(a) || !isFinite(b) || b < a) { say(en ? 'Enter a valid start and end ID.' : '请输入有效的起止工号。', true); return; }
   if (b - a > 500) { say(en ? 'Range too large — max 500 IDs at a time.' : '一次最多添加 500 个工号。', true); return; }
   var nr = loadNameRoster(), rows = {};
-  for (var k in (nr.rows || {})) rows[k] = { cn: nr.rows[k].cn || '', en: nr.rows[k].en || '' };
+  for (var k in (nr.rows || {})) rows[k] = rosterRowCopy(nr.rows[k]);
   var added = 0;
   for (var i = a; i <= b; i++) {
     var e2 = normEmpNo(String(i));
@@ -8357,14 +8498,15 @@ function adminRosterApplyNames(emp, stuKey) {
     render();
   });
 }
-// ⑥ 名册模板下载：列序固定 英文名 · 中文名 · 工号（与导入解析列序无关，
+// ⑥ 名册模板下载：列序固定 英文名 · 中文名 · 工号 · 级别（与导入解析列序无关，
 //    但模板按用户要求的顺序给）。首行表头会被解析器自动跳过。
+//    级别可选：L/T/S（实习/正式/主管，×1）· A/B（经理，×1.5）· G（总监，×2）。
 function adminRosterTemplateDl() {
   var rows = [
-    ['英文名', '中文名', '工号'],
-    ['David Wang', '王大伟', '1001'],
-    ['Maria Garcia Lopez', '', '1002'],
-    ['', '陈小明', '1003']
+    ['英文名', '中文名', '工号', '级别'],
+    ['David Wang', '王大伟', '1001', 'G'],
+    ['Maria Garcia Lopez', '', '1002', 'T'],
+    ['', '陈小明', '1003', 'S']
   ];
   var lines = [];
   for (var i = 0; i < rows.length; i++) lines.push(rows[i].join(','));
@@ -8397,7 +8539,7 @@ function adminMarkStudentLeft(stuKey) {
     : '确认「' + name + '（' + e + '）」已离职吗？\n\n该工号将从有效工号名单移除，拦截原因标为「已离职」，此后任何设备都无法用这个工号注册或登录。';
   if (!confirm(msg)) return;
   var nr = loadNameRoster(), rows = {};
-  for (var k in (nr.rows || {})) rows[k] = { cn: nr.rows[k].cn || '', en: nr.rows[k].en || '' };
+  for (var k in (nr.rows || {})) rows[k] = rosterRowCopy(nr.rows[k]);
   delete rows[e];
   var reasons = {}; reasons[e] = 'left';
   adminPublishNameRoster(rows, { reasons: reasons }).then(function (ok) {
@@ -8540,7 +8682,7 @@ function adminStaffSetLeft(emp) {
     : '确认让「' + head + '」失效吗？\n\n· 该工号将从名册移除，并标记为「已离职」\n· 任何设备都无法再用它注册或登录\n· 已登录的设备约 90 秒内退回登录页\n· 历史考试与答题赛记录保留，不会删除';
   if (!confirm(msg)) return;
   var nr = loadNameRoster(), rows = {};
-  for (var k in (nr.rows || {})) rows[k] = { cn: nr.rows[k].cn || '', en: nr.rows[k].en || '' };
+  for (var k in (nr.rows || {})) rows[k] = rosterRowCopy(nr.rows[k]);
   delete rows[e];
   var reasons = {};
   for (var rk in (nr.reasons || {})) reasons[rk] = nr.reasons[rk];
@@ -8564,7 +8706,7 @@ function adminStaffSetActive(emp) {
   if (!e) return;
   var nr = loadNameRoster(), rows = {};
   var hadAny = false;
-  for (var k in (nr.rows || {})) { rows[k] = { cn: nr.rows[k].cn || '', en: nr.rows[k].en || '' }; hadAny = true; }
+  for (var k in (nr.rows || {})) { rows[k] = rosterRowCopy(nr.rows[k]); hadAny = true; }
   // 名册整体为空时绝不能"只加一个人"——ids 会从空变成一条，等于把全店其他人全拦在门外。
   if (!hadAny) {
     adminToast(en
@@ -10745,6 +10887,101 @@ function applyRaceConf(c) {
   if (a === b) return false;
   raceSaveConf(c);
   return true;
+}
+// ---- 奖项设置（2026-11-17）----
+// 参与奖 / 个人排名奖 / 部门奖三块，全部挂在赛事配置 conf.award 里随赛事下发：
+// 学员端要靠它算"达标线"，管理端导出要靠它算"取前几名"。数字一律夹取上下限，
+// 后台手输 0、999 或留空都不会把奖项算崩（留空 = 用默认值）。
+var RACE_AWARD_DEF = { on: true, partOn: true, partMin: 7, rankOn: true, rankTopN: 10, deptOn: true, deptTopN: 5 };
+function raceAwardClamp(v, lo, hi, dft) {
+  var n = parseInt(v, 10);
+  if (!isFinite(n) || n <= 0) n = dft;
+  return Math.max(lo, Math.min(hi, n));
+}
+// 唯一的奖项参数出口：页面、券码判定、将来的获奖名单导出全部读这里，
+// 避免三处各写一套默认值（第一期后改数字就不用动代码）。
+function raceAwardCfgOf(c) {
+  c = c || raceConfOf() || {};
+  var a = (c && c.award && typeof c.award === 'object') ? c.award : {};
+  return {
+    on: a.on !== false,
+    partOn: a.partOn !== false,
+    partMin: raceAwardClamp(a.partMin, 1, 50, RACE_AWARD_DEF.partMin),
+    rankOn: a.rankOn !== false,
+    rankTopN: raceAwardClamp(a.rankTopN, 1, 100, RACE_AWARD_DEF.rankTopN),
+    deptOn: a.deptOn !== false,
+    deptTopN: raceAwardClamp(a.deptTopN, 1, 50, RACE_AWARD_DEF.deptTopN)
+  };
+}
+
+// ---- 参与奖兑换券（2026-11-17）----
+// 券码由「工号 + 届次」确定性生成：不发券、不入库，达标即持有唯一一张。
+// 好处是三件事一次解决 —— 重答 / 换设备 / 刷新页面都算同一张券（天然防重复领取）；
+// 断网也能当场把券号给人看（只是算，不需要请求）；云端只需记"谁已核销"。
+// 字母表剔除了 0/1/I/L/O：券码要能被前台照着输，不能让人纠结是零还是欧。
+var RACE_VCH_ALPHA = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+function raceVchHash(s) {
+  var h = 2166136261;
+  s = String(s || '');
+  for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 16777619) >>> 0; }
+  return h >>> 0;
+}
+function raceVchWord(seed, len) {
+  var h = raceVchHash(seed), out = '';
+  for (var i = 0; i < len; i++) {
+    out += RACE_VCH_ALPHA.charAt(h % RACE_VCH_ALPHA.length);
+    h = (Math.floor(h / RACE_VCH_ALPHA.length) + 7 + i * 13) >>> 0;
+  }
+  return out;
+}
+// 形态：RC-<届次4位>-<工号>-<校验2位>，例 RC-7K2M-10024-9F
+// 中间带工号是为了前台核销时能一眼看出"这张券是谁的"，不用再去名单里找。
+function raceVoucherCodeOf(emp, rid) {
+  var e = normEmpNo(emp) || String(emp == null ? '' : emp).trim();
+  if (!e || !rid) return '';
+  var tag = raceVchWord('t|' + rid, 4);
+  return 'RC-' + tag + '-' + e + '-' + raceVchWord('c|' + tag + '|' + e, 2);
+}
+function raceVoucherParse(code) {
+  var m = String(code == null ? '' : code).toUpperCase().replace(/[\s\u3000]+/g, '')
+    .match(/^RC-?([0-9A-Z]{4})-?(\d{1,8})-?([0-9A-Z]{2})$/);
+  if (!m) return null;
+  return { tag: m[1], emp: normEmpNo(m[2]) || m[2], ck: m[3] };
+}
+// 校验一张券码是否属于指定届次：届次标签 + 校验位都对才算数。
+// 返回 null = 不合法（输错 / 不是本平台发的 / 不是这一届）。
+function raceVoucherVerify(code, rid) {
+  var p = raceVoucherParse(code);
+  if (!p || !rid) return null;
+  if (p.tag !== raceVchWord('t|' + rid, 4)) return null;
+  if (p.ck !== raceVchWord('c|' + p.tag + '|' + p.emp, 2)) return null;
+  return p;
+}
+// 本机缓存的核销记录（admin_state.awards 原样落地）：{届次: {工号: {at, by}}}
+var RACE_AWARDS_KEY = 'raceAwards';
+function loadRaceAwards() {
+  try { var v = JSON.parse(localStorage.getItem(RACE_AWARDS_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; }
+  catch (e) { return {}; }
+}
+function applyRaceAwards(a) {
+  if (!a || typeof a !== 'object') return false;
+  var cur = loadRaceAwards(), a1 = '', b1 = '';
+  try { a1 = JSON.stringify(cur); b1 = JSON.stringify(a); } catch (e) { return false; }
+  if (a1 === b1) return false;
+  try { localStorage.setItem(RACE_AWARDS_KEY, JSON.stringify(a)); } catch (e2) { return false; }
+  return true;
+}
+function raceAwardRecOf(rid, emp) {
+  if (!rid || !emp) return null;
+  var aw = loadRaceAwards(), m = aw && aw[rid];
+  return (m && m[emp]) || null;
+}
+// 本人当前工号：与快照上报同一套取值（profile.empNo → 账户键里的工号），
+// 否则会出现"排行榜上是 10024、券码里却是空"这种对不上的情况。
+function raceMyEmpNo() {
+  var e = '';
+  try { e = String((state.profile && state.profile.empNo) || '') || getProfileEmpNo() || ''; } catch (x) { e = ''; }
+  return normEmpNo(e) || '';
 }
 // 发布赛事配置到云端。落点必须是 channels.admin_state —— channels 的 RLS
 // 白名单只有 admin_state / question_data / blacklist，'race' 这种名字会被
@@ -13553,6 +13790,23 @@ function raceSubmitScore() {
   // 结果页当场点亮 —— 徽章是激励，得在最有成就感的一刻给出来。
   var gotBadges = raceAwardBadges(rec, entry.raceId, raceBadgeMonthDays());
   state.raceNewBadges = gotBadges.length ? gotBadges : null;
+  // 参与奖兑换券（2026-11-17）：单场答对达到门槛就当场出一张券，并在结果页
+  // 立刻点亮。券号完全由「工号 + 届次」算出来，所以这一步不需要联网、也不
+  // 会有"发了两次"的可能 —— 同一个人同一届算出来永远是同一个码。
+  state.raceVoucher = null;
+  try {
+    var _vAc = raceAwardCfgOf(r.conf || raceConfOf());
+    var _vRid = (r.conf && r.conf.id) || (raceConfOf() || {}).id || '';
+    var _vEmp = raceMyEmpNo();
+    if (_vAc.on && _vAc.partOn && _vRid && _vEmp && (r.correct || 0) >= _vAc.partMin) {
+      state.raceVoucher = {
+        code: raceVoucherCodeOf(_vEmp, _vRid),
+        rid: _vRid,
+        correct: r.correct || 0,
+        min: _vAc.partMin
+      };
+    }
+  } catch (eV) { state.raceVoucher = null; }
   // 庆祝动画标记（2026-11-03）：单期全对（≥5 题）或拿到新徽章时，结果页撒彩带。
   // 只是"答完"不庆祝 —— 庆祝要留给真正的里程碑，否则很快就麻木。
   // 段位晋升（v2）同样算里程碑，一起走这条彩带；但只在**超过本机记住的最高段位**时触发，
@@ -13774,11 +14028,13 @@ function raceDeptPersonLabel(divCn, unitCn) {
   if (!div || div === unit) return unit;
   return div + ' \u00b7 ' + unit;
 }
-// 部门排名：把本届每个**排名单位**的参赛员工成绩汇总，按总答对题数 → 总准确率
-// → 参赛人数排序（每人只算他在本届的最佳一条，避免多刷板块给部门灌分）。
+// 部门排名：把本届每个**排名单位**的参赛员工成绩汇总，按**加权总答对题数** →
+// 原始答对 → 总准确率 → 参赛人数排序（每人只算他在本届的最佳一条，避免多刷板块给部门灌分）。
+// 加权口径（部门奖，2026-11-17）：每位成员贡献 = 答对题数 × 级别权重
+//   L/T/S=×1、A/B=×1.5、G=×2；没设级别按 ×1（此时 weighted === correct）。
 // 排名单位见 raceDeptUnitOf：餐饮 / 厨房 / 房务下沉到小部门，其余按大部门。
-// 纯函数版本，管理端导出直接复用（口径必须一致）。
-function raceDeptAggRowsFrom(list, secFilter, rid) {
+// 纯函数版本，管理端导出直接复用（口径必须一致）。lvOf(emp) 可选，缺省=人人 ×1。
+function raceDeptAggRowsFrom(list, secFilter, rid, lvOf) {
   list = list || [];
   var map = {}, order = [];
   for (var i = 0; i < list.length; i++) {
@@ -13789,18 +14045,30 @@ function raceDeptAggRowsFrom(list, secFilter, rid) {
     if (!e) continue;
     var dept = raceDeptUnitOfRow(raw, race);
     var row = map[dept];
-    if (!row) { row = map[dept] = { dept: dept, n: 0, correct: 0, answered: 0, acc: 0 }; order.push(dept); }
+    if (!row) { row = map[dept] = { dept: dept, n: 0, correct: 0, answered: 0, acc: 0, weighted: 0, lvN: 0 }; order.push(dept); }
     row.n++;
-    row.correct += (e.correct || 0);
+    var c = e.correct || 0;
+    row.correct += c;
     row.answered += (e.answered || 0);
+    if (typeof lvOf === 'function') {
+      var lv = '';
+      try { lv = lvOf(dashEmpNoOf((raw && raw.snap) || {}, (raw && (raw.akey || raw.key)) || '')); } catch (x) { lv = ''; }
+      var w = raceLvWeightOf(lv);
+      row.weighted += c * w;
+      if (w !== 1) row.lvN++;
+    } else {
+      row.weighted += c;
+    }
   }
   var rows = [];
   for (var k = 0; k < order.length; k++) {
     var r = map[order[k]];
     r.acc = r.answered ? Math.round(r.correct / r.answered * 1000) / 10 : 0;
+    r.weighted = Math.round(r.weighted * 10) / 10;
     rows.push(r);
   }
   rows.sort(function (a, b) {
+    if (b.weighted !== a.weighted) return b.weighted - a.weighted;
     if (b.correct !== a.correct) return b.correct - a.correct;
     if (b.acc !== a.acc) return b.acc - a.acc;
     if (b.n !== a.n) return b.n - a.n;
@@ -13810,7 +14078,8 @@ function raceDeptAggRowsFrom(list, secFilter, rid) {
 }
 function raceDeptAggRows(secFilter) {
   var c = raceConfOf();
-  return raceDeptAggRowsFrom(state.raceBoard || [], secFilter, c && c.id);
+  // 部门奖加权：按当前名册里每个人的级别查权重。名册没配级别 ⇒ 全员 ×1，与旧口径一致。
+  return raceDeptAggRowsFrom(state.raceBoard || [], secFilter, c && c.id, rosterLvOf);
 }
 
 // ===== 打卡天数榜 =====
@@ -15134,12 +15403,143 @@ function renderRaceCalendar() {
   // 复盘语境：温故知新后再刷一遍产品知识题库
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">🔁 ' + t('race_study_cal') + '</button>';
   // 看完自己的打卡记录，顺手就能看自己在榜上第几（页面底部，次级入口）
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceVouchers\')">🎟 ' + t('race_vch_mine') + '</button>';
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
   // 复盘完顺手清错题：日历里当天明细只能重做单场，这里给整本错题本的入口（2026-11-13 领导）
   html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="wrongOpenSrc(\'\')">📖 ' + t('race_cal_to_wrong') + '</button>';
   // 「补签机会与任务」卡已退役（2026-11-12 领导十一调）：补签入口全部收敛到
   // 虚线日期弹窗（金框=可补 / 灰框=可赚），弹窗里都有「查看任务与进度」按钮，
   // 页面底部再放一张卡纯属重复 —— 大多数人滑不到那么低，看到的还以为是另一套入口。
+  html += '</div>';
+  return html;
+}
+// 参与奖兑换券页（2026-11-17）：把"我到底有没有券、兑了没有"讲清楚。
+// 券不是发出来存起来的，而是按「工号 + 届次」算出来的 —— 所以这里只需要
+// 从本机答题记录里翻出各届的最好成绩，配上门槛现算一遍。
+// 往届也一起列：券不会因为换届就作废，年底清奖时才需要核对旧券。
+function raceVoucherRoundsOf(rec, partMin) {
+  rec = rec || {};
+  var ids = [], seen = {}, out = [];
+  function add(rid) { if (rid && !seen[rid]) { seen[rid] = 1; ids.push(rid); } }
+  var br = rec.byRound || {};
+  for (var r1 in br) add(r1);
+  var brs = rec.byRoundSec || {};
+  for (var r2 in brs) add(r2);
+  for (var i = 0; i < ids.length; i++) {
+    var e = null;
+    try { e = raceRoundEntryOf(rec, ids[i], ''); } catch (x) { e = null; }
+    if (!e || (e.correct || 0) < partMin) continue;
+    out.push({ rid: ids[i], correct: e.correct || 0, ts: e.ts || 0, code: raceVoucherCodeOf(raceMyEmpNo(), ids[i]) });
+  }
+  // 本届排最前，其余按时间新→旧（同一届可能只有 byRoundSec 有记录，靠 ts 兜底排序）
+  var curRid = (raceConfOf() || {}).id || '';
+  out.sort(function (a, b) {
+    if ((a.rid === curRid) !== (b.rid === curRid)) return a.rid === curRid ? -1 : 1;
+    return (b.ts || 0) - (a.ts || 0);
+  });
+  return out;
+}
+function renderRaceVouchers() {
+  var en = state.lang === 'en';
+  var conf = raceConfOf() || {};
+  var ac = raceAwardCfgOf(conf);
+  var emp = raceMyEmpNo();
+  var rec = raceLocalRecord() || {};
+  var curRid = conf.id || '';
+  // 进页面顺手拉一次云端核销记录（≥60 秒才拉一次，避免反复 render 打接口）。
+  // 拉回来变了就重画：管理员刚核销完，学员这边应该马上变成"已核销"。
+  try {
+    var lastPull = state.raceVchPulledAt || 0;
+    if (typeof SB_ON !== 'undefined' && SB_ON && Date.now() - lastPull > 60000) {
+      state.raceVchPulledAt = Date.now();
+      refreshRoster(8000).then(function (ch) {
+        if (ch && state.currentPage === 'raceVouchers') { try { render(); } catch (e) {} }
+      }, function () {});
+    }
+  } catch (e0) {}
+
+  var html = renderAppHeader({ title: '🎟 ' + t('race_vch_title'), subtitle: t('race_vch_sub') });
+  html += '<div class="page">';
+
+  if (!ac.on || !ac.partOn) {
+    html += '<div class="q-card" style="text-align:center;color:#666;">'
+      + escapeHtml(en ? 'Participation award is not enabled for this round.' : '本届未开启参与奖。') + '</div>';
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goBack()">'
+      + escapeHtml(en ? 'Back' : '返回') + '</button>';
+    html += '</div>';
+    return html;
+  }
+  if (!emp) {
+    html += '<div class="q-card" style="text-align:center;color:#a14a00;">'
+      + escapeHtml(en ? 'Your profile has no employee ID yet. Add it under Me to get your voucher code.'
+                      : '资料里还没有工号，先到「我的」补全，才能生成券码。') + '</div>';
+    html += '<button class="action-btn primary" style="width:100%;margin-top:10px;" onclick="navigate(\'profile\')">'
+      + escapeHtml(en ? 'Complete my profile' : '去补全资料') + '</button>';
+    html += '</div>';
+    return html;
+  }
+
+  var list = raceVoucherRoundsOf(rec, ac.partMin);
+  var unused = 0, used = 0;
+  for (var i = 0; i < list.length; i++) {
+    var u = raceAwardRecOf(list[i].rid, emp);
+    list[i].rec = u;
+    if (u) used++; else unused++;
+  }
+
+  if (!list.length) {
+    html += '<div class="q-card" style="text-align:center;padding:22px 14px;">';
+    html += '<div style="font-size:34px;line-height:1.1;">🎟</div>';
+    html += '<div style="font-size:14px;font-weight:600;margin-top:8px;color:#000;">'
+      + escapeHtml(t('race_vch_none').replace('{n}', String(ac.partMin))) + '</div>';
+    html += '<div style="font-size:12px;color:#888;margin-top:8px;line-height:1.6;">'
+      + escapeHtml(t('race_vch_rule').replace('{n}', String(ac.partMin))) + '</div>';
+    html += '</div>';
+    html += '<button class="action-btn primary" style="width:100%;margin-top:10px;" onclick="navigate(\'race\')">⚡ '
+      + escapeHtml(en ? 'Take the quiz' : '去答题') + '</button>';
+    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceCalendar\')">📅 '
+      + escapeHtml(en ? 'Check-in calendar' : '打卡日历') + '</button>';
+    html += '</div>';
+    return html;
+  }
+
+  // 统计条
+  html += '<div class="q-card" style="display:flex;gap:8px;text-align:center;padding:12px 8px;">';
+  html += '<div style="flex:1;"><div style="font-size:22px;font-weight:700;color:#b7791f;">' + unused + '</div>'
+    + '<div style="font-size:11px;color:#888;">' + escapeHtml(t('race_vch_pending')) + '</div></div>';
+  html += '<div style="flex:1;border-left:1px solid #eef1f4;"><div style="font-size:22px;font-weight:700;color:#2e7d32;">' + used + '</div>'
+    + '<div style="font-size:11px;color:#888;">' + escapeHtml(t('race_vch_used')) + '</div></div>';
+  html += '</div>';
+
+  for (var k = 0; k < list.length; k++) {
+    var v = list[k];
+    var isCur = v.rid === curRid;
+    var when = v.ts ? fmtSyncTime(v.ts) : '';
+    html += '<div class="q-card" style="border:1.5px dashed ' + (v.rec ? '#cfd8dc' : '#c9a227') + ';background:' + (v.rec ? '#fafbfc' : '#fff') + ';">';
+    html += '<div style="display:flex;align-items:center;gap:8px;">';
+    html += '<div style="flex:1;min-width:0;font-size:12px;color:#888;">'
+      + escapeHtml(isCur ? t('race_vch_round') : t('race_vch_past')) + (when ? ' · ' + escapeHtml(when) : '') + '</div>';
+    html += '<div style="flex:0 0 auto;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;'
+      + (v.rec ? 'background:#e8f5e9;color:#2e7d32;' : 'background:#fff8e1;color:#b7791f;') + '">'
+      + (v.rec ? '✅ ' + escapeHtml(t('race_vch_used')) : '🎁 ' + escapeHtml(t('race_vch_pending'))) + '</div>';
+    html += '</div>';
+    html += '<div style="margin:10px 0 6px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;'
+      + 'font-size:17px;font-weight:800;letter-spacing:1px;color:' + (v.rec ? '#9aa3ad' : '#000') + ';'
+      + 'background:' + (v.rec ? '#f2f4f6' : '#fdf6e3') + ';border-radius:8px;padding:10px 6px;word-break:break-all;'
+      + (v.rec ? 'text-decoration:line-through;' : '') + '">' + escapeHtml(v.code) + '</div>';
+    html += '<div style="font-size:12px;color:#888;text-align:center;">'
+      + escapeHtml(t('race_vch_got').replace('{n}', String(v.correct)).replace('{m}', String(ac.partMin))) + '</div>';
+    if (v.rec) {
+      html += '<div style="font-size:11.5px;color:#2e7d32;text-align:center;margin-top:4px;">'
+        + escapeHtml(t('race_vch_used_at').replace('{t}', fmtSyncTime(v.rec.at))) + '</div>';
+    }
+    html += '</div>';
+  }
+  html += '<div style="font-size:11.5px;color:#9a7b4f;line-height:1.7;margin:4px 2px 12px;">'
+    + 'ℹ️ ' + escapeHtml(t('race_vch_tip')) + '</div>';
+
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:4px;" onclick="navigate(\'raceCalendar\')">📅 '
+    + escapeHtml(en ? 'Check-in calendar' : '打卡日历') + '</button>';
   html += '</div>';
   return html;
 }
@@ -15279,6 +15679,28 @@ function renderRaceResult() {
         html += '<div style="font-size:14px;font-weight:600;color:#8a5a00;">' + escapeHtml(raceBadgeName(nb2)) + '</div>';
         html += '<div style="font-size:11px;color:#9a7b4f;margin-top:1px;">' + escapeHtml(raceBadgeDesc(nb2)) + '</div>';
       }
+      html += '</div>';
+    }
+    // ③-1 参与奖兑换券（2026-11-17）：达标当场出券。券是"我拿到了"的实物证据，
+    // 必须给在成就感的最高点；同时标明"到哪领、领完失效"，免得券号被当成抽奖码乱传。
+    if (state.raceVoucher) {
+      var _vch = state.raceVoucher;
+      var _vchUsed = null;
+      try { _vchUsed = raceAwardRecOf(_vch.rid, raceMyEmpNo()); } catch (eVu) { _vchUsed = null; }
+      html += '<div class="q-card" style="text-align:center;background:#fff;border:1.5px dashed #c9a227;">';
+      html += '<div style="font-size:13px;font-weight:700;color:#8a6d00;">🎟 ' + t('race_vch_new') + '</div>';
+      html += '<div style="margin:10px 0 6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;'
+        + 'font-size:17px;font-weight:800;letter-spacing:1px;color:#000;background:#fdf6e3;'
+        + 'border-radius:8px;padding:10px 6px;word-break:break-all;">' + escapeHtml(_vch.code) + '</div>';
+      html += '<div style="font-size:12px;color:#8a6d00;">'
+        + escapeHtml(t('race_vch_got').replace('{n}', String(_vch.correct)).replace('{m}', String(_vch.min))) + '</div>';
+      html += '<div style="font-size:12px;margin-top:6px;font-weight:600;color:' + (_vchUsed ? '#2e7d32' : '#b7791f') + ';">'
+        + (_vchUsed ? '✅ ' + escapeHtml(t('race_vch_used_at').replace('{t}', fmtSyncTime(_vchUsed.at)))
+                    : '🎁 ' + escapeHtml(t('race_vch_pending'))) + '</div>';
+      html += '<div style="font-size:11px;color:#9a7b4f;margin-top:8px;line-height:1.6;">'
+        + escapeHtml(t('race_vch_tip')) + '</div>';
+      html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceVouchers\')">🎟 '
+        + t('race_vch_mine') + '</button>';
       html += '</div>';
     }
     // ③-2 段位晋升卡（v2）：只在真正跨过门槛那一轮出现，彩带已在上面撒过。
@@ -15509,6 +15931,10 @@ function renderRaceBoard() {
       var isMine = myDeptCn && dr.dept === myDeptCn;
       var dMedal = di === 0 ? '🥇' : di === 1 ? '🥈' : di === 2 ? '🥉' : (di + 1);
       var per = dr.n ? Math.round(dr.correct / dr.n * 10) / 10 : 0;
+      // 部门奖加权：名册里配了级别时，右侧主数字显示加权分（L/T/S ×1、A/B ×1.5、G ×2）；
+      // 没配级别时 weighted === correct，展示与旧版完全一致。
+      var hasW = (typeof dr.weighted === 'number') && Math.abs(dr.weighted - dr.correct) > 0.001;
+      var bigNum = hasW ? dr.weighted : dr.correct;
       html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMine ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + (isMine ? '#eef4fa' : '#fff') + ';">';
       html += '<div style="width:32px;text-align:center;font-weight:700;color:#000;">' + dMedal + '</div>';
       html += '<div style="flex:1;min-width:0;">';
@@ -15519,7 +15945,8 @@ function renderRaceBoard() {
           ? (dr.n + ' ' + t('race_dept_people') + ' \u00b7 ' + (state.lang === 'en' ? 'runs ' : '挑战 ') + dr.runs
              + ' \u00b7 ' + (state.lang === 'en' ? 'avg ' : '人均 ') + dr.avg)
           : (dr.n + ' ' + t('race_dept_people') + ' \u00b7 ' + t('race_dept_answered') + ' ' + dr.answered
-             + ' \u00b7 ' + t('race_dept_avg') + ' ' + per))
+             + ' \u00b7 ' + t('race_dept_avg') + ' ' + per
+             + (hasW ? ' \u00b7 ' + (state.lang === 'en' ? 'raw ' + dr.correct : '原始 ' + dr.correct) : '')))
         + '</div>';
       html += '</div>';
       html += '<div style="text-align:right;">';
@@ -15527,8 +15954,8 @@ function renderRaceBoard() {
         html += '<div style="font-size:16px;font-weight:700;color:#000;">' + dr.value + '</div>';
         html += '<div style="font-size:12px;color:#888;">' + (state.lang === 'en' ? 'days' : '天') + '</div>';
       } else {
-        html += '<div style="font-size:16px;font-weight:700;color:#000;">' + dr.correct + '</div>';
-        html += '<div style="font-size:12px;color:#888;">' + dr.acc + '%</div>';
+        html += '<div style="font-size:16px;font-weight:700;color:#000;">' + bigNum + '</div>';
+        html += '<div style="font-size:12px;color:#888;">' + (hasW ? (state.lang === 'en' ? 'weighted' : '加权分') : (dr.acc + '%')) + '</div>';
       }
       html += '</div></div>';
     }
@@ -16362,6 +16789,30 @@ function renderAdminRace() {
           : '任务二：任选模块抽 10 题答对 8 题，同一模块本届限 1 次。')
     + '</div>';
   html += '</div>';
+  // 奖项设置（2026-11-17）：参与奖门槛、个人排名奖名额、部门奖名额都做成可改，
+  // 第一期跑完想调量不用改代码。留空或填 0 一律回落到默认值（7 题 / 前 10 / 前 5）。
+  var awd = raceAwardCfgOf(c);
+  html += '<div style="border-top:1px solid #eef1f4;margin-top:12px;padding-top:10px;">';
+  html += '<div style="font-size:13px;font-weight:600;margin-bottom:2px;">🏅 ' + t('race_vch_cfg') + '</div>';
+  html += '<div style="font-size:11px;color:#888;margin:2px 0 8px;line-height:1.5;">' + t('race_vch_cfg_hint') + '</div>';
+  html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;padding:2px 0;cursor:pointer;">'
+    + '<input type="checkbox" id="raceAwPartOn" style="margin-top:2px;"' + (awd.partOn ? ' checked' : '') + '> '
+    + '<span>' + (en ? 'Participation award (voucher)' : '参与奖（兑换券）') + '</span></label>';
+  html += '<label style="font-size:12px;color:#666;display:block;margin-top:4px;">' + t('race_vch_cfg_part') + '</label>';
+  html += '<input id="raceAwPartMin" type="number" min="1" max="50" step="1" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + awd.partMin + '">';
+  html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;padding:2px 0;cursor:pointer;">'
+    + '<input type="checkbox" id="raceAwRankOn" style="margin-top:2px;"' + (awd.rankOn ? ' checked' : '') + '> '
+    + '<span>' + (en ? 'Ranking award (individual)' : '个人排名奖') + '</span></label>';
+  html += '<label style="font-size:12px;color:#666;display:block;margin-top:4px;">' + t('race_vch_cfg_rank') + '</label>';
+  html += '<input id="raceAwRankTopN" type="number" min="1" max="100" step="1" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + awd.rankTopN + '">';
+  html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;padding:2px 0;cursor:pointer;">'
+    + '<input type="checkbox" id="raceAwDeptOn" style="margin-top:2px;"' + (awd.deptOn ? ' checked' : '') + '> '
+    + '<span>' + (en ? 'Department award' : '部门奖') + '</span></label>';
+  html += '<label style="font-size:12px;color:#666;display:block;margin-top:4px;">' + t('race_vch_cfg_dept') + '</label>';
+  html += '<input id="raceAwDeptTopN" type="number" min="1" max="50" step="1" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + awd.deptTopN + '">';
+  html += '<button class="action-btn secondary" style="width:100%;margin:2px 0 4px;" onclick="navigate(\'adminVouchers\')">🎟 '
+    + t('race_vch_admin') + '</button>';
+  html += '</div>';
   // 新一季开关：勾选 = 发布时换一个全新届次 id，本届榜单自动清零（历史最佳榜
   // 跨届累计，不受影响）；不勾 = 沿用本届 id，只更新设置。榜单按届次 id 过滤，
   // 所以"清空榜单"不需要删任何数据，换 id 即可。
@@ -16989,6 +17440,17 @@ function adminRacePublish() {
   c.mkCap = Math.max(1, Math.min(10, parseInt((el('raceMkCap') && el('raceMkCap').value), 10) || 3));
   // 徽章判定读目录，这里写一个兼容值，老版本页面 / 老导出读到也不会崩
   c.badgeDays = raceBadgeMonthDays();
+  // 奖项参数（2026-11-17）：门槛与名额跟赛事一起发布 —— 学员端要靠 partMin 算券，
+  // 获奖名单导出要靠 rankTopN / deptTopN 取名次。全部过夹取，绝不把 NaN 写进配置。
+  c.award = {
+    on: true,
+    partOn: !!(el('raceAwPartOn') && el('raceAwPartOn').checked),
+    partMin: raceAwardClamp((el('raceAwPartMin') && el('raceAwPartMin').value), 1, 50, RACE_AWARD_DEF.partMin),
+    rankOn: !!(el('raceAwRankOn') && el('raceAwRankOn').checked),
+    rankTopN: raceAwardClamp((el('raceAwRankTopN') && el('raceAwRankTopN').value), 1, 100, RACE_AWARD_DEF.rankTopN),
+    deptOn: !!(el('raceAwDeptOn') && el('raceAwDeptOn').checked),
+    deptTopN: raceAwardClamp((el('raceAwDeptTopN') && el('raceAwDeptTopN').value), 1, 50, RACE_AWARD_DEF.deptTopN)
+  };
   var sv = el('raceStart') && el('raceStart').value, ev = el('raceEnd') && el('raceEnd').value;
   c.startTime = sv ? new Date(sv).toISOString() : '';
   c.endTime = ev ? new Date(ev).toISOString() : '';
@@ -17014,6 +17476,339 @@ function adminRaceClose() {
 function adminRaceMsg(msg) {
   var el = document.getElementById('raceAdminMsg');
   if (el) el.textContent = msg;
+}
+// ================= 参与奖核销（2026-11-17）=================
+// 三条硬规则，别改：
+//   ① 只写 admin_state.awards 这一个键，且必须「先读整行 → 只动自己那一个格子 → 写回」，
+//      否则会冲掉同一行里的名单 / 赛事配置；
+//   ② 核销是幂等的：云端已有 at 就返回 dup，页面显示"已于 X 核销"，绝不二次发奖；
+//   ③ 断网时先记在本机队列里再提示"可先发奖"，联网后自动补写（补写同样幂等）。
+var VCH_PENDING_KEY = 'voucherPending';
+function loadVchPending() {
+  try { var v = JSON.parse(localStorage.getItem(VCH_PENDING_KEY) || '[]'); return Array.isArray(v) ? v : []; }
+  catch (e) { return []; }
+}
+function saveVchPending(l) { try { localStorage.setItem(VCH_PENDING_KEY, JSON.stringify(l || [])); } catch (e) {} }
+function vchPendingOf(rid, emp) {
+  var l = loadVchPending();
+  for (var i = 0; i < l.length; i++) if (l[i] && l[i].rid === rid && l[i].emp === emp) return l[i];
+  return null;
+}
+function enqueueVch(rid, emp) {
+  var l = loadVchPending();
+  for (var i = 0; i < l.length; i++) if (l[i] && l[i].rid === rid && l[i].emp === emp) return;
+  l.push({ rid: rid, emp: emp, at: Date.now() });
+  saveVchPending(l);
+}
+function vchPendingRemove(rid, emp) {
+  var l = loadVchPending(), out = [];
+  for (var i = 0; i < l.length; i++) if (!(l[i] && l[i].rid === rid && l[i].emp === emp)) out.push(l[i]);
+  saveVchPending(out);
+}
+// 本机核销记录即时合并：管理员核销完，自己这台的名单与学员端缓存立刻变"已核销"，
+// 不用等下一次云端拉取（现场发奖最怕"点了没反应"）。
+function vchMarkLocal(rid, emp, rec) {
+  var aw = loadRaceAwards();
+  aw[rid] = aw[rid] || {};
+  aw[rid][emp] = rec || { at: Date.now(), by: 'admin' };
+  applyRaceAwards(aw);
+}
+// 云端核销一次。返回 {ok, dup, rec}；dup = 这张券之前已经核销过。
+function adminVoucherRedeemOne(rid, emp, by) {
+  return sbGetChannelJson(ROSTER_CHANNEL).then(function (j) {
+    if (!(j && j.success)) throw new Error('admin_state unreadable');
+    var base = (j.data && typeof j.data === 'object') ? j.data : {};
+    // 深拷贝 awards：只改 aw[rid][emp] 一个格子，其他届 / 其他人的记录一字不动。
+    var aw = {};
+    if (base.awards && typeof base.awards === 'object') {
+      for (var r in base.awards) {
+        if (!Object.prototype.hasOwnProperty.call(base.awards, r)) continue;
+        aw[r] = {};
+        var src = base.awards[r] || {};
+        for (var e in src) if (Object.prototype.hasOwnProperty.call(src, e)) aw[r][e] = src[e];
+      }
+    }
+    aw[rid] = aw[rid] || {};
+    var prev = aw[rid][emp];
+    if (prev && prev.at) return { ok: true, dup: true, rec: prev };
+    aw[rid][emp] = { at: Date.now(), by: String(by || 'admin') };
+    var out = {};
+    for (var k in base) out[k] = base[k];
+    out.awards = aw;
+    if (!out.t) out.t = 'roster';
+    return sbSaveChannel(ROSTER_CHANNEL, out).then(function () {
+      return { ok: true, dup: false, rec: aw[rid][emp] };
+    });
+  });
+}
+// 断网队列补写：一次拦一张，成功就出队。永远不并发写同一行。
+function vchFlushPending() {
+  var l = loadVchPending();
+  if (!l.length) return Promise.resolve(0);
+  var done = 0;
+  function step(i) {
+    if (i >= l.length) return Promise.resolve(done);
+    var it = l[i];
+    if (!it || !it.rid || !it.emp) return step(i + 1);
+    return adminVoucherRedeemOne(it.rid, it.emp, 'admin').then(function (res) {
+      vchPendingRemove(it.rid, it.emp);
+      vchMarkLocal(it.rid, it.emp, (res && res.rec) || null);
+      done++;
+      return step(i + 1);
+    }, function () { return Promise.resolve(done); });   // 还是不通 → 留在队列里
+  }
+  return step(0);
+}
+// 拉本届达标名单：与排行榜 / 导出同一个入口（raceBoardRowsFrom），
+// 所以"榜上是 30 分、核销页是 20 分"这种对不上永远不会发生。
+function adminVoucherLoad(force) {
+  var c = raceConfOf();
+  if (!c || !c.id) { adminState.vchState = 'fail'; return; }
+  if (!force && adminState.vchState === 'ready' && adminState.vchRid === c.id) {
+    vchFlushPending().then(function (n) {
+      if (!n) return;
+      adminVoucherRefreshRows();
+      // 队列补写成功后队列已空，下一次进这里不会再触发重绘 —— 不会自激。
+      if (state.currentPage === 'adminVouchers') { try { render(); } catch (e) {} }
+    });
+    return;
+  }
+  if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbListSnapshots !== 'function') {
+    adminState.vchState = 'fail';
+    return;
+  }
+  var ac = raceAwardCfgOf(c);
+  adminState.vchState = 'loading';
+  adminState.vchRid = c.id;
+  var rid = c.id;
+  sbListSnapshots(0, true).then(function (res) {
+    var rows = (typeof sbSnapshotRecordList === 'function') ? sbSnapshotRecordList(res) : [];
+    rows = raceBoardRosterFilter(rows);
+    var all = raceBoardRowsFrom(rows, 'period', '', rid);
+    var out = [];
+    for (var i = 0; i < all.length; i++) {
+      var r = all[i];
+      if ((r.correct || 0) < ac.partMin) continue;
+      var sn = (r.raw && r.raw.snap) || {};
+      var emp = normEmpNo(dashEmpNoOf(sn, r.key)) || normEmpNo(empOfKey(r.key));
+      if (!emp) continue;
+      var pend = vchPendingOf(rid, emp);
+      out.push({
+        emp: emp,
+        cn: String(sn.cn || r.cn || ''),
+        en: String(sn.en || r.en || ''),
+        dept: deptDisplayName(raceDeptPersonLabel(r.div, r.dept)),
+        correct: r.correct || 0,
+        code: raceVoucherCodeOf(emp, rid),
+        rec: raceAwardRecOf(rid, emp),
+        pendingSync: !!pend
+      });
+    }
+    out.sort(function (a, b) {
+      var au = !!(a.rec || a.pendingSync), bu = !!(b.rec || b.pendingSync);
+      if (au !== bu) return au ? 1 : -1;           // 待兑换的排前面
+      if (b.correct !== a.correct) return b.correct - a.correct;
+      return String(a.emp) < String(b.emp) ? -1 : 1;
+    });
+    adminState.vchRows = out;
+    adminState.vchState = 'ready';
+    if (state.currentPage === 'adminVouchers') { try { render(); } catch (e) {} }
+  }, function () {
+    adminState.vchState = 'fail';
+    if (state.currentPage === 'adminVouchers') { try { render(); } catch (e) {} }
+  });
+}
+// 核销后只改内存里那一行：不重拉全量快照（500 行 × 每人一次）太慢，
+// 现场发奖要的是"点完立刻变绿"。
+function adminVoucherRefreshRows() {
+  var rows = adminState.vchRows || [];
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].rec = raceAwardRecOf(adminState.vchRid, rows[i].emp);
+    rows[i].pendingSync = !!vchPendingOf(adminState.vchRid, rows[i].emp);
+  }
+}
+function adminVoucherRedeem(emp) {
+  var c = raceConfOf();
+  if (!c || !c.id) { adminToast(t('race_no_conf')); return; }
+  emp = normEmpNo(emp);
+  if (!emp || adminState.vchBusy) return;
+  var rid = c.id;
+  adminState.vchBusy = emp;
+  adminState.vchMsg = '';
+  adminState.vchMsgBad = false;
+  try { render(); } catch (e) {}
+  var backoff = [0, 1200, 3000];
+  function step(i) {
+    return adminVoucherRedeemOne(rid, emp, 'admin').then(function (res) {
+      adminState.vchBusy = '';
+      if (res && res.dup) {
+        adminState.vchMsg = t('race_vch_dup').replace('{t}', fmtSyncTime(res.rec && res.rec.at));
+        adminState.vchMsgBad = true;
+        vchMarkLocal(rid, emp, res.rec);
+      } else {
+        adminState.vchMsg = t('race_vch_ok');
+        adminState.vchMsgBad = false;
+        vchMarkLocal(rid, emp, (res && res.rec) || null);
+      }
+      adminVoucherRefreshRows();
+      try { render(); } catch (e) {}
+    }, function () {
+      if (i + 1 < backoff.length) {
+        return new Promise(function (ok) { setTimeout(ok, backoff[i + 1]); }).then(function () { return step(i + 1); });
+      }
+      // 三次都没通：先记账再提示。补写走的是同一个幂等函数，多写一次不会多发奖。
+      enqueueVch(rid, emp);
+      adminState.vchBusy = '';
+      adminState.vchMsg = t('race_vch_queued');
+      adminState.vchMsgBad = true;
+      adminVoucherRefreshRows();
+      try { render(); } catch (e2) {}
+    });
+  }
+  return step(0);
+}
+// 手输 / 扫码核销：先校验券码本身（届次标签 + 校验位），再核对这个人确实达标。
+// 券码里带着工号，所以前台输完就能看到"这张券是谁的"，不用再去名单里找。
+function adminVoucherByCode() {
+  var c = raceConfOf();
+  if (!c || !c.id) { adminToast(t('race_no_conf')); return; }
+  var input = document.getElementById('vchCodeInput');
+  var raw = (input && input.value) || adminState.vchCode || '';
+  adminState.vchCode = raw;
+  var p = raceVoucherVerify(raw, c.id);
+  if (!p) {
+    adminState.vchMsg = t('race_vch_bad');
+    adminState.vchMsgBad = true;
+    try { render(); } catch (e) {}
+    return;
+  }
+  var rows = adminState.vchRows || [];
+  var hit = null;
+  for (var i = 0; i < rows.length; i++) if (rows[i].emp === p.emp) { hit = rows[i]; break; }
+  if (!hit) {
+    adminState.vchMsg = t('race_vch_not_eligible');
+    adminState.vchMsgBad = true;
+    try { render(); } catch (e2) {}
+    return;
+  }
+  adminState.vchCode = '';
+  adminState.vchQuery = p.emp;   // 顺手把列表筛到这个人，核销结果看得见
+  adminVoucherRedeem(p.emp);
+}
+// 名单搜索：整页重绘后必须把焦点和光标还给输入框，否则打一个字就断
+// （和有效工号名单的 adminRosterSearchInput 同一套写法）。
+function adminVoucherSearchInput(v) {
+  adminState.vchQuery = String(v == null ? '' : v);
+  try { render(); } catch (e) {}
+  var el = document.getElementById('vchSearch');
+  if (el && typeof el.focus === 'function') {
+    try { el.focus(); } catch (e2) {}
+    try { if (el.setSelectionRange && el.value != null) el.setSelectionRange(el.value.length, el.value.length); } catch (e3) {}
+  }
+}
+function renderAdminVouchers() {
+  var en = state.lang === 'en';
+  var c = raceConfOf();
+  var ac = raceAwardCfgOf(c);
+  if (!c || !c.id) {
+    return '<div class="q-card" style="text-align:center;color:#666;">'
+      + escapeHtml(en ? 'No quiz round yet. Publish one under Quiz Race first.' : '还没有赛事。请先到「答题赛」发布一期。') + '</div>';
+  }
+  if (!adminState.vchState) adminVoucherLoad(false);
+  var html = '';
+  html += '<div class="q-card" style="background:linear-gradient(135deg,var(--primary-soft) 0%,var(--primary-light) 100%);">';
+  html += '<div style="font-size:12px;color:rgba(0,0,0,.6);">' + escapeHtml(c.title || (en ? 'Quiz race' : '限时答题赛')) + '</div>';
+  html += '<div style="font-size:15px;font-weight:700;color:#000;margin-top:2px;">🎟 ' + t('race_vch_admin') + '</div>';
+  html += '<div style="font-size:12px;color:rgba(0,0,0,.6);margin-top:6px;line-height:1.6;">'
+    + escapeHtml(t('race_vch_rule').replace('{n}', String(ac.partMin))) + '</div>';
+  html += '</div>';
+
+  // 手输 / 扫码核销
+  html += '<div class="q-card">';
+  html += '<div style="font-size:13px;font-weight:600;margin-bottom:6px;">⌨️ ' + t('race_vch_by_code') + '</div>';
+  html += '<div style="display:flex;gap:8px;">';
+  html += '<input id="vchCodeInput" value="' + escapeHtml(adminState.vchCode || '') + '" placeholder="' + escapeHtml(t('race_vch_code_ph'))
+    + '" oninput="adminState.vchCode=this.value" onkeydown="if(event.key===\'Enter\')adminVoucherByCode()"'
+    + ' style="flex:1;min-width:0;padding:9px 10px;border:1px solid #d8dee4;border-radius:8px;'
+    + 'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;letter-spacing:.5px;">';
+  html += '<button class="action-btn primary" style="flex:0 0 auto;padding:9px 14px;font-size:13px;" onclick="adminVoucherByCode()">' + t('race_vch_redeem') + '</button>';
+  html += '</div>';
+  if (adminState.vchMsg) {
+    html += '<div style="margin-top:8px;font-size:12.5px;line-height:1.6;color:' + (adminState.vchMsgBad ? '#b3261e' : '#1e7a3c') + ';">'
+      + (adminState.vchMsgBad ? '⚠️ ' : '✅ ') + escapeHtml(adminState.vchMsg) + '</div>';
+  }
+  html += '</div>';
+
+  // 名单
+  html += '<div class="q-card">';
+  var rows = adminState.vchRows || [];
+  var un = 0;
+  for (var s0 = 0; s0 < rows.length; s0++) if (!rows[s0].rec && !rows[s0].pendingSync) un++;
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
+  html += '<div style="flex:1;font-size:13px;font-weight:600;">📋 ' + (en ? 'Qualified list' : '达标名单') + '</div>';
+  html += '<div style="font-size:11.5px;color:#888;">' + escapeHtml(t('race_vch_count')
+    .replace('{n}', String(rows.length)).replace('{a}', String(un)).replace('{b}', String(rows.length - un))) + '</div>';
+  html += '</div>';
+  html += '<input id="vchSearch" value="' + escapeHtml(adminState.vchQuery || '') + '" placeholder="' + escapeHtml(t('race_vch_search'))
+    + '" autocomplete="off" oninput="adminVoucherSearchInput(this.value)"'
+    + ' style="width:100%;padding:8px 10px;border:1px solid #d8dee4;border-radius:8px;font-size:13px;margin-bottom:8px;">';
+  if (adminState.vchState === 'loading') {
+    html += '<div style="padding:14px;text-align:center;color:#888;font-size:13px;">' + escapeHtml(t('race_vch_loading')) + '</div>';
+  } else if (adminState.vchState === 'fail') {
+    html += '<div style="padding:14px;text-align:center;color:#b3261e;font-size:13px;">'
+      + escapeHtml(en ? 'Could not load participants. Check the connection and retry.' : '成绩拉取失败，请检查网络后重试。') + '</div>';
+    html += '<button class="action-btn secondary" style="width:100%;" onclick="adminVoucherLoad(true)">'
+      + escapeHtml(en ? 'Reload' : '重新拉取') + '</button>';
+  } else if (!rows.length) {
+    html += '<div style="padding:14px;text-align:center;color:#888;font-size:13px;">' + escapeHtml(t('race_vch_none_list')) + '</div>';
+  } else {
+    var q = String(adminState.vchQuery || '').trim().toLowerCase();
+    var shown = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (q) {
+        var hay = (r.cn + ' ' + r.en + ' ' + r.emp + ' ' + r.dept).toLowerCase();
+        if (hay.indexOf(q) < 0) continue;
+      }
+      shown++;
+      var done = !!(r.rec || r.pendingSync);
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;margin-bottom:6px;'
+        + 'border:1px solid ' + (done ? '#e2e6ea' : '#f0d9a8') + ';border-radius:10px;background:' + (done ? '#fafbfc' : '#fffdf5') + ';">';
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="font-size:13.5px;font-weight:600;color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+        + escapeHtml(en ? (r.en || r.cn || r.emp) : (r.cn || r.en || r.emp))
+        + ' <span style="font-family:monospace;font-size:12px;color:#888;font-weight:400;">' + escapeHtml(r.emp) + '</span></div>';
+      html += '<div style="font-size:11.5px;color:#888;margin-top:1px;">' + escapeHtml(r.dept || '—')
+        + ' · ' + (en ? 'correct ' : '答对 ') + r.correct + '</div>';
+      html += '<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#8a6d00;margin-top:1px;'
+        + (done ? 'text-decoration:line-through;color:#b0b8bf;' : '') + '">' + escapeHtml(r.code) + '</div>';
+      html += '</div>';
+      html += '<div style="flex:0 0 auto;text-align:right;">';
+      if (r.pendingSync && !r.rec) {
+        html += '<div style="font-size:11px;color:#b7791f;">' + escapeHtml(t('race_vch_wait_sync')) + '</div>';
+        html += '<div style="font-size:11px;color:#999;">' + escapeHtml(fmtSyncTime(vchPendingOf(adminState.vchRid, r.emp) && vchPendingOf(adminState.vchRid, r.emp).at)) + '</div>';
+      } else if (r.rec) {
+        html += '<div style="font-size:11px;color:#2e7d32;font-weight:600;">✅ ' + escapeHtml(t('race_vch_used')) + '</div>';
+        html += '<div style="font-size:11px;color:#999;">' + escapeHtml(fmtSyncTime(r.rec.at)) + '</div>';
+      } else {
+        html += '<button class="action-btn primary" style="padding:7px 14px;font-size:12.5px;" '
+          + (adminState.vchBusy === r.emp ? 'disabled ' : '')
+          + 'onclick="adminVoucherRedeem(\'' + jsKey(r.emp) + '\')">'
+          + (adminState.vchBusy === r.emp ? '…' : t('race_vch_redeem')) + '</button>';
+      }
+      html += '</div></div>';
+    }
+    if (!shown) {
+      html += '<div style="padding:12px;text-align:center;color:#888;font-size:12.5px;">'
+        + escapeHtml(en ? 'No match.' : '没有匹配的人。') + '</div>';
+    }
+  }
+  html += '</div>';
+  html += '<button class="action-btn secondary" style="width:100%;" onclick="adminVoucherLoad(true)">🔄 '
+    + escapeHtml(en ? 'Refresh list' : '刷新名单') + '</button>';
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'adminRace\')">⚡ '
+    + escapeHtml(en ? 'Back to quiz race' : '返回答题赛设置') + '</button>';
+  return html;
 }
 // 管理端导出：一个 CSV 里放四张表，口径与学员端排行榜完全一致（都走
 // raceBoardRowsFrom / raceDeptAggRowsFrom，不再自己另写一套循环）。
@@ -20076,7 +20871,7 @@ var ROUTE_STORE_KEY = '__quizRouteV1';
 var ROUTE_STORE_TTL = 30 * 60 * 1000;
 var ROUTE_RESTORABLE = {
   home: 1, lusty: 1, bank: 1, paperSelect: 1, search: 1, wrongList: 1, wrongAll: 1,
-  collectedList: 1, race: 1, raceBoard: 1, raceCalendar: 1, raceMkTask: 1, myBadges: 1,
+  collectedList: 1, race: 1, raceBoard: 1, raceCalendar: 1, raceVouchers: 1, raceMkTask: 1, myBadges: 1,
   examHistory: 1, profile: 1, avatar: 1
 };
 var ROUTE_KNOWN_BANKS = { day21: 1, tsos: 1, manual: 1 };
@@ -23307,7 +24102,7 @@ function adminRosterRefresh() {
 // 全部摊开，让管理员先看清楚再按确认。
 function adminRosterPendingHtml(p) {
   var en = state.lang === 'en';
-  var d = p.diff || { added: [], removed: [], renamed: [] };
+  var d = p.diff || { added: [], removed: [], renamed: [], lvChanged: [] };
   var total = 0, named = 0, reserved = 0;
   for (var k in p.rows) { total++; if (p.rows[k].cn || p.rows[k].en) named++; else reserved++; }
   var html = '';
@@ -23321,7 +24116,8 @@ function adminRosterPendingHtml(p) {
     [reserved, en ? 'Reserved' : '预留'],
     ['+' + d.added.length, en ? 'New' : '新增'],
     ['−' + d.removed.length, en ? 'Removed' : '移除'],
-    [d.renamed.length, en ? 'Renamed' : '改名']
+    [d.renamed.length, en ? 'Renamed' : '改名'],
+    [(d.lvChanged || []).length, en ? 'Level changed' : '级别变更']
   ];
   for (var c = 0; c < cells.length; c++) {
     html += '<div class="stat-card"><div class="num" style="font-size:16px;">' + cells[c][0] + '</div><div class="label">' + cells[c][1] + '</div></div>';
@@ -23424,12 +24220,12 @@ function adminRosterPanelHtml() {
   html += '<div class="q-card" style="margin-top:10px;"><div class="profile-form">';
   html += '<h4 style="margin:0 0 6px;">📥 ' + (en ? 'Import roster (Excel / CSV)' : '一键导入员工名册（Excel / CSV）') + '</h4>';
   html += '<div class="sync-note" style="font-size:12px;margin-bottom:8px;">' + (en
-    ? 'Columns can be in any order — recommended: English name, Chinese name, employee ID. The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
-    : '列顺序不限（推荐：英文名、中文名、工号），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。') + '</div>';
+    ? 'Columns can be in any order — recommended: English name, Chinese name, employee ID, level (L/T/S/A/B/G, optional). The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
+    : '列顺序不限（推荐：英文名、中文名、工号、级别 L/T/S/A/B/G，级别可选），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。级别用于部门奖加权：L/T/S ×1、A/B ×1.5、G ×2。') + '</div>';
   html += '<label class="rz-file">📄 ' + (en ? 'Choose file & preview differences' : '选择文件并预览差异')
     + '<input type="file" accept=".xlsx,.csv,.txt,.tsv" style="display:none" onchange="adminRosterFileChosen(this)"></label>';
   html += '<button class="action-btn nav-btn secondary" style="width:100%;margin-top:8px;" onclick="adminRosterTemplateDl()">⬇️ '
-    + (en ? 'Download the template (EN name · CN name · ID)' : '下载名册模板（英文名 · 中文名 · 工号）') + '</button>';
+    + (en ? 'Download the template (EN name · CN name · ID · Level)' : '下载名册模板（英文名 · 中文名 · 工号 · 级别）') + '</button>';
   html += '</div></div>';
   if (adminState.rosterPending) html += adminRosterPendingHtml(adminState.rosterPending);
 
@@ -26454,10 +27250,10 @@ function adminUnifiedRosterHtml(statusLine, en) {
     // 列宽记忆（2026-11-12 用户要求）：拖动表头右侧手柄调列宽，存 localStorage，
     // 下次进入按上次的尺寸显示。全部列都有宽度时才启用 fixed 布局。
     var colWs = adminRosterColWs();
-    html += '<div class="stu-table-wrap"><table class="stu-table"' + (colWs.length >= 7 ? ' style="table-layout:fixed;"' : '') + '>';
+    html += '<div class="stu-table-wrap"><table class="stu-table"' + (colWs.length >= ROSTER_COL_N ? ' style="table-layout:fixed;"' : '') + '>';
     if (colWs.length) {
       html += '<colgroup>';
-      for (var cw = 0; cw < 7; cw++) html += '<col' + (colWs[cw] ? ' style="width:' + colWs[cw] + 'px"' : '') + '>';
+      for (var cw = 0; cw < ROSTER_COL_N; cw++) html += '<col' + (colWs[cw] ? ' style="width:' + colWs[cw] + 'px"' : '') + '>';
       html += '</colgroup>';
     }
     html += '<thead><tr>';
@@ -26465,13 +27261,14 @@ function adminUnifiedRosterHtml(statusLine, en) {
       (en ? 'Employee ID' : '工号 / 状态'),
       (en ? 'Roster CN' : '名册中文'),
       (en ? 'Roster EN' : '名册英文'),
+      (en ? 'Level' : '级别'),
       (en ? 'Registered' : '注册姓名'),
       (en ? 'Department' : '部门'),
       (en ? 'Last active' : '最近活跃'),
       (en ? 'Actions' : '操作')
     ];
     for (var thi = 0; thi < thLabels.length; thi++) {
-      html += '<th' + (thi === 6 ? ' style="text-align:right;"' : '') + '>' + thLabels[thi]
+      html += '<th' + (thi === thLabels.length - 1 ? ' style="text-align:right;"' : '') + '>' + thLabels[thi]
         + '<span class="col-grip" title="' + (en ? 'Drag to resize column' : '拖动调整列宽') + '" onmousedown="adminColGrip(event,' + thi + ')"></span></th>';
     }
     html += '</tr></thead><tbody>';
@@ -26486,6 +27283,7 @@ function adminUnifiedRosterHtml(statusLine, en) {
         + (isLeft2 ? adminRosterLeftChip(en) : adminRosterStatusChip(sst)) + '</td>';
       html += '<td><input class="cell" value="' + escapeHtml(rr.rosterCn) + '" placeholder="—" onchange="adminRosterRowEdit(\'' + jsKey(rr.emp) + '\',\'cn\',this.value)"></td>';
       html += '<td><input class="cell" value="' + escapeHtml(rr.rosterEn) + '" placeholder="—" onchange="adminRosterRowEdit(\'' + jsKey(rr.emp) + '\',\'en\',this.value)"></td>';
+      html += '<td>' + adminRosterLvSelect(rr.emp, rr.rosterLv, en) + '</td>';
       html += '<td>' + (rr.reg ? ((escapeHtml(rr.reg.cn) + (rr.reg.cn && rr.reg.en ? ' / ' : '') + escapeHtml(rr.reg.en)) || '<span class="dash">—</span>') : '<span class="dash">' + (en ? 'not yet' : '未注册') + '</span>') + '</td>';
       html += '<td>' + (rr.reg && rr.reg.div ? escapeHtml(rr.reg.div + (rr.reg.dept ? ' · ' + rr.reg.dept : '')) : '<span class="st-muted">—</span>') + '</td>';
       html += '<td>' + (rr.reg && rr.reg.ts ? fmtSyncTime(rr.reg.ts) + (rr.reg.exams ? '<div class="st-muted">' + rr.reg.exams + (en ? ' exam(s)' : ' 次考试') + '</div>' : '') : '<span class="st-muted">—</span>') + '</td>';
@@ -26558,12 +27356,12 @@ function adminUnifiedRosterHtml(statusLine, en) {
   if (impOpen) {
     html += '<div class="profile-form" style="margin-top:10px;">';
     html += '<div class="sync-note" style="font-size:12px;margin-bottom:8px;">' + (en
-      ? 'Columns can be in any order — recommended: English name, Chinese name, employee ID. The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
-      : '列顺序不限（推荐：英文名、中文名、工号），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。') + '</div>';
+      ? 'Columns can be in any order — recommended: English name, Chinese name, employee ID, level (L/T/S/A/B/G, optional). The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
+      : '列顺序不限（推荐：英文名、中文名、工号、级别 L/T/S/A/B/G，级别可选），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。级别用于部门奖加权：L/T/S ×1、A/B ×1.5、G ×2。') + '</div>';
     html += '<label class="rz-file">📄 ' + (en ? 'Choose file & preview differences' : '选择文件并预览差异')
       + '<input type="file" accept=".xlsx,.csv,.txt,.tsv" style="display:none" onchange="adminRosterFileChosen(this)"></label>';
     html += '<button class="action-btn nav-btn secondary" style="width:100%;margin-top:8px;" onclick="adminRosterTemplateDl()">⬇️ '
-      + (en ? 'Download the template (EN name · CN name · ID)' : '下载名册模板（英文名 · 中文名 · 工号）') + '</button>';
+      + (en ? 'Download the template (EN name · CN name · ID · Level)' : '下载名册模板（英文名 · 中文名 · 工号 · 级别）') + '</button>';
     html += '</div>';
   }
   html += '</div>';
@@ -29595,7 +30393,7 @@ function adminShellRoutes() {
         { page: 'adminDeptStats', cn: '部门统计', en: 'Dept Analytics' }
       ] },
     { key: 'adminDeptStats', label: en ? 'Dept Analytics' : '部门统计', ico: 'pie', match: ['adminDeptStats'], subOf: 'adminDepts' },
-    { grp: en ? 'MOTIVATION' : '激励', key: 'adminRace', label: en ? 'Quiz Race' : '答题赛', ico: 'bolt', match: ['adminRace'] },
+    { grp: en ? 'MOTIVATION' : '激励', key: 'adminRace', label: en ? 'Quiz Race' : '答题赛', ico: 'bolt', match: ['adminRace', 'adminVouchers'] },
     { key: 'adminBadges', label: en ? 'Badges' : '徽章', ico: 'medal', match: ['adminBadges'] },
     { grp: en ? 'INSIGHTS' : '洞察', key: 'adminDash', label: en ? 'Data Board' : '数据看板', ico: 'chart', match: ['adminDash'] },
     { key: 'adminTeaching', label: en ? 'Teaching' : '教学分析', ico: 'layers', match: ['adminTeaching'] },
@@ -29624,6 +30422,7 @@ function adminPageTitleOf(page) {
     adminVerify:     en ? 'Registration Review' : '注册核查',
     adminStaff:      en ? 'Staff Changes' : '人员变动',
     adminRace:       en ? 'Quiz Race' : '答题赛',
+    adminVouchers:   en ? 'Voucher Redemption' : '参与奖核销',
     adminBadges:     en ? 'Badges' : '徽章',
     adminDash:       en ? 'Data Board' : '数据看板',
     adminTeaching:   en ? 'Teaching' : '教学分析',
@@ -29645,6 +30444,7 @@ function adminSubOf(page) {
     adminGrading:     en ? 'Points per question and passing score \u2014 published to every device' : '\u6bcf\u9898\u5206\u503c\u4e0e\u53ca\u683c\u7ebf\uff0c\u53d1\u5e03\u540e\u540c\u6b65\u5230\u6240\u6709\u5b66\u5458\u7aef',
     adminExamHub:     en ? 'Exams' : '\u8003\u8bd5',
     adminRace:        en ? 'Quiz race config, roster and leaderboard' : '\u7b54\u9898\u8d5b\u914d\u7f6e\u3001\u53c2\u8d5b\u540d\u518c\u4e0e\u6392\u884c\u699c',
+    adminVouchers:    en ? 'Redeem participation award vouchers' : '\u6838\u9500\u53c2\u4e0e\u5956\u5151\u6362\u5238\uff0c\u53ef\u6309\u5238\u7801\u6216\u540d\u5355\u6838\u9500',
     adminBadges:      en ? 'Badge catalog, thresholds and awards' : '\u5fbd\u7ae0\u76ee\u5f55\u3001\u95e8\u69db\u4e0e\u53d1\u653e',
     adminDash:        en ? 'Activity, exam and quiz-race analytics' : '\u6d3b\u8dc3\u5ea6\u3001\u8003\u8bd5\u4e0e\u7b54\u9898\u8d5b\u5206\u6790',
     adminTeaching:    en ? 'Where the cohort is weak, by division and module' : '\u6309\u90e8\u95e8\u4e0e\u6a21\u5757\u770b\u6574\u4f53\u8584\u5f31\u70b9',
@@ -29895,6 +30695,7 @@ function render() {
       case 'adminReports': app.innerHTML = adminShellHtml('adminReports', renderAdminReports()); return;
       case 'adminGrading': app.innerHTML = adminShellHtml('adminGrading', renderAdminGrading()); return;
       case 'adminRace': app.innerHTML = adminShellHtml('adminRace', renderAdminRace()); return;
+      case 'adminVouchers': app.innerHTML = adminShellHtml('adminVouchers', renderAdminVouchers()); return;
       case 'adminBadges': app.innerHTML = adminShellHtml('adminBadges', renderAdminBadges()); return;
       case 'adminDash': app.innerHTML = adminShellHtml('adminDash', renderAdminDash()); return;
       case 'adminTeaching': app.innerHTML = adminShellHtml('adminTeaching', renderAdminTeaching()); return;
@@ -29968,6 +30769,7 @@ function render() {
     case 'raceMakeup': app.innerHTML = renderRaceMakeup(); break;
     case 'raceMkTask': app.innerHTML = renderRaceMkTask(); break;
     case 'raceCalendar': app.innerHTML = renderRaceCalendar(); break;
+    case 'raceVouchers': app.innerHTML = renderRaceVouchers(); break;
     case 'myBadges': app.innerHTML = renderMyBadges(); break;
     default: app.innerHTML = renderHome();
   }
