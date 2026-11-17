@@ -535,6 +535,9 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .primary-btn { padding:12px 28px; background:var(--primary); color:#fff; border:none; border-radius:10px; font-size:15px; font-weight:600; cursor:pointer; box-shadow:var(--shadow); }
 .primary-btn:active { transform:scale(0.97); }
 .confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:999; display:flex; align-items:center; justify-content:center; padding:20px; }
+.info-chip { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; line-height:15px; border-radius:50%; border:1px solid #b9c2cc; background:#fff; color:#7a8794; font-size:10px; font-weight:700; cursor:pointer; padding:0; vertical-align:middle; margin-left:4px; }
+.info-chip:active { background:var(--primary); color:#fff; }
+.info-detail { display:none; font-size:12px; color:#8b98a3; line-height:1.7; margin:6px 0 10px; text-align:left; }
 .confirm-box { background:var(--card-bg); border-radius:14px; padding:20px; max-width:340px; width:100%; box-shadow:0 10px 30px rgba(0,0,0,0.2); }
 .confirm-title { font-size:16px; font-weight:600; margin:0 0 10px; }
 .confirm-body { font-size:14px; color:var(--text-light); margin-bottom:18px; }
@@ -5392,7 +5395,7 @@ var I18N = {
   login_pin_mismatch: {cn:'两次输入的密码不一致', en:'The two passwords do not match'},
   login_pin_btn: {cn:'进 入', en:'Enter'},
   login_pin_reset_notice: {cn:'该账号的密码已被重置，请点击「✓ 是我」后重新设置', en:'This account\'s password was reset — tap "✓ That\'s me" and choose a new one'},
-  login_pin_hint: {cn:'密码将用于在其他设备登录，请务必牢记；忘记时需由管理员重置。', en:'Your password is what you will use on any other device — keep it safe. If you forget it, an administrator must reset it.'},
+  login_pin_hint: {cn:'忘记密码请联系管理员重置。', en:'Forgot your password? Ask the administrator to reset it.'},
   login_exists_switched: {cn:'该工号已注册，请直接输入密码进入', en:'This employee ID is already registered — enter its password to continue'},
   login_register_title: {cn:'首次使用，完善资料', en:'First time here — set up your profile'},
   login_register_sub: {cn:'这个工号还没有账号，填写后即完成注册', en:'No account exists for this employee ID yet — fill this in to register'},
@@ -12712,6 +12715,36 @@ function raceFrameClickOf(frame, name) {
   return "raceFrameInfoShow('" + frame.cat + "','" + n + "')";
 }
 // 点头像框 → 这个框是什么、谁解锁的、怎么拿。再点单枚徽章能看到那一枚的条件。
+// ===== 极简文案：通用「说明」弹窗（2026-11-17）=====
+// 常驻说明文字收进隐藏的 .info-detail；旁边只留一个 ⓘ 小圆点，点开才看全文。
+// 说明内容本身仍留在页面 HTML 里（隐藏容器），既有测试的字符串断言不会失效，
+// 又不占版面。复用 confirm-overlay 样式，纯展示、不写状态、不走 render()。
+var INFO_TIP_TITLE = { cn: '说明', en: 'Info' };
+function infoTipShow(id) {
+  if (typeof document === 'undefined' || !document.body || !document.body.appendChild) return;
+  var src = document.getElementById ? document.getElementById(id) : null;
+  var body = src ? src.innerHTML : '';
+  var okTxt = (typeof t === 'function') ? t('race_badge_ok') : (state.lang === 'en' ? 'Got it' : '知道了');
+  var overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML =
+    '<div class="confirm-box" style="max-width:340px;">' +
+      '<div class="confirm-title" style="margin-bottom:8px;">' + escapeHtml(state.lang === 'en' ? INFO_TIP_TITLE.en : INFO_TIP_TITLE.cn) + '</div>' +
+      '<div class="confirm-body" style="text-align:left;line-height:1.7;">' + body + '</div>' +
+      '<div class="confirm-actions"><button class="confirm-btn primary" data-act="ok">' + escapeHtml(okTxt) + '</button></div>' +
+    '</div>';
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  overlay.querySelector('[data-act="ok"]').onclick = close;
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+  document.body.appendChild(overlay);
+}
+// 生成「ⓘ + 隐藏说明」一段 HTML：detailHtml 为说明正文（可含 <br>），id 全局唯一。
+function infoTipHtml(id, detailHtml) {
+  var lbl = (state.lang === 'en' ? INFO_TIP_TITLE.en : INFO_TIP_TITLE.cn);
+  return '<button type="button" class="info-chip" aria-label="' + escapeHtml(lbl) + '"'
+    + ' title="' + escapeHtml(lbl) + '" onclick="infoTipShow(\'' + id + '\')">ⓘ</button>'
+    + '<div id="' + id + '" class="info-detail">' + detailHtml + '</div>';
+}
 function raceFrameInfoShow(rawCat, rawName) {
   if (typeof document === 'undefined' || !document.body || !document.body.appendChild) return;
   var cat = String(rawCat || '');
@@ -13273,7 +13306,6 @@ function raceFrameSectionHtml(counts) {
       + ' · ' + r.got + '/' + r.total + '</div></div></div>';
   }
   html += '</div>';
-  html += '<div style="font-size:10.5px;color:#9aa3ad;line-height:1.6;margin-top:8px;">' + t('race_frame_hint') + '</div>';
   html += '</div>';
   return html;
 }
@@ -15859,8 +15891,8 @@ function renderRaceBoard() {
   html += '<button class="action-btn ' + (tab === 'best' ? 'primary' : 'secondary') + '" style="flex:1;min-width:0;white-space:nowrap;font-size:13px;" onclick="state.raceBoardTab=\'best\';render()">' + t('race_board_best') + '</button>';
   html += '<button class="action-btn ' + (tab === 'mover' ? 'primary' : 'secondary') + '" style="flex:1;min-width:0;white-space:nowrap;font-size:13px;" onclick="state.raceBoardTab=\'mover\';render()">' + t('race_board_mover') + '</button>';
   html += '</div>';
-  // 说明文字只留"统计范围"：徽章 / 段位能点这件事不另写提示，让大家自己发现。
-  html += '<div style="font-size:12px;color:#999;line-height:1.5;margin:0 0 10px;">' + raceBoardScopeHint(tab) + '</div>';
+  // 口径说明收进 ⓘ 弹窗：常驻文字不占版面，点开才看全文（极简文案原则）。
+  // 文字仍写进页面 HTML（隐藏在 info-detail 里），既有字符串断言不受影响。
   var sec = state.raceBoardSec || '';
   // 进步之星跟板块无关（比的是自己的历届最佳），不显示板块切换条
   var isMoverTab = tab === 'mover';
@@ -15877,15 +15909,17 @@ function renderRaceBoard() {
   }
   html += '</div>';
   }
-  html += '<div style="font-size:12px;color:#888;margin:2px 0 10px;">'
-    + (isMoverTab ? '' :
-      (isDays ? t(tab === 'dept' ? (raceDeptDaysMode() === 'avg' ? 'race_board_days_hint_dept_avg' : 'race_board_days_hint_dept')
-                                 : (tab === 'best' ? 'race_board_days_hint_best' : 'race_board_days_hint_period'))
-       : (sec ? (raceSecIcon(sec) + ' ' + escapeHtml(raceSecName(sec)) + ' \u00b7 '
-                 + t(tab === 'dept' ? 'race_board_dept_sec_hint' : (tab === 'best' ? 'race_board_best_sec_hint' : 'race_board_sec_hint')))
-              : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 '
-                 + t(tab === 'dept' ? 'race_board_dept_mix_hint' : (tab === 'best' ? 'race_board_best_mix_hint' : 'race_board_mix_hint'))))))
-    + '</div>';
+  var scopeText = raceBoardScopeHint(tab);
+  var scopeDetail = isMoverTab ? scopeText
+    : scopeText + '<br>'
+      + (isDays ? t(tab === 'dept' ? (raceDeptDaysMode() === 'avg' ? 'race_board_days_hint_dept_avg' : 'race_board_days_hint_dept')
+                                   : (tab === 'best' ? 'race_board_days_hint_best' : 'race_board_days_hint_period'))
+         : (sec ? (raceSecIcon(sec) + ' ' + escapeHtml(raceSecName(sec)) + ' \u00b7 '
+                   + t(tab === 'dept' ? 'race_board_dept_sec_hint' : (tab === 'best' ? 'race_board_best_sec_hint' : 'race_board_sec_hint')))
+                : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 '
+                   + t(tab === 'dept' ? 'race_board_dept_mix_hint' : (tab === 'best' ? 'race_board_best_mix_hint' : 'race_board_mix_hint')))));
+  html += '<div style="font-size:12px;color:#999;margin:2px 0 10px;">'
+    + infoTipHtml('boardScopeTip', scopeDetail) + '</div>';
   var isDeptTab = tab === 'dept';
   var rows = isMoverTab ? raceMoverRows()
     : isDays
@@ -16758,7 +16792,7 @@ function renderAdminRace() {
   // C1 参与保底（2026-11-03）：打卡次数达标线，导出 CSV 里出达标名单
   html += '<label style="font-size:12px;color:#666;">' + t('race_part_n_label') + '</label>';
   html += '<input id="racePartN" type="number" min="1" max="31" step="1" style="width:100%;padding:8px;margin:4px 0 4px;border:1px solid #d8dee4;border-radius:6px;" value="' + (parseInt(c.partN, 10) || 5) + '">';
-  html += '<div style="font-size:11px;color:#888;margin:0 0 10px;line-height:1.5;">' + t('race_part_n_hint') + '</div>';
+  html += '<div style="font-size:11px;color:#888;margin:0 0 10px;line-height:1.5;">' + infoTipHtml('partNTip', t('race_part_n_hint')) + '</div>';
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'Start (optional)' : '开始时间（可留空）') + '</label>';
   html += '<input id="raceStart" type="datetime-local" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((c.startTime ? raceInputDate(c.startTime) : '') || defaultStartInput(0)) + '">';
   html += '<label style="font-size:12px;color:#666;">' + (en ? 'End (optional)' : '结束时间（可留空）') + '</label>';
@@ -16781,14 +16815,16 @@ function renderAdminRace() {
     + '<span>' + (en ? 'Enable make-up earning tasks' : '启用赚补签任务（错题巩固 / 模块挑战）') + '</span></label>';
   // 任务一机制（2026-11-12 改版）已定：抽 5 道已开启巩固的错题全对得 1 次，不再有可调的「巩固完成数」
   html += '<div style="font-size:11px;color:#888;margin:8px 0 2px;line-height:1.5;">'
-    + (en ? 'Task 1: draw 5 consolidated wrong answers from the Error Notebook; all correct earns one credit.'
-          : '任务一：从错题本抽 5 道已开启巩固的错题，全部答对记 1 次补签。')
+    + (en ? 'Task 1' : '任务一') + infoTipHtml('mkTask1Tip', en
+        ? 'Draw 5 consolidated wrong answers from the Error Notebook; all correct earns one credit.'
+        : '从错题本抽 5 道已开启巩固的错题，全部答对记 1 次补签。')
     + '</div>';
   html += '<label style="font-size:12px;color:#666;margin-top:8px;display:block;">' + (en ? 'Make-up limit per round (earned via tasks)' : '每届补签次数上限（全部由任务获得）') + '</label>';
   html += '<input id="raceMkCap" type="number" min="1" max="10" step="1" style="width:100%;padding:8px;margin:4px 0 4px;border:1px solid #d8dee4;border-radius:6px;" value="' + ((parseInt(c.mkCap, 10) || 0) > 0 ? parseInt(c.mkCap, 10) : 3) + '">';
   html += '<div style="font-size:11px;color:#888;margin:4px 0 2px;line-height:1.5;">'
-    + (en ? 'Task 2: pick a module, answer at least 8 of 10 drawn questions correct — once per module per round.'
-          : '任务二：任选模块抽 10 题答对 8 题，同一模块本届限 1 次。')
+    + (en ? 'Task 2' : '任务二') + infoTipHtml('mkTask2Tip', en
+        ? 'Pick a module, answer at least 8 of 10 drawn questions correct — once per module per round.'
+        : '任选模块抽 10 题答对 8 题，同一模块本届限 1 次。')
     + '</div>';
   html += '</div>';
   // 奖项设置（2026-11-17）：参与奖门槛、个人排名奖名额、部门奖名额都做成可改，
@@ -16796,7 +16832,7 @@ function renderAdminRace() {
   var awd = raceAwardCfgOf(c);
   html += '<div style="border-top:1px solid #eef1f4;margin-top:12px;padding-top:10px;">';
   html += '<div style="font-size:13px;font-weight:600;margin-bottom:2px;">🏅 ' + t('race_vch_cfg') + '</div>';
-  html += '<div style="font-size:11px;color:#888;margin:2px 0 8px;line-height:1.5;">' + t('race_vch_cfg_hint') + '</div>';
+  html += '<div style="font-size:11px;color:#888;margin:2px 0 8px;line-height:1.5;">' + infoTipHtml('vchCfgTip', t('race_vch_cfg_hint')) + '</div>';
   html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;padding:2px 0;cursor:pointer;">'
     + '<input type="checkbox" id="raceAwPartOn" style="margin-top:2px;"' + (awd.partOn ? ' checked' : '') + '> '
     + '<span>' + (en ? 'Participation award (voucher)' : '参与奖（兑换券）') + '</span></label>';
@@ -16821,7 +16857,7 @@ function renderAdminRace() {
   html += '<div style="border-top:1px solid #eef1f4;margin-top:12px;padding-top:10px;">';
   html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;font-weight:600;padding:2px 0;cursor:pointer;">'
     + '<input type="checkbox" id="raceNewSeason" style="margin-top:2px;"> <span>' + t('race_new_season') + '</span></label>';
-  html += '<div style="font-size:11px;color:#888;margin:4px 0 2px;line-height:1.5;">' + t('race_new_season_hint') + '</div>';
+  html += '<div style="font-size:11px;color:#888;margin:4px 0 2px;line-height:1.5;">' + infoTipHtml('newSeasonTip', t('race_new_season_hint')) + '</div>';
   html += '</div>';
   // 徽章改成独立目录（管理端可增删改、自动生成样式），这里只留入口。
   // 旧版这里是一个「月度达标天数」输入框；为了不让已发布赛事里的 badgeDays 变成死配置，
@@ -17134,7 +17170,7 @@ function renderAdminBadges() {
     html += '<option value="' + skS + '"' + (secVal === skS ? ' selected' : '') + '>'
       + RACE_SECTIONS[si].icon + ' ' + escapeHtml(en ? RACE_SECTIONS[si].en : RACE_SECTIONS[si].cn) + '</option>';
   }
-  html += '</select><div style="font-size:11px;color:#8b98a3;margin-top:3px;">' + t('badge_admin_sec_hint') + '</div></div>';
+  html += '</select><div style="font-size:11px;color:#8b98a3;margin-top:3px;">' + infoTipHtml('badgeSecTip', t('badge_admin_sec_hint')) + '</div></div>';
   // 限定主题徽章要绑定"哪一届"：留空 = 当前届（发布时才知道 id，所以留空最省心）；
   // 想把它钉死在某一届就填进去（新一季换了 id 之后，旧主题自动变成"已结束、不再发放"）。
   html += '<div style="margin-top:8px;"><label style="font-size:12px;color:#666;">' + t('badge_admin_rid') + '</label>'
@@ -17146,7 +17182,7 @@ function renderAdminBadges() {
   // 填 0 表示只看打卡天数（老行为）。
   html += '<div style="margin-top:8px;"><label style="font-size:12px;color:#666;">' + t('badge_admin_mc') + '</label>'
     + '<input id="bdMc" type="number" min="0" max="2000" class="admin-input" style="width:100%;padding:8px;border:1px solid #d8dee4;border-radius:6px;box-sizing:border-box;" value="' + (parseInt(d.mc, 10) || 0) + '" placeholder="0">'
-    + '<div style="font-size:11px;color:#8b98a3;margin-top:3px;">' + t('badge_admin_mc_hint') + '</div></div>';
+    + '<div style="font-size:11px;color:#8b98a3;margin-top:3px;">' + infoTipHtml('badgeMcTip', t('badge_admin_mc_hint')) + '</div></div>';
   html += '<div style="display:flex;gap:8px;margin-top:8px;">';
   html += '<div style="flex:1;"><label style="font-size:12px;color:#666;">' + t('badge_admin_n') + '</label>'
     + '<input id="bdN" type="number" min="1" max="365" class="admin-input" style="width:100%;padding:8px;border:1px solid #d8dee4;border-radius:6px;box-sizing:border-box;" value="' + d.n + '"></div>';
@@ -17159,7 +17195,7 @@ function renderAdminBadges() {
   // 显示的那句话。留空 = 按规则自动生成（占位文字就是默认值）；填了就用填的。
   // 只作用于文案字段 dcn / den，不碰 rule / n / mc，改文案不会动门槛。
   html += '<div style="margin-top:10px;padding:10px;border:1px solid #e6edf4;border-radius:8px;background:#f9fbfd;">';
-  html += '<div style="font-size:11px;color:#8b98a3;line-height:1.5;margin-bottom:6px;">' + t('badge_admin_desc_hint') + '</div>';
+  html += '<div style="font-size:11px;color:#8b98a3;line-height:1.5;margin-bottom:6px;">' + infoTipHtml('badgeDescTip', t('badge_admin_desc_hint')) + '</div>';
   html += '<label style="font-size:12px;color:#666;">' + t('badge_admin_desc_cn') + '</label>';
   html += '<textarea id="bdDcn" rows="2" maxlength="120" class="admin-input" style="width:100%;padding:8px;margin:4px 0 6px;border:1px solid #d8dee4;border-radius:6px;box-sizing:border-box;font-size:13px;"'
     + ' placeholder="' + escapeHtml(raceBadgeDesc({ def: { rule: d.rule, n: d.n, mc: parseInt(d.mc, 10) || 0, sec: badgeSecValid(d.sec) } }, 'cn')) + '"'
@@ -17563,6 +17599,31 @@ function vchFlushPending() {
 }
 // 拉本届达标名单：与排行榜 / 导出同一个入口（raceBoardRowsFrom），
 // 所以"榜上是 30 分、核销页是 20 分"这种对不上永远不会发生。
+// 🔴 局部刷新必须钉住滚动位置（2026-11-17 现场反馈：输着输着页面自己上下弹）
+// 名单被筛短 / 筛长会改变文档高度，手机浏览器为了让焦点输入框"留在可见区"
+// 会自己改 scrollTop，看上去就是页面往上顶或往下掉。这里刷新前记下位置、刷新后放回。
+function vchScrollY() {
+  try {
+    var se = document.scrollingElement || document.documentElement || document.body;
+    return (se && se.scrollTop) || window.pageYOffset || 0;
+  } catch (e) { return 0; }
+}
+function vchRestoreScroll(y) {
+  try {
+    if (Math.abs(vchScrollY() - y) <= 1) return;
+    if (typeof window.scrollTo === 'function') window.scrollTo(0, y);
+    else {
+      var se = document.scrollingElement || document.documentElement || document.body;
+      if (se) se.scrollTop = y;
+    }
+  } catch (e) {}
+}
+function vchKeepScroll(fn) {
+  var y = vchScrollY();
+  var r = fn();
+  vchRestoreScroll(y);
+  return r;
+}
 // 刷新按钮的忙碌态：只改按钮本身，不重绘整页（重绘会重建搜索框、打断输入法）
 function vchSetRefreshBusy(on) {
   var b = document.getElementById('vchRefreshBtn');
@@ -17594,6 +17655,7 @@ function adminVoucherLoad(force) {
   adminState.vchRid = c.id;
   vchSetRefreshBusy(true);   // 立刻给反馈，不必等整页重绘
   var rid = c.id;
+  var keepY = vchScrollY();   // 整页重绘会改文档高度，刷完把滚动位置放回原处
   sbListSnapshots(0, true).then(function (res) {
     var rows = (typeof sbSnapshotRecordList === 'function') ? sbSnapshotRecordList(res) : [];
     rows = raceBoardRosterFilter(rows);
@@ -17625,10 +17687,10 @@ function adminVoucherLoad(force) {
     });
     adminState.vchRows = out;
     adminState.vchState = 'ready';
-    if (state.currentPage === 'adminVouchers') { try { render(); } catch (e) {} }
+    if (state.currentPage === 'adminVouchers') { try { render(); vchRestoreScroll(keepY); } catch (e) {} }
   }, function () {
     adminState.vchState = 'fail';
-    if (state.currentPage === 'adminVouchers') { try { render(); } catch (e) {} }
+    if (state.currentPage === 'adminVouchers') { try { render(); vchRestoreScroll(keepY); } catch (e) {} }
   });
 }
 // 核销后只改内存里那一行：不重拉全量快照（500 行 × 每人一次）太慢，
@@ -17649,6 +17711,11 @@ function adminVoucherRedeem(emp, fromInput) {
   adminState.vchBusy = emp;
   adminState.vchMsg = '';
   adminState.vchMsgBad = false;
+  // 只有"本来就在核销框里打字"才把焦点还给它。若操作员是点的「核销」按钮，
+  // 强行 focus 会弹起键盘并把页面滚回输入框 —— 又是一个"页面自己跳"的来源。
+  var ip0 = document.getElementById('vchCodeInput');
+  var keepFocus = !!(fromInput && ip0 && document.activeElement === ip0);
+  var keepY0 = vchScrollY();
   adminVoucherPaint();
   // 从输入框发起的核销：成功后清空输入框、焦点留在原处，方便一张接一张地核销
   function finishClear() {
@@ -17657,7 +17724,7 @@ function adminVoucherRedeem(emp, fromInput) {
     var ip = document.getElementById('vchCodeInput');
     if (ip) {
       ip.value = '';
-      try { ip.focus(); } catch (e0) {}
+      if (keepFocus) { try { ip.focus(); } catch (e0) {} }
     }
   }
   var backoff = [0, 1200, 3000];
@@ -17676,6 +17743,7 @@ function adminVoucherRedeem(emp, fromInput) {
       adminVoucherRefreshRows();
       if (!(res && res.dup)) finishClear();
       adminVoucherPaint();
+      vchRestoreScroll(keepY0);   // focus() 可能把页面滚回输入框，这里放回原处
     }, function () {
       if (i + 1 < backoff.length) {
         return new Promise(function (ok) { setTimeout(ok, backoff[i + 1]); }).then(function () { return step(i + 1); });
@@ -17688,6 +17756,7 @@ function adminVoucherRedeem(emp, fromInput) {
       adminVoucherRefreshRows();
       finishClear();
       adminVoucherPaint();
+      vchRestoreScroll(keepY0);
     });
   }
   return step(0);
@@ -17752,8 +17821,7 @@ function adminVoucherByCode() {
       adminVoucherPaint();
       return;
     }
-    adminState.vchQuery = p.emp;
-    syncVoucherSearchBox();
+    // 不把券码里的工号写进搜索框：搜索框是操作员自己的筛选，不该被核销动作悄悄改掉
     return adminVoucherRedeem(p.emp, true);
   }
   // 长得像券码（RC 开头 / 带连字符）却校验不过 → 判无效，不要当工号去搜
@@ -17766,20 +17834,19 @@ function adminVoucherByCode() {
 
   // ②③ 工号 / 工号后几位
   var m = vchMatchRows(raw);
-  if (m.exact) {
-    adminState.vchQuery = m.exact.emp;
-    syncVoucherSearchBox();
-    return adminVoucherRedeem(m.exact.emp, true);
-  }
-  if (m.list.length === 1) {
-    adminState.vchQuery = raw;
-    syncVoucherSearchBox();
-    return adminVoucherRedeem(m.list[0].emp, true);
-  }
+  if (m.exact) return adminVoucherRedeem(m.exact.emp, true);
+  if (m.list.length === 1) return adminVoucherRedeem(m.list[0].emp, true);
   if (m.list.length > 1) {
-    adminState.vchQuery = raw;
-    syncVoucherSearchBox();
-    adminState.vchMsg = t('race_vch_multi').replace('{n}', String(m.list.length));
+    // 命中多人时只报"有谁"，不去动下方名单和搜索框 —— 两处输入框互相改值
+    // 正是现场反馈"清空又不同步"的根源。把候选工号直接写在提示里，
+    // 操作员照着一搜就到，不必再猜。
+    var names = [];
+    for (var mi = 0; mi < m.list.length && mi < 3; mi++) {
+      var rr2 = m.list[mi];
+      names.push((rr2.cn || rr2.en || rr2.emp) + ' ' + rr2.emp);
+    }
+    adminState.vchMsg = t('race_vch_multi').replace('{n}', String(m.list.length))
+      + (names.length ? '（' + names.join('、') + (m.list.length > 3 ? ' 等' : '') + '）' : '');
     adminState.vchMsgBad = true;
     adminVoucherPaint();
     return;
@@ -17792,33 +17859,33 @@ function adminVoucherByCode() {
   adminState.vchMsgBad = true;
   adminVoucherPaint();
 }
-// 把当前筛选写回搜索框（只改 value，不重绘，所以不会打断输入法）
-function syncVoucherSearchBox() {
-  var el = document.getElementById('vchSearch');
-  if (el && el.value !== (adminState.vchQuery || '')) el.value = adminState.vchQuery || '';
-}
 // 🔴 核销页的输入框绝不能整页重绘（2026-11-17 现场反馈）：
 // <input> 一被销毁重建，手机输入法就重置回拼音键盘，输一个数字弹一次拼音，
 // 大批量核销时极慢。所以搜索 / 核销只重画下面两个容器，输入框元素始终不动。
 function adminVoucherSearchInput(v) {
   adminState.vchQuery = String(v == null ? '' : v);
   var l = document.getElementById('vchListWrap');
-  if (l) l.innerHTML = adminVoucherListHtml();
+  if (l) vchKeepScroll(function () { l.innerHTML = adminVoucherListHtml(); });
   else { try { render(); } catch (e) {} }
 }
-// 核销框边输边筛：像工号就实时把名单筛到候选人，输完回车即核销。
-// 只换名单容器，不重建输入框，键盘与输入法都不打断。
+// 核销框只负责核销：不筛下方名单、不改搜索框（2026-11-17 现场反馈第二次）。
+// 原先边输边筛有两个毛病：① 名单长度变化把页面顶得上下跳；② 它会把内容写回
+// 搜索框，但清空时又提前 return 不写回 —— 联动只做一半，比不联动更让人困惑。
+// 现在两块彻底解耦：要找人就搜「达标名单」，要核销就在核销框输完回车。
 function adminVoucherCodeInput(v) {
   adminState.vchCode = String(v == null ? '' : v);
   var raw = adminState.vchCode.trim();
-  if (!raw) return;
-  if (/^RC/i.test(raw) || raw.indexOf('-') >= 0) return;   // 券码输完再回车，中途不筛
-  var m = vchMatchRows(raw);
-  if (m.list.length > 40) return;                          // 候选太多就别筛，免得看着闪
-  adminState.vchQuery = raw;
-  syncVoucherSearchBox();
-  var l = document.getElementById('vchListWrap');
-  if (l) l.innerHTML = adminVoucherListHtml();
+  // 提示要跟着输入走：清空 → 收起；重新开始输 → 收起上一次的报错（成功提示留着）
+  var dirty = false;
+  if (!raw) {
+    if (adminState.vchMsg || adminState.vchMsgBad) { adminState.vchMsg = ''; adminState.vchMsgBad = false; dirty = true; }
+  } else if (adminState.vchMsgBad) {
+    adminState.vchMsg = ''; adminState.vchMsgBad = false; dirty = true;
+  }
+  if (!dirty) return;
+  var m = document.getElementById('vchMsgWrap');
+  if (m) m.innerHTML = adminVoucherMsgHtml();
+  else { try { render(); } catch (e) {} }
 }
 function adminVoucherMsgHtml() {
   if (!adminState.vchMsg) return '';
@@ -17884,15 +17951,17 @@ function adminVoucherListHtml() {
   }
   return html;
 }
-// 局部重绘：只更新提示 / 计数 / 名单三块，输入框原封不动
+// 局部重绘：只更新提示 / 计数 / 名单三块，输入框原封不动；滚动位置也钉住
 function adminVoucherPaint() {
   var l = document.getElementById('vchListWrap');
   if (!l) { try { render(); } catch (e) {} return; }
   var m = document.getElementById('vchMsgWrap');
-  if (m) m.innerHTML = adminVoucherMsgHtml();
   var n = document.getElementById('vchCount');
-  if (n) n.innerHTML = adminVoucherCountHtml();
-  l.innerHTML = adminVoucherListHtml();
+  vchKeepScroll(function () {
+    if (m) m.innerHTML = adminVoucherMsgHtml();
+    if (n) n.innerHTML = adminVoucherCountHtml();
+    l.innerHTML = adminVoucherListHtml();
+  });
 }
 function renderAdminVouchers() {
   var en = state.lang === 'en';
@@ -18346,7 +18415,7 @@ function renderMyBadges() {
   var defs = raceBadgeDefs(false);
   var counts = raceBadgeCounts(rec, '');
   var mine = raceBadgeMineSorted(counts);
-  var html = renderAppHeader({ title: '🏅 ' + t('race_badge_mine'), subtitle: t('race_badge_mine_sub') });
+  var html = renderAppHeader({ title: '🏅 ' + t('race_badge_mine') });
   html += '<div class="page">';
   // 顶部总览：已解锁 / 总徽章 / 累计打卡天数
   html += '<div class="q-card" style="display:flex;gap:8px;text-align:center;padding:14px 8px;">';
@@ -18410,7 +18479,7 @@ function renderMyBadges() {
   }
   // 集齐一个系列 → 专属头像框（纯荣誉，平台内生效）
   html += raceFrameSectionHtml(counts);
-  html += '<div style="font-size:11px;color:#999;line-height:1.7;margin:12px 2px;">' + t('race_badge_mine_hint') + '</div>';
+  html += '<div style="font-size:11px;color:#999;line-height:1.7;margin:12px 2px;">' + infoTipHtml('badgeMineTip', t('race_badge_mine_hint')) + '</div>';
   html += '</div>';
   return html;
 }
@@ -25469,7 +25538,7 @@ function renderAdminDash() {
   html += '<button class="admin-export-btn" style="flex:1 1 160px;width:auto;" onclick="adminDashExportCSV()">\u2b07\ufe0f ' + t('dash_export') + '</button>';
   html += '<button class="admin-export-btn" style="flex:1 1 160px;width:auto;" onclick="adminDashExportDetailCSV()">\u2b07\ufe0f ' + t('dash_export_detail') + '</button>';
   html += '</div>';
-  html += '<div style="font-size:11px;color:#999;line-height:1.5;margin:6px 0 2px;">' + t('dash_export_detail_hint') + '</div>';
+  html += '<div style="font-size:11px;color:#999;line-height:1.5;margin:6px 0 2px;">' + infoTipHtml('dashExportTip', t('dash_export_detail_hint')) + '</div>';
   if (adminState.dashDrawer) html += dashDrawerHtml();
   html += '</div>';
   return html;
@@ -25513,7 +25582,7 @@ function dashActiveHtml(from, to, en) {
     h += '<div class="q-card" style="text-align:center;color:#888;">' + t('dash_no_active') + '</div>';
     return h;
   }
-  h += '<div style="font-size:12px;color:#888;margin:2px 0 8px;">' + t('dash_active_tip') + '</div>';
+  h += '<div style="font-size:12px;color:#888;margin:2px 0 8px;">' + infoTipHtml('dashActiveTip', t('dash_active_tip')) + '</div>';
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
     h += '<div class="dash-dept-card" onclick="adminState.dashDrawer={key:\'' + jsKey(r.key) + '\'};render()">';
