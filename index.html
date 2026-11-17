@@ -5762,8 +5762,10 @@ var I18N = {
   race_vch_admin: {cn:'参与奖核销', en:'Voucher redemption'},
   race_vch_admin_desc: {cn:'核销参与奖兑换券，并管理奖项参数', en:'Redeem participation vouchers and tune award settings'},
   race_vch_by_code: {cn:'输入券码核销', en:'Redeem by code'},
-  race_vch_code_ph: {cn:'RC-XXXX-1001-AA', en:'RC-XXXX-1001-AA'},
-  race_vch_search: {cn:'搜索姓名或工号', en:'Search name or employee ID'},
+  race_vch_code_ph: {cn:'输券码 RC-XXXX-1001-AA，或直接输工号后几位', en:'Code RC-XXXX-1001-AA, or just the last digits of an ID'},
+  race_vch_search: {cn:'输入工号或姓名（可只输工号后几位）', en:'Employee ID or name (partial ID works)'},
+  race_vch_multi: {cn:'匹配到 {n} 人，请在下方名单里点选', en:'{n} matches — pick the person from the list below'},
+  race_vch_nomatch: {cn:'没有找到这个工号，请核对后重试', en:'No employee ID matches — please check and retry'},
   race_vch_redeem: {cn:'核销', en:'Redeem'},
   race_vch_ok: {cn:'已核销，可以发奖了', en:'Redeemed — hand over the gift'},
   race_vch_dup: {cn:'这张券已于 {t} 核销，不能重复兑奖', en:'This voucher was already redeemed on {t} — do not hand out a second gift'},
@@ -17568,8 +17570,9 @@ function adminVoucherLoad(force) {
     vchFlushPending().then(function (n) {
       if (!n) return;
       adminVoucherRefreshRows();
-      // 队列补写成功后队列已空，下一次进这里不会再触发重绘 —— 不会自激。
-      if (state.currentPage === 'adminVouchers') { try { render(); } catch (e) {} }
+      // 补写成功后队列已空，下一次进这里不会再触发刷新 —— 不会自激。
+      // 只局部重画，别整页重绘：操作员可能正在输工号，重建输入框会打断输入法。
+      if (state.currentPage === 'adminVouchers') { try { adminVoucherPaint(); } catch (e) {} }
     });
     return;
   }
@@ -17627,7 +17630,7 @@ function adminVoucherRefreshRows() {
     rows[i].pendingSync = !!vchPendingOf(adminState.vchRid, rows[i].emp);
   }
 }
-function adminVoucherRedeem(emp) {
+function adminVoucherRedeem(emp, fromInput) {
   var c = raceConfOf();
   if (!c || !c.id) { adminToast(t('race_no_conf')); return; }
   emp = normEmpNo(emp);
@@ -17636,7 +17639,17 @@ function adminVoucherRedeem(emp) {
   adminState.vchBusy = emp;
   adminState.vchMsg = '';
   adminState.vchMsgBad = false;
-  try { render(); } catch (e) {}
+  adminVoucherPaint();
+  // 从输入框发起的核销：成功后清空输入框、焦点留在原处，方便一张接一张地核销
+  function finishClear() {
+    if (!fromInput) return;
+    adminState.vchCode = '';
+    var ip = document.getElementById('vchCodeInput');
+    if (ip) {
+      ip.value = '';
+      try { ip.focus(); } catch (e0) {}
+    }
+  }
   var backoff = [0, 1200, 3000];
   function step(i) {
     return adminVoucherRedeemOne(rid, emp, 'admin').then(function (res) {
@@ -17651,7 +17664,8 @@ function adminVoucherRedeem(emp) {
         vchMarkLocal(rid, emp, (res && res.rec) || null);
       }
       adminVoucherRefreshRows();
-      try { render(); } catch (e) {}
+      if (!(res && res.dup)) finishClear();
+      adminVoucherPaint();
     }, function () {
       if (i + 1 < backoff.length) {
         return new Promise(function (ok) { setTimeout(ok, backoff[i + 1]); }).then(function () { return step(i + 1); });
@@ -17662,96 +17676,156 @@ function adminVoucherRedeem(emp) {
       adminState.vchMsg = t('race_vch_queued');
       adminState.vchMsgBad = true;
       adminVoucherRefreshRows();
-      try { render(); } catch (e2) {}
+      finishClear();
+      adminVoucherPaint();
     });
   }
   return step(0);
 }
-// 手输 / 扫码核销：先校验券码本身（届次标签 + 校验位），再核对这个人确实达标。
-// 券码里带着工号，所以前台输完就能看到"这张券是谁的"，不用再去名单里找。
+// 匹配打分：0=工号完全相同 1=工号后几位 2=工号包含 3=姓名 4=部门 -1=不匹配
+// 员工来兑换时只报工号后几位，所以「后几位命中」必须排在「包含命中」前面。
+function vchMatchScore(r, s) {
+  var emp = String(r && r.emp != null ? r.emp : '').toLowerCase();
+  var cn = String(r && r.cn != null ? r.cn : '').toLowerCase();
+  var en = String(r && r.en != null ? r.en : '').toLowerCase();
+  var dept = String(r && r.dept != null ? r.dept : '').toLowerCase();
+  if (!s) return 9;
+  if (emp === s) return 0;
+  if (emp.length > s.length && emp.slice(-s.length) === s) return 1;
+  if (emp.indexOf(s) >= 0) return 2;
+  if (cn.indexOf(s) >= 0 || en.indexOf(s) >= 0) return 3;
+  if (dept.indexOf(s) >= 0) return 4;
+  return -1;
+}
+// 在本届达标名单里找匹配项：exact = 工号完全相同的那个（可能没有），list 已按匹配度排序。
+function vchMatchRows(q) {
+  var rows = adminState.vchRows || [];
+  var s = String(q == null ? '' : q).trim().toLowerCase();
+  if (!s) return { exact: null, list: rows.slice() };
+  var exact = null, hit = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i], sc = vchMatchScore(r, s);
+    if (sc < 0) continue;
+    if (sc === 0) exact = r;
+    hit.push({ r: r, sc: sc });
+  }
+  hit.sort(function (a, b) {
+    if (a.sc !== b.sc) return a.sc - b.sc;
+    return String(a.r.emp) < String(b.r.emp) ? -1 : 1;
+  });
+  var list = [];
+  for (var k = 0; k < hit.length; k++) list.push(hit[k].r);
+  return { exact: exact, list: list };
+}
+// 手输 / 扫码核销。三种输入都认：
+//   ① 完整券码   RC-XXXX-1001-AA（校验届次标签 + 校验位）
+//   ② 完整工号   10024
+//   ③ 工号后几位 0024 / 24（员工报工号时最快）
+// 唯一命中直接核销；命中多人则把名单筛成候选让人点选，绝不猜人误核销。
 function adminVoucherByCode() {
   var c = raceConfOf();
   if (!c || !c.id) { adminToast(t('race_no_conf')); return; }
   var input = document.getElementById('vchCodeInput');
-  var raw = (input && input.value) || adminState.vchCode || '';
+  var raw = input && input.value != null ? input.value : (adminState.vchCode || '');
+  raw = String(raw).trim();
   adminState.vchCode = raw;
+  if (!raw) return;
+
+  // ① 完整券码
   var p = raceVoucherVerify(raw, c.id);
-  if (!p) {
+  if (p) {
+    var rows = adminState.vchRows || [], hit = null;
+    for (var i = 0; i < rows.length; i++) if (rows[i].emp === p.emp) { hit = rows[i]; break; }
+    if (!hit) {
+      adminState.vchMsg = t('race_vch_not_eligible');
+      adminState.vchMsgBad = true;
+      adminVoucherPaint();
+      return;
+    }
+    adminState.vchQuery = p.emp;
+    syncVoucherSearchBox();
+    return adminVoucherRedeem(p.emp, true);
+  }
+  // 长得像券码（RC 开头 / 带连字符）却校验不过 → 判无效，不要当工号去搜
+  if (/^RC/i.test(raw) || raw.indexOf('-') >= 0) {
     adminState.vchMsg = t('race_vch_bad');
     adminState.vchMsgBad = true;
-    try { render(); } catch (e) {}
+    adminVoucherPaint();
     return;
   }
-  var rows = adminState.vchRows || [];
-  var hit = null;
-  for (var i = 0; i < rows.length; i++) if (rows[i].emp === p.emp) { hit = rows[i]; break; }
-  if (!hit) {
-    adminState.vchMsg = t('race_vch_not_eligible');
+
+  // ②③ 工号 / 工号后几位
+  var m = vchMatchRows(raw);
+  if (m.exact) {
+    adminState.vchQuery = m.exact.emp;
+    syncVoucherSearchBox();
+    return adminVoucherRedeem(m.exact.emp, true);
+  }
+  if (m.list.length === 1) {
+    adminState.vchQuery = raw;
+    syncVoucherSearchBox();
+    return adminVoucherRedeem(m.list[0].emp, true);
+  }
+  if (m.list.length > 1) {
+    adminState.vchQuery = raw;
+    syncVoucherSearchBox();
+    adminState.vchMsg = t('race_vch_multi').replace('{n}', String(m.list.length));
     adminState.vchMsgBad = true;
-    try { render(); } catch (e2) {}
+    adminVoucherPaint();
     return;
   }
-  adminState.vchCode = '';
-  adminState.vchQuery = p.emp;   // 顺手把列表筛到这个人，核销结果看得见
-  adminVoucherRedeem(p.emp);
+  // 一个都没匹配到：区分「工号不在本届达标名单」和「压根没这个工号」
+  var kw = raw.replace(/[^0-9A-Za-z]/g, '').toLowerCase();
+  var all = adminState.vchRows || [], known = false;
+  for (var k2 = 0; k2 < all.length; k2++) if (String(all[k2].emp).toLowerCase() === kw) { known = true; break; }
+  adminState.vchMsg = known ? t('race_vch_not_eligible') : t('race_vch_nomatch');
+  adminState.vchMsgBad = true;
+  adminVoucherPaint();
 }
-// 名单搜索：整页重绘后必须把焦点和光标还给输入框，否则打一个字就断
-// （和有效工号名单的 adminRosterSearchInput 同一套写法）。
+// 把当前筛选写回搜索框（只改 value，不重绘，所以不会打断输入法）
+function syncVoucherSearchBox() {
+  var el = document.getElementById('vchSearch');
+  if (el && el.value !== (adminState.vchQuery || '')) el.value = adminState.vchQuery || '';
+}
+// 🔴 核销页的输入框绝不能整页重绘（2026-11-17 现场反馈）：
+// <input> 一被销毁重建，手机输入法就重置回拼音键盘，输一个数字弹一次拼音，
+// 大批量核销时极慢。所以搜索 / 核销只重画下面两个容器，输入框元素始终不动。
 function adminVoucherSearchInput(v) {
   adminState.vchQuery = String(v == null ? '' : v);
-  try { render(); } catch (e) {}
-  var el = document.getElementById('vchSearch');
-  if (el && typeof el.focus === 'function') {
-    try { el.focus(); } catch (e2) {}
-    try { if (el.setSelectionRange && el.value != null) el.setSelectionRange(el.value.length, el.value.length); } catch (e3) {}
-  }
+  var l = document.getElementById('vchListWrap');
+  if (l) l.innerHTML = adminVoucherListHtml();
+  else { try { render(); } catch (e) {} }
 }
-function renderAdminVouchers() {
-  var en = state.lang === 'en';
-  var c = raceConfOf();
-  var ac = raceAwardCfgOf(c);
-  if (!c || !c.id) {
-    return '<div class="q-card" style="text-align:center;color:#666;">'
-      + escapeHtml(en ? 'No quiz round yet. Publish one under Quiz Race first.' : '还没有赛事。请先到「答题赛」发布一期。') + '</div>';
-  }
-  if (!adminState.vchState) adminVoucherLoad(false);
-  var html = '';
-  html += '<div class="q-card" style="background:linear-gradient(135deg,var(--primary-soft) 0%,var(--primary-light) 100%);">';
-  html += '<div style="font-size:12px;color:rgba(0,0,0,.6);">' + escapeHtml(c.title || (en ? 'Quiz race' : '限时答题赛')) + '</div>';
-  html += '<div style="font-size:15px;font-weight:700;color:#000;margin-top:2px;">🎟 ' + t('race_vch_admin') + '</div>';
-  html += '<div style="font-size:12px;color:rgba(0,0,0,.6);margin-top:6px;line-height:1.6;">'
-    + escapeHtml(t('race_vch_rule').replace('{n}', String(ac.partMin))) + '</div>';
-  html += '</div>';
-
-  // 手输 / 扫码核销
-  html += '<div class="q-card">';
-  html += '<div style="font-size:13px;font-weight:600;margin-bottom:6px;">⌨️ ' + t('race_vch_by_code') + '</div>';
-  html += '<div style="display:flex;gap:8px;">';
-  html += '<input id="vchCodeInput" value="' + escapeHtml(adminState.vchCode || '') + '" placeholder="' + escapeHtml(t('race_vch_code_ph'))
-    + '" oninput="adminState.vchCode=this.value" onkeydown="if(event.key===\'Enter\')adminVoucherByCode()"'
-    + ' style="flex:1;min-width:0;padding:9px 10px;border:1px solid #d8dee4;border-radius:8px;'
-    + 'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;letter-spacing:.5px;">';
-  html += '<button class="action-btn primary" style="flex:0 0 auto;padding:9px 14px;font-size:13px;" onclick="adminVoucherByCode()">' + t('race_vch_redeem') + '</button>';
-  html += '</div>';
-  if (adminState.vchMsg) {
-    html += '<div style="margin-top:8px;font-size:12.5px;line-height:1.6;color:' + (adminState.vchMsgBad ? '#b3261e' : '#1e7a3c') + ';">'
-      + (adminState.vchMsgBad ? '⚠️ ' : '✅ ') + escapeHtml(adminState.vchMsg) + '</div>';
-  }
-  html += '</div>';
-
-  // 名单
-  html += '<div class="q-card">';
+// 核销框边输边筛：像工号就实时把名单筛到候选人，输完回车即核销。
+// 只换名单容器，不重建输入框，键盘与输入法都不打断。
+function adminVoucherCodeInput(v) {
+  adminState.vchCode = String(v == null ? '' : v);
+  var raw = adminState.vchCode.trim();
+  if (!raw) return;
+  if (/^RC/i.test(raw) || raw.indexOf('-') >= 0) return;   // 券码输完再回车，中途不筛
+  var m = vchMatchRows(raw);
+  if (m.list.length > 40) return;                          // 候选太多就别筛，免得看着闪
+  adminState.vchQuery = raw;
+  syncVoucherSearchBox();
+  var l = document.getElementById('vchListWrap');
+  if (l) l.innerHTML = adminVoucherListHtml();
+}
+function adminVoucherMsgHtml() {
+  if (!adminState.vchMsg) return '';
+  return '<div style="margin-top:8px;font-size:12.5px;line-height:1.6;color:' + (adminState.vchMsgBad ? '#b3261e' : '#1e7a3c') + ';">'
+    + (adminState.vchMsgBad ? '⚠️ ' : '✅ ') + escapeHtml(adminState.vchMsg) + '</div>';
+}
+function adminVoucherCountHtml() {
   var rows = adminState.vchRows || [];
   var un = 0;
-  for (var s0 = 0; s0 < rows.length; s0++) if (!rows[s0].rec && !rows[s0].pendingSync) un++;
-  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
-  html += '<div style="flex:1;font-size:13px;font-weight:600;">📋 ' + (en ? 'Qualified list' : '达标名单') + '</div>';
-  html += '<div style="font-size:11.5px;color:#888;">' + escapeHtml(t('race_vch_count')
-    .replace('{n}', String(rows.length)).replace('{a}', String(un)).replace('{b}', String(rows.length - un))) + '</div>';
-  html += '</div>';
-  html += '<input id="vchSearch" value="' + escapeHtml(adminState.vchQuery || '') + '" placeholder="' + escapeHtml(t('race_vch_search'))
-    + '" autocomplete="off" oninput="adminVoucherSearchInput(this.value)"'
-    + ' style="width:100%;padding:8px 10px;border:1px solid #d8dee4;border-radius:8px;font-size:13px;margin-bottom:8px;">';
+  for (var i = 0; i < rows.length; i++) if (!rows[i].rec && !rows[i].pendingSync) un++;
+  return escapeHtml(t('race_vch_count')
+    .replace('{n}', String(rows.length)).replace('{a}', String(un)).replace('{b}', String(rows.length - un)));
+}
+function adminVoucherListHtml() {
+  var en = state.lang === 'en';
+  var rows = adminState.vchRows || [];
+  var html = '';
   if (adminState.vchState === 'loading') {
     html += '<div style="padding:14px;text-align:center;color:#888;font-size:13px;">' + escapeHtml(t('race_vch_loading')) + '</div>';
   } else if (adminState.vchState === 'fail') {
@@ -17762,15 +17836,10 @@ function renderAdminVouchers() {
   } else if (!rows.length) {
     html += '<div style="padding:14px;text-align:center;color:#888;font-size:13px;">' + escapeHtml(t('race_vch_none_list')) + '</div>';
   } else {
-    var q = String(adminState.vchQuery || '').trim().toLowerCase();
-    var shown = 0;
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      if (q) {
-        var hay = (r.cn + ' ' + r.en + ' ' + r.emp + ' ' + r.dept).toLowerCase();
-        if (hay.indexOf(q) < 0) continue;
-      }
-      shown++;
+    // 复用与核销框一致的匹配打分（工号后几位优先），保证「搜到的」和「输工号核销的」是同一套规则
+    var list = vchMatchRows(adminState.vchQuery).list;
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i];
       var done = !!(r.rec || r.pendingSync);
       html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;margin-bottom:6px;'
         + 'border:1px solid ' + (done ? '#e2e6ea' : '#f0d9a8') + ';border-radius:10px;background:' + (done ? '#fafbfc' : '#fffdf5') + ';">';
@@ -17798,11 +17867,65 @@ function renderAdminVouchers() {
       }
       html += '</div></div>';
     }
-    if (!shown) {
+    if (!list.length) {
       html += '<div style="padding:12px;text-align:center;color:#888;font-size:12.5px;">'
         + escapeHtml(en ? 'No match.' : '没有匹配的人。') + '</div>';
     }
   }
+  return html;
+}
+// 局部重绘：只更新提示 / 计数 / 名单三块，输入框原封不动
+function adminVoucherPaint() {
+  var l = document.getElementById('vchListWrap');
+  if (!l) { try { render(); } catch (e) {} return; }
+  var m = document.getElementById('vchMsgWrap');
+  if (m) m.innerHTML = adminVoucherMsgHtml();
+  var n = document.getElementById('vchCount');
+  if (n) n.innerHTML = adminVoucherCountHtml();
+  l.innerHTML = adminVoucherListHtml();
+}
+function renderAdminVouchers() {
+  var en = state.lang === 'en';
+  var c = raceConfOf();
+  var ac = raceAwardCfgOf(c);
+  if (!c || !c.id) {
+    return '<div class="q-card" style="text-align:center;color:#666;">'
+      + escapeHtml(en ? 'No quiz round yet. Publish one under Quiz Race first.' : '还没有赛事。请先到「答题赛」发布一期。') + '</div>';
+  }
+  if (!adminState.vchState) adminVoucherLoad(false);
+  var html = '';
+  html += '<div class="q-card" style="background:linear-gradient(135deg,var(--primary-soft) 0%,var(--primary-light) 100%);">';
+  html += '<div style="font-size:12px;color:rgba(0,0,0,.6);">' + escapeHtml(c.title || (en ? 'Quiz race' : '限时答题赛')) + '</div>';
+  html += '<div style="font-size:15px;font-weight:700;color:#000;margin-top:2px;">🎟 ' + t('race_vch_admin') + '</div>';
+  html += '<div style="font-size:12px;color:rgba(0,0,0,.6);margin-top:6px;line-height:1.6;">'
+    + escapeHtml(t('race_vch_rule').replace('{n}', String(ac.partMin))) + '</div>';
+  html += '</div>';
+
+  // 手输 / 扫码核销
+  html += '<div class="q-card">';
+  html += '<div style="font-size:13px;font-weight:600;margin-bottom:6px;">⌨️ ' + t('race_vch_by_code') + '</div>';
+  html += '<div style="display:flex;gap:8px;">';
+  html += '<input id="vchCodeInput" value="' + escapeHtml(adminState.vchCode || '') + '" placeholder="' + escapeHtml(t('race_vch_code_ph'))
+    + '" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"'
+    + ' oninput="adminVoucherCodeInput(this.value)" onkeydown="if(event.key===\'Enter\')adminVoucherByCode()"'
+    + ' style="flex:1;min-width:0;padding:9px 10px;border:1px solid #d8dee4;border-radius:8px;'
+    + 'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;letter-spacing:.5px;">';
+  html += '<button class="action-btn primary" style="flex:0 0 auto;padding:9px 14px;font-size:13px;" onclick="adminVoucherByCode()">' + t('race_vch_redeem') + '</button>';
+  html += '</div>';
+  html += '<div id="vchMsgWrap">' + adminVoucherMsgHtml() + '</div>';
+  html += '</div>';
+
+  // 名单（标题 + 计数 + 搜索框不动，只有 #vchListWrap 会局部刷新）
+  html += '<div class="q-card">';
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
+  html += '<div style="flex:1;font-size:13px;font-weight:600;">📋 ' + (en ? 'Qualified list' : '达标名单') + '</div>';
+  html += '<div id="vchCount" style="font-size:11.5px;color:#888;">' + adminVoucherCountHtml() + '</div>';
+  html += '</div>';
+  html += '<input id="vchSearch" value="' + escapeHtml(adminState.vchQuery || '') + '" placeholder="' + escapeHtml(t('race_vch_search'))
+    + '" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"'
+    + ' oninput="adminVoucherSearchInput(this.value)"'
+    + ' style="width:100%;padding:8px 10px;border:1px solid #d8dee4;border-radius:8px;font-size:13px;margin-bottom:8px;">';
+  html += '<div id="vchListWrap">' + adminVoucherListHtml() + '</div>';
   html += '</div>';
   html += '<button class="action-btn secondary" style="width:100%;" onclick="adminVoucherLoad(true)">🔄 '
     + escapeHtml(en ? 'Refresh list' : '刷新名单') + '</button>';
