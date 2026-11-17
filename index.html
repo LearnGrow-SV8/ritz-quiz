@@ -2760,6 +2760,43 @@ function savePendingExamPublish(list, reason) {
 function clearPendingExamPublish() {
   try { localStorage.removeItem(EXAM_PENDING_KEY); } catch (e) {}
 }
+// 🔴 打字中不整页重绘（2026-11-17 现场第三次反馈：核销时页面自己上下弹）
+// 后台每 90 s 轮询题库/场次、每 30 s 重试补发，任何一次"有变化"都会 render() 整页；
+// 一旦撞上操作员正在核销框或搜索框打字，<input> 被销毁重建 → 手机键盘收起再弹起、
+// 浏览器把页面滚回输入框，现场看到的就是"输着输着页面自己上下弹"。
+// 处理：后台触发的重绘一律走 renderWhenIdle()，正在打字就先记账，离开输入框再画。
+// 用户主动点按钮（刷新名单等）不走这条路，照旧立刻重绘。
+function uiTypingInVoucher() {
+  try {
+    var a = document.activeElement;
+    if (!a || !a.id) return false;
+    var id = String(a.id);
+    return id === 'vchCodeInput' || id === 'vchSearch';
+  } catch (e) { return false; }
+}
+var __idleRenderBound = false;
+function renderWhenIdle() {
+  if (!__idleRenderBound) {
+    __idleRenderBound = true;
+    try {
+      document.addEventListener('focusout', function () {
+        setTimeout(function () {
+          try {
+            if (state && state.__renderIdle && !uiTypingInVoucher()) { state.__renderIdle = false; render(); }
+          } catch (e0) {}
+        }, 150);
+      }, true);
+    } catch (e1) {}
+  }
+  try {
+    if (uiTypingInVoucher()) {
+      try { state.__renderIdle = true; } catch (e2) {}
+      return false;
+    }
+  } catch (e3) {}
+  try { render(); } catch (e4) {}
+  return true;
+}
 var EXAM_PENDING_FLUSHING = false;
 function flushPendingExamPublish() {
   var rec = loadPendingExamPublish();
@@ -2771,7 +2808,8 @@ function flushPendingExamPublish() {
     EXAM_PENDING_FLUSHING = false;
     if (r && r.ok) {
       clearPendingExamPublish();
-      if (typeof render === 'function') { try { render(); } catch (e) {} }
+      // 后台补发成功：打字中先不重绘（会把输入框连根拔掉），离开输入框再画
+      if (typeof render === 'function') { try { renderWhenIdle(); } catch (e) {} }
       return true;
     }
     return false;
@@ -2793,7 +2831,7 @@ function adminRetryExamPublish() {
     } else {
       adminToast(examPublishFailMsg({ reason: rec.reason || 'network' }));
     }
-    if (typeof render === 'function') { try { render(); } catch (e) {} }
+    if (typeof render === 'function') { try { renderWhenIdle(); } catch (e) {} }
   });
 }
 function publishExamSessions(list) {
@@ -3891,7 +3929,8 @@ function flushPendingBankPublish() {
       if (typeof adminPaperSaveState !== 'undefined' && adminPaperSaveState === 'pending') {
         adminPaperSaveState = (NTFY_AVAILABLE && SERVER_AVAILABLE) ? 'ok' : (NTFY_AVAILABLE ? 'ntfy' : 'local');
       }
-      if (typeof render === 'function') { try { render(); } catch (e) {} }
+      // 后台补发成功：打字中先不重绘（会把输入框连根拔掉），离开输入框再画
+      if (typeof render === 'function') { try { renderWhenIdle(); } catch (e) {} }
     } else {
       rec.at = Date.now();
       try { localStorage.setItem('pendingBankPublish', JSON.stringify(rec)); } catch (e) {}
@@ -4156,11 +4195,12 @@ var CLOUD_SYNC_READY = false; // true after the first relay round-trip settles
     // conflict guard keeps its own fast 5 s/6 s budget).
     refreshBankFromCloud({ directMs: 20000, relayMs: 22000 }).then(function(changed) {
       CLOUD_SYNC_READY = true;
-      if (changed && typeof render === 'function') render();
+      // 90 s 一次的后台轮询随时可能撞上打字 → 一律走 renderWhenIdle（打字中只记账）
+      if (changed && typeof render === 'function') renderWhenIdle();
     });
     refreshExamSessions().then(function(changed) {
       // re-render so the formal-exam cards / corrected profile update everywhere
-      if (changed && typeof render === 'function') render();
+      if (changed && typeof render === 'function') renderWhenIdle();
     });
     // A previous publish that failed partway is retried now; the live override
     // is also re-published every 6 h so ntfy's 12 h retention never expires it.
@@ -5564,12 +5604,12 @@ var I18N = {
   race_board_all: {cn:'全酒店榜', en:'Hotel-wide'},
   race_board_dept: {cn:'部门排名', en:'Departments'},
   race_board_best: {cn:'历史最佳榜', en:'All-time best'},
-  race_board_hint_period: {cn:'统计范围：本届赛事全体参赛绅士淑女。可多次答题，系统仅选取您得分最高的一次成绩参与排名。', en:'Scope: All Ladies and Gentlemen participating in the current contest. Multiple attempts are permitted; only your highest-scoring submission will be ranked.'},
-  race_board_hint_dept: {cn:'统计范围：本届所有参赛部门。每位绅士淑女可多次答题，仅取单次最优成绩计入部门汇总；按部门答对总题数排序，题数相同则比对准确率。<br>\ud83c\udfaf 部门奖加权：在答对题数基础上按成员级别加权后重新排名（L/T/S ×1、A/B ×1.5、G ×2；未设级别按 ×1）。<br>\ud83c\udfaf 统计口径：后线部门以一级部门（如市场销售部、财务部）为排名单位；厨房部、餐饮部、房务部以二级部门（如客房部、大堂吧）参与排名。', en:'Scope: All participating departments for the current contest. Each Lady and Gentleman may attempt repeatedly, with only one best submission counted toward the department total. Departments are ranked by total correct answers; accuracy breaks ties.<br>\ud83c\udfaf Department award weighting: correct answers are weighted by member level before ranking (L/T/S \u00d71, A/B \u00d71.5, G \u00d72; unset level counts as \u00d71).<br>\ud83c\udfaf Ranking grouping guidelines: Heart-of-House Divisions are grouped as primary divisions (e.g., Sales & Marketing, Finance). Culinary, Food & Beverage and Rooms are grouped as secondary units (e.g., Housekeeping, Onyx).'},
-  race_board_hint_best: {cn:'统计范围：全体绅士淑女的历史个人最优成绩，按答题板块独立留存，新一届赛事开启后记录不清空。同一位绅士淑女可在多个板块分别上榜。', en:'Scope: Historical personal best scores of all Ladies and Gentlemen, logged separately by quiz module. Records will be preserved when a new contest launches. One Lady or Gentleman may secure rankings across multiple modules.'},
+  race_board_hint_period: {cn:'· 统计范围：本届赛事全体参赛绅士淑女<br>· 可多次答题，系统仅选取您得分最高的一次成绩参与排名。', en:'\u00b7 Scope: All Ladies and Gentlemen participating in the current contest<br>\u00b7 Multiple attempts are permitted; only your highest-scoring submission will be ranked.'},
+  race_board_hint_dept: {cn:'· 统计范围：本届所有参赛部门<br>· 每位绅士淑女可多次答题，仅取单次最优成绩计入部门汇总；按部门答对总题数排序，题数相同则比对准确率。<br>· 后线部门以一级部门（如市场销售部、财务部）为排名单位；厨房部、餐饮部、房务部以二级部门（如客房部、大堂吧）参与排名。', en:'\u00b7 Scope: All participating departments for the current contest<br>\u00b7 Each Lady and Gentleman may attempt repeatedly, with only one best submission counted toward the department total. Departments are ranked by total correct answers; accuracy breaks ties.<br>\u00b7 Heart-of-House Divisions are grouped as primary divisions (e.g., Sales & Marketing, Finance). Culinary, Food & Beverage and Rooms are grouped as secondary units (e.g., Housekeeping, Onyx).'},
+  race_board_hint_best: {cn:'· 统计范围：全体绅士淑女的历史个人最优成绩，按答题板块独立留存，新一届赛事开启后记录不清空<br>· 同一位绅士淑女可在多个板块分别上榜。', en:'\u00b7 Scope: Historical personal best scores of all Ladies and Gentlemen, logged separately by quiz module. Records will be preserved when a new contest launches<br>\u00b7 One Lady or Gentleman may secure rankings across multiple modules.'},
   race_board_best_mix_hint: {cn:'汇总展示每位绅士淑女在各个板块的个人最优成绩。如需查看单一板块专项排名，请切换上方对应板块。', en:'It displays each Lady and Gentleman\u2019s personal best score across all modules. To view rankings for a single module, select the corresponding tab above.'},
   race_board_best_sec_hint: {cn:'统计范围：本板块的历届个人最优成绩。同一绅士淑女在其他板块的最优成绩，计入对应板块榜单。', en:'Scope: All-time personal best within this module only. A Lady or Gentleman\u2019s best results in other modules appear on those modules\u2019 boards.'},
-  race_board_hint_noconf: {cn:'当前设备尚未同步本届赛事数据，榜单为空属正常现象，请稍后刷新。', en:'This device has not synced the current round yet, so the board may be empty. Please refresh later.'},
+  race_board_hint_noconf: {cn:'· 当前设备尚未同步本届赛事数据，榜单为空属正常现象，请稍后刷新。', en:'\u00b7 This device has not synced the current round yet, so the board may be empty. Please refresh later.'},
   race_board_empty: {cn:'还没有人提交成绩', en:'No scores submitted yet'},
   race_dept_people: {cn:'人参赛', en:'people'},
   race_dept_answered: {cn:'共答', en:'answered'},
@@ -5727,10 +5767,10 @@ var I18N = {
   race_confirm_ask: {cn:'确定开始吗？', en:'Ready to start?'},
   race_filter_label: {cn:'只看', en:'Filter'},
   race_filter_all: {cn:'全部板块总榜', en:'Overall — all sections'},
-  race_board_mix_hint: {cn:'汇总展示每位绅士淑女在本届各板块的个人最优成绩，跨板块题目不同、成绩不具直接可比性。如需查看单一板块专项排名，请切换上方对应板块。', en:'Combines each Lady and Gentleman\u2019s personal best across all modules in the current contest; modules differ in content, so cross-module scores are not directly comparable. To view a single module, select the corresponding tab above.'},
-  race_board_sec_hint: {cn:'仅收录选择本板块产生的答题成绩，所有成绩在本板块内进行比对排名。', en:'Only attempts submitted within this module will be counted. All scores are ranked against one another within this module.'},
-  race_board_dept_sec_hint: {cn:'仅收录选择本板块产生的答题成绩。', en:'Only attempts submitted within this module are counted.'},
-  race_board_dept_mix_hint: {cn:'汇总各部门参赛人员在全部板块的答题成绩。', en:'Combines the results of each department\u2019s members across all modules.'},
+  race_board_mix_hint: {cn:'· 汇总展示每位绅士淑女在本届各板块的个人最优成绩，跨板块题目不同、成绩不具直接可比性；看单一板块请切换上方对应板块。', en:'\u00b7 Combines each Lady and Gentleman\u2019s personal best across all modules in the current contest; modules differ, so scores are not directly comparable. For a single module, select the corresponding tab above.'},
+  race_board_sec_hint: {cn:'· 仅收录选择本板块产生的答题成绩，所有成绩在本板块内进行比对排名。', en:'\u00b7 Only attempts submitted within this module will be counted. All scores are ranked against one another within this module.'},
+  race_board_dept_sec_hint: {cn:'· 仅收录选择本板块产生的答题成绩。', en:'\u00b7 Only attempts submitted within this module are counted.'},
+  race_board_dept_mix_hint: {cn:'· 汇总各部门参赛人员在全部板块的答题成绩。', en:'\u00b7 Combines the results of each department\u2019s members across all modules.'},
   race_my_section: {cn:'你本期所选', en:'Your section'},
   race_go_pick: {cn:'去选板块参与挑战吧！', en:'Pick a section and join the challenge!'},
   // ---- 打卡日历 ----
@@ -5799,10 +5839,10 @@ var I18N = {
   race_cal_legend: {cn:'实底色＝当日已打卡；金边虚线＝可补签；徽章标记＝当日解锁徽章', en:'Solid: Completed. Golden dashed: Eligible for make-up. Badge icon: Badge unlocked on this day.'},
   race_cal_week: {cn:'一二三四五六日', en:'M T W T F S S'},
   race_board_days: {cn:'📅 打卡天数', en:'📅 Check-in days'},
-  race_board_days_hint_period: {cn:'统计范围：本届赛事全体参赛绅士淑女的打卡天数。单日多次答题仅计一日，榜单依打卡天数排序；天数相同时，则比对累计挑战总次数。', en:'Scope: Check-in days of all participating Ladies and Gentlemen for the current contest. Multiple attempts on the same day count as one day only. Ranking is determined by total check-in days; total quiz attempts serve as the tiebreaker.'},
-  race_board_days_hint_dept: {cn:'统计范围：本届赛事各部门参赛人员的打卡天数合计。单日多次答题仅计一日。', en:'Scope: The sum of check-in days of each department\u2019s participants in the current contest. Multiple attempts on the same day count as one day only.'},
-  race_board_days_hint_dept_avg: {cn:'统计范围：本届赛事各部门参赛人员的打卡天数，按部门人均天数排序（部门打卡总天数 \u00f7 参赛人数）。单日多次答题仅计一日。', en:'Scope: Check-in days of each department\u2019s participants in the current contest, ranked by average per participant (total check-in days \u00f7 participants). Multiple attempts on the same day count as one day only.'},
-  race_board_days_hint_best: {cn:'统计范围：全体绅士淑女的历届累计打卡天数，单日仅计一日，新一届赛事开启后记录不清空。', en:'Scope: All-time check-in days of all Ladies and Gentlemen, one day counted once, preserved when a new contest launches.'},
+  race_board_days_hint_period: {cn:'· 统计范围：本届赛事全体参赛绅士淑女的打卡天数<br>· 单日多次答题仅计一日，按打卡天数排序；同天数比累计挑战总次数。', en:'\u00b7 Scope: Check-in days of all participating Ladies and Gentlemen for the current contest<br>\u00b7 Multiple attempts on the same day count as one day only. Ranked by check-in days; total attempts break ties.'},
+  race_board_days_hint_dept: {cn:'· 统计范围：本届各部门参赛人员的打卡天数合计<br>· 单日多次答题仅计一日。', en:'\u00b7 Scope: Total check-in days of each department\u2019s participants<br>\u00b7 Multiple attempts on the same day count as one day only.'},
+  race_board_days_hint_dept_avg: {cn:'· 统计范围：本届各部门参赛人员的打卡天数，按部门人均天数排序（部门打卡总天数 \u00f7 参赛人数）<br>· 单日多次答题仅计一日。', en:'\u00b7 Scope: Check-in days of each department\u2019s participants, ranked by average per participant (total days \u00f7 participants)<br>\u00b7 Multiple attempts on the same day count as one day only.'},
+  race_board_days_hint_best: {cn:'· 统计范围：全体绅士淑女的历届累计打卡天数，新一届开启后记录不清空<br>· 单日仅计一日。', en:'\u00b7 Scope: All-time check-in days of all Ladies and Gentlemen, preserved when a new contest launches<br>\u00b7 One day counted once.'},
   // 竞速闯关徽章（2026-11-04）：赛季结束后统一结算，赛中只在榜单上报当前名次
   race_dept_days_mode: {cn:'部门打卡天数统计口径', en:'Department check-in ranking'},
   race_dept_days_sum: {cn:'部门总打卡天数（鼓励更多人参与）', en:'Total days (rewards headcount)'},
@@ -5915,7 +5955,7 @@ var I18N = {
   race_admin_report_empty: {cn:'本期还没有成绩，先让学员答一轮。', en:'No scores this round yet.'},
   // A2 进步之星（2026-11-03）
   race_board_mover: {cn:'进步之星', en:'Movers'},
-  race_board_hint_mover: {cn:'\ud83d\udcc8 本榜单致敬在本届赛事突破个人历史最佳、答对更多题目的绅士淑女，嘉奖每一次自我超越。暂无历史参赛记录的绅士淑女不参与本榜单评选。', en:'\ud83d\udcc8 This honor roll recognizes Ladies and Gentlemen who outperform their historical best with more correct answers in the current contest, celebrating every breakthrough. Ladies and Gentlemen without prior contest records are not eligible for this ranking.'},
+  race_board_hint_mover: {cn:'\u00b7 统计范围：本届答对题数超过个人历史最佳的绅士淑女<br>\u00b7 暂无历史参赛记录者不参与本榜评选。', en:'\u00b7 Scope: Ladies and Gentlemen whose correct answers in the current contest exceed their personal best<br>\u00b7 Those without prior contest records are not eligible.'},
   race_mover_gain: {cn:'进步', en:'gain'},
   // B2 名人堂（2026-11-03）
   race_hall: {cn:'名人堂', en:'Hall of Fame'},
@@ -15913,14 +15953,15 @@ function renderRaceBoard() {
   html += '</div>';
   }
   var scopeText = raceBoardScopeHint(tab);
+  // 打卡天数榜只显示天数榜自己的口径，不再叠加上面的通用口径（两段"统计范围"重复）。
   var scopeDetail = isMoverTab ? scopeText
+    : isDays ? t(tab === 'dept' ? (raceDeptDaysMode() === 'avg' ? 'race_board_days_hint_dept_avg' : 'race_board_days_hint_dept')
+                                : (tab === 'best' ? 'race_board_days_hint_best' : 'race_board_days_hint_period'))
     : scopeText + '<br>'
-      + (isDays ? t(tab === 'dept' ? (raceDeptDaysMode() === 'avg' ? 'race_board_days_hint_dept_avg' : 'race_board_days_hint_dept')
-                                   : (tab === 'best' ? 'race_board_days_hint_best' : 'race_board_days_hint_period'))
-         : (sec ? (raceSecIcon(sec) + ' ' + escapeHtml(raceSecName(sec)) + ' \u00b7 '
-                   + t(tab === 'dept' ? 'race_board_dept_sec_hint' : (tab === 'best' ? 'race_board_best_sec_hint' : 'race_board_sec_hint')))
-                : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 '
-                   + t(tab === 'dept' ? 'race_board_dept_mix_hint' : (tab === 'best' ? 'race_board_best_mix_hint' : 'race_board_mix_hint')))));
+      + (sec ? (raceSecIcon(sec) + ' ' + escapeHtml(raceSecName(sec)) + ' \u00b7 '
+                + t(tab === 'dept' ? 'race_board_dept_sec_hint' : (tab === 'best' ? 'race_board_best_sec_hint' : 'race_board_sec_hint')))
+             : ('\ud83d\udcca ' + t('race_filter_all') + ' \u00b7 '
+                + t(tab === 'dept' ? 'race_board_dept_mix_hint' : (tab === 'best' ? 'race_board_best_mix_hint' : 'race_board_mix_hint'))));
   html += '<div style="font-size:12px;color:#999;margin:2px 0 10px;">'
     + infoTipHtml('boardScopeTip', scopeDetail) + '</div>';
   var isDeptTab = tab === 'dept';
@@ -17605,43 +17646,40 @@ function vchFlushPending() {
 // 🔴 局部刷新必须钉住滚动位置（2026-11-17 现场反馈：输着输着页面自己上下弹）
 // 名单被筛短 / 筛长会改变文档高度，浏览器为了让焦点输入框"留在可见区"会自己改滚动位置，
 // 看上去就是页面往上顶或往下掉。刷新前记位置、刷新后放回。
-// ⚠️ 管理端桌面版（>900px）真正的滚动容器是 .adm-scroll，不是 window ——
-//    只锁 window 在电脑上完全无效，所以要往上找最近的滚动祖先（含 .adm-scroll）。
-function vchScrollerEl() {
+// 2026-11-17 第三次：名单框和识别区改成固定高度后各自内部滚动，
+// 所以现在是"四处一起钉"：名单框、识别区、桌面端的 .adm-scroll、以及页面本身。
+function vchPageY() {
   try {
-    var el = document.getElementById('vchListWrap');
-    while (el && el.nodeType === 1 && el !== document.body && el !== document.documentElement) {
-      var cs = null;
-      try { cs = window.getComputedStyle ? window.getComputedStyle(el) : null; } catch (e0) {}
-      var oy = cs && cs.overflowY;
-      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) return el;
-      el = el.parentNode;
-    }
-  } catch (e) {}
-  return null;
+    var se = document.scrollingElement || document.documentElement || document.body || null;
+    return (se && se.scrollTop) || window.pageYOffset || 0;
+  } catch (e) { return 0; }
 }
 function vchScrollState() {
-  var el = vchScrollerEl();
-  if (el) return { el: el, y: el.scrollTop || 0, win: false };
-  var se = null, y = 0;
+  var st = { items: [], el: null, y: vchPageY(), win: true };
   try {
-    se = document.scrollingElement || document.documentElement || document.body || null;
-    y = (se && se.scrollTop) || window.pageYOffset || 0;
+    var l = document.getElementById('vchListWrap');
+    if (l) st.items.push({ el: l, y: l.scrollTop || 0 });
+    var h = document.getElementById('vchHitWrap');
+    if (h) st.items.push({ el: h, y: h.scrollTop || 0 });
+    var a = (typeof document.querySelector === 'function') ? document.querySelector('.adm-scroll') : null;
+    if (a && a.scrollHeight > a.clientHeight + 1) st.items.push({ el: a, y: a.scrollTop || 0 });
   } catch (e) {}
-  return { el: se, y: y, win: true };
+  try { st.el = document.scrollingElement || document.documentElement || null; } catch (e2) {}
+  return st;
 }
 function vchRestoreScroll(st) {
   if (!st) return;
   try {
-    if (st.win) {
-      var now = (st.el && st.el.scrollTop) || window.pageYOffset || 0;
-      if (Math.abs(now - st.y) <= 1) return;
-      if (typeof window.scrollTo === 'function') window.scrollTo(0, st.y);
-      else if (st.el) st.el.scrollTop = st.y;
-      return;
+    for (var i = 0; i < (st.items || []).length; i++) {
+      var it = st.items[i];
+      if (it.el && Math.abs((it.el.scrollTop || 0) - it.y) > 1) it.el.scrollTop = it.y;
     }
-    if (st.el && Math.abs((st.el.scrollTop || 0) - st.y) > 1) st.el.scrollTop = st.y;
   } catch (e) {}
+  try {
+    if (Math.abs(vchPageY() - st.y) <= 1) return;
+    if (typeof window.scrollTo === 'function') window.scrollTo(0, st.y);
+    else if (st.el) st.el.scrollTop = st.y;
+  } catch (e2) {}
 }
 function vchKeepScroll(fn) {
   var st = vchScrollState();
@@ -18086,11 +18124,16 @@ function renderAdminVouchers() {
     + 'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;letter-spacing:.5px;">';
   html += '<button class="action-btn primary" style="flex:0 0 auto;padding:9px 14px;font-size:13px;" onclick="adminVoucherByCode()">' + t('race_vch_redeem') + '</button>';
   html += '</div>';
-  // 识别结果区：输入框正下方，高度有限（overflow-anchor:none 防浏览器自动锚定），
-  // 只替换这一块内容，下面的达标名单不动 —— 输得再快页面也不会上下弹。
-  html += '<div id="vchHitWrap" style="margin-top:8px;max-height:150px;overflow-y:auto;overflow-anchor:none;">'
+  // 识别结果区：🔴 高度钉死（2026-11-17 现场第三次反馈）。
+  // 以前只有 max-height，内容一变（提示 → 1 人 → 3 个候选）高度就从 20px 长到 150px，
+  // 页面高度跟着变，浏览器为了"让输入框留在可见区"自己改滚动位置 → 看上去就是上下弹。
+  // 现在固定 124px、内容多了内部滚动，输入多少字这一块都不会改变外部高度。
+  html += '<div id="vchHitWrap" style="height:124px;margin-top:8px;padding:4px 4px 0;'
+    + 'border:1px dashed #e5eaf0;border-radius:9px;background:#fbfcfd;'
+    + 'overflow-y:auto;overflow-anchor:none;overscroll-behavior:contain;">'
     + adminVoucherHitHtml() + '</div>';
-  html += '<div id="vchMsgWrap">' + adminVoucherMsgHtml() + '</div>';
+  // 提示条也占固定高度：出现/收起都不会推动下面的名单
+  html += '<div id="vchMsgWrap" style="min-height:22px;">' + adminVoucherMsgHtml() + '</div>';
   html += '</div>';
 
   // 名单（标题 + 刷新 + 计数 + 搜索框都不参与局部刷新，只有 #vchListWrap 会重画）
@@ -18110,7 +18153,11 @@ function renderAdminVouchers() {
     + '" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"'
     + ' oninput="adminVoucherSearchInput(this.value)"'
     + ' style="width:100%;padding:8px 10px;border:1px solid #d8dee4;border-radius:8px;font-size:13px;margin-bottom:8px;">';
-  html += '<div id="vchListWrap" style="overflow-anchor:none;">' + adminVoucherListHtml() + '</div>';
+  // 🔴 名单框高度同样钉死（2026-11-17 现场第三次反馈）：
+  // 搜索/刷新会让行数在 0 和 500 之间跳，框高随行数变 → 文档高度变 → 页面上下弹。
+  // 固定 420px、内部滚动后，筛多筛少只影响框内滚动条，外部布局纹丝不动。
+  html += '<div id="vchListWrap" style="height:420px;overflow-y:auto;overflow-anchor:none;'
+    + 'overscroll-behavior:contain;padding-right:2px;">' + adminVoucherListHtml() + '</div>';
   html += '</div>';
   html += '<button class="action-btn secondary" style="width:100%;" onclick="navigate(\'adminRace\')">⚡ '
     + escapeHtml(en ? 'Back to quiz race' : '返回答题赛设置') + '</button>';
