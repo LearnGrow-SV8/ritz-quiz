@@ -5595,8 +5595,8 @@ var I18N = {
   race_start: {cn:'开始答题', en:'Start'},
   race_pick_section: {cn:'选择板块', en:'Choose a section'},
   race_pool_size: {cn:'题目池', en:'Question pool'},
-  race_spare_hint: {cn:'本模块答完后自动补充通用知识', en:'General knowledge added after these'},
-  race_pool_spare: {cn:'本模块 {n} 题 · 答完后自动补充通用知识 {m} 题', en:'{n} in this section · {m} general added after'},
+  race_spare_hint: {cn:'本模块答完后自动补充品牌与酒店知识', en:'Brand & Hotel Knowledge added after these'},
+  race_pool_spare: {cn:'本模块 {n} 题 · 答完后自动补充品牌与酒店知识 {m} 题', en:'{n} in this section · {m} Brand & Hotel added after'},
   race_limit: {cn:'答题时长', en:'Duration'},
   race_no_conf: {cn:'当前没有进行中的答题赛，请联系培训部', en:'No active quiz right now. Please contact Learning.'},
   race_pending: {cn:'答题赛尚未开始', en:'The quiz has not started yet'},
@@ -5899,8 +5899,8 @@ var I18N = {
   badge_admin_rid: {cn:'限定届次（仅主题徽章用，留空 = 当前届）', en:'Bound round (theme badges only, blank = current)'},
   badge_admin_mc: {cn:'另需当期答对多少题（仅主题徽章用，0 = 只看打卡）', en:'Also require N correct answers this round (theme only, 0 = check-ins only)'},
   badge_admin_mc_hint: {cn:'打卡管「来过」，答对管「学过」，两个一起才配得上主题徽章。整月赛事建议 8 天 + 50 题。', en:'Check-ins prove showing up, correct answers prove learning. For a full month, 8 days + 50 correct is a good balance.'},
-  badge_admin_sec: {cn:'限定板块（仅「板块速答榜」类徽章用）', en:'Bound section (section-board badges only)'},
-  badge_admin_sec_hint: {cn:'留空 = 任一板块榜都算；选具体板块 = 只认该板块榜（如「厨房部题库征服者」选厨房部）。', en:'Blank = any section board counts; pick a section to count only that board (e.g. Culinary Bank Conqueror → Culinary).'},
+  badge_admin_sec: {cn:'限定板块（板块速答榜 / 限定主题徽章用）', en:'Bound section (section-board / monthly theme badges)'},
+  badge_admin_sec_hint: {cn:'速答榜：留空 = 任一板块榜都算，选板块 = 只认该板块榜；主题徽章：选板块 = 打卡天数与答对题数都只算该板块，留空 = 全题库。', en:'Board badges: blank = any board, pick one = only that board. Theme badges: picking a section counts check-ins and correct answers in that section only; blank = all questions.'},
   badge_admin_sec_any: {cn:'任一板块（不限）', en:'Any section'},
   race_theme_kicker: {cn:'本期限定徽章', en:'This round only'},
   race_theme_got: {cn:'已获得', en:'earned'},
@@ -5908,7 +5908,7 @@ var I18N = {
   race_hero_section: {cn:'参赛板块', en:'Section'},
   race_hero_pool: {cn:'题目池', en:'Pool'},
   race_hero_sub_choice: {cn:'每轮任选一个板块开赛，各板块相互独立、均可分别挑战', en:'Pick a section each round · all sections are independently playable'},
-  race_hero_spare: {cn:'答完后自动补充通用知识 {m} 题', en:'{m} general questions added after the pool runs out'},
+  race_hero_spare: {cn:'答完后自动补充品牌与酒店知识 {m} 题', en:'{m} Brand & Hotel questions added after the pool runs out'},
   badge_admin_rid_cur: {cn:'当前届', en:'Current round'},
   race_badge_theme_ended: {cn:'本期已结束', en:'Round closed'},
   // 专属头像框（集齐同一系列全套解锁，纯荣誉）
@@ -7777,13 +7777,21 @@ var NAME_ROSTER_CACHE_KEY = 'empNameRoster';
 //                却没有了 ⇒ 已离职；从来没出现过 ⇒ 不存在此工号
 // · reasons   —— 管理员手工改判的拦截原因（优先于 everIds 推断）
 //
-// 员工级别（2026-11-17，部门奖加权用）：T/L/S=×1、A/B=×1.5、G=×2。
-// 🔴 字母含义（2026-11-18 用户更正）：T = 实习生、L = 正式工（此前记反过，别再改回去）。
+// 员工级别（2026-11-17，部门奖加权用）：T/L/S=×1、B/A=×1.5、G=×2。
+// 🔴 字母含义（2026-11-18 用户更正）：T = 实习生 Trainee、L = 正式工 Line Employee
+//    （此前记反过，别再改回去）。英文全称见下方 RACE_LV_EN。
 // 级别只在后台「导入名册 / 名单行内编辑」时写入，学员端不可见、不可自选；
 // 未填级别一律按 ×1（中性，不影响任何尚未配级别的老名册）。
 var RACE_LV_WEIGHT = { L: 1, T: 1, S: 1, A: 1.5, B: 1.5, G: 2 };
-// 下拉显示顺序按职级递进：实习生 → 正式工 → 主管 → 经理 → 总监
-var RACE_LV_KEYS = ['T', 'L', 'S', 'A', 'B', 'G'];
+// 🔴 官方英文级别全称（2026-11-18 用户指定，不许自创简写）：
+//    T Trainee · L Line Employee · S Supervisor · B B Level Manager
+//    A A Level Manager · G GT (Guidance Team)
+var RACE_LV_EN = {
+  T: 'Trainee', L: 'Line Employee', S: 'Supervisor',
+  B: 'B Level Manager', A: 'A Level Manager', G: 'GT (Guidance Team)'
+};
+// 下拉显示顺序按职级递进：实习生 → 正式工 → 主管 → B 级经理 → A 级经理 → GT
+var RACE_LV_KEYS = ['T', 'L', 'S', 'B', 'A', 'G'];
 // 把任意写法（l / L / L级 / 主管…）收敛成标准级别字母；认不出就返回 ''。
 function normRaceLv(v) {
   var s = String(v == null ? '' : v).trim().toUpperCase().replace(/\s*级$/, '');
@@ -7987,13 +7995,26 @@ function parseRosterGrid(grid) {
         var m = t.match(/^(\d{1,8})(?:\.0+)?$/);
         if (m) { emp = normEmpNo(m[1]); continue; }
       }
-      // 级别列（必须在「英文名」之前判）：单个级别字母（T/L/S/A/B/G）或中文级别词。
+      // 级别列（必须在「英文名」之前判）：单个级别字母（T/L/S/B/A/G）、中文级别词或官方英文全称。
       // 单字母英文名几乎不存在，先让位给级别更安全。
-      // 🔴 T = 实习生、L = 正式工（2026-11-18 用户更正）；"员工" 归正式工。
+      // 🔴 英文全称含空格，不在这一步认出来就会被下面的「英文名」分支吞掉（当成员工英文名）。
+      // 🔴 T = 实习生 Trainee、L = 正式工 Line Employee（2026-11-18 用户更正）；"员工" 归正式工。
       if (!lv) {
         var lvTry = normRaceLv(t);
         if (lvTry) { lv = lvTry; continue; }
-        var lvCn = ({ '实习生': 'T', '实习': 'T', 'Intern': 'T', '正式工': 'L', '正式': 'L', '员工': 'L', 'Staff': 'L', '主管': 'S', '经理': 'A', '总监': 'G' })[String(t).trim()];
+        var _lvRaw = String(t == null ? '' : t).trim();
+        var lvCn = ({
+          '实习生': 'T', '实习': 'T', '正式工': 'L', '正式': 'L', '员工': 'L',
+          '主管': 'S', '经理': 'A', '总监': 'G'
+        })[_lvRaw];
+        if (!lvCn) lvCn = ({
+          'TRAINEE': 'T', 'INTERN': 'T',                  // Intern = 旧称，继续兼容
+          'LINE EMPLOYEE': 'L', 'STAFF': 'L',            // Staff = 旧称，继续兼容
+          'SUPERVISOR': 'S',
+          'B LEVEL MANAGER': 'B', 'B MANAGER': 'B',
+          'A LEVEL MANAGER': 'A', 'A MANAGER': 'A',
+          'GT': 'G', 'GUIDANCE TEAM': 'G'
+        })[_lvRaw.toUpperCase()];
         if (lvCn) { lv = lvCn; continue; }
       }
       if (!cn && /[\u4e00-\u9fff]/.test(t) && isCnNameValid(t)) { cn = t; continue; }
@@ -8339,21 +8360,22 @@ function adminRosterConfirmImport() {
     render();
   });
 }
-// 名单里的级别下拉：T/L/S=×1、A/B=×1.5、G=×2，空白 = 未设（按 ×1）。
+// 名单里的级别下拉：T/L/S=×1、B/A=×1.5、G=×2，空白 = 未设（按 ×1）。
 // 每级都带权重角标，管理员一眼能看出这个级别在部门奖里算几分。
-// 🔴 T = 实习生、L = 正式工（2026-11-18 用户更正）。
+// 🔴 T = 实习生 Trainee、L = 正式工 Line Employee（2026-11-18 用户更正）。
+// 🔴 英文全称统一取 RACE_LV_EN（2026-11-18 用户指定），中文标签不动。
 function adminRosterLvSelect(emp, lv, en) {
   var W = RACE_LV_WEIGHT;
-  var lbl = {
-    T: (en ? 'T · Intern' : 'T · 实习生') + ' ×' + W.T,
-    L: (en ? 'L · Staff' : 'L · 正式工') + ' ×' + W.L,
-    S: (en ? 'S · Supervisor' : 'S · 主管') + ' ×' + W.S,
-    A: (en ? 'A · Manager' : 'A · 经理') + ' ×' + W.A,
-    B: (en ? 'B · Manager' : 'B · 经理') + ' ×' + W.B,
-    G: (en ? 'G · Director' : 'G · 总监') + ' ×' + W.G
-  };
+  var CN = { T: '实习生', L: '正式工', S: '主管', B: '经理', A: '经理', G: '总监' };
+  var lbl = {};
+  for (var i = 0; i < RACE_LV_KEYS.length; i++) {
+    var k = RACE_LV_KEYS[i];
+    lbl[k] = k + ' · ' + (en ? RACE_LV_EN[k] : CN[k]) + ' ×' + W[k];
+  }
   var cur = normRaceLv(lv);
-  var h = '<select onchange="adminRosterRowEdit(\'' + jsKey(emp) + '\',\'lv\',this.value)" style="padding:4px 6px;font-size:12px;border:1px solid var(--a-line2);border-radius:6px;max-width:120px;'
+  // 英文全称较长，收起时会截断；title 让鼠标悬停可读完整标签（展开时选项本来就完整）
+  var h = '<select title="' + escapeHtml(cur ? lbl[cur] : (en ? '— none —' : '— 未设 —')) + '"'
+    + ' onchange="adminRosterRowEdit(\'' + jsKey(emp) + '\',\'lv\',this.value)" style="padding:4px 6px;font-size:12px;border:1px solid var(--a-line2);border-radius:6px;max-width:120px;'
     + (cur ? '' : 'color:#8a8f96;') + '">';
   h += '<option value=""' + (cur ? '' : ' selected') + '>' + (en ? '— none —' : '— 未设 —') + '</option>';
   for (var i = 0; i < RACE_LV_KEYS.length; i++) {
@@ -8560,7 +8582,7 @@ function adminRosterApplyNames(emp, stuKey) {
 }
 // ⑥ 名册模板下载：列序固定 级别 · 英文名 · 中文名 · 工号（2026-11-17 用户指定；
 //    导入解析本身列序无关，模板只是给管理员一个照填的样子）。首行表头会被解析器自动跳过。
-//    级别可选：T（实习生）/ L（正式工）/ S（主管）= ×1 · A/B（经理）= ×1.5 · G（总监）= ×2。
+//    级别可选：T/L/S = ×1 · B/A = ×1.5 · G（GT）= ×2；官方英文全称见 RACE_LV_EN。
 function adminRosterTemplateDl() {
   var rows = [
     ['级别', '英文名', '中文名', '工号'],
@@ -10567,7 +10589,7 @@ var RACE_SECTIONS = [
   {key:'culinary', cn:'厨房部',      en:'Culinary',          icon:'🍳'},
   {key:'fb',       cn:'餐饮部',      en:'F&B',               icon:'🍽'},
   {key:'rooms',    cn:'房务部',      en:'Rooms',             icon:'🛏'},
-  {key:'general',  cn:'通用知识',    en:'General Knowledge', icon:'⭐'},
+  {key:'general',  cn:'品牌与酒店知识', en:'Brand & Hotel Knowledge', icon:'⭐'},
   {key:'hr',       cn:'人力资源部',  en:'Human Resources',   icon:'👥'},
   {key:'finance',  cn:'财务部',      en:'Finance',           icon:'💰'},
   {key:'sm',       cn:'市场销售部',  en:'Sales & Marketing', icon:'📈'},
@@ -10585,7 +10607,7 @@ var RACE_SECTION_SOURCE = {
   eng:      ['工程部']
 };
 // 注意：RACE_MIN_POOL 已**不再**用于填充题池（2026-10-28 改）。题池只放本板块题，
-// 通用知识挂在 state.race.spare 上当备胎，本板块答完且限时未到才分批补（见 raceTakeSpare）。
+// 品牌与酒店知识挂在 state.race.spare 上当备胎，本板块答完且限时未到才分批补（见 raceTakeSpare）。
 var RACE_TIMES = [30, 45, 60, 90];
 
 function raceSecMeta(key) {
@@ -10674,13 +10696,13 @@ function racePrioritizeWrong(list) {
     return out;
   } catch (e2) { return list; }
 }
-// 题池：**只放本板块的题目**。通用知识不再一开始就掺进来（2026-10-28 改），
+// 题池：**只放本板块的题目**。品牌与酒店知识不再一开始就掺进来（2026-10-28 改），
 // 改成挂在 state.race.spare 上做备胎，等本板块题目真的答完了、限时还没到才补。
 function racePoolOf(key) {
   var pool = raceQuestionsOf(key);
   return racePrioritizeWrong(shuffleArray(prepareQuestions(pool)));
 }
-// 备胎池：通用知识里剔除本板块已有的题目。all / general 本身就是全量，不需要备胎。
+// 备胎池：品牌与酒店知识里剔除本板块已有的题目。all / general 本身就是全量，不需要备胎。
 function raceSparePoolOf(key, main) {
   if (key === 'all' || key === 'general') return [];
   var have = {}, k;
@@ -11617,7 +11639,8 @@ var BADGE_DESC_TEXT = {
   bd_wkend:   { cn: '累计周末完成 3 天打卡', en: '3 weekend check-ins all-time' },
   bd_perf:    { cn: '单场限时竞速答对 10 题以上，答题实力在线', en: '10+ correct in one race run — speed meets accuracy' },
   bd_fast:    { cn: '单赛季答题平均每题用时 ≤5 秒（至少答对 8 题），反应敏捷', en: 'Avg \u2264 5 sec per question (8+ answered) — lightning reflexes' },
-  bd_theme1:  { cn: '✨ 月度限定 · 当期打卡满 8 天且累计答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers this round' }
+  bd_theme1:  { cn: '✨ 月度限定 · 当期打卡满 8 天且累计答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers this round' },
+  bd_theme2:  { cn: '✨ 月度限定 · 品牌与酒店知识打卡 8 天、答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers in Brand & Hotel Knowledge' }
 };
 // 预设徽章：先用一套合理的，管理端随时可改（改完发布即生效）。
 // 命名走「主题名 + 规则说明」：名号给人身份感（学习王者），副标题说清怎么拿到。
@@ -11636,7 +11659,7 @@ function badgeDefaultCatalog() {
       badgeDef('bd_s21', S, 21, '习惯大师', 'Habit Master', '🏆', 5, '#ffe08a', '#c99700'),
       badgeDef('bd_p10', P, 10, '月学常客', 'Monthly Learner', '📅', 2, '#a8d8ff', '#2b6cb0'),
       badgeDef('bd_p15', P, 15, '半程之星', 'Half-month Star', '🌟', 3, '#9fd0ff', '#1f5f9e'),
-      badgeDef('bd_p20', P, 20, '月度全勤狮', 'Monthly Lion', '🦁', 4, '#8ec4ff', '#174a7c'),
+      badgeDef('bd_p20', P, 20, '月度全勤狮', 'Monthly Lion', '🗓️', 4, '#8ec4ff', '#174a7c'),
       badgeDef('bd_t30', T, 30, '积步成途', '30-day Walker', '🌿', 2, '#b7e4c7', '#2f855a'),
       badgeDef('bd_t60', T, 60, '勤学不辍', '60-day Scholar', '🌳', 3, '#9fd8b0', '#276749'),
       badgeDef('bd_t100', T, 100, '学习王者', 'Learning Champion', '👑', 5, '#ffe08a', '#b7791f'),
@@ -11659,7 +11682,12 @@ function badgeDefaultCatalog() {
       badgeDef('bd_fast', F, 5, '闪电快手', 'Lightning Fast', '⚡', 3, '#ffe08a', '#ef6c00'),
       // 限定主题第一期：整月赛事 = 打卡 8 天 + 当期答对 50 题（约 10~12 局，摊到 8 天每天一局半）。
       // 第一期门槛：打卡偏松（保参与），答对收紧（保证真学了产品知识）。
-      badgeDef('bd_theme1', TH, 8, '产品知识启航狮', 'Product Launch Lion', '⛵', 3, '#ffd7a8', '#c2410c', '', 50)
+      // 第一期主题（2026-11 产品知识启航狮）：已结束，停发保留历史荣誉。
+      // 新一代主题徽章另起 id：换 id 才能让 12 月这一期重新可拿（theme 是终身一次，同 id 拿过就不再发）。
+      Object.assign(badgeDef('bd_theme1', TH, 8, '产品知识启航狮', 'Product Launch Lion', '⛵', 3, '#ffd7a8', '#c2410c', '', 50), { on: false }),
+      // 2026-12 第二期主题：品牌文化探索狮，绑定「品牌与酒店知识」板块（sec=general）。
+      // 赛事不锁板块，徽章达标只认该板块的打卡与答对（见 raceComputeAwards / raceBadgeProgress）。
+      badgeDef('bd_theme2', TH, 8, '品牌文化探索狮', 'Brand Culture Explorer Lion', '🦁', 3, '#ffd7a8', '#c2410c', '', 50, 'general')
     ]
   };
   // 挂上逐条定稿的员工端说明（见 BADGE_DESC_TEXT）
@@ -11681,7 +11709,7 @@ var BADGE_LEGACY_MIGRATE = {
   'bd_s5':  { cn: '灼灼微光', en: 'Steady Glow',       fromIcons: ['🔥'], icon: '🔥' },
   'bd_s7':  { cn: '一周之火', en: 'Week of Fire',       fromIcons: ['🔥'], icon: '🌋' },
   'bd_s14': { fromCn: '双周铁人', cn: '双周达人', en: 'Fortnight Pro' },
-  'bd_p20': { fromCn: '月度全勤王', cn: '月度全勤狮', en: 'Monthly Lion', fromIcons: ['👑', '🥇'], icon: '🦁' },
+  'bd_p20': { fromCn: '月度全勤王', cn: '月度全勤狮', en: 'Monthly Lion', fromIcons: ['👑', '🥇'], icon: '🗓️' },
   'bd_perf': { fromCn: '神射手', cn: '答题能手', en: 'Run Sharpshooter', n: 10 },
   'bd_fast': { fromCn: '闪电快手', fromEn: 'Lightning Fast', cn: '闪电快手', en: 'Lightning Fast', n: 5 }
 };
@@ -11784,6 +11812,35 @@ function badgePatchThemeMc(list) {
   }
   return changed;
 }
+// 主题徽章换代（2026-11-18，12 月场启用）：
+//   ① 月度全勤狮 🦁 → 🗓️（让位给新的「品牌文化探索狮」🦁，避免撞图标）；
+//   ② 第一期「产品知识启航狮」原封未动的 → 停发（历史荣誉保留，已拿到的记录不动）；
+//   ③ 补入第二期「品牌文化探索狮」（id 不同 ⇒ 上一期拿过的人这一期还能再拿）。
+// 发布过的目录 ver 是 Date.now()，不能靠 ver 比较，只能按值判定；管理员改过的图标 / 名字一律尊重。
+function badgePatchThemeRollover(list) {
+  var changed = false, i, b, oldUntouched = false, hasNew = false;
+  for (i = 0; i < list.length; i++) {
+    b = list[i];
+    if (!b) continue;
+    if (b.id === 'bd_p20' && b.icon === '🦁') { b.icon = '🗓️'; changed = true; }
+    if (b.id === 'bd_theme2') hasNew = true;
+    // 只有"原封未动的旧徽章"还在，才算这台设备还没换代。
+    // 换代过 / 管理员删过旧徽章就不再自动补新徽章，尊重手动目录。
+    if (b.id === 'bd_theme1' && b.cn === '产品知识启航狮' && b.icon === '⛵' && b.on !== false) {
+      oldUntouched = true; b.on = false; changed = true;
+    }
+  }
+  if (oldUntouched && !hasNew) {
+    var defs = badgeDefaultCatalog().list;
+    for (i = 0; i < defs.length; i++) {
+      if (defs[i].id !== 'bd_theme2') continue;
+      list.push(Object.assign({}, defs[i]));
+      changed = true;
+      break;
+    }
+  }
+  return changed;
+}
 // 夜猫子门槛 1 次 → 3 次（2026-11-13）：与管理端发布无关，按值打补丁 —— 已发布的云端目录、
 // 各设备本地缓存里的旧目录（bd_night n=1）读到内存时统一升到 3，口径全站一致。
 function badgePatchNightN(list) {
@@ -11872,6 +11929,7 @@ function raceBadgeCatalog() {
   badgePatchThemeMc(list);
   badgePatchNightN(list);
   badgePatchSplitDeptTop(list);
+  badgePatchThemeRollover(list);
   // 已下线的 id 一律剔掉：云端目录若还是旧版（管理员没重发布 / 旧缓存），界面也不会再画出来
   badgeDropRetired(list);
   return { ver: ver, list: list };
@@ -11937,6 +11995,36 @@ function raceDayList(rec, rid) {
   }
   out.sort();
   return out;
+}
+// 主题徽章的达标统计 —— 判定 / 进度 / 首页卡三处共用同一口径，避免各算各的。
+// sec 非空：打卡天数与答对题数都只认该板块的答题流水（赛事不锁板块时用，如 12 月「品牌文化探索狮」）；
+// sec 为空：沿用老行为 —— 打卡天数取 rec.days（含补签），答对题数取当期全部流水。
+// 返回 { days:升序日期[], correct:答对题数, cDay:答对达标日 }。
+function raceThemeStats(rec, rid, sec, needC) {
+  var log = Array.isArray(rec && rec.log) ? rec.log : [];
+  if (!sec) {
+    var allDays = raceDayList(rec, rid), sumAll = 0, dayAll = '';
+    if (needC > 0) {
+      for (var i = 0; i < log.length; i++) {
+        var l = log[i];
+        if (!l || l.id !== rid) continue;
+        sumAll += (l.c || 0);
+        if (sumAll >= needC) { dayAll = raceDayKey(l.ts || Date.now()); break; }
+      }
+    }
+    return { days: allDays, correct: sumAll, cDay: dayAll };
+  }
+  var seen = {}, days = [], sum = 0, cDay = '', gotC = false;
+  for (var j = 0; j < log.length; j++) {
+    var e = log[j];
+    if (!e || e.id !== rid || e.sec !== sec) continue;
+    sum += (e.c || 0);
+    var dk = raceDayKey(e.ts || Date.now());
+    if (!seen[dk]) { seen[dk] = 1; days.push(dk); }
+    if (!gotC && needC > 0 && sum >= needC) { cDay = dk; gotC = true; }
+  }
+  days.sort();
+  return { days: days, correct: sum, cDay: cDay };
 }
 // 某天属于哪一期（没有赛事 id 的打卡按自然月归期，老数据也不会丢）
 function raceBadgePeriodOf(rec, day) {
@@ -12194,6 +12282,8 @@ function raceComputeAwards(rec) {
   // 只在**当前届**算：只要换届了，上一期的主题徽章就不再结算 —— 这才是真正的「过期不补」。
   // （此前只按 d.rid 查打卡记录，换届后才打开 App 的人照样能补到，稀缺感是假的。）
   // 门槛双条件：当期打卡 ≥ n 天，且当期答对 ≥ mc 题（mc=0 只看打卡）。
+  // 徽章设了 sec（如 12 月品牌文化探索狮）→ 天数和题数都只认该板块的答题流水；
+  // 没设 sec（老徽章）→ 沿用 rec.days 打卡 + 当期全部流水，老学员历史不受影响。
   //   ⚠️ 答对题数按 rec.log 累加，log 只留最近 RACE_LOG_MAX=120 条；一期正常打不满，
   //   真出现超长流水（一天刷十几次那种）可能少算，属已知可接受误差。
   var _conf = raceConfOf(), _curRid = (_conf && _conf.id) || '';
@@ -12204,20 +12294,14 @@ function raceComputeAwards(rec) {
     if (!trid) continue;
     if (_curRid && trid !== _curRid) continue;        // 已换届 → 过期不补
     if (raceBadgeEarnedAnywhere(rec, d.id)) continue;
-    var tdays = raceDayList(rec, trid);
+    var needC0 = parseInt(d.mc, 10) || 0;
+    var st = raceThemeStats(rec, trid, badgeSecValid(d.sec), needC0);
+    var tdays = st.days;
     if (tdays.length < (d.n || 1)) continue;
     var hitDay = tdays[(d.n || 1) - 1];               // 打卡达标那天
-    var needC = parseInt(d.mc, 10) || 0;
-    if (needC > 0) {
-      var sumC = 0, cDay = '';
-      for (var i2 = 0; i2 < log.length; i2++) {
-        var l2 = log[i2];
-        if (!l2 || l2.id !== trid) continue;
-        sumC += (l2.c || 0);
-        if (sumC >= needC) { cDay = raceDayKey(l2.ts || Date.now()); break; }
-      }
-      if (!cDay) continue;                            // 答对题数没到
-      if (cDay > hitDay) hitDay = cDay;               // 两个条件都满足的那天（日期串可直接比大小）
+    if (needC0 > 0) {
+      if (!st.cDay) continue;                          // 答对题数没到
+      if (st.cDay > hitDay) hitDay = st.cDay;          // 两个条件都满足的那天（日期串可直接比大小）
     }
     if (!out[trid]) out[trid] = {};
     if (!out[trid][d.id]) out[trid][d.id] = hitDay;
@@ -12607,9 +12691,11 @@ function raceBadgeDesc(b, lang) {
     if (rule === BADGE_RULE_PRACTICE) return n + ' practice answers';
     if (rule === BADGE_RULE_THEME) {
       var mc1 = parseInt((def && def.mc) || (b && b.mc), 10) || 0;
+      var se1 = badgeSecValid(def && def.sec);
+      var scope1 = se1 ? (' in ' + raceSecMeta(se1).en) : '';
       return mc1 > 0
-        ? (n + ' check-ins + ' + mc1 + ' correct answers, this round only')
-        : ('Check in ' + n + ' day(s) this round only');
+        ? (n + ' check-ins + ' + mc1 + ' correct answers' + scope1 + ', this round only')
+        : ('Check in ' + n + ' day(s)' + scope1 + ' this round only');
     }
     return rule === BADGE_RULE_STREAK ? (n + ' days in a row')
       : rule === BADGE_RULE_PERIOD ? (n + ' days in one round') : (n + ' days all-time');
@@ -12630,9 +12716,11 @@ function raceBadgeDesc(b, lang) {
   if (rule === BADGE_RULE_PRACTICE) return '练习模式累计答题 ' + n + ' 道';
   if (rule === BADGE_RULE_THEME) {
     var mc2 = parseInt((def && def.mc) || (b && b.mc), 10) || 0;
+    var se2 = badgeSecValid(def && def.sec);
+    var scope2 = se2 ? ('在「' + raceSecMeta(se2).cn + '」板块') : '';
     return mc2 > 0
-      ? ('当期打卡 ' + n + ' 天 + 答对 ' + mc2 + ' 题，过期不补')
-      : ('仅在当期打卡 ' + n + ' 天可得，过期不补');
+      ? ('当期' + scope2 + '打卡 ' + n + ' 天 + 答对 ' + mc2 + ' 题，过期不补')
+      : ('当期' + scope2 + '打卡 ' + n + ' 天可得，过期不补');
   }
   return rule === BADGE_RULE_STREAK ? ('连续打卡 ' + n + ' 天')
     : rule === BADGE_RULE_PERIOD ? ('单期累计打卡 ' + n + ' 天') : ('累计打卡 ' + n + ' 天');
@@ -12707,13 +12795,9 @@ function raceBadgeProgressOf(rec, def) {
   // 同时把两个维度的原始值都带上，卡片上能拼成「0/8 天 · 0/50 题」。
   if (def.rule === BADGE_RULE_THEME) {
     var trid = def.rid || (raceConfOf() || {}).id || '';
-    var td = trid ? raceDayList(rec, trid).length : 0;
     var needC = parseInt(def.mc, 10) || 0;
-    var sumC = 0;
-    if (needC > 0) {
-      var lg0 = Array.isArray(rec && rec.log) ? rec.log : [], q3;
-      for (q3 = 0; q3 < lg0.length; q3++) if (lg0[q3] && lg0[q3].id === trid) sumC += (lg0[q3].c || 0);
-    }
+    var stt = raceThemeStats(rec, trid, badgeSecValid(def.sec), needC);
+    var td = stt.days.length, sumC = stt.correct;
     var pg = {
       cur: Math.min(td, def.n), max: def.n, unit: 'd',
       dCur: Math.min(td, def.n), dMax: def.n,
@@ -13536,7 +13620,7 @@ function raceStart(sectionKey) {
   if (!raceAllowed(c, sec)) { alert(t('race_no_conf')); return; }
   var pool = racePoolOf(sec);
   if (!pool.length) { alert(t('no_questions')); return; }
-  // 本板块题目优先；通用知识作为备胎，等本板块答完了还有时间再补进来
+  // 本板块题目优先；品牌与酒店知识作为备胎，等本板块答完了还有时间再补进来
   state.raceNewBadges = null;   // 上一轮的"新徽章"提示只属于上一轮
   state.raceCelebrate = null;   // 彩带也一样：庆祝只属于拿到好成绩的那一轮
   state.raceTierUp = null;      // 段位晋升卡片同理
@@ -13630,7 +13714,7 @@ function raceAdvance() {
   r.answers[r.idx] = { ans: (r.cur && r.cur.length) ? r.cur.slice() : [] };
   r.cur = null;
   r.idx++;
-  // 本板块题目答完了：限时还没到的话，从备胎池（通用知识）补一批进来继续答
+  // 本板块题目答完了：限时还没到的话，从备胎池（品牌与酒店知识）补一批进来继续答
   if (r.idx >= r.pool.length) {
     var add = raceTakeSpare(r);
     if (add && add.length) r.pool = r.pool.concat(add);
@@ -14152,7 +14236,7 @@ function raceDeptPersonLabel(divCn, unitCn) {
 // 部门排名：把本届每个**排名单位**的参赛员工成绩汇总，按**加权总答对题数** →
 // 原始答对 → 总准确率 → 参赛人数排序（每人只算他在本届的最佳一条，避免多刷板块给部门灌分）。
 // 加权口径（部门奖，2026-11-17）：每位成员贡献 = 答对题数 × 级别权重
-//   L/T/S=×1、A/B=×1.5、G=×2；没设级别按 ×1（此时 weighted === correct）。
+//   T/L/S=×1、B/A=×1.5、G=×2；没设级别按 ×1（此时 weighted === correct）。
 // 排名单位见 raceDeptUnitOf：餐饮 / 厨房 / 房务下沉到小部门，其余按大部门。
 // 纯函数版本，管理端导出直接复用（口径必须一致）。lvOf(emp) 可选，缺省=人人 ×1。
 function raceDeptAggRowsFrom(list, secFilter, rid, lvOf) {
@@ -14821,12 +14905,8 @@ function raceThemeCardHtml(conf) {
   if (leftTxt && !got) html += '<div style="flex:0 0 auto;font-size:11px;color:#a06a00;background:#fff2d6;border-radius:20px;padding:3px 9px;">' + leftTxt + '</div>';
   html += '</div>';
   if (!got) {
-    var td = rid ? raceDayList(rec, rid).length : 0;
-    var sumC = 0;
-    if (needC > 0) {
-      var lg = Array.isArray(rec && rec.log) ? rec.log : [];
-      for (var i = 0; i < lg.length; i++) if (lg[i] && lg[i].id === rid) sumC += (lg[i].c || 0);
-    }
+    var st2 = raceThemeStats(rec, rid, badgeSecValid(def.sec), needC);
+    var td = st2.days.length, sumC = st2.correct;
     var okD = td >= needD, okC = !needC || sumC >= needC;
     html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">';
     html += '<span style="font-size:11.5px;padding:3px 9px;border-radius:20px;'
@@ -15014,7 +15094,7 @@ function racePoolOfSize(key) {
   if (_racePoolSizeCache[key] == null) _racePoolSizeCache[key] = racePoolOf(key).length;
   return _racePoolSizeCache[key];
 }
-// "本模块答完后自动补充通用知识"这句只在**题真的可能不够**的时候才有意义。
+// "本模块答完后自动补充品牌与酒店知识"这句只在**题真的可能不够**的时候才有意义。
 // 多数板块（如厨房 175 题、餐饮 108 题）限时内根本答不完，写上反而让人以为
 // 还要无限答下去 —— 超过 RACE_SPARE_HINT_MAX_POOL 题就不提示了。
 // 实际会补题的逻辑不变（raceTakeSpare 照旧），只是不再广而告之。
@@ -16063,7 +16143,7 @@ function renderRaceBoard() {
       var isMine = myDeptCn && dr.dept === myDeptCn;
       var dMedal = di === 0 ? '🥇' : di === 1 ? '🥈' : di === 2 ? '🥉' : (di + 1);
       var per = dr.n ? Math.round(dr.correct / dr.n * 10) / 10 : 0;
-      // 部门奖加权：名册里配了级别时，右侧主数字显示加权分（L/T/S ×1、A/B ×1.5、G ×2）；
+      // 部门奖加权：名册里配了级别时，右侧主数字显示加权分（T/L/S ×1、B/A ×1.5、G ×2）；
       // 没配级别时 weighted === correct，展示与旧版完全一致。
       var hasW = (typeof dr.weighted === 'number') && Math.abs(dr.weighted - dr.correct) > 0.001;
       var bigNum = hasW ? dr.weighted : dr.correct;
@@ -17215,8 +17295,9 @@ function renderAdminBadges() {
     + '<option value="theme"' + (d.rule === BADGE_RULE_THEME ? ' selected' : '') + '>' + t('badge_admin_rule_theme') + '</option>'
     + '</select></div>';
   html += '</div>';
-  // 「板块速答榜」类徽章要说明**绑哪张榜**：厨房部/餐饮部/房务部三枚「题库征服者」就靠这里区分。
-  // 留空 = 任一板块榜都算（老目录的「题库征服者」就是这个语义）。
+  // 「板块速答榜」徽章 / 限定主题徽章要说明**绑哪张榜 / 认哪个板块**：
+  // 速答榜三枚「题库征服者」靠这里区分；主题徽章选了板块就只统计该板块的打卡与答对。
+  // 留空 = 任一板块（老目录的「题库征服者」就是这个语义）。
   var secVal = badgeSecValid(d.sec);
   html += '<div style="margin-top:8px;"><label style="font-size:12px;color:#666;">' + t('badge_admin_sec') + '</label>'
     + '<select id="bdSec" class="admin-input" style="width:100%;padding:8px;border:1px solid #d8dee4;border-radius:6px;box-sizing:border-box;">'
@@ -17395,8 +17476,8 @@ function adminBadgeSave() {
   var lv = parseInt(g('bdLv'), 10) || 1;
   var icon = String(g('bdIcon') || '🏅').trim() || '🏅';
   var rid = String(g('bdRid') || '').trim();
-  // 绑哪张板块榜（只有「板块速答榜」规则用得上；别的规则一律存空，避免脏字段漂移）
-  var sec = rule === BADGE_RULE_DEPT_TOP ? badgeSecValid(g('bdSec')) : '';
+  // 绑哪张板块榜 / 主题徽章认哪个板块；别的规则一律存空，避免脏字段漂移
+  var sec = (rule === BADGE_RULE_DEPT_TOP || rule === BADGE_RULE_THEME) ? badgeSecValid(g('bdSec')) : '';
   // 限定主题的第二道门槛（答对题数）；非主题规则一律存 0，避免脏字段跟着别的规则漂。
   var mc = rule === BADGE_RULE_THEME ? Math.max(0, Math.min(2000, parseInt(g('bdMc'), 10) || 0)) : 0;
   // 员工端说明（自定义文案）：留空 = 按规则自动生成。只管显示，不影响判定。
@@ -24675,8 +24756,8 @@ function adminRosterPanelHtml() {
   html += '<div class="q-card" style="margin-top:10px;"><div class="profile-form">';
   html += '<h4 style="margin:0 0 6px;">📥 ' + (en ? 'Import roster (Excel / CSV)' : '一键导入员工名册（Excel / CSV）') + '</h4>';
   html += '<div class="sync-note" style="font-size:12px;margin-bottom:8px;">' + (en
-    ? 'Columns can be in any order — recommended: level (L/T/S/A/B/G, optional), English name, Chinese name, employee ID. The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
-    : '列顺序不限（推荐：级别 L/T/S/A/B/G（可选）、英文名、中文名、工号），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。级别用于部门奖加权：L/T/S ×1、A/B ×1.5、G ×2。') + '</div>';
+    ? 'Columns can be in any order — recommended: level (T/L/S/B/A/G, optional), English name, Chinese name, employee ID. The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
+    : '列顺序不限（推荐：级别 T/L/S/B/A/G（可选）、英文名、中文名、工号），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。级别用于部门奖加权：T/L/S ×1、B/A ×1.5、G ×2。') + '</div>';
   html += '<label class="rz-file">📄 ' + (en ? 'Choose file & preview differences' : '选择文件并预览差异')
     + '<input type="file" accept=".xlsx,.csv,.txt,.tsv" style="display:none" onchange="adminRosterFileChosen(this)"></label>';
   html += '<button class="action-btn nav-btn secondary" style="width:100%;margin-top:8px;" onclick="adminRosterTemplateDl()">⬇️ '
@@ -27811,8 +27892,8 @@ function adminUnifiedRosterHtml(statusLine, en) {
   if (impOpen) {
     html += '<div class="profile-form" style="margin-top:10px;">';
     html += '<div class="sync-note" style="font-size:12px;margin-bottom:8px;">' + (en
-      ? 'Columns can be in any order — recommended: level (L/T/S/A/B/G, optional), English name, Chinese name, employee ID. The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
-      : '列顺序不限（推荐：级别 L/T/S/A/B/G（可选）、英文名、中文名、工号），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。级别用于部门奖加权：L/T/S ×1、A/B ×1.5、G ×2。') + '</div>';
+      ? 'Columns can be in any order — recommended: level (T/L/S/B/A/G, optional), English name, Chinese name, employee ID. The first row may be a header. Rows with only an ID reserve that ID for a new hire.'
+      : '列顺序不限（推荐：级别 T/L/S/B/A/G（可选）、英文名、中文名、工号），首行是表头也可以。只填工号、姓名留空的行 = 给新员工预留。级别用于部门奖加权：T/L/S ×1、B/A ×1.5、G ×2。') + '</div>';
     html += '<label class="rz-file">📄 ' + (en ? 'Choose file & preview differences' : '选择文件并预览差异')
       + '<input type="file" accept=".xlsx,.csv,.txt,.tsv" style="display:none" onchange="adminRosterFileChosen(this)"></label>';
     html += '<button class="action-btn nav-btn secondary" style="width:100%;margin-top:8px;" onclick="adminRosterTemplateDl()">⬇️ '
