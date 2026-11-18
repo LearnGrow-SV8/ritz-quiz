@@ -559,8 +559,10 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 
 .restart-banner { background:linear-gradient(135deg,#e8f5e9,#c8e6c9); border:1px solid #a5d6a7; border-radius:10px; padding:12px 16px; margin-bottom:16px; text-align:center; font-size:13px; color:#2e7d32; }
 .restart-banner .restart-btn { margin-top:8px; padding:8px 20px; background:var(--success); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
-/* 本轮完成条：钉在底部操作条上方（bottom 值 = 底部条高度），只在本轮最后一题出现 */
-.paper-finish-bar { position:fixed; bottom:65px; left:50%; transform:translateX(-50%); width:100%; max-width:600px; z-index:99; box-sizing:border-box;
+/* 本轮完成条：钉在底部操作条上方（bottom 值 = 底部条高度 + 7px 缓冲），只在本轮最后一题出现。
+   2026-11-18 领导反馈：查看小结按钮原来在条右端，正下方 1px 就是收藏 ⭐，手指稍低就误触收藏。
+   按钮移到条左端（下方是进度文本，点偏无副作用），并整体抬高 7px 拉开与底部条的间距。 */
+.paper-finish-bar { position:fixed; bottom:72px; left:50%; transform:translateX(-50%); width:100%; max-width:600px; z-index:99; box-sizing:border-box;
   background:linear-gradient(135deg,#e9f6ea,#d5efd8); border-top:1px solid #a5d6a7; border-bottom:1px solid #a5d6a7;
   padding:9px 16px; display:flex; align-items:center; gap:10px; box-shadow:0 -2px 12px rgba(46,125,50,.12); }
 .paper-finish-bar .pf-main { flex:1; min-width:0; }
@@ -6364,8 +6366,8 @@ var I18N = {
   rv_chart_unit: {cn:'道', en:''},
   rv_chart_rule: {cn:'请遵循记忆曲线，于第 1、3、5 天对错题进行复习巩固；若三次全部答对，系统即判定该题已被熟练掌握，题目将自动移出错题本。', en:'Please follow the memory curve, and review your incorrect questions on Day 1, Day 3 and Day 5. If you get all three attempts right, the system will mark the question as fully mastered and it will be automatically removed from the error notebook.'},
   // 答完一题后的即时说明：告诉学员「这一答到底推进了什么」，否则做了还是 0/3 会以为坏了
-  rv_h_promote: {cn:'本题已巩固 {n}/{m} 阶 · 下次复习：{d}', en:'Stage {n} of {m} · next review in {d}'},
-  rv_h_promote_today: {cn:'本题已巩固 {n}/{m} 阶 · 明天可再复习', en:'Stage {n} of {m} · due again tomorrow'},
+  rv_h_promote: {cn:'本题已推进到第 {n} 阶（共 {m} 阶）· {d} 天后再复习', en:'Advanced to stage {n} of {m} · review again in {d} days'},
+  rv_h_promote_today: {cn:'本题已推进到第 {n} 阶（共 {m} 阶）· 明天可再复习', en:'Advanced to stage {n} of {m} · review again tomorrow'},
   rv_h_grad: {cn:'本题已巩固完成，已自动移出错题本（以后练习、考试里还会抽查）', en:'Cleared and removed from your mistake book (still spot-checked in practice and exams)'},
   rv_h_checkpass: {cn:'抽查通过：这道题你已稳定掌握', en:'Spot-check passed — this one is solid'},
   rv_h_readded: {cn:'这道题此前已巩固完成、移出错题本；这次答错，重新回到第 1 阶', en:'You had already cleared this one and it had left your book — now it is back at stage 1'},
@@ -19196,13 +19198,14 @@ function renderQuestion() {
   if (state.paperSession && idx === total - 1 && state.showAnswer) {
     var _ps = state.paperSession;
     html += '<div class="paper-finish-bar">';
+    // 按钮在条左端（2026-11-18）：右端下方 1px 就是收藏 ⭐，误触率太高；左端下方是进度文本
+    html += '<button class="pf-btn" onclick="openPaperDone()">' + t('rv_finish_bar_go') + '</button>';
     html += '<div class="pf-main">';
     html += '<div class="pf-t">🎉 ' + t('rv_paper_done') + '</div>';
     html += '<div class="pf-s">' + t('rv_finish_bar_sub')
       .replace('{ok}', String(_ps.ok || 0)).replace('{n}', String(_ps.total || total))
       .replace('{p}', String(_ps.promoted || 0)).replace('{g}', String(_ps.graduated || 0)) + '</div>';
     html += '</div>';
-    html += '<button class="pf-btn" onclick="openPaperDone()">' + t('rv_finish_bar_go') + '</button>';
     html += '</div>';
   }
 
@@ -20561,19 +20564,27 @@ function wrongStartScopedRedo() {
   var isAll = (state.wrongTab || 'all') === 'all' && !state.wrongSrc;
   startWrongRedoIds(ids, { kind: 'bank', title: isAll ? t('rv_bk_redo_all') : t('rv_bk_redo_now') });
 }
-// 总览右上角角标：重做按钮（或纯计数）。浏览模式（wrongReveal）下只留计数。
+// 总览右上角角标：「显示答案」开关与「重做全部错题」同列同款（2026-11-18 领导：
+// 开关别独占一整行，放重做按钮左边/下面，款式尺寸同重做）——竖排两颗小药丸。
+// 浏览模式（wrongReveal）下重做按钮藏起只留计数。
 // 抽成函数是因为搜索防抖局部更新时要重算这一个格子（#rvBankCorner）。
 function wrongBankCornerHtml() {
   var redoIds = wrongRedoIdsScoped();
   var _unit = t('rv_paper_unit');
+  var _pill = 'class="nav-btn secondary" style="padding:5px 10px;font-size:11px;border-radius:999px;flex:0 0 auto;margin:0;"';
+  var h = '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">';
+  h += '<button ' + _pill + ' onclick="wrongRevealToggle()">'
+    + escapeHtml(t(state.wrongReveal ? 'rv_reveal_off' : 'rv_reveal_on')) + '</button>';
   if (!state.wrongReveal && redoIds.length) {
     var redoIsAll = (state.wrongTab || 'all') === 'all' && !state.wrongSrc;
-    return '<button class="nav-btn secondary" style="padding:5px 10px;font-size:11px;border-radius:999px;flex:0 0 auto;margin:0;" '
-      + 'onclick="wrongStartScopedRedo()">🔁 '
+    h += '<button ' + _pill + ' onclick="wrongStartScopedRedo()">🔁 '
       + escapeHtml(t(redoIsAll ? 'rv_bk_redo_all' : 'rv_bk_redo_now').replace('{n}', String(redoIds.length))) + '</button>';
+  } else {
+    h += '<div style="font-size:12px;color:#5a6473;font-weight:600;white-space:nowrap;"><b style="font-size:14px;color:#000;">' + redoIds.length + '</b>'
+      + (_unit ? ' ' + escapeHtml(_unit) : '') + '</div>';
   }
-  return '<b style="font-size:14px;color:#000;">' + redoIds.length + '</b>'
-    + (_unit ? ' <span style="color:#5a6473;">' + escapeHtml(_unit) + '</span>' : '');
+  h += '</div>';
+  return h;
 }
 // 搜索框打字中绝不整页 render（铁律：重建 <input> 会弹键盘、拉滚动）——
 // 防抖 350ms 后只更新清单容器和右上角角标两个格子，输入框原地不动。
@@ -20694,9 +20705,6 @@ function renderWrongAll() {
       + ' style="flex:1;min-width:0;height:38px;border:1.5px solid var(--border);border-radius:10px;padding:0 12px;font-size:13.5px;background:#fff;color:#000;outline:none;" />';
     html += '<button id="rvSearchClear" class="admin-mini-btn" style="display:' + ((state.wrongSearchQ || '').trim() ? '' : 'none') + ';" onclick="rvBankSearchClear()">✕</button>';
     html += '</div>';
-    // 展示答案浏览模式开关：开了整页变纯阅读（答案+解析直接铺开，不能做题）
-    html += '<button class="action-btn ' + (state.wrongReveal ? 'primary' : 'secondary') + '" style="width:100%;margin-top:8px;padding:9px;font-size:13px;" onclick="wrongRevealToggle()">'
-      + escapeHtml(t(state.wrongReveal ? 'rv_reveal_off' : 'rv_reveal_on')) + '</button>';
   }
 
   if (tab === 'fav') {
