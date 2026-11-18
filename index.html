@@ -200,8 +200,13 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
   padding:3px 9px 3px 7px; border-radius:20px; letter-spacing:.2px; color:#000;
   border:1px solid rgba(26,58,92,.18); background:rgba(255,255,255,.65); white-space:nowrap; }
 .race-hero-pill i { width:5px; height:5px; border-radius:50%; display:block; }
-.race-hero-title { margin-top:10px; font-size:20px; font-weight:700; line-height:1.32;
+.race-hero-title-row { display:flex; align-items:flex-start; gap:8px; margin-top:10px; }
+.race-hero-title { flex:1 1 auto; min-width:0; font-size:20px; font-weight:700; line-height:1.32;
   letter-spacing:.3px; color:#0E2545; word-break:break-word; }
+/* 奖项说明入口（2026-11-18）：收在状态胶囊下方标题行的右侧留白里，不另起一行占版面 */
+.race-hero-award-btn { flex:0 0 auto; margin-top:3px; padding:3px 9px; border:1px solid #C7DDF3;
+  border-radius:20px; background:#fff; color:#000; font-size:10.5px; font-weight:600;
+  line-height:1.5; white-space:nowrap; cursor:pointer; }
 .race-hero-sub { margin-top:4px; font-size:11px; color:rgba(14,37,69,.55); letter-spacing:.2px; }
 .race-hero-metrics { display:flex; margin-top:14px; padding-top:12px; border-top:1px solid rgba(14,37,69,.12); }
 .race-hero-cell { flex:1 1 0; min-width:0; }
@@ -15063,7 +15068,13 @@ function raceHeroCardHtml(c, st, mode) {
   html += '<div class="race-hero-rule"></div>';
   if (pillTxt) html += '<div class="race-hero-pill"><i style="background:' + dotColor + ';"></i>' + escapeHtml(pillTxt) + '</div>';
   html += '</div>';
+  html += '<div class="race-hero-title-row">';
   html += '<div class="race-hero-title">' + (conf.title ? escapeHtml(conf.title) : t('race_title')) + '</div>';
+  // 奖项说明入口：塞在状态胶囊下方标题行的右侧留白，不另起一行（极简文案原则）
+  html += '<button type="button" class="race-hero-award-btn" onclick="raceAwardInfoShow()"'
+    + ' title="' + escapeHtml(en ? 'Awards & redemption rules' : '奖项设置与兑奖说明') + '">'
+    + (en ? '🏅 Awards' : '🏅 奖项说明') + ' ›</button>';
+  html += '</div>';
   // 自由选板块的赛制多说一句：不然「任选」两个字不知道什么时候选
   if (mode !== 'admin' && st === 'open') html += '<div class="race-hero-sub">' + t('race_hero_sub_choice') + '</div>';
   html += '<div class="race-hero-metrics">';
@@ -15093,10 +15104,6 @@ function raceHeroCardHtml(c, st, mode) {
     var spare = raceSpareSizeOf(conf.section || 'all');
     if (spare) html += '<div class="race-hero-note">' + t('race_hero_spare').replace('{m}', String(spare)) + '</div>';
   }
-  // 奖项说明入口（2026-11-18）：一句话小按钮，点开浮窗看全文，不占首页版面。
-  html += '<button type="button" onclick="raceAwardInfoShow()" style="display:block;width:100%;margin-top:12px;padding:8px 10px;'
-    + 'border:1px solid #C7DDF3;border-radius:8px;background:#fff;color:#000;font-size:12.5px;cursor:pointer;text-align:center;">'
-    + (en ? '🏅 Awards & redemption rules' : '🏅 奖项设置与兑奖说明') + ' ›</button>';
   html += '</div>';
   return html;
 }
