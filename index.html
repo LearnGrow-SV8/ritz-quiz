@@ -20568,11 +20568,13 @@ function wrongStartScopedRedo() {
 // 开关别独占一整行，放重做按钮左边/下面，款式尺寸同重做）——竖排两颗小药丸。
 // 浏览模式（wrongReveal）下重做按钮藏起只留计数。
 // 抽成函数是因为搜索防抖局部更新时要重算这一个格子（#rvBankCorner）。
-function wrongBankCornerHtml() {
+function wrongBankOpsHtml() {
   var redoIds = wrongRedoIdsScoped();
   var _unit = t('rv_paper_unit');
   var _pill = 'class="nav-btn secondary" style="padding:5px 10px;font-size:11px;border-radius:999px;flex:0 0 auto;margin:0;"';
-  var h = '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">';
+  // 标题下一行的操作条（2026-11-18 领导）：左「显示答案」右「一键重做」，同款小药丸；
+  // 浏览模式（纯阅读）下重做按钮藏起、右侧回落成纯计数。
+  var h = '<div id="rvBankOps" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 4px;">';
   h += '<button ' + _pill + ' onclick="wrongRevealToggle()">'
     + escapeHtml(t(state.wrongReveal ? 'rv_reveal_off' : 'rv_reveal_on')) + '</button>';
   if (!state.wrongReveal && redoIds.length) {
@@ -20599,8 +20601,8 @@ function rvBankSearchApply() {
   var rows = wrongFilteredRows();
   var el = document.getElementById('rvBankList');
   if (el) el.innerHTML = wrongRowListHtml(rows);
-  var ce = document.getElementById('rvBankCorner');
-  if (ce) ce.innerHTML = wrongBankCornerHtml();
+  var ce = document.getElementById('rvBankOps');
+  if (ce) ce.outerHTML = wrongBankOpsHtml();
   var cb = document.getElementById('rvSearchClear');
   if (cb) cb.style.display = (state.wrongSearchQ || '').trim() ? '' : 'none';
 }
@@ -20689,16 +20691,17 @@ function renderWrongAll() {
   html += '</div>';
   html += '</div></div>';
 
-  // ---- 板块三｜当前错题总览：两个筛选按钮 + 搜索框 + 当前命中的清单 ----
+  // ---- 板块三｜当前错题总览：操作条（左显示答案 / 右一键重做）+ 两个筛选按钮 + 搜索框 + 清单 ----
   html += '<div class="rv-blk" id="rvBlkBank">';
-  // 右上角：小号「重做全部错题（N 道）」按钮（2026-11-11 领导：撤大按钮与 N 道角标，二合一）。
-  // 无题可重做时回落成纯计数。展示答案浏览模式下按钮藏起来只留计数（2026-11-13 领导：纯阅读防瞬时记忆）。
-  html += rvBlkHeadHtml('📚', t('rv_bk_t3'), t('rv_bk_d3'), '<span id="rvBankCorner">' + wrongBankCornerHtml() + '</span>');
+  html += rvBlkHeadHtml('📚', t('rv_bk_t3'), t('rv_bk_d3'));
   html += '<div class="rv-blk-b">';
+  // 操作条放在标题正下方一行（2026-11-18 领导：左「显示答案」右「一键重做」），
+  // 搜索防抖局部更新这一格（#rvBankOps），保证重做计数跟着筛选/搜索走。
+  html += '<span id="rvBankOpsWrap">' + wrongBankOpsHtml() + '</span>';
   html += rvFilterBarHtml();
   // 搜索框（2026-11-13 领导）：来源/分类之下、清单之上，实时过滤；收藏夹页签不走筛选出口，不显示
   if (tab !== 'fav') {
-    html += '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;margin-bottom:10px;">';
     html += '<input id="rvSearchBox" type="text" value="' + escapeHtml(state.wrongSearchQ || '') + '"'
       + ' placeholder="' + escapeHtml(t('rv_search_ph')) + '"'
       + ' oninput="rvBankSearchInput(this.value)"'
