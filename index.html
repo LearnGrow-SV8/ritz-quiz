@@ -5793,7 +5793,7 @@ var I18N = {
   race_cal_day_runs: {cn:'当天完成 {n} 次挑战', en:'{n} challenges on this day'},
   race_cal_no_log: {cn:'更早的成绩流水已超出保存上限（仅保留最近 120 次），当天只显示打卡标记。', en:'Older attempts are beyond the storage limit (only the latest 120 are kept) — this day shows the check-in mark only.'},
   // —— 参与奖兑换券（2026-11-17）——
-  race_vch_title: {cn:'参与奖兑换券', en:'Participation Award Voucher'},
+  race_vch_title: {cn:'兑奖券', en:'Vouchers'},
   race_vch_sub: {cn:'达标即可获得，凭券领取奖品', en:'Earned once qualified — show the code to collect'},
   race_vch_new: {cn:'恭喜获得参与奖兑换券', en:'You have earned a participation voucher'},
   race_vch_rule: {cn:'单场答对 {n} 题及以上即可获得，每人每届限一张', en:'Answer {n} or more correctly in one attempt. One voucher per person per round.'},
@@ -5802,7 +5802,15 @@ var I18N = {
   race_vch_used: {cn:'已核销', en:'Redeemed'},
   race_vch_used_at: {cn:'已于 {t} 核销', en:'Redeemed on {t}'},
   race_vch_tip: {cn:'请凭此券码到人力资源部领取奖品。核销后此码即失效，不可重复兑奖。', en:'Show this code to the HR team to collect your gift. It becomes invalid once redeemed — one collection per voucher.'},
-  race_vch_mine: {cn:'我的兑换券', en:'My vouchers'},
+  race_vch_mine: {cn:'兑奖券', en:'Vouchers'},
+  race_vch_part_sec: {cn:'参与奖兑换券', en:'Participation award'},
+  race_vch_rank_sec: {cn:'个人奖兑换券', en:'Individual award'},
+  race_vch_dept_sec: {cn:'部门奖', en:'Department award'},
+  race_vch_rank_none: {cn:'个人奖名单尚未确认。名单经管理端确认后，上榜者将在此看到个人奖券。', en:'Individual winners have not been confirmed yet. Once confirmed, winners will see their voucher here.'},
+  race_vch_rank_win: {cn:'你在 {s} 榜排名第 {n}', en:'Ranked No.{n} on the {s} leaderboard'},
+  race_vch_cut: {cn:'兑换截止：{t}（北京时间）', en:'Redeem by: {t} (Beijing time)'},
+  race_vch_expired: {cn:'已过期', en:'Expired'},
+  race_vch_over: {cn:'兑奖已截止', en:'Redemption closed'},
   race_vch_none: {cn:'本届还没有兑换券。参加限时答题赛，单场答对 {n} 题即可获得。', en:'No voucher for this round yet. Take the quiz and answer {n} correctly in one attempt to earn one.'},
   race_vch_round: {cn:'本届兑换券', en:'This round'},
   race_vch_past: {cn:'往届兑换券', en:'Previous rounds'},
@@ -7624,6 +7632,8 @@ function refreshRoster(timeoutMs) {
     // 参与奖核销记录（admin_state.awards）也搭这班车：学员点开「我的兑换券」时
     // 要显示"待兑换 / 已核销"，靠的就是这份数据。数据量很小（一届几十上百条）。
     if (j.data.awards && typeof applyRaceAwards === 'function' && applyRaceAwards(j.data.awards)) changed = true;
+    // 个人奖 / 部门奖确认名单（2026-11-18）：确认后学员端才看到个人奖券与截止日。
+    if (j.data.awardSettle && typeof applyRaceSettle === 'function' && applyRaceSettle(j.data.awardSettle)) changed = true;
     // 徽章目录也放在这一行里（admin_state.badges）：学员只要拉到配置就能拿到最新的
     // 徽章名字 / 图标 / 达标线，不必等下次打开答题赛页面。
     if (j.data.badges && applyBadgeCatalog(j.data.badges)) changed = true;
@@ -10976,7 +10986,7 @@ function applyRaceConf(c) {
 // 参与奖 / 个人排名奖 / 部门奖三块，全部挂在赛事配置 conf.award 里随赛事下发：
 // 学员端要靠它算"达标线"，管理端导出要靠它算"取前几名"。数字一律夹取上下限，
 // 后台手输 0、999 或留空都不会把奖项算崩（留空 = 用默认值）。
-var RACE_AWARD_DEF = { on: true, partOn: true, partMin: 7, rankOn: true, rankTopN: 10, deptOn: true, deptTopN: 5 };
+var RACE_AWARD_DEF = { on: true, partOn: true, partMin: 7, rankOn: true, rankTopN: 10, deptOn: true, deptTopN: 5, rankCutDays: 7 };
 function raceAwardClamp(v, lo, hi, dft) {
   var n = parseInt(v, 10);
   if (!isFinite(n) || n <= 0) n = dft;
@@ -10994,8 +11004,46 @@ function raceAwardCfgOf(c) {
     rankOn: a.rankOn !== false,
     rankTopN: raceAwardClamp(a.rankTopN, 1, 100, RACE_AWARD_DEF.rankTopN),
     deptOn: a.deptOn !== false,
-    deptTopN: raceAwardClamp(a.deptTopN, 1, 50, RACE_AWARD_DEF.deptTopN)
+    deptTopN: raceAwardClamp(a.deptTopN, 1, 50, RACE_AWARD_DEF.deptTopN),
+    // 兑奖规则（2026-11-18）：rankCutDays = 个人奖券在「名单确认日」之后多少天截止，默认一周。
+    // 参与奖不设独立天数 —— 它的截止恒为赛事最后一天 23:59:59（北京时间），见 raceAwardCutoffOf。
+    rankCutDays: raceAwardClamp(a.rankCutDays, 1, 90, RACE_AWARD_DEF.rankCutDays),
+    descCn: (typeof a.descCn === 'string') ? a.descCn : '',
+    descEn: (typeof a.descEn === 'string') ? a.descEn : ''
   };
+}
+// ===== 兑奖截止时间（2026-11-18）=====
+// 参与奖：赛事最后一天的 23:59:59（北京时间）截止 —— 赛事 endTime 那天的末尾。
+// 个人奖：管理端「确认名单」时定下确认时间，券在确认日 + rankCutDays 天的 23:59:59 截止。
+// 返回毫秒时间戳；0 = 无截止（赛事没设结束时间 / 个人奖还没确认名单，不判过期）。
+function raceAwardCutoffOf(kind, conf, settleAt) {
+  conf = conf || raceConfOf() || {};
+  var ac = raceAwardCfgOf(conf);
+  var baseTs = 0;
+  if (kind === 'rank') {
+    baseTs = parseInt(settleAt, 10) || 0;
+    if (!baseTs) return 0;                       // 名单未确认 → 还没开始计截止
+    baseTs += (ac.rankCutDays || 7) * 86400000;
+  } else {
+    baseTs = Date.parse(conf.endTime || '');
+    if (!isFinite(baseTs) || !baseTs) return 0;  // 没设结束时间 → 不判过期
+  }
+  // 一律取"那一天的北京时间 23:59:59"，不用设备本地时区
+  var day = raceDayKeyBj(baseTs);
+  return Date.parse(day + 'T23:59:59+08:00');
+}
+function raceAwardExpired(kind, conf, settleAt, now) {
+  var cut = raceAwardCutoffOf(kind, conf, settleAt);
+  return !!cut && (now || Date.now()) > cut;
+}
+// 北京时间可读的截止文案（用于券卡 / 弹窗），无截止返回空串
+function raceAwardCutoffText(kind, conf, settleAt) {
+  var cut = raceAwardCutoffOf(kind, conf, settleAt);
+  if (!cut) return '';
+  var d = new Date(cut + 8 * 3600000);
+  function p(n) { return (n < 10 ? '0' : '') + n; }
+  return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate())
+    + ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
 }
 
 // ---- 参与奖兑换券（2026-11-17）----
@@ -11027,16 +11075,24 @@ function raceVoucherCodeOf(emp, rid) {
   return 'RC-' + tag + '-' + e + '-' + raceVchWord('c|' + tag + '|' + e, 2);
 }
 function raceVoucherParse(code) {
+  // RC = 参与奖，RR = 个人排名奖（2026-11-18）。两类都带工号，前台照着输即可。
   var m = String(code == null ? '' : code).toUpperCase().replace(/[\s\u3000]+/g, '')
-    .match(/^RC-?([0-9A-Z]{4})-?(\d{1,8})-?([0-9A-Z]{2})$/);
+    .match(/^R([CR])-?([0-9A-Z]{4})-?(\d{1,8})-?([0-9A-Z]{2})$/);
   if (!m) return null;
-  return { tag: m[1], emp: normEmpNo(m[2]) || m[2], ck: m[3] };
+  return { kind: (m[1] === 'R') ? 'rank' : 'part', tag: m[2], emp: normEmpNo(m[3]) || m[3], ck: m[4] };
+}
+// 个人奖券码：同工号同届恒等，与参与奖同哈希族但前缀 RR，避免两类券混淆。
+function raceRankVoucherCodeOf(emp, rid) {
+  var s = raceVoucherCodeOf(emp, rid);
+  return s ? 'RR' + s.slice(2) : '';
 }
 // 校验一张券码是否属于指定届次：届次标签 + 校验位都对才算数。
-// 返回 null = 不合法（输错 / 不是本平台发的 / 不是这一届）。
-function raceVoucherVerify(code, rid) {
+// 第三参数 kind 可选：传 'part'/'rank' 时额外要求类型匹配（核销时防止拿参与奖券核个人奖）。
+// 返回 null = 不合法（输错 / 不是本平台发的 / 不是这一届 / 类型不对）。
+function raceVoucherVerify(code, rid, kind) {
   var p = raceVoucherParse(code);
   if (!p || !rid) return null;
+  if (kind && p.kind !== kind) return null;
   if (p.tag !== raceVchWord('t|' + rid, 4)) return null;
   if (p.ck !== raceVchWord('c|' + p.tag + '|' + p.emp, 2)) return null;
   return p;
@@ -11082,6 +11138,38 @@ function raceAwardRecOf(rid, emp) {
   if (!rid || !emp) return null;
   var aw = loadRaceAwards(), m = aw && aw[rid];
   return (m && m[emp]) || null;
+}
+// ---- 个人奖 / 部门奖：管理端确认后发布的名单（2026-11-18）----
+// 云端落在 admin_state.awardSettle[届次]，随 refreshRoster 下发到本机。
+// 结构：{ at: 确认时刻, by: 操作人, rankRows: [{emp,cn,en,dept,sec,correct, answered,acc,ts,boards}],
+//         deptRows: [{dept,rank,weighted,correct,n,acc}], rankTopN, deptTopN, partMin }
+// 只有确认过的届次才有个人奖券；未确认 = 学员端不显示任何个人奖，避免赛中就把名次说死。
+var RACE_SETTLE_KEY = 'raceAwardSettle';
+function loadRaceSettle() {
+  try { var v = JSON.parse(localStorage.getItem(RACE_SETTLE_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; }
+  catch (e) { return {}; }
+}
+function applyRaceSettle(s) {
+  if (!s || typeof s !== 'object') return false;
+  var cur = loadRaceSettle(), a = '', b = '';
+  try { a = JSON.stringify(cur); b = JSON.stringify(s); } catch (e) { return false; }
+  if (a === b) return false;
+  try { localStorage.setItem(RACE_SETTLE_KEY, JSON.stringify(s)); } catch (e2) { return false; }
+  return true;
+}
+function raceSettleOf(rid) {
+  if (!rid) return null;
+  var s = loadRaceSettle();
+  return s[rid] || null;
+}
+// 我在本届个人奖名单里的那一行（按工号找，找不到返回 null）
+function raceMyRankWinOf(rid, emp) {
+  var st = raceSettleOf(rid), e = normEmpNo(emp);
+  if (!st || !e || !Array.isArray(st.rankRows)) return null;
+  for (var i = 0; i < st.rankRows.length; i++) {
+    if (normEmpNo(st.rankRows[i] && st.rankRows[i].emp) === e) return st.rankRows[i];
+  }
+  return null;
 }
 // 本人当前工号：与快照上报同一套取值（profile.empNo → 账户键里的工号），
 // 否则会出现"排行榜上是 10024、券码里却是空"这种对不上的情况。
@@ -13972,7 +14060,7 @@ function raceSubmitScore() {
   // 只保留最近 RACE_LOG_MAX 条，避免快照无限膨胀。
   rec.log = Array.isArray(rec.log) ? rec.log : [];
   rec.log.push({
-    ts: entry.ts, sec: entry.section, c: entry.correct, a: entry.answered, acc: entry.acc, id: entry.raceId,
+    ts: entry.ts, sec: entry.section, c: entry.correct, a: entry.answered, acc: entry.acc, secs: secs, id: entry.raceId,
     // 答题明细（紧凑三元组：题号 / 对错 / 学员选的下标）——打卡日历点开某天要
     // 能复盘"当时答了什么、错在哪"。题干与解析不存，按题号从题库现取。
     q: raceDetailOfRun(r)
@@ -15005,8 +15093,64 @@ function raceHeroCardHtml(c, st, mode) {
     var spare = raceSpareSizeOf(conf.section || 'all');
     if (spare) html += '<div class="race-hero-note">' + t('race_hero_spare').replace('{m}', String(spare)) + '</div>';
   }
+  // 奖项说明入口（2026-11-18）：一句话小按钮，点开浮窗看全文，不占首页版面。
+  html += '<button type="button" onclick="raceAwardInfoShow()" style="display:block;width:100%;margin-top:12px;padding:8px 10px;'
+    + 'border:1px solid #C7DDF3;border-radius:8px;background:#fff;color:#000;font-size:12.5px;cursor:pointer;text-align:center;">'
+    + (en ? '🏅 Awards & redemption rules' : '🏅 奖项设置与兑奖说明') + ' ›</button>';
   html += '</div>';
   return html;
+}
+// ===== 奖项设置说明浮窗（2026-11-18）=====
+// 扫码进来就能看到本届奖项怎么设、怎么兑，但不占首页版面：只在主卡上放一个「奖项说明」小入口，
+// 点开看全文。文案优先用后台发布赛事时填的 descCn/descEn，留空则按当前参数自动生成。
+function raceAwardDescText(c) {
+  c = c || raceConfOf() || {};
+  var en = state.lang === 'en';
+  var ac = raceAwardCfgOf(c);
+  var custom = en ? ac.descEn : ac.descCn;
+  var endTxt = raceAwardCutoffText('part', c) || (en ? 'the last day of the event' : '赛事最后一天');
+  var lines = [];
+  if (ac.partOn) lines.push(en
+    ? 'Participation: answer ' + ac.partMin + ' or more correctly in one attempt to get a voucher instantly. Redeem by ' + endTxt + ' (end of the event day); it expires after that.'
+    : '参与奖：单场答对 ' + ac.partMin + ' 题及以上即可当场获得兑换券，最迟于赛事最后一天 ' + endTxt.slice(11) + ' 前兑换，超时失效。');
+  if (ac.rankOn) lines.push(en
+    ? 'Individual: top ' + ac.rankTopN + ' on each of the five leaderboards (all questions, Culinary, F&B, Rooms, Brand & Hotel Knowledge). Winners are confirmed by the admin; vouchers expire ' + ac.rankCutDays + ' days after confirmation.'
+    : '个人奖：全题库、厨房部、餐饮部、房务部、品牌与酒店知识五个榜单各前 ' + ac.rankTopN + ' 名，名单经管理端确认后发券，确认日起 ' + ac.rankCutDays + ' 天内兑换有效。');
+  if (ac.deptOn) lines.push(en
+    ? 'Department: top ' + ac.deptTopN + ' departments by final weighted score, awarded at CTL.'
+    : '部门奖：按赛事最终加权得分排名前 ' + ac.deptTopN + ' 个部门，于 CTL 发放。');
+  if (!lines.length) return en ? 'No awards are enabled for this round.' : '本届未设置奖项。';
+  return (custom && custom.trim()) ? custom : lines.join('\n');
+}
+function raceAwardInfoHtml(c) {
+  var en = state.lang === 'en';
+  var txt = raceAwardDescText(c);
+  var parts = String(txt).split(/\r?\n/).filter(function (x) { return x && x.trim(); });
+  var html = '';
+  for (var i = 0; i < parts.length; i++) {
+    html += '<div style="display:flex;gap:8px;margin:' + (i ? '10px 0 0' : '0') + ';">'
+      + '<span style="flex:0 0 auto;font-weight:600;color:#000;">' + escapeHtml(String(i + 1) + '.') + '</span>'
+      + '<span style="flex:1;line-height:1.7;">' + escapeHtml(parts[i]) + '</span></div>';
+  }
+  return html;
+}
+function raceAwardInfoShow() {
+  if (typeof document === 'undefined' || !document.body || !document.body.appendChild) return;
+  var en = state.lang === 'en';
+  var overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML =
+    '<div class="confirm-box" style="max-width:400px;">' +
+      '<div class="confirm-title" style="margin-bottom:10px;">' + escapeHtml(en ? 'Awards & redemption' : '奖项设置与兑奖说明') + '</div>' +
+      '<div class="confirm-body" style="text-align:left;line-height:1.7;">' + raceAwardInfoHtml(raceConfOf()) + '</div>' +
+      '<div class="confirm-actions"><button class="confirm-btn primary" data-act="ok">'
+        + escapeHtml(en ? 'Got it' : '知道了') + '</button></div>' +
+    '</div>';
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  var ok = overlay.querySelector ? overlay.querySelector('[data-act="ok"]') : null;
+  if (ok) ok.onclick = close;
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+  document.body.appendChild(overlay);
 }
 function renderRaceHome() {
   // 2026-10-28：以前这里只读本机缓存，而学员端**从未**从云端拉过答题赛配置
@@ -15693,9 +15837,9 @@ function renderRaceVouchers() {
   var html = renderAppHeader({ title: '🎟 ' + t('race_vch_title'), subtitle: t('race_vch_sub') });
   html += '<div class="page">';
 
-  if (!ac.on || !ac.partOn) {
+  if (!ac.on) {
     html += '<div class="q-card" style="text-align:center;color:#666;">'
-      + escapeHtml(en ? 'Participation award is not enabled for this round.' : '本届未开启参与奖。') + '</div>';
+      + escapeHtml(en ? 'No awards are enabled for this round.' : '本届未设置奖项。') + '</div>';
     html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goBack()">'
       + escapeHtml(en ? 'Back' : '返回') + '</button>';
     html += '</div>';
@@ -15711,15 +15855,23 @@ function renderRaceVouchers() {
     return html;
   }
 
-  var list = raceVoucherRoundsOf(rec, ac.partMin);
-  var unused = 0, used = 0;
+  var list = ac.partOn ? raceVoucherRoundsOf(rec, ac.partMin) : [];
+  var unused = 0, used = 0, expiredN = 0;
+  var partCutTxt = raceAwardCutoffText('part', conf);
   for (var i = 0; i < list.length; i++) {
     var u = raceAwardRecOf(list[i].rid, emp);
-    list[i].rec = u;
-    if (u) used++; else unused++;
+    var exp = raceAwardExpired('part', conf) && list[i].rid === curRid;
+    list[i].rec = u; list[i].expired = exp && !u;
+    if (list[i].expired) expiredN++;
+    else if (u) used++; else unused++;
   }
 
-  if (!list.length) {
+  // ===== 参与奖券区 =====
+  html += '<div style="font-size:13px;font-weight:600;margin:2px 2px 8px;">🎟 ' + escapeHtml(t('race_vch_part_sec')) + '</div>';
+  if (!ac.partOn) {
+    html += '<div class="q-card" style="text-align:center;color:#666;padding:16px;">'
+      + escapeHtml(en ? 'Participation award is not enabled for this round.' : '本届未开启参与奖。') + '</div>';
+  } else if (!list.length) {
     html += '<div class="q-card" style="text-align:center;padding:22px 14px;">';
     html += '<div style="font-size:34px;line-height:1.1;">🎟</div>';
     html += '<div style="font-size:14px;font-weight:600;margin-top:8px;color:#000;">'
@@ -15727,50 +15879,112 @@ function renderRaceVouchers() {
     html += '<div style="font-size:12px;color:#888;margin-top:8px;line-height:1.6;">'
       + escapeHtml(t('race_vch_rule').replace('{n}', String(ac.partMin))) + '</div>';
     html += '</div>';
-    html += '<button class="action-btn primary" style="width:100%;margin-top:10px;" onclick="navigate(\'race\')">⚡ '
-      + escapeHtml(en ? 'Take the quiz' : '去答题') + '</button>';
-    html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceCalendar\')">📅 '
-      + escapeHtml(en ? 'Check-in calendar' : '打卡日历') + '</button>';
-    html += '</div>';
-    return html;
-  }
-
-  // 统计条
-  html += '<div class="q-card" style="display:flex;gap:8px;text-align:center;padding:12px 8px;">';
-  html += '<div style="flex:1;"><div style="font-size:22px;font-weight:700;color:#b7791f;">' + unused + '</div>'
-    + '<div style="font-size:11px;color:#888;">' + escapeHtml(t('race_vch_pending')) + '</div></div>';
-  html += '<div style="flex:1;border-left:1px solid #eef1f4;"><div style="font-size:22px;font-weight:700;color:#2e7d32;">' + used + '</div>'
-    + '<div style="font-size:11px;color:#888;">' + escapeHtml(t('race_vch_used')) + '</div></div>';
-  html += '</div>';
-
-  for (var k = 0; k < list.length; k++) {
-    var v = list[k];
-    var isCur = v.rid === curRid;
-    var when = v.ts ? fmtSyncTime(v.ts) : '';
-    html += '<div class="q-card" style="border:1.5px dashed ' + (v.rec ? '#cfd8dc' : '#c9a227') + ';background:' + (v.rec ? '#fafbfc' : '#fff') + ';">';
-    html += '<div style="display:flex;align-items:center;gap:8px;">';
-    html += '<div style="flex:1;min-width:0;font-size:12px;color:#888;">'
-      + escapeHtml(isCur ? t('race_vch_round') : t('race_vch_past')) + (when ? ' · ' + escapeHtml(when) : '') + '</div>';
-    html += '<div style="flex:0 0 auto;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;'
-      + (v.rec ? 'background:#e8f5e9;color:#2e7d32;' : 'background:#fff8e1;color:#b7791f;') + '">'
-      + (v.rec ? '✅ ' + escapeHtml(t('race_vch_used')) : '🎁 ' + escapeHtml(t('race_vch_pending'))) + '</div>';
-    html += '</div>';
-    html += '<div style="margin:10px 0 6px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;'
-      + 'font-size:17px;font-weight:800;letter-spacing:1px;color:' + (v.rec ? '#9aa3ad' : '#000') + ';'
-      + 'background:' + (v.rec ? '#f2f4f6' : '#fdf6e3') + ';border-radius:8px;padding:10px 6px;word-break:break-all;'
-      + (v.rec ? 'text-decoration:line-through;' : '') + '">' + escapeHtml(v.code) + '</div>';
-    html += '<div style="font-size:12px;color:#888;text-align:center;">'
-      + escapeHtml(t('race_vch_got').replace('{n}', String(v.correct)).replace('{m}', String(ac.partMin))) + '</div>';
-    if (v.rec) {
-      html += '<div style="font-size:11.5px;color:#2e7d32;text-align:center;margin-top:4px;">'
-        + escapeHtml(t('race_vch_used_at').replace('{t}', fmtSyncTime(v.rec.at))) + '</div>';
+  } else {
+    html += '<div class="q-card" style="display:flex;gap:8px;text-align:center;padding:12px 8px;">';
+    html += '<div style="flex:1;"><div style="font-size:22px;font-weight:700;color:#b7791f;">' + unused + '</div>'
+      + '<div style="font-size:11px;color:#888;">' + escapeHtml(t('race_vch_pending')) + '</div></div>';
+    html += '<div style="flex:1;border-left:1px solid #eef1f4;"><div style="font-size:22px;font-weight:700;color:#2e7d32;">' + used + '</div>'
+      + '<div style="font-size:11px;color:#888;">' + escapeHtml(t('race_vch_used')) + '</div></div>';
+    if (expiredN) {
+      html += '<div style="flex:1;border-left:1px solid #eef1f4;"><div style="font-size:22px;font-weight:700;color:#999;">' + expiredN + '</div>'
+        + '<div style="font-size:11px;color:#888;">' + escapeHtml(t('race_vch_expired')) + '</div></div>';
     }
     html += '</div>';
-  }
-  html += '<div style="font-size:11.5px;color:#9a7b4f;line-height:1.7;margin:4px 2px 12px;">'
-    + 'ℹ️ ' + escapeHtml(t('race_vch_tip')) + '</div>';
 
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:4px;" onclick="navigate(\'raceCalendar\')">📅 '
+    for (var k = 0; k < list.length; k++) {
+      var v = list[k];
+      var isCur = v.rid === curRid;
+      var when = v.ts ? fmtSyncTime(v.ts) : '';
+      var dim = v.rec || v.expired;
+      html += '<div class="q-card" style="border:1.5px dashed ' + (dim ? '#cfd8dc' : '#c9a227') + ';background:' + (dim ? '#fafbfc' : '#fff') + ';">';
+      html += '<div style="display:flex;align-items:center;gap:8px;">';
+      html += '<div style="flex:1;min-width:0;font-size:12px;color:#888;">'
+        + escapeHtml(isCur ? t('race_vch_round') : t('race_vch_past')) + (when ? ' · ' + escapeHtml(when) : '') + '</div>';
+      html += '<div style="flex:0 0 auto;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;'
+        + (v.expired ? 'background:#f2f4f6;color:#999;' : v.rec ? 'background:#e8f5e9;color:#2e7d32;' : 'background:#fff8e1;color:#b7791f;') + '">'
+        + (v.expired ? '⏰ ' + escapeHtml(t('race_vch_expired')) : v.rec ? '✅ ' + escapeHtml(t('race_vch_used')) : '🎁 ' + escapeHtml(t('race_vch_pending'))) + '</div>';
+      html += '</div>';
+      html += '<div style="margin:10px 0 6px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;'
+        + 'font-size:17px;font-weight:800;letter-spacing:1px;color:' + (dim ? '#9aa3ad' : '#000') + ';'
+        + 'background:' + (dim ? '#f2f4f6' : '#fdf6e3') + ';border-radius:8px;padding:10px 6px;word-break:break-all;'
+        + (dim ? 'text-decoration:line-through;' : '') + '">' + escapeHtml(v.code) + '</div>';
+      html += '<div style="font-size:12px;color:#888;text-align:center;">'
+        + escapeHtml(t('race_vch_got').replace('{n}', String(v.correct)).replace('{m}', String(ac.partMin))) + '</div>';
+      if (isCur && partCutTxt) {
+        html += '<div style="font-size:11.5px;color:' + (v.expired ? '#999' : '#9a7b4f') + ';text-align:center;margin-top:4px;">'
+          + escapeHtml(t('race_vch_cut').replace('{t}', partCutTxt)) + '</div>';
+      }
+      if (v.rec) {
+        html += '<div style="font-size:11.5px;color:#2e7d32;text-align:center;margin-top:4px;">'
+          + escapeHtml(t('race_vch_used_at').replace('{t}', fmtSyncTime(v.rec.at))) + '</div>';
+      }
+      html += '</div>';
+    }
+    html += '<div style="font-size:11.5px;color:#9a7b4f;line-height:1.7;margin:4px 2px 10px;">'
+      + 'ℹ️ ' + escapeHtml(t('race_vch_tip')) + '</div>';
+  }
+
+  // ===== 个人奖券区（管理端确认名单后才有）=====
+  if (ac.rankOn) {
+    html += '<div style="font-size:13px;font-weight:600;margin:16px 2px 8px;">🏅 ' + escapeHtml(t('race_vch_rank_sec')) + '</div>';
+    var settle = raceSettleOf(curRid);
+    var win = raceMyRankWinOf(curRid, emp);
+    if (!settle || !win) {
+      html += '<div class="q-card" style="text-align:center;color:#666;padding:16px;line-height:1.6;">'
+        + escapeHtml(t('race_vch_rank_none')) + '</div>';
+    } else {
+      var rankCode = raceRankVoucherCodeOf(emp, curRid);
+      var rankRec = raceAwardRecOf(curRid, emp + 'R');   // 个人奖核销记在 emp+'R' 键下，与参与奖分开
+      var rankExp = raceAwardExpired('rank', conf, settle.at) && !rankRec;
+      var rCut = raceAwardCutoffText('rank', conf, settle.at);
+      var boards = win.boards || (win.sec ? [win.sec] : []);
+      html += '<div class="q-card" style="border:1.5px dashed ' + (rankRec || rankExp ? '#cfd8dc' : '#c9a227') + ';background:' + (rankRec || rankExp ? '#fafbfc' : '#fff') + ';">';
+      html += '<div style="display:flex;align-items:center;gap:8px;">';
+      html += '<div style="flex:1;min-width:0;font-size:12px;color:#888;">' + escapeHtml(t('race_vch_round')) + '</div>';
+      html += '<div style="flex:0 0 auto;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;'
+        + (rankExp ? 'background:#f2f4f6;color:#999;' : rankRec ? 'background:#e8f5e9;color:#2e7d32;' : 'background:#fff8e1;color:#b7791f;') + '">'
+        + (rankExp ? '⏰ ' + escapeHtml(t('race_vch_expired')) : rankRec ? '✅ ' + escapeHtml(t('race_vch_used')) : '🎁 ' + escapeHtml(t('race_vch_pending'))) + '</div>';
+      html += '</div>';
+      html += '<div style="margin:10px 0 6px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;'
+        + 'font-size:17px;font-weight:800;letter-spacing:1px;color:' + (rankRec || rankExp ? '#9aa3ad' : '#000') + ';'
+        + 'background:' + (rankRec || rankExp ? '#f2f4f6' : '#fdf6e3') + ';border-radius:8px;padding:10px 6px;word-break:break-all;'
+        + (rankRec || rankExp ? 'text-decoration:line-through;' : '') + '">' + escapeHtml(rankCode) + '</div>';
+      for (var bi = 0; bi < boards.length; bi++) {
+        html += '<div style="font-size:12px;color:#888;text-align:center;margin-top:3px;">'
+          + escapeHtml(t('race_vch_rank_win').replace('{s}', raceSecName(boards[bi])).replace('{n}', String(win.rank || (bi + 1)))) + '</div>';
+      }
+      if (rCut) {
+        html += '<div style="font-size:11.5px;color:' + (rankExp ? '#999' : '#9a7b4f') + ';text-align:center;margin-top:4px;">'
+          + escapeHtml(t('race_vch_cut').replace('{t}', rCut)) + '</div>';
+      }
+      if (rankRec) {
+        html += '<div style="font-size:11.5px;color:#2e7d32;text-align:center;margin-top:4px;">'
+          + escapeHtml(t('race_vch_used_at').replace('{t}', fmtSyncTime(rankRec.at))) + '</div>';
+      }
+      html += '</div>';
+    }
+  }
+
+  if (ac.deptOn) {
+    var dsettle = raceSettleOf(curRid);
+    var dwin = null;
+    if (dsettle && Array.isArray(dsettle.deptRows)) {
+      var myDept = '';
+      try { myDept = raceDeptUnitOfRow({ snap: (state.profile || {}) }, raceLocalRecord()); } catch (eD) {}
+      for (var di = 0; di < dsettle.deptRows.length; di++) {
+        if (dsettle.deptRows[di].dept === myDept) { dwin = dsettle.deptRows[di]; break; }
+      }
+    }
+    html += '<div style="font-size:13px;font-weight:600;margin:16px 2px 8px;">🏢 ' + escapeHtml(t('race_vch_dept_sec')) + '</div>';
+    html += '<div class="q-card" style="text-align:center;color:#666;padding:16px;line-height:1.6;">'
+      + escapeHtml(dwin
+        ? (en ? 'Your department ranked No.' + dwin.rank + ' — awarded at CTL.'
+              : '你所在部门排名第 ' + dwin.rank + '，奖品于 CTL 发放。')
+        : (en ? 'Department awards are confirmed by the admin and distributed at CTL.'
+              : '部门奖名单经管理端确认后公布，奖品于 CTL 发放。')) + '</div>';
+  }
+
+  html += '<button class="action-btn secondary" style="width:100%;margin-top:14px;" onclick="navigate(\'raceCalendar\')">📅 '
     + escapeHtml(en ? 'Check-in calendar' : '打卡日历') + '</button>';
   html += '</div>';
   return html;
@@ -17005,8 +17219,23 @@ function renderAdminRace() {
     + '<span>' + (en ? 'Department award' : '部门奖') + '</span></label>';
   html += '<label style="font-size:12px;color:#666;display:block;margin-top:4px;">' + t('race_vch_cfg_dept') + '</label>';
   html += '<input id="raceAwDeptTopN" type="number" min="1" max="50" step="1" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + awd.deptTopN + '">';
+  // 兑奖规则（2026-11-18）：参与奖截止恒为赛事最后一天；个人奖天数在确认名单时还能再改，
+  // 这里填的是默认值。说明文案留空则按上面的参数自动生成，浮窗展示。
+  html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#666;display:block;margin-top:6px;">'
+    + (en ? 'Individual voucher validity (days after confirmation)' : '个人奖券有效期（名单确认后天数，默认 7 天）') + '</label>';
+  html += '<input id="raceAwRankCutDays" type="number" min="1" max="90" step="1" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + awd.rankCutDays + '">';
+  html += '<label style="font-size:12px;color:#666;display:block;margin-top:4px;">'
+    + (en ? 'Award rules · Chinese (shown in a pop-up on the quiz home)' : '奖项说明 · 中文（赛事首页浮窗，留空自动生成）') + '</label>';
+  html += '<textarea id="raceAwDescCn" rows="4" style="width:100%;padding:8px;margin:4px 0 8px;border:1px solid #d8dee4;border-radius:6px;font-size:12px;resize:vertical;" placeholder="'
+    + escapeHtml(raceAwardDescText(c).split('\n').join(' / ')) + '">' + escapeHtml(awd.descCn || '') + '</textarea>';
+  html += '<label style="font-size:12px;color:#666;display:block;">'
+    + (en ? 'Award rules · English' : '奖项说明 · 英文') + '</label>';
+  html += '<textarea id="raceAwDescEn" rows="4" style="width:100%;padding:8px;margin:4px 0 8px;border:1px solid #d8dee4;border-radius:6px;font-size:12px;resize:vertical;" placeholder="'
+    + escapeHtml(raceAwardDescText(c).split('\n').join(' / ')) + '">' + escapeHtml(awd.descEn || '') + '</textarea>';
   html += '<button class="action-btn secondary" style="width:100%;margin:2px 0 4px;" onclick="navigate(\'adminVouchers\')">🎟 '
     + t('race_vch_admin') + '</button>';
+  html += '<button class="action-btn secondary" style="width:100%;margin:2px 0 4px;" onclick="navigate(\'adminAwardSettle\')">🏅 '
+    + (en ? 'Confirm winners & export lists' : '确认获奖名单 / 导出 / 统计') + '</button>';
   html += '</div>';
   // 新一季开关：勾选 = 发布时换一个全新届次 id，本届榜单自动清零（历史最佳榜
   // 跨届累计，不受影响）；不勾 = 沿用本届 id，只更新设置。榜单按届次 id 过滤，
@@ -17645,7 +17874,10 @@ function adminRacePublish() {
     rankOn: !!(el('raceAwRankOn') && el('raceAwRankOn').checked),
     rankTopN: raceAwardClamp((el('raceAwRankTopN') && el('raceAwRankTopN').value), 1, 100, RACE_AWARD_DEF.rankTopN),
     deptOn: !!(el('raceAwDeptOn') && el('raceAwDeptOn').checked),
-    deptTopN: raceAwardClamp((el('raceAwDeptTopN') && el('raceAwDeptTopN').value), 1, 50, RACE_AWARD_DEF.deptTopN)
+    deptTopN: raceAwardClamp((el('raceAwDeptTopN') && el('raceAwDeptTopN').value), 1, 50, RACE_AWARD_DEF.deptTopN),
+    rankCutDays: raceAwardClamp((el('raceAwRankCutDays') && el('raceAwRankCutDays').value), 1, 90, RACE_AWARD_DEF.rankCutDays),
+    descCn: ((el('raceAwDescCn') && el('raceAwDescCn').value) || '').trim(),
+    descEn: ((el('raceAwDescEn') && el('raceAwDescEn').value) || '').trim()
   };
   var sv = el('raceStart') && el('raceStart').value, ev = el('raceEnd') && el('raceEnd').value;
   c.startTime = sv ? new Date(sv).toISOString() : '';
@@ -17709,8 +17941,14 @@ function vchMarkLocal(rid, emp, rec) {
   aw[rid][emp] = rec || { at: Date.now(), by: 'admin' };
   applyRaceAwards(aw);
 }
+// 核销记录的真实键：个人奖在工号后加 'R'，与参与奖分开存，互不覆盖。
+function raceAwardKeyOf(emp, kind) { return (kind === 'rank') ? (String(emp || '') + 'R') : String(emp || ''); }
+// 按类型读核销记录
+function raceAwardRecByKind(rid, emp, kind) { return raceAwardRecOf(rid, raceAwardKeyOf(emp, kind)); }
 // 云端核销一次。返回 {ok, dup, rec}；dup = 这张券之前已经核销过。
-function adminVoucherRedeemOne(rid, emp, by) {
+// kind: 'part'（默认，参与奖）/ 'rank'（个人奖），决定写 aw[rid][emp] 还是 aw[rid][emp+'R']。
+function adminVoucherRedeemOne(rid, emp, by, kind) {
+  var key = raceAwardKeyOf(emp, kind);
   return sbGetChannelJson(ROSTER_CHANNEL).then(function (j) {
     if (!(j && j.success)) throw new Error('admin_state unreadable');
     var base = (j.data && typeof j.data === 'object') ? j.data : {};
@@ -17725,15 +17963,15 @@ function adminVoucherRedeemOne(rid, emp, by) {
       }
     }
     aw[rid] = aw[rid] || {};
-    var prev = aw[rid][emp];
+    var prev = aw[rid][key];
     if (prev && prev.at) return { ok: true, dup: true, rec: prev };
-    aw[rid][emp] = { at: Date.now(), by: String(by || 'admin') };
+    aw[rid][key] = { at: Date.now(), by: String(by || 'admin') };
     var out = {};
     for (var k in base) out[k] = base[k];
     out.awards = aw;
     if (!out.t) out.t = 'roster';
     return sbSaveChannel(ROSTER_CHANNEL, out).then(function () {
-      return { ok: true, dup: false, rec: aw[rid][emp] };
+      return { ok: true, dup: false, rec: aw[rid][key] };
     });
   });
 }
@@ -17813,7 +18051,7 @@ function vchSetRefreshBusy(on) {
 function adminVoucherLoad(force) {
   var c = raceConfOf();
   if (!c || !c.id) { adminState.vchState = 'fail'; return; }
-  if (!force && adminState.vchState === 'ready' && adminState.vchRid === c.id) {
+  if (!force && adminState.vchState === 'ready' && adminState.vchRid === c.id && adminState.vchLoadKind === (adminState.vchKind || 'part')) {
     vchFlushPending().then(function (n) {
       if (!n) return;
       adminVoucherRefreshRows();
@@ -17828,8 +18066,10 @@ function adminVoucherLoad(force) {
     return;
   }
   var ac = raceAwardCfgOf(c);
+  var vkind = adminState.vchKind || 'part';
   adminState.vchState = 'loading';
   adminState.vchRid = c.id;
+  adminState.vchLoadKind = vkind;
   vchSetRefreshBusy(true);   // 立刻给反馈，不必等整页重绘
   var rid = c.id;
   var keepY = vchScrollState();   // 整页重绘会改文档高度，刷完把滚动位置放回原处
@@ -17838,6 +18078,33 @@ function adminVoucherLoad(force) {
     rows = raceBoardRosterFilter(rows);
     var all = raceBoardRowsFrom(rows, 'period', '', rid);
     var out = [];
+    if (vkind === 'rank') {
+      // 个人奖名单来自管理端确认发布的 settle（未确认则空），与参与奖达标线无关
+      var st = raceSettleOf(rid), rr = (st && st.rankRows) || [];
+      for (var q = 0; q < rr.length; q++) {
+        var rw = rr[q];
+        if (!rw || !rw.emp) continue;
+        var pend = vchPendingOf(rid, rw.emp + 'R');
+        out.push({
+          emp: normEmpNo(rw.emp), cn: rw.cn || '', en: rw.en || '',
+          dept: deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept)),
+          correct: rw.correct || 0, boards: rw.boards || [],
+          code: raceRankVoucherCodeOf(rw.emp, rid),
+          rec: raceAwardRecByKind(rid, rw.emp, 'rank'),
+          pendingSync: !!pend
+        });
+      }
+      out.sort(function (a, b) {
+        var au = !!(a.rec || a.pendingSync), bu = !!(b.rec || b.pendingSync);
+        if (au !== bu) return au ? 1 : -1;
+        if (b.correct !== a.correct) return b.correct - a.correct;
+        return String(a.emp) < String(b.emp) ? -1 : 1;
+      });
+      adminState.vchRows = out;
+      adminState.vchState = 'ready';
+      if (state.currentPage === 'adminVouchers') { try { render(); vchRestoreScroll(keepY); } catch (e) {} }
+      return;
+    }
     for (var i = 0; i < all.length; i++) {
       var r = all[i];
       if ((r.correct || 0) < ac.partMin) continue;
@@ -17874,9 +18141,11 @@ function adminVoucherLoad(force) {
 // 现场发奖要的是"点完立刻变绿"。
 function adminVoucherRefreshRows() {
   var rows = adminState.vchRows || [];
+  var rk = (adminState.vchKind || 'part') === 'rank';
   for (var i = 0; i < rows.length; i++) {
-    rows[i].rec = raceAwardRecOf(adminState.vchRid, rows[i].emp);
-    rows[i].pendingSync = !!vchPendingOf(adminState.vchRid, rows[i].emp);
+    var key = rk ? (rows[i].emp + 'R') : rows[i].emp;
+    rows[i].rec = raceAwardRecOf(adminState.vchRid, key);
+    rows[i].pendingSync = !!vchPendingOf(adminState.vchRid, key);
   }
 }
 function adminVoucherRedeem(emp, fromInput) {
@@ -17884,6 +18153,9 @@ function adminVoucherRedeem(emp, fromInput) {
   if (!c || !c.id) { adminToast(t('race_no_conf')); return; }
   emp = normEmpNo(emp);
   if (!emp || adminState.vchBusy) return;
+  // 个人奖模式下核销键 = 工号 + 'R'（与学员端展示、名单加载同一套），
+  // 后续队列 / 幂等 / 本机缓存都按这个键走，参与奖与个人奖互不覆盖。
+  if ((adminState.vchKind || 'part') === 'rank' && !/R$/.test(emp)) emp = emp + 'R';
   var rid = c.id;
   adminState.vchBusy = emp;
   adminState.vchMsg = '';
@@ -17919,7 +18191,7 @@ function adminVoucherRedeem(emp, fromInput) {
       }
       // 记住刚处理的是谁：清空输入框后识别区继续显示这个人（含"已核销"时间），
       // 现场发奖不用回想刚才是谁，也不会出现"清空了就什么都看不到"的空窗。
-      adminState.vchLast = emp;
+      adminState.vchLast = ((adminState.vchKind || 'part') === 'rank' && /R$/.test(emp)) ? emp.slice(0, -1) : emp;
       adminVoucherRefreshRows();
       if (!(res && res.dup)) finishClear();
       adminVoucherPaint();
@@ -17990,8 +18262,8 @@ function adminVoucherByCode() {
   adminState.vchCode = raw;
   if (!raw) return;
 
-  // ① 完整券码
-  var p = raceVoucherVerify(raw, c.id);
+  // ① 完整券码（按当前核销类型校验，防止拿参与奖券核个人奖）
+  var p = raceVoucherVerify(raw, c.id, (adminState.vchKind || 'part') === 'rank' ? 'rank' : 'part');
   if (p) {
     var rows = adminState.vchRows || [], hit = null;
     for (var i = 0; i < rows.length; i++) if (rows[i].emp === p.emp) { hit = rows[i]; break; }
@@ -18005,7 +18277,7 @@ function adminVoucherByCode() {
     return adminVoucherRedeem(p.emp, true);
   }
   // 长得像券码（RC 开头 / 带连字符）却校验不过 → 判无效，不要当工号去搜
-  if (/^RC/i.test(raw) || raw.indexOf('-') >= 0) {
+  if (/^R[CR]/i.test(raw) || raw.indexOf('-') >= 0) {
     adminState.vchMsg = t('race_vch_bad');
     adminState.vchMsgBad = true;
     adminVoucherPaint();
@@ -18108,9 +18380,9 @@ function adminVoucherHitHtml() {
       + escapeHtml(t('race_vch_hit_hint')) + '</div>';
   }
   // ① 长得像券码：只校验券码本身
-  if (/^RC/i.test(raw) || raw.indexOf('-') >= 0) {
+  if (/^R[CR]/i.test(raw) || raw.indexOf('-') >= 0) {
     var c0 = raceConfOf();
-    var p = raceVoucherVerify(raw, c0 ? c0.id : '');
+    var p = raceVoucherVerify(raw, c0 ? c0.id : '', (adminState.vchKind || 'part') === 'rank' ? 'rank' : 'part');
     if (!p) return '<div style="font-size:12px;color:#b3261e;padding:2px 0;">⚠️ ' + escapeHtml(t('race_vch_hit_bad')) + '</div>';
     var hit = null;
     for (var i = 0; i < rows.length; i++) if (rows[i].emp === p.emp) { hit = rows[i]; break; }
@@ -18210,6 +18482,221 @@ function adminVoucherPaint() {
     l.innerHTML = adminVoucherListHtml();
   });
 }
+// ===== 获奖确认 / 名单导出 / 赛事统计管理页（2026-11-18）=====
+// 三个动作：①拉快照算候选 → ②人工核对名额后确认发布 → ③三类名单 + 统计报表导出。
+function adminAwardLoad() {
+  var c = raceConfOf();
+  if (!c || !c.id) { adminToast(t('race_no_conf')); return; }
+  if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbListSnapshots !== 'function') { adminToast(t('race_admin_no_scores')); return; }
+  adminState.awardLoading = true;
+  if (state.currentPage === 'adminAwardSettle') { try { render(); } catch (e) {} }
+  sbListSnapshots(0, true).then(function (res) {
+    var rows = (typeof sbSnapshotRecordList === 'function') ? sbSnapshotRecordList(res) : [];
+    rows = raceBoardRosterFilter(rows);
+    var ac = raceAwardCfgOf(c), rid = c.id;
+    adminState.awardRows = rows;
+    adminState.awardStats = raceStatsFrom(rows, rid);
+    adminState.awardDraft = {
+      rid: rid,
+      rankCutDays: ac.rankCutDays,
+      rankRows: ac.rankOn ? raceRankCandidateRows(rows, rid, ac.rankTopN) : [],
+      deptRows: ac.deptOn ? raceDeptCandidateRows(rows, rid, ac.deptTopN, (typeof rosterLvOf === 'function' ? rosterLvOf : null)) : []
+    };
+    adminState.awardLoading = false;
+    if (state.currentPage === 'adminAwardSettle') { try { render(); } catch (e) {} }
+    adminToast((state.lang === 'en' ? 'Loaded' : '已载入') + ' · ' + adminState.awardDraft.rankRows.length + ' / ' + adminState.awardDraft.deptRows.length, true);
+  }, function () {
+    adminState.awardLoading = false;
+    adminToast(t('race_admin_no_scores'), false);
+    if (state.currentPage === 'adminAwardSettle') { try { render(); } catch (e) {} }
+  });
+}
+// 重新按调整后的名额重算候选（名额可在确认前改）
+function adminAwardRecalc() {
+  var d = adminState.awardDraft, rows = adminState.awardRows, c = raceConfOf();
+  if (!d || !rows || !c) { adminToast(t('race_admin_no_scores'), false); return; }
+  var topN = Math.max(1, Math.min(100, parseInt(document.getElementById('settleTopN') && document.getElementById('settleTopN').value, 10) || 10));
+  var deptN = Math.max(1, Math.min(50, parseInt(document.getElementById('settleDeptN') && document.getElementById('settleDeptN').value, 10) || 5));
+  d.rankCutDays = Math.max(1, Math.min(90, parseInt(document.getElementById('settleCutDays') && document.getElementById('settleCutDays').value, 10) || 7));
+  d.rankRows = raceRankCandidateRows(rows, c.id, topN);
+  d.deptRows = raceDeptCandidateRows(rows, c.id, deptN, (typeof rosterLvOf === 'function' ? rosterLvOf : null));
+  if (state.currentPage === 'adminAwardSettle') { try { render(); } catch (e) {} }
+}
+// 确认发布：把候选名单写入 admin_state.awardSettle[rid]（read → 深拷贝 → 只改一格 → 写回）
+function adminAwardConfirmPublish() {
+  var d = adminState.awardDraft, c = raceConfOf();
+  if (!d || !c || !c.id) { adminToast(t('race_admin_no_scores'), false); return; }
+  if (!confirm(state.lang === 'en' ? 'Confirm and publish the winner lists? Vouchers will appear on students’ devices.'
+                                   : '确认并发布获奖名单？发布后学员端将看到个人奖券。')) return;
+  var rid = c.id;
+  var cutDays = Math.max(1, Math.min(90, parseInt(document.getElementById('settleCutDays') && document.getElementById('settleCutDays').value, 10) || 7));
+  var payload = {
+    at: Date.now(), by: 'admin', rankCutDays: cutDays,
+    rankRows: d.rankRows || [], deptRows: d.deptRows || [],
+    rankTopN: d.rankRows ? d.rankRows.length : 0,
+    deptTopN: d.deptRows ? d.deptRows.length : 0,
+    partMin: raceAwardCfgOf(c).partMin
+  };
+  if (typeof SB_ON === 'undefined' || !SB_ON || typeof sbGetChannelJson !== 'function') { adminToast(t('race_cloud_fail'), false); return; }
+  sbGetChannelJson(ROSTER_CHANNEL).then(function (j) {
+    if (!(j && j.success)) throw new Error('unreadable');
+    var base = (j.data && typeof j.data === 'object') ? j.data : {};
+    var aw = {};
+    if (base.awardSettle && typeof base.awardSettle === 'object') {
+      for (var r in base.awardSettle) if (Object.prototype.hasOwnProperty.call(base.awardSettle, r)) aw[r] = base.awardSettle[r];
+    }
+    aw[rid] = payload;
+    var out = {}; for (var k in base) out[k] = base[k];
+    out.awardSettle = aw;
+    if (!out.t) out.t = 'roster';
+    return sbSaveChannel(ROSTER_CHANNEL, out).then(function () {
+      applyRaceSettle(aw);
+      adminToast(state.lang === 'en' ? 'Winners published' : '获奖名单已发布', true);
+      if (state.currentPage === 'adminAwardSettle') { try { render(); } catch (e) {} }
+    });
+  }, function () { adminToast(t('race_cloud_fail'), false); });
+}
+// 三类名单导出按钮
+function adminAwardExportList(kind) {
+  var c = raceConfOf(), en = state.lang === 'en';
+  if (!c || !c.id) { adminToast(t('race_no_conf')); return; }
+  var rid = c.id, ac = raceAwardCfgOf(c), rows = adminState.awardRows || [];
+  if (!rows.length && typeof sbSnapshotRecordList === 'function') { adminToast(en ? 'Load the list first' : '请先载入名单', false); return; }
+  var list = [], cut = '', expired = false;
+  if (kind === 'part') {
+    var board = raceBoardRowsFrom(rows, 'period', '', rid);
+    for (var i = 0; i < board.length; i++) {
+      var r = board[i]; if ((r.correct || 0) < ac.partMin) continue;
+      var sn = (r.raw && r.raw.snap) || {};
+      var emp = normEmpNo(dashEmpNoOf(sn, r.key)) || normEmpNo(empOfKey(r.key));
+      if (!emp) continue;
+      list.push({ emp: emp, cn: String(sn.cn || r.cn || ''), en: String(sn.en || r.en || ''),
+        dept: raceDeptPersonLabel(r.div, r.dept), correct: r.correct || 0, answered: r.answered || 0, acc: r.acc || 0, sec: r.section || '' });
+    }
+    cut = raceAwardCutoffText('part', c); expired = raceAwardExpired('part', c);
+  } else {
+    var st = raceSettleOf(rid);
+    if (!st) { adminToast(en ? 'Confirm the winners first' : '请先确认获奖名单', false); return; }
+    list = (kind === 'rank') ? (st.rankRows || []) : (st.deptRows || []);
+    if (kind === 'rank') { cut = raceAwardCutoffText('rank', c, st.at); expired = raceAwardExpired('rank', c, st.at); }
+  }
+  var Q = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  var csv = raceAwardListCsv(kind, { en: en, rows: list, Q: Q, rid: rid, cut: cut, expired: expired,
+    redeemOf: function (r) { return raceAwardRecByKind(rid, r.emp, (kind === 'rank') ? 'rank' : 'part'); } });
+  var names = { part: 'participation', rank: 'individual', dept: 'department' };
+  raceCsvDownload(csv, 'awards-' + names[kind] + '-' + rid + '.csv');
+}
+function adminAwardExportStats() {
+  var st = adminState.awardStats, c = raceConfOf();
+  if (!st || !c) { adminToast(state.lang === 'en' ? 'Load the list first' : '请先载入名单', false); return; }
+  raceCsvDownload(raceStatsCsv(st, state.lang === 'en'), 'quiz-stats-' + c.id + '.csv');
+}
+function renderAdminAwardSettle() {
+  var en = state.lang === 'en', c = raceConfOf() || {}, ac = raceAwardCfgOf(c);
+  var html = renderAppHeader({ title: '🏅 ' + (en ? 'Winners & statistics' : '获奖名单与统计'),
+    subtitle: en ? 'Confirm winners, export lists and view quiz statistics' : '确认获奖名单、导出名单与查看赛事统计',
+    onBack: 'adminBack(\'adminRace\')' });
+  html += '<div class="page">';
+  html += '<div class="q-card" style="background:var(--primary-soft);">';
+  html += '<div style="font-size:12px;color:rgba(0,0,0,.6);">' + escapeHtml(c.title || (en ? 'Quiz race' : '限时答题赛')) + '</div>';
+  var settled = raceSettleOf(c.id);
+  html += '<div style="font-size:13px;font-weight:600;margin-top:4px;">'
+    + (settled ? (en ? 'Winners confirmed' : '名单已确认') + ' · ' + fmtSyncTime(settled.at) : (en ? 'Winners not confirmed yet' : '名单尚未确认')) + '</div>';
+  html += '<button class="action-btn primary" style="width:100%;margin-top:10px;" onclick="adminAwardLoad()">'
+    + (adminState.awardLoading ? (en ? 'Loading…' : '载入中…') : (en ? 'Load candidates & statistics' : '载入候选名单与统计')) + '</button>';
+  html += '</div>';
+
+  var d = adminState.awardDraft;
+  if (d && d.rid === c.id) {
+    html += '<div class="q-card">';
+    html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">⚙️ ' + (en ? 'Confirm settings' : '确认参数') + '</div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<div style="flex:1;"><label style="font-size:11px;color:#666;">' + (en ? 'Top N per board' : '各榜前 N 名') + '</label>'
+      + '<input id="settleTopN" type="number" min="1" max="100" value="' + ac.rankTopN + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;"></div>';
+    html += '<div style="flex:1;"><label style="font-size:11px;color:#666;">' + (en ? 'Top N departments' : '前 N 个部门') + '</label>'
+      + '<input id="settleDeptN" type="number" min="1" max="50" value="' + ac.deptTopN + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;"></div>';
+    html += '</div>';
+    html += '<label style="font-size:11px;color:#666;display:block;margin-top:8px;">' + (en ? 'Individual voucher validity (days)' : '个人奖券有效期（天）') + '</label>';
+    html += '<input id="settleCutDays" type="number" min="1" max="90" value="' + d.rankCutDays + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;">';
+    html += '<div style="display:flex;gap:8px;margin-top:10px;">';
+    html += '<button class="action-btn secondary" style="flex:1;" onclick="adminAwardRecalc()">' + (en ? 'Recalculate' : '按名额重算') + '</button>';
+    html += '<button class="action-btn primary" style="flex:1;" onclick="adminAwardConfirmPublish()">' + (en ? 'Confirm & publish' : '确认并发布') + '</button>';
+    html += '</div></div>';
+
+    html += '<div class="q-card">';
+    html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">🏅 ' + (en ? 'Individual award candidates' : '个人奖候选名单')
+      + ' <span style="font-size:11px;color:#888;font-weight:400;">' + d.rankRows.length + '</span></div>';
+    if (!d.rankRows.length) html += '<div style="font-size:12px;color:#888;">' + (en ? 'No candidates.' : '暂无候选。') + '</div>';
+    for (var i = 0; i < d.rankRows.length; i++) {
+      var r = d.rankRows[i];
+      var bd = (r.boards || [r.section]).map(function (k) { return raceSecName(k); }).join(' / ');
+      html += '<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #eef1f4;font-size:12px;">'
+        + '<span style="flex:0 0 22px;color:#888;">' + (i + 1) + '</span>'
+        + '<span style="flex:1;min-width:0;"><b>' + escapeHtml(r.cn || r.en || r.emp) + '</b> <span style="color:#888;">' + escapeHtml(r.emp) + '</span>'
+        + '<div style="color:#888;font-size:11px;">' + escapeHtml(bd) + ' · ' + escapeHtml(dashDeptName ? dashDeptName(r.div) : r.div) + ' · ' + (en ? 'Correct' : '答对') + ' ' + r.correct + '</div></span></div>';
+    }
+    html += '</div>';
+    html += '<div class="q-card">';
+    html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">🏢 ' + (en ? 'Department award candidates' : '部门奖候选名单')
+      + ' <span style="font-size:11px;color:#888;font-weight:400;">' + d.deptRows.length + '</span></div>';
+    if (!d.deptRows.length) html += '<div style="font-size:12px;color:#888;">' + (en ? 'No candidates.' : '暂无候选。') + '</div>';
+    for (var k = 0; k < d.deptRows.length; k++) {
+      var dr = d.deptRows[k];
+      html += '<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #eef1f4;font-size:12px;">'
+        + '<span style="flex:0 0 22px;color:#888;">' + (k + 1) + '</span>'
+        + '<span style="flex:1;">' + escapeHtml(en ? (typeof deptDisplayName === 'function' ? deptDisplayName(dr.dept) : dr.dept) : dr.dept)
+        + ' · ' + (en ? 'Weighted' : '加权') + ' ' + dr.weighted + ' · ' + (en ? 'Correct' : '答对') + ' ' + dr.correct + '</span></div>';
+    }
+    html += '</div>';
+  }
+
+  var stt = adminState.awardStats;
+  html += '<div class="q-card">';
+  html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">📊 ' + (en ? 'Quiz statistics' : '赛事统计') + '</div>';
+  if (!stt) {
+    html += '<div style="font-size:12px;color:#888;">' + (en ? 'Load candidates & statistics first.' : '请先点上方「载入候选名单与统计」。') + '</div>';
+  } else {
+    var tt = stt.total;
+    html += '<div style="display:flex;gap:8px;text-align:center;">';
+    html += '<div style="flex:1;"><div style="font-size:19px;font-weight:700;">' + tt.people + '</div><div style="font-size:10px;color:#888;">' + (en ? 'Participants' : '参与人数') + '</div></div>';
+    html += '<div style="flex:1;"><div style="font-size:19px;font-weight:700;">' + tt.runs + '</div><div style="font-size:10px;color:#888;">' + (en ? 'Attempts' : '答题次数') + '</div></div>';
+    html += '<div style="flex:1;"><div style="font-size:19px;font-weight:700;">' + tt.correct + '</div><div style="font-size:10px;color:#888;">' + (en ? 'Correct' : '答对题数') + '</div></div>';
+    html += '<div style="flex:1;"><div style="font-size:19px;font-weight:700;">' + escapeHtml(raceSecsText(tt.secs)) + '</div><div style="font-size:10px;color:#888;">' + (en ? 'Total time' : '答题时长') + '</div></div>';
+    html += '</div>';
+    var ds = stt.depts || [];
+    if (ds.length) {
+      html += '<div style="margin-top:10px;font-size:11px;color:#888;">' + (en ? 'Scope' : '统计范围') + '：' + (en ? 'This round; attempts from recent logs' : '本届赛事；次数 / 题数 / 时长取自最近挑战流水') + '</div>';
+      for (var q = 0; q < ds.length; q++) {
+        var dd = ds[q];
+        html += '<div style="display:flex;gap:6px;padding:6px 0;border-bottom:1px solid #eef1f4;font-size:11.5px;">'
+          + '<span style="flex:1;min-width:0;">' + escapeHtml(en ? (typeof deptDisplayName === 'function' ? deptDisplayName(dd.dept) : dd.dept) : dd.dept) + '</span>'
+          + '<span style="flex:0 0 auto;color:#888;">' + dd.people + (en ? 'p' : '人') + ' · ' + dd.runs + (en ? 'runs' : '次') + ' · ' + dd.correct + (en ? 'correct' : '对') + ' · ' + escapeHtml(raceSecsText(dd.secs)) + '</span></div>';
+      }
+    }
+  }
+  html += '</div>';
+
+  html += '<div class="q-card">';
+  html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">⬇️ ' + (en ? 'Export' : '名单与报表导出') + '</div>';
+  html += '<button class="action-btn secondary" style="width:100%;margin-bottom:6px;" onclick="adminAwardExportList(\'part\')">'
+    + (en ? 'Participation list' : '参与奖名单') + '</button>';
+  html += '<button class="action-btn secondary" style="width:100%;margin-bottom:6px;" onclick="adminAwardExportList(\'rank\')">'
+    + (en ? 'Individual award list' : '个人奖名单') + '</button>';
+  html += '<button class="action-btn secondary" style="width:100%;margin-bottom:6px;" onclick="adminAwardExportList(\'dept\')">'
+    + (en ? 'Department award list' : '部门奖名单') + '</button>';
+  html += '<button class="action-btn secondary" style="width:100%;" onclick="adminAwardExportStats()">'
+    + (en ? 'Quiz statistics report' : '赛事统计报表') + '</button>';
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+function adminVoucherSwitchKind(kind) {
+  if (adminState.vchKind === kind) return;
+  adminState.vchKind = kind;
+  adminState.vchState = ''; adminState.vchRows = []; adminState.vchCode = ''; adminState.vchLast = '';
+  adminState.vchMsg = ''; adminState.vchQuery = '';
+  adminVoucherLoad(true);
+}
 function renderAdminVouchers() {
   var en = state.lang === 'en';
   var c = raceConfOf();
@@ -18223,6 +18710,13 @@ function renderAdminVouchers() {
   html += '<div class="q-card" style="background:linear-gradient(135deg,var(--primary-soft) 0%,var(--primary-light) 100%);">';
   html += '<div style="font-size:12px;color:rgba(0,0,0,.6);">' + escapeHtml(c.title || (en ? 'Quiz race' : '限时答题赛')) + '</div>';
   html += '<div style="font-size:15px;font-weight:700;color:#000;margin-top:2px;">🎟 ' + t('race_vch_admin') + '</div>';
+  // 类型切换：参与奖 / 个人奖（2026-11-18）
+  html += '<div style="display:flex;gap:6px;margin-top:10px;">';
+  html += '<button class="action-btn ' + ((adminState.vchKind || 'part') === 'part' ? 'primary' : 'secondary') + '" style="flex:1;font-size:12px;" onclick="adminVoucherSwitchKind(\'part\')">'
+    + (en ? 'Participation' : '参与奖') + '</button>';
+  html += '<button class="action-btn ' + (adminState.vchKind === 'rank' ? 'primary' : 'secondary') + '" style="flex:1;font-size:12px;" onclick="adminVoucherSwitchKind(\'rank\')">'
+    + (en ? 'Individual' : '个人奖') + '</button>';
+  html += '</div>';
   html += '<div style="font-size:12px;color:rgba(0,0,0,.6);margin-top:6px;line-height:1.6;">'
     + escapeHtml(t('race_vch_rule').replace('{n}', String(ac.partMin))) + '</div>';
   html += '</div>';
@@ -18283,6 +18777,94 @@ function renderAdminVouchers() {
 //   ② 个人各板块    本届每人每板块一条（同一人可有多行）
 //   ③ 部门排名      本届各部门答对合计（每人只算最好一条）
 //   ④ 部门排名·按板块 每个板块单独一张部门榜
+// ===== 获奖名单候选 / 赛事统计（2026-11-18）=====
+// 三个名单口径都与榜单同源（raceBoardRowsFrom / raceDeptAggRowsFrom），绝不另写一套循环。
+var RACE_RANK_SECTIONS = ['all', 'culinary', 'fb', 'rooms', 'general'];
+// 个人奖候选：五个榜单各取前 N，按工号去重，一人多榜合并 boards（只发一张个人奖券）。
+function raceRankCandidateRows(rows, rid, topN) {
+  var byEmp = {}, order = [];
+  for (var s = 0; s < RACE_RANK_SECTIONS.length; s++) {
+    var sk = RACE_RANK_SECTIONS[s];
+    var board = raceBoardRowsFrom(rows, 'period', sk, rid);
+    for (var i = 0; i < board.length && i < topN; i++) {
+      var r = board[i], sn = (r.raw && r.raw.snap) || {};
+      var emp = normEmpNo(dashEmpNoOf(sn, r.key)) || normEmpNo(empOfKey(r.key));
+      if (!emp) continue;
+      var it = byEmp[emp];
+      if (!it) {
+        it = byEmp[emp] = {
+          emp: emp, cn: String(sn.cn || r.cn || ''), en: String(sn.en || r.en || ''),
+          div: r.div, dept: r.dept, section: r.section || sk,
+          correct: r.correct || 0, answered: r.answered || 0, acc: r.acc || 0, ts: r.ts || 0,
+          boards: [], rank: 0
+        };
+        order.push(emp);
+      }
+      if (it.boards.indexOf(sk) < 0) it.boards.push(sk);
+      if (!it.rank || (i + 1) < it.rank) it.rank = i + 1;
+    }
+  }
+  var out = [];
+  for (var k = 0; k < order.length; k++) out.push(byEmp[order[k]]);
+  out.sort(function (a, b) {
+    if (b.correct !== a.correct) return b.correct - a.correct;
+    if (b.acc !== a.acc) return b.acc - a.acc;
+    return (a.ts || 0) - (b.ts || 0);
+  });
+  return out;
+}
+// 部门奖候选：复用加权部门榜取前 N
+function raceDeptCandidateRows(rows, rid, topN, rosterLv) {
+  var all = raceDeptAggRowsFrom(rows, '', rid, rosterLv);
+  return all.slice(0, topN);
+}
+// 赛事统计：参与人数（去重的有成绩者）/ 总答题次数 / 总答对数 / 总答题时长，按大部门分组。
+// 口径：每人本届取一条最佳成绩（byRound），但次数 / 题数 / 时长取自该人本届**全部**流水。
+// 流水 log 有上限（RACE_LOG_MAX），报表里注明统计范围。
+function raceStatsFrom(rows, rid) {
+  var seen = {}, deptMap = {}, deptOrder = [];
+  function bucket(k) {
+    if (!deptMap[k]) { deptMap[k] = { dept: k, people: 0, runs: 0, correct: 0, answered: 0, secs: 0 }; deptOrder.push(k); }
+    return deptMap[k];
+  }
+  var total = { people: 0, runs: 0, correct: 0, answered: 0, secs: 0 };
+  for (var i = 0; i < rows.length; i++) {
+    var raw = rows[i], race = raceRecordOf(raw);
+    if (!race) continue;
+    var sec = raceRoundEntryOf(race, rid, '');
+    if (!sec) continue;                                  // 本届没成绩 = 没参赛
+    var key = String((raw && (raw.akey || raw.key || raw.phone)) || ('k' + i));
+    if (seen[key]) continue;
+    seen[key] = 1;
+    var div = raceDeptOfRow(raw, race) || (state.lang === 'en' ? 'Unassigned' : '未分组');
+    var b = bucket(div);
+    total.people++; b.people++;
+    var log = (race.log && Array.isArray(race.log)) ? race.log : [];
+    for (var j = 0; j < log.length; j++) {
+      var l = log[j];
+      if (!l || l.id !== rid) continue;
+      var c = parseInt(l.c, 10) || 0, a = parseInt(l.a, 10) || 0, sc = parseInt(l.secs, 10) || 0;
+      total.runs++; total.correct += c; total.answered += a; total.secs += sc;
+      b.runs++; b.correct += c; b.answered += a; b.secs += sc;
+    }
+  }
+  var depts = [];
+  for (var k2 = 0; k2 < deptOrder.length; k2++) depts.push(deptMap[deptOrder[k2]]);
+  depts.sort(function (x, y) {
+    if (y.correct !== x.correct) return y.correct - x.correct;
+    if (y.people !== x.people) return y.people - x.people;
+    return String(x.dept) < String(y.dept) ? -1 : 1;
+  });
+  return { total: total, depts: depts };
+}
+// 时长显示：秒 → 「x小时x分」/「x分x秒」
+function raceSecsText(sec) {
+  sec = parseInt(sec, 10) || 0;
+  if (sec < 60) return sec + 's';
+  var m = Math.floor(sec / 60);
+  if (m < 60) return m + 'm' + (sec % 60) + 's';
+  return Math.floor(m / 60) + 'h' + (m % 60) + 'm';
+}
 function adminRaceExport() {
   var c = raceConfOf();
   if (!c) { adminToast(t('race_no_conf')); return; }
@@ -18423,6 +19005,70 @@ function adminRaceExport() {
     a.download = 'speed-quiz-' + c.id + '.csv';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }, function () { adminToast(t('race_admin_no_scores')); });
+}
+// ===== 三类获奖名单 CSV（2026-11-18）=====
+// 纯函数：只吃数据出 CSV 文本，方便测试；下载入口负责拉快照 + Blob。
+function raceAwardCsvHeader(kind, en) {
+  if (kind === 'rank') return en
+    ? ['Rank', 'Name (CN)', 'Name (EN)', 'Employee ID', 'Division', 'Leaderboards', 'Correct', 'Answered', 'Accuracy', 'Voucher code', 'Redeem by', 'Status']
+    : ['排名', '中文名', '英文名', '工号', '部门', '上榜板块', '答对', '已答', '准确率', '券码', '兑换截止', '状态'];
+  if (kind === 'dept') return en
+    ? ['Rank', 'Department', 'Weighted score', 'Correct', 'Answered', 'Participants', 'Accuracy']
+    : ['排名', '部门', '加权得分', '答对合计', '答题合计', '参赛人数', '准确率'];
+  return en
+    ? ['Rank', 'Name (CN)', 'Name (EN)', 'Employee ID', 'Division', 'Correct', 'Answered', 'Accuracy', 'Voucher code', 'Redeem by', 'Status']
+    : ['排名', '中文名', '英文名', '工号', '部门', '答对', '已答', '准确率', '券码', '兑换截止', '状态'];
+}
+function raceAwardListCsv(kind, ctx) {
+  ctx = ctx || {};
+  var en = !!ctx.en, rows = ctx.rows || [], Q = ctx.Q || function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  var cut = ctx.cut || '', redeemOf = ctx.redeemOf || function () { return null; };
+  var pctf = function (v) { return (Math.round((v || 0) * 10) / 10).toFixed(1) + '%'; };
+  var lines = [], line = function (a) { lines.push(a.map(Q).join(',')); };
+  line(raceAwardCsvHeader(kind, en));
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i], rec = redeemOf(r);
+    var stat = rec ? (en ? 'Redeemed' : '已核销') : (ctx.expired ? (en ? 'Expired' : '已过期') : (en ? 'Unused' : '待兑换'));
+    var dep = en ? (typeof deptDisplayName === 'function' ? deptDisplayName(r.dept) : r.dept) : r.dept;
+    if (kind === 'dept') {
+      line([i + 1, dep, r.weighted, r.correct, r.answered, r.n, pctf(r.acc)]);
+    } else {
+      var boards = (r.boards || (r.sec ? [r.sec] : [])).map(function (k) { return raceSecName(k); }).join(' / ');
+      var base = [i + 1, r.cn || '', r.en || '', r.emp, dep];
+      if (kind === 'rank') base.push(boards);
+      base.push(r.correct, r.answered, pctf(r.acc));
+      base.push(kind === 'rank' ? raceRankVoucherCodeOf(r.emp, ctx.rid) : raceVoucherCodeOf(r.emp, ctx.rid));
+      base.push(cut, stat);
+      line(base);
+    }
+  }
+  return lines.join('\r\n') + '\r\n';
+}
+// 赛事统计 CSV：总体 4 指标 + 分部门明细
+function raceStatsCsv(st, en) {
+  st = st || {};
+  var t = st.total || {}, Q = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  var lines = [], line = function (a) { lines.push(a.map(Q).join(',')); };
+  line([Q(en ? 'Quiz race statistics' : '答题赛统计')]);
+  line([Q(en ? 'Scope' : '统计范围'), Q(en ? 'This round; attempts are from recent attempt logs (capped)' : '本届赛事；答题次数 / 题数 / 时长取自最近挑战流水（有保存上限）')]);
+  line([Q(en ? 'Participants' : '参赛人数'), Q(en ? 'Total attempts' : '总答题次数'), Q(en ? 'Total correct' : '总答对题数'), Q(en ? 'Total time' : '总答题时长')]);
+  line([t.people || 0, t.runs || 0, t.correct || 0, Q(raceSecsText(t.secs))]);
+  line(['']);
+  line([Q(en ? 'By department' : '分部门'), Q(en ? 'Participants' : '参赛人数'), Q(en ? 'Total attempts' : '总答题次数'), Q(en ? 'Total correct' : '总答对题数'), Q(en ? 'Total time' : '总答题时长')]);
+  var ds = st.depts || [];
+  for (var i = 0; i < ds.length; i++) {
+    line([en ? (typeof deptDisplayName === 'function' ? deptDisplayName(ds[i].dept) : ds[i].dept) : ds[i].dept,
+      ds[i].people, ds[i].runs, ds[i].correct, Q(raceSecsText(ds[i].secs))]);
+  }
+  return lines.join('\r\n') + '\r\n';
+}
+function raceCsvDownload(text, name) {
+  var csv = '\ufeff' + text;
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  try { setTimeout(function () { URL.revokeObjectURL(a.href); }, 500); } catch (e) {}
 }
 // ===== B1 部门战报（2026-11-03）=====
 // 生成一段**可直接转发部门群**的文字战报：部门排名（带参与率）+ 部门打卡榜 +
@@ -30949,7 +31595,7 @@ function adminShellRoutes() {
         { page: 'adminDeptStats', cn: '部门统计', en: 'Dept Analytics' }
       ] },
     { key: 'adminDeptStats', label: en ? 'Dept Analytics' : '部门统计', ico: 'pie', match: ['adminDeptStats'], subOf: 'adminDepts' },
-    { grp: en ? 'MOTIVATION' : '激励', key: 'adminRace', label: en ? 'Quiz Race' : '答题赛', ico: 'bolt', match: ['adminRace', 'adminVouchers'] },
+    { grp: en ? 'MOTIVATION' : '激励', key: 'adminRace', label: en ? 'Quiz Race' : '答题赛', ico: 'bolt', match: ['adminRace', 'adminVouchers', 'adminAwardSettle'] },
     { key: 'adminBadges', label: en ? 'Badges' : '徽章', ico: 'medal', match: ['adminBadges'] },
     { grp: en ? 'INSIGHTS' : '洞察', key: 'adminDash', label: en ? 'Data Board' : '数据看板', ico: 'chart', match: ['adminDash'] },
     { key: 'adminTeaching', label: en ? 'Teaching' : '教学分析', ico: 'layers', match: ['adminTeaching'] },
@@ -30978,7 +31624,8 @@ function adminPageTitleOf(page) {
     adminVerify:     en ? 'Registration Review' : '注册核查',
     adminStaff:      en ? 'Staff Changes' : '人员变动',
     adminRace:       en ? 'Quiz Race' : '答题赛',
-    adminVouchers:   en ? 'Voucher Redemption' : '参与奖核销',
+    adminVouchers:   en ? 'Voucher Redemption' : '兑奖券核销',
+    adminAwardSettle: en ? 'Winners & statistics' : '获奖名单与统计',
     adminBadges:     en ? 'Badges' : '徽章',
     adminDash:       en ? 'Data Board' : '数据看板',
     adminTeaching:   en ? 'Teaching' : '教学分析',
@@ -31001,6 +31648,8 @@ function adminSubOf(page) {
     adminExamHub:     en ? 'Exams' : '\u8003\u8bd5',
     adminRace:        en ? 'Quiz race config, roster and leaderboard' : '\u7b54\u9898\u8d5b\u914d\u7f6e\u3001\u53c2\u8d5b\u540d\u518c\u4e0e\u6392\u884c\u699c',
     adminVouchers:    en ? 'Redeem participation award vouchers' : '\u6838\u9500\u53c2\u4e0e\u5956\u5151\u6362\u5238\uff0c\u53ef\u6309\u5238\u7801\u6216\u540d\u5355\u6838\u9500',
+    adminAwardSettle: en ? 'Confirm winners, export lists and view quiz statistics'
+                         : '\u786e\u8ba4\u83b7\u5956\u540d\u5355\u3001\u5bfc\u51fa\u5404\u7c7b\u540d\u5355\u4e0e\u8d5b\u4e8b\u7edf\u8ba1',
     adminBadges:      en ? 'Badge catalog, thresholds and awards' : '\u5fbd\u7ae0\u76ee\u5f55\u3001\u95e8\u69db\u4e0e\u53d1\u653e',
     adminDash:        en ? 'Activity, exam and quiz-race analytics' : '\u6d3b\u8dc3\u5ea6\u3001\u8003\u8bd5\u4e0e\u7b54\u9898\u8d5b\u5206\u6790',
     adminTeaching:    en ? 'Where the cohort is weak, by division and module' : '\u6309\u90e8\u95e8\u4e0e\u6a21\u5757\u770b\u6574\u4f53\u8584\u5f31\u70b9',
@@ -31252,6 +31901,7 @@ function render() {
       case 'adminGrading': app.innerHTML = adminShellHtml('adminGrading', renderAdminGrading()); return;
       case 'adminRace': app.innerHTML = adminShellHtml('adminRace', renderAdminRace()); return;
       case 'adminVouchers': app.innerHTML = adminShellHtml('adminVouchers', renderAdminVouchers()); return;
+      case 'adminAwardSettle': app.innerHTML = adminShellHtml('adminAwardSettle', renderAdminAwardSettle()); return;
       case 'adminBadges': app.innerHTML = adminShellHtml('adminBadges', renderAdminBadges()); return;
       case 'adminDash': app.innerHTML = adminShellHtml('adminDash', renderAdminDash()); return;
       case 'adminTeaching': app.innerHTML = adminShellHtml('adminTeaching', renderAdminTeaching()); return;
