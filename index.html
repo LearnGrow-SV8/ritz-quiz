@@ -410,6 +410,27 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .action-btn.secondary { background:#fff; color:var(--primary); border:1px solid var(--border); }
 .action-btn:active { transform:scale(0.98); }
 
+/* 打卡日历底部入口（2026-11-18 方案B）：2 张大主卡 + 3 个小图标方格。
+   只用品牌黑 + 回忆蓝 + 白；minmax(0,1fr) 防窄屏被文字撑破。
+   图标用 CSS 遮罩，颜色继承文字色（黑卡自动反白），不引入彩色 emoji。 */
+.race-quick-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:10px; }
+.race-quick-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:10px; }
+.race-quick-card { position:relative; background:#fff; border:1px solid var(--border); border-radius:12px;
+  min-height:66px; padding:12px 10px; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:6px; text-align:center; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.race-quick-card .ic { width:22px; height:22px; display:flex; align-items:center; justify-content:center; color:#1a1a1a; }
+.race-quick-card .ic svg { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8;
+  stroke-linecap:round; stroke-linejoin:round; }
+.race-quick-card .lb { font-size:13px; font-weight:600; color:#1a1a1a; line-height:1.3; }
+.race-quick-card.main { background:#1a1a1a; border-color:#1a1a1a; }
+.race-quick-card.main .ic { color:#fff; }
+.race-quick-card.main .lb { color:#fff; }
+.race-quick-card.sub { border-color:var(--primary-light); background:#fff; }
+.race-quick-card.mini { min-height:58px; padding:10px 4px; gap:5px; }
+.race-quick-card.mini .ic, .race-quick-card.mini .ic svg { width:20px; height:20px; }
+.race-quick-card.mini .lb { font-size:12px; }
+.race-quick-card:active { transform:scale(0.98); }
+
 /* 2026-11-12: 统计卡改自适应一行（4 张卡不再 3+1 折行） */
 .stats-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:20px; }
 .stat-card { background:var(--card-bg); padding:16px 12px; border-radius:10px; text-align:center; box-shadow:var(--shadow); border:1px solid var(--border); }
@@ -5631,7 +5652,11 @@ var I18N = {
   // 三处「去酒店产品知识刷题」入口（排行榜/挑战主页/打卡日历），按语境各起一个名
   race_study_board: {cn:'想冲榜？先去题库巩固一下', en:'Want a top spot? Brush up first'},
   race_study_home: {cn:'赛前先去题库巩固一下', en:'Brush up before the race'},
-  race_study_cal: {cn:'温故知新，再刷一遍题库', en:'Review & brush up the bank again'},
+  // 2026-11-18：原来叫「温故知新，再刷一遍题库」，和首页复习中心的「温故而知新」撞名，
+  // 但这里点进去是整个产品知识题库（goToBank('manual')），不是错题本。改名对齐动作。
+  race_study_cal: {cn:'练习题库', en:'Practice bank'},
+  race_q_board: {cn:'排行榜', en:'Leaderboard'},
+  race_q_wrong: {cn:'错题本', en:'Wrong answers'},
   race_confirm: {cn:'确认作答', en:'Confirm'},
   race_confirm_hint: {cn:'选好后点下方「确认作答」，确认后不能修改', en:'Tap Confirm below once you choose - it cannot be changed'},
   race_need_pick: {cn:'请先选择一个答案再确认', en:'Please choose an answer first'},
@@ -5811,7 +5836,8 @@ var I18N = {
   race_vch_part_sec: {cn:'参与奖兑换券', en:'Participation award'},
   race_vch_rank_sec: {cn:'个人奖兑换券', en:'Individual award'},
   race_vch_dept_sec: {cn:'部门奖', en:'Department award'},
-  race_vch_rank_none: {cn:'个人奖名单尚未确认。名单经管理端确认后，上榜者将在此看到个人奖券。', en:'Individual winners have not been confirmed yet. Once confirmed, winners will see their voucher here.'},
+  race_vch_rank_none: {cn:'暂未获得', en:'Not awarded yet'},
+  race_vch_rank_none_tip: {cn:'个人奖名单经管理端确认后，上榜者将在此看到兑奖券。', en:'Winners will see their voucher here once the list is confirmed by the admin.'},
   race_vch_rank_win: {cn:'你在 {s} 榜排名第 {n}', en:'Ranked No.{n} on the {s} leaderboard'},
   race_vch_cut: {cn:'兑换截止：{t}（北京时间）', en:'Redeem by: {t} (Beijing time)'},
   race_vch_expired: {cn:'已过期', en:'Expired'},
@@ -15507,6 +15533,20 @@ function raceMkDayClose() {
   state.raceCalDay = '';
   render();
 }
+// 打卡日历底部入口的线性图标（2026-11-18 方案B）：内联 SVG，stroke 继承 currentColor。
+// 不用彩色 emoji —— 既统一风格，黑底主卡也能自动反白。
+var RACE_QUICK_ICONS = {
+  bolt:   '<svg viewBox="0 0 24 24"><path d="M13 2 4 13h6l-1 9 9-12h-6l1-8z"/></svg>',
+  retry:  '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>',
+  ticket: '<svg viewBox="0 0 24 24"><path d="M3 8h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4V8z"/><path d="M12 8v2M12 14v2"/></svg>',
+  board:  '<svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V4M19 20v-6"/><path d="M3 20h18"/></svg>',
+  book:   '<svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21V5.5z"/><path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20"/></svg>'
+};
+function raceQuickCardHtml(cls, icon, label, onclick) {
+  return '<div class="race-quick-card ' + cls + '" onclick="' + onclick + '" role="button">'
+    + '<div class="ic">' + (RACE_QUICK_ICONS[icon] || '') + '</div>'
+    + '<div class="lb">' + escapeHtml(label) + '</div></div>';
+}
 function renderRaceCalendar() {
   var en = state.lang === 'en';
   var rec = raceLocalRecord() || {};
@@ -15781,15 +15821,17 @@ function renderRaceCalendar() {
   }
   // 「我的徽章」墙已退役（2026-11-12）：徽章入口改为 当天明细里的「当天获得徽章」卡片
   // 底部的「查看完整徽章集锦」，不再在页面底部重复一面墙。
-  // 看完日历顺手再来一局：一步回到挑战主页
-  html += '<button class="action-btn primary" style="width:100%;margin-top:2px;" onclick="navigate(\'race\')">⚡ ' + t('race_cal_retry') + '</button>';
-  // 复盘语境：温故知新后再刷一遍产品知识题库
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="goToBank(\'manual\')">🔁 ' + t('race_study_cal') + '</button>';
-  // 看完自己的打卡记录，顺手就能看自己在榜上第几（页面底部，次级入口）
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="navigate(\'raceVouchers\')">🎟 ' + t('race_vch_mine') + '</button>';
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="raceOpenBoard()">🏆 ' + t('race_view_board') + '</button>';
-  // 复盘完顺手清错题：日历里当天明细只能重做单场，这里给整本错题本的入口（2026-11-13 领导）
-  html += '<button class="action-btn secondary" style="width:100%;margin-top:10px;" onclick="wrongOpenSrc(\'\')">📖 ' + t('race_cal_to_wrong') + '</button>';
+  // 底部入口（2026-11-18 方案B）：2 张大主卡（再挑战 / 练习题库）+ 3 个小方格（券 / 榜 / 错题本）。
+  // 主次分层：高频动作放大，次级入口收进小方格；跳转与文案 key 全部沿用，只换布局与撞名文案。
+  html += '<div class="race-quick-2">';
+  html += raceQuickCardHtml('main', 'bolt', t('race_cal_retry'), "navigate('race')");
+  html += raceQuickCardHtml('sub', 'retry', t('race_study_cal'), "goToBank('manual')");
+  html += '</div>';
+  html += '<div class="race-quick-3">';
+  html += raceQuickCardHtml('mini', 'ticket', t('race_vch_mine'), "navigate('raceVouchers')");
+  html += raceQuickCardHtml('mini', 'board', t('race_q_board'), 'raceOpenBoard()');
+  html += raceQuickCardHtml('mini', 'book', t('race_q_wrong'), "wrongOpenSrc('')");
+  html += '</div>';
   // 「补签机会与任务」卡已退役（2026-11-12 领导十一调）：补签入口全部收敛到
   // 虚线日期弹窗（金框=可补 / 灰框=可赚），弹窗里都有「查看任务与进度」按钮，
   // 页面底部再放一张卡纯属重复 —— 大多数人滑不到那么低，看到的还以为是另一套入口。
@@ -15937,8 +15979,9 @@ function renderRaceVouchers() {
     var settle = raceSettleOf(curRid);
     var win = raceMyRankWinOf(curRid, emp);
     if (!settle || !win) {
-      html += '<div class="q-card" style="text-align:center;color:#666;padding:16px;line-height:1.6;">'
-        + escapeHtml(t('race_vch_rank_none')) + '</div>';
+      html += '<div class="q-card" style="text-align:center;padding:14px;"'
+        + ' title="' + escapeHtml(t('race_vch_rank_none_tip')) + '">'
+        + '<div style="font-size:12px;color:#888;">' + escapeHtml(t('race_vch_rank_none')) + '</div></div>';
     } else {
       var rankCode = raceRankVoucherCodeOf(emp, curRid);
       var rankRec = raceAwardRecOf(curRid, emp + 'R');   // 个人奖核销记在 emp+'R' 键下，与参与奖分开
@@ -15972,24 +16015,8 @@ function renderRaceVouchers() {
     }
   }
 
-  if (ac.deptOn) {
-    var dsettle = raceSettleOf(curRid);
-    var dwin = null;
-    if (dsettle && Array.isArray(dsettle.deptRows)) {
-      var myDept = '';
-      try { myDept = raceDeptUnitOfRow({ snap: (state.profile || {}) }, raceLocalRecord()); } catch (eD) {}
-      for (var di = 0; di < dsettle.deptRows.length; di++) {
-        if (dsettle.deptRows[di].dept === myDept) { dwin = dsettle.deptRows[di]; break; }
-      }
-    }
-    html += '<div style="font-size:13px;font-weight:600;margin:16px 2px 8px;">🏢 ' + escapeHtml(t('race_vch_dept_sec')) + '</div>';
-    html += '<div class="q-card" style="text-align:center;color:#666;padding:16px;line-height:1.6;">'
-      + escapeHtml(dwin
-        ? (en ? 'Your department ranked No.' + dwin.rank + ' — awarded at CTL.'
-              : '你所在部门排名第 ' + dwin.rank + '，奖品于 CTL 发放。')
-        : (en ? 'Department awards are confirmed by the admin and distributed at CTL.'
-              : '部门奖名单经管理端确认后公布，奖品于 CTL 发放。')) + '</div>';
-  }
+  // 部门奖不设兑奖券：奖品发给部门、在 CTL 发放，不是给个人的券；
+  // 规则已在赛事首页「奖项说明」浮窗写明，名单由管理端导出，券页不再摆这一块。
 
   html += '<button class="action-btn secondary" style="width:100%;margin-top:14px;" onclick="navigate(\'raceCalendar\')">📅 '
     + escapeHtml(en ? 'Check-in calendar' : '打卡日历') + '</button>';
