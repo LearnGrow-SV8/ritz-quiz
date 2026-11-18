@@ -410,24 +410,23 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .action-btn.secondary { background:#fff; color:var(--primary); border:1px solid var(--border); }
 .action-btn:active { transform:scale(0.98); }
 
-/* 打卡日历底部入口（2026-11-18）：图标 + 文字横向并排的紧凑条。
-   五个入口在手机上无法挤成一行（中文标签放不下），保持 2+3 分组但高度压到 ~42px，
-   和日历格子/成绩卡同一量级。只用品牌黑 + 回忆蓝 + 白；minmax(0,1fr) 防窄屏撑破。 */
+/* 打卡日历底部入口：图标 + 文字横向并排。
+   尺寸对齐本页「查看答题清单」(.action-btn)：padding 12 / font 14 / weight 600 / 行高 1.6，
+   实际高度约 48px，不再显得比上面的按钮小。只用品牌黑 + 回忆蓝 + 白。 */
 .race-quick-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:8px; }
 .race-quick-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:8px; }
-.race-quick-card { position:relative; background:#fff; border:1px solid var(--border); border-radius:9px;
-  min-height:42px; padding:8px 8px; display:flex; flex-direction:row; align-items:center;
-  justify-content:center; gap:7px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.race-quick-card { position:relative; background:#fff; border:1px solid var(--border); border-radius:10px;
+  min-height:48px; padding:12px 10px; display:flex; flex-direction:row; align-items:center;
+  justify-content:center; gap:8px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
 .race-quick-card .ic { flex:0 0 18px; width:18px; height:18px; display:flex; align-items:center; justify-content:center;
-  font-size:16px; line-height:1; }
-.race-quick-card .lb { font-size:12.5px; font-weight:600; color:#1a1a1a; line-height:1.2; white-space:nowrap; }
+  font-size:17px; line-height:1; }
+.race-quick-card .lb { font-size:14px; font-weight:600; color:#1a1a1a; line-height:1.6; white-space:nowrap; }
 .race-quick-card.main { background:#1a1a1a; border-color:#1a1a1a; }
-.race-quick-card.main .ic { color:#fff; }
 .race-quick-card.main .lb { color:#fff; }
 .race-quick-card.sub { border-color:var(--primary-light); background:#fff; }
-.race-quick-card.mini { min-height:40px; padding:8px 4px; gap:5px; }
-.race-quick-card.mini .ic { flex-basis:16px; width:16px; height:16px; font-size:14px; }
-.race-quick-card.mini .lb { font-size:11.5px; }
+.race-quick-card.mini { min-height:48px; padding:12px 4px; gap:6px; }
+.race-quick-card.mini .ic { flex-basis:16px; width:16px; height:16px; font-size:15px; }
+.race-quick-card.mini .lb { font-size:14px; }
 .race-quick-card:active { transform:scale(0.98); }
 
 /* 2026-11-12: 统计卡改自适应一行（4 张卡不再 3+1 折行） */
@@ -5631,6 +5630,10 @@ var I18N = {
   race_correct: {cn:'答对', en:'Correct'},
   race_answered: {cn:'已答', en:'Answered'},
   race_accuracy: {cn:'准确率', en:'Accuracy'},
+  race_correct_n: {cn:'答对题数', en:'Correct answers'},
+  race_answered_n: {cn:'作答总数', en:'Answered'},
+  race_name: {cn:'姓名', en:'Name'},
+  race_dept: {cn:'部门', en:'Department'},
   race_my_rank: {cn:'我的排名', en:'My rank'},
   race_board: {cn:'排行榜', en:'Leaderboard'},
   race_board_all: {cn:'全酒店榜', en:'Hotel-wide'},
@@ -13851,6 +13854,7 @@ function raceEnd(reason) {
   var r = state.race; if (!r || r.endReason) return;
   clearRaceTimer();
   r.endReason = reason || 'submit';
+  r.endTs = Date.now();   // 交卷时刻：成绩单底部「作答时间」注脚，重绘不漂移
   var correct = 0, answered = 0;
   for (var i = 0; i < r.answers.length; i++) {
     var a = r.answers[i];
