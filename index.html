@@ -11006,6 +11006,29 @@ function raceVoucherVerify(code, rid) {
   if (p.ck !== raceVchWord('c|' + p.tag + '|' + p.emp, 2)) return null;
   return p;
 }
+// 本届是不是**第一次**达标（2026-11-18 用户反馈）：
+// 一张券一届只有一张，重复达标再弹"恭喜获得参与奖兑换券"会让人以为又发了一张，
+// 甚至以为券会累积。所以小结里的券卡只在第一次达标时出现，后续要看券 / 去兑换，
+// 走打卡日历底部的「参与奖兑换券」入口。
+//   prevBest : 本次交卷**之前**本届的最好答对数（rec.byRound 更新前的旧值；没有则 null）
+//   rec      : 本机答题记录（用挑战流水兜底，防 byRound 被异常清掉）
+//   ts       : 本次交卷时间；流水里早于它的达标记录才算"以前拿过"
+//   redeemed : 是否已有核销记录（换设备 / 本机记录丢失时的保险）
+function raceVoucherFirstEarn(prevBest, rec, rid, partMin, ts, redeemed) {
+  var min = parseInt(partMin, 10) || 0;
+  if (!rid || min <= 0) return false;
+  if (prevBest != null && (parseInt(prevBest, 10) || 0) >= min) return false;
+  var log = (rec && Array.isArray(rec.log)) ? rec.log : [];
+  var t0 = parseInt(ts, 10) || 0;
+  for (var i = 0; i < log.length; i++) {
+    var l = log[i];
+    if (!l || l.id !== rid) continue;
+    if ((parseInt(l.c, 10) || 0) < min) continue;
+    if (!t0 || (parseInt(l.ts, 10) || 0) < t0) return false;
+  }
+  if (redeemed) return false;
+  return true;
+}
 // 本机缓存的核销记录（admin_state.awards 原样落地）：{届次: {工号: {at, by}}}
 var RACE_AWARDS_KEY = 'raceAwards';
 function loadRaceAwards() {
@@ -13871,18 +13894,26 @@ function raceSubmitScore() {
   // 参与奖兑换券（2026-11-17）：单场答对达到门槛就当场出一张券，并在结果页
   // 立刻点亮。券号完全由「工号 + 届次」算出来，所以这一步不需要联网、也不
   // 会有"发了两次"的可能 —— 同一个人同一届算出来永远是同一个码。
+  // 🔴 只在**本届第一次**达标时弹（2026-11-18 用户反馈）：券一届就一张，之前拿过
+  //    （哪怕还没兑）再弹"恭喜获得"会让人以为又发了一张。后续查券 / 去兑换走
+  //    打卡日历底部的「参与奖兑换券」。判定见 raceVoucherFirstEarn。
   state.raceVoucher = null;
   try {
     var _vAc = raceAwardCfgOf(r.conf || raceConfOf());
     var _vRid = (r.conf && r.conf.id) || (raceConfOf() || {}).id || '';
     var _vEmp = raceMyEmpNo();
     if (_vAc.on && _vAc.partOn && _vRid && _vEmp && (r.correct || 0) >= _vAc.partMin) {
-      state.raceVoucher = {
-        code: raceVoucherCodeOf(_vEmp, _vRid),
-        rid: _vRid,
-        correct: r.correct || 0,
-        min: _vAc.partMin
-      };
+      // prev = 本次之前的本届最好成绩（上面 byRound 更新前取到的旧值）
+      var _vRedeemed = null;
+      try { _vRedeemed = raceAwardRecOf(_vRid, _vEmp); } catch (eRd) { _vRedeemed = null; }
+      if (raceVoucherFirstEarn(prev && prev.correct, rec, _vRid, _vAc.partMin, entry.ts, !!_vRedeemed)) {
+        state.raceVoucher = {
+          code: raceVoucherCodeOf(_vEmp, _vRid),
+          rid: _vRid,
+          correct: r.correct || 0,
+          min: _vAc.partMin
+        };
+      }
     }
   } catch (eV) { state.raceVoucher = null; }
   // 庆祝动画标记（2026-11-03）：单期全对（≥5 题）或拿到新徽章时，结果页撒彩带。
