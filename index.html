@@ -7777,11 +7777,13 @@ var NAME_ROSTER_CACHE_KEY = 'empNameRoster';
 //                却没有了 ⇒ 已离职；从来没出现过 ⇒ 不存在此工号
 // · reasons   —— 管理员手工改判的拦截原因（优先于 everIds 推断）
 //
-// 员工级别（2026-11-17，部门奖加权用）：L/T/S=×1、A/B=×1.5、G=×2。
+// 员工级别（2026-11-17，部门奖加权用）：T/L/S=×1、A/B=×1.5、G=×2。
+// 🔴 字母含义（2026-11-18 用户更正）：T = 实习生、L = 正式工（此前记反过，别再改回去）。
 // 级别只在后台「导入名册 / 名单行内编辑」时写入，学员端不可见、不可自选；
 // 未填级别一律按 ×1（中性，不影响任何尚未配级别的老名册）。
 var RACE_LV_WEIGHT = { L: 1, T: 1, S: 1, A: 1.5, B: 1.5, G: 2 };
-var RACE_LV_KEYS = ['L', 'T', 'S', 'A', 'B', 'G'];
+// 下拉显示顺序按职级递进：实习生 → 正式工 → 主管 → 经理 → 总监
+var RACE_LV_KEYS = ['T', 'L', 'S', 'A', 'B', 'G'];
 // 把任意写法（l / L / L级 / 主管…）收敛成标准级别字母；认不出就返回 ''。
 function normRaceLv(v) {
   var s = String(v == null ? '' : v).trim().toUpperCase().replace(/\s*级$/, '');
@@ -7985,12 +7987,13 @@ function parseRosterGrid(grid) {
         var m = t.match(/^(\d{1,8})(?:\.0+)?$/);
         if (m) { emp = normEmpNo(m[1]); continue; }
       }
-      // 级别列（必须在「英文名」之前判）：单个级别字母（L/T/S/A/B/G）或中文级别词。
+      // 级别列（必须在「英文名」之前判）：单个级别字母（T/L/S/A/B/G）或中文级别词。
       // 单字母英文名几乎不存在，先让位给级别更安全。
+      // 🔴 T = 实习生、L = 正式工（2026-11-18 用户更正）；"员工" 归正式工。
       if (!lv) {
         var lvTry = normRaceLv(t);
         if (lvTry) { lv = lvTry; continue; }
-        var lvCn = ({ '实习生': 'L', '正式工': 'T', '员工': 'T', '主管': 'S', '经理': 'A', '总监': 'G' })[String(t).trim()];
+        var lvCn = ({ '实习生': 'T', '实习': 'T', 'Intern': 'T', '正式工': 'L', '正式': 'L', '员工': 'L', 'Staff': 'L', '主管': 'S', '经理': 'A', '总监': 'G' })[String(t).trim()];
         if (lvCn) { lv = lvCn; continue; }
       }
       if (!cn && /[\u4e00-\u9fff]/.test(t) && isCnNameValid(t)) { cn = t; continue; }
@@ -8336,13 +8339,14 @@ function adminRosterConfirmImport() {
     render();
   });
 }
-// 名单里的级别下拉：L/T/S=×1、A/B=×1.5、G=×2，空白 = 未设（按 ×1）。
+// 名单里的级别下拉：T/L/S=×1、A/B=×1.5、G=×2，空白 = 未设（按 ×1）。
 // 每级都带权重角标，管理员一眼能看出这个级别在部门奖里算几分。
+// 🔴 T = 实习生、L = 正式工（2026-11-18 用户更正）。
 function adminRosterLvSelect(emp, lv, en) {
   var W = RACE_LV_WEIGHT;
   var lbl = {
-    L: (en ? 'L · Intern' : 'L · 实习生') + ' ×' + W.L,
-    T: (en ? 'T · Staff' : 'T · 正式工') + ' ×' + W.T,
+    T: (en ? 'T · Intern' : 'T · 实习生') + ' ×' + W.T,
+    L: (en ? 'L · Staff' : 'L · 正式工') + ' ×' + W.L,
     S: (en ? 'S · Supervisor' : 'S · 主管') + ' ×' + W.S,
     A: (en ? 'A · Manager' : 'A · 经理') + ' ×' + W.A,
     B: (en ? 'B · Manager' : 'B · 经理') + ' ×' + W.B,
@@ -8556,7 +8560,7 @@ function adminRosterApplyNames(emp, stuKey) {
 }
 // ⑥ 名册模板下载：列序固定 级别 · 英文名 · 中文名 · 工号（2026-11-17 用户指定；
 //    导入解析本身列序无关，模板只是给管理员一个照填的样子）。首行表头会被解析器自动跳过。
-//    级别可选：L/T/S（实习/正式/主管，×1）· A/B（经理，×1.5）· G（总监，×2）。
+//    级别可选：T（实习生）/ L（正式工）/ S（主管）= ×1 · A/B（经理）= ×1.5 · G（总监）= ×2。
 function adminRosterTemplateDl() {
   var rows = [
     ['级别', '英文名', '中文名', '工号'],
