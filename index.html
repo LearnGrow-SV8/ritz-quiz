@@ -5533,7 +5533,7 @@ var I18N = {
   section_all: {cn:'全部', en:'All'},
   menu_practice: {cn:'顺序练习', en:'Practice'},
   menu_exam: {cn:'模拟考试', en:'Mock Exam'},
-  menu_wrong: {cn:'错题本', en:'Wrong Answers'},
+  menu_wrong: {cn:'错题本', en:'Error Notebook'},
   menu_search: {cn:'题目搜索', en:'Search'},
   menu_formal: {cn:'正式考试', en:'Formal Exam'},
   formal_pending_hint: {cn:'考试尚未开始，将于', en:'Not started yet — opens at'},
@@ -5600,7 +5600,7 @@ var I18N = {
   collected_title: {cn:'我的收藏', en:'Saved Questions'},
   collected_empty: {cn:'暂无收藏题目。练习时点击 ☆ 即可收藏本题。', en:'No saved questions yet. Tap ☆ while practicing.'},
   remove_one: {cn:'移除', en:'Remove'},
-  wrong_remove_confirm: {cn:'确定要将该题从错题本移除吗？', en:'Remove this question from your wrong-answer list?'},
+  wrong_remove_confirm: {cn:'确定要将该题从错题本移除吗？', en:'Remove this question from the Error Notebook?'},
   fav_remove_confirm: {cn:'确定要将该题从收藏中移除吗？', en:'Remove this question from your saved list?'},
   // Exam result
   result_title: {cn:'考试成绩', en:'Exam Result'},
@@ -5617,7 +5617,7 @@ var I18N = {
   race_title: {cn:'限时答题赛', en:'Speed Quiz'},
   race_sub: {cn:'限定时间内答得越快越准，排名越高', en:'Answer as many as you can before time runs out'},
   race_start: {cn:'开始答题', en:'Start'},
-  race_pick_section: {cn:'选择板块', en:'Choose a section'},
+  race_pick_section: {cn:'选择板块', en:'Choose a module'},
   race_pool_size: {cn:'题目池', en:'Question pool'},
   race_spare_hint: {cn:'本模块答完后自动补充品牌与酒店知识', en:'Brand & Hotel Knowledge added after these'},
   race_pool_spare: {cn:'本模块 {n} 题 · 答完后自动补充品牌与酒店知识 {m} 题', en:'{n} in this section · {m} Brand & Hotel added after'},
@@ -5659,12 +5659,12 @@ var I18N = {
   // 改「题库练习」—— 名词在前点对象、动词在后点动作，和小格「错题本」形成对照。
   race_study_cal: {cn:'题库练习', en:'Question bank'},
   race_q_board: {cn:'排行榜', en:'Leaderboard'},
-  race_q_wrong: {cn:'错题本', en:'Wrong answers'},
+  race_q_wrong: {cn:'错题本', en:'Error Notebook'},
   race_confirm: {cn:'确认作答', en:'Confirm'},
   race_confirm_hint: {cn:'选好后点下方「确认作答」，确认后不能修改', en:'Tap Confirm below once you choose - it cannot be changed'},
   race_need_pick: {cn:'请先选择一个答案再确认', en:'Please choose an answer first'},
   race_view_board: {cn:'查看排行榜', en:'View leaderboard'},
-  race_cal_to_wrong: {cn:'进入错题本', en:'Open error notebook'},
+  race_cal_to_wrong: {cn:'进入错题本', en:'Open Error Notebook'},
   race_review: {cn:'查看答案解析', en:'Review answers'},
   race_submit_ok: {cn:'成绩已提交', en:'Score submitted'},
   // 成绩上传的四种终态（2026-11-06）：以前只有一句"上传失败，将自动重试"，
@@ -5688,7 +5688,7 @@ var I18N = {
   race_board_off: {cn:'当前无法连接云端，暂时看不到排行榜', en:'Cloud unreachable — the leaderboard is unavailable right now.'},
   race_you: {cn:'（我）', en:' (you)'},
   race_admin_hub: {cn:'限时答题赛', en:'Speed Quiz'},
-  race_admin_hub_desc: {cn:'发布赛事、设置板块与时限、导出成绩', en:'Publish rounds, set section & time limit, export scores'},
+  race_admin_hub_desc: {cn:'发布赛事、设置板块与时限、导出成绩', en:'Publish rounds, set module & time limit, export scores'},
   dash_hub: {cn:'数据中心', en:'Data Center'},
   dash_hub_desc: {cn:'活跃榜 · 考试分析 · 答题赛分析', en:'Active ranking · exam & quiz analytics'},
   dash_title: {cn:'数据看板', en:'Data Board'},
@@ -5725,8 +5725,8 @@ var I18N = {
   dash_race_people: {cn:'\u53c2\u8d5b\u4eba\u6570', en:'Participants'},
   dash_race_noday: {cn:'\u8be5\u65f6\u95f4\u8303\u56f4\u5185\u6ca1\u6709\u7b54\u9898\u8d5b\u8bb0\u5f55\u3002', en:'No speed-quiz records in this period.'},
   race_unit_correct: {cn:'\u9898', en:'correct'},
-  race_board_sec: {cn:'\u677f\u5757', en:'Section'},
-  race_tag_bank: {cn:'题库', en:'Module'},
+  race_board_sec: {cn:'\u677f\u5757', en:'Module'},
+  race_tag_bank: {cn:'题库', en:'Question bank'},
   dash_session: {cn:'场次', en:'Session'},
   dash_all_sessions: {cn:'全部场次', en:'All sessions'},
   dash_session_pick: {cn:'具体场次（某一次发布）', en:'Specific session (one published round)'},
@@ -5750,7 +5750,7 @@ var I18N = {
   dash_export_detail: {cn:'导出答题明细 CSV', en:'Export answer log CSV'},
   dash_export_empty: {cn:'当前场次没有可导出的记录。', en:'Nothing to export for this session.'},
   dash_export_detail_empty: {cn:'选定时间范围内还没有答题记录。', en:'No answer records in the selected range.'},
-  dash_export_detail_hint: {cn:'按当前时间范围导出每一条答题记录（考试 / 练习 / 答题赛），含工号、中英文名、部门与板块。', en:'Exports every attempt in the selected range (exam / practice / speed quiz) with employee ID, CN+EN names, division and section.'},
+  dash_export_detail_hint: {cn:'按当前时间范围导出每一条答题记录（考试 / 练习 / 答题赛），含工号、中英文名、部门与板块。', en:'Exports every attempt in the selected range (exam / practice / speed quiz) with employee ID, CN+EN names, division and module.'},
   dash_race_loading: {cn:'正在拉取答题赛成绩…', en:'Loading Speed Quiz scores…'},
   dash_race_none: {cn:'本期还没有人参加答题赛。', en:'No one has joined this round yet.'},
   dash_best: {cn:'最好成绩', en:'Best'},
@@ -5761,7 +5761,7 @@ var I18N = {
   race_admin_published: {cn:'已发布，学员端即刻生效', en:'Published — live on student devices now'},
   race_new_season: {cn:'这是新一季赛事（清空榜单重新开始）', en:'New season (reset the board and start fresh)'},
   race_new_season_hint: {cn:'勾选后发布 = 开新一季：个人总榜、板块榜、部门榜、打卡天数榜全部从零开始，历史最佳榜保留。只调整本期设置（时间/板块/时长等）则不要勾选，榜单不受影响。', en:'Tick to start a new season: the overall / section / department / check-in-days boards reset to zero, while the all-time best board is kept. Leave unticked to only update this round\'s settings — the board stays as is.'},
-  race_new_season_confirm: {cn:'确认开启新一季赛事？\n\n本届榜单（个人总榜 / 板块榜 / 部门榜 / 打卡天数榜）将清空重新开始；历史最佳榜保留。', en:'Start a new season?\n\nThe current boards (overall / section / department / check-in days) will reset and start from zero; the all-time best board is kept.'},
+  race_new_season_confirm: {cn:'确认开启新一季赛事？\n\n本届榜单（个人总榜 / 板块榜 / 部门榜 / 打卡天数榜）将清空重新开始；历史最佳榜保留。', en:'Start a new season?\n\nThe current boards (overall / module / department / check-in days) will reset and start from zero; the all-time best board is kept.'},
   race_season_id_label: {cn:'本届 ID', en:'Season ID'},
   race_badge_tap_hint: {cn:'👆 点名字旁的徽章可以查看它的含义', en:'Tap a badge to see what it means'},
   race_badge_past_tag: {cn:'🏛 往期荣耀 · 不是本期排名', en:'🏛 Past glory · not this round\'s ranking'},
@@ -5795,27 +5795,27 @@ var I18N = {
   win_custom_bad: {cn:'请输入 1–1440 之间的分钟数', en:'Please enter minutes between 1 and 1440'},
   win_custom_bad_hours: {cn:'请输入 1–24 之间的小时数', en:'Please enter hours between 1 and 24'},
   win_default_tip: {cn:'默认「现在 → 30 分钟后」，可直接保存，也可在上方调整；到点后后台自动关闭', en:'Defaults to now → +30 min. Save as-is or adjust; the activity closes automatically when time is up'},
-  race_mode: {cn:'板块选择方式', en:'Section selection'},
-  race_mode_choice: {cn:'学员自行选择板块', en:'Employees pick their own section'},
-  race_mode_admin: {cn:'管理员指定统一板块', en:'Admin sets one section for all'},
-  race_mode_choice_desc: {cn:'学员进来看见板块列表，自己挑一个再开始', en:'Employees see the section list and choose one before starting'},
+  race_mode: {cn:'板块选择方式', en:'Module selection'},
+  race_mode_choice: {cn:'学员自行选择板块', en:'Employees pick their own module'},
+  race_mode_admin: {cn:'管理员指定统一板块', en:'Admin sets one module for all'},
+  race_mode_choice_desc: {cn:'学员进来看见板块列表，自己挑一个再开始', en:'Employees see the module list and choose one before starting'},
   race_mode_admin_desc: {cn:'所有人答同一套题，学员不能选', en:'Everyone answers the same section; no choice on the student side'},
-  race_allowed: {cn:'开放的板块', en:'Sections open'},
-  race_allowed_hint: {cn:'一个都不勾选 = 全部板块开放', en:'Select none = all sections open'},
-  race_choose_hint: {cn:'请选择一个板块开始答题', en:'Pick a section to start'},
+  race_allowed: {cn:'开放的板块', en:'Modules open'},
+  race_allowed_hint: {cn:'一个都不勾选 = 全部板块开放', en:'Select none = all modules open'},
+  race_choose_hint: {cn:'请选择一个板块开始答题', en:'Pick a module to start'},
   race_confirm_start: {cn:'点开始后立刻计时', en:'The timer starts as soon as you begin'},
   race_confirm_ask: {cn:'确定开始吗？', en:'Ready to start?'},
   race_filter_label: {cn:'只看', en:'Filter'},
-  race_filter_all: {cn:'全部板块总榜', en:'Overall — all sections'},
+  race_filter_all: {cn:'全部板块总榜', en:'Overall — all modules'},
   race_board_mix_hint: {cn:'汇总展示每位绅士淑女在本届各板块的个人最优成绩，跨板块题目不同、成绩不具直接可比性。如需查看单一板块专项排名，请切换上方对应板块。', en:'Combines each Lady and Gentleman\u2019s personal best across all modules in the current contest; modules differ in content, so cross-module scores are not directly comparable. To view a single module, select the corresponding tab above.'},
   race_board_sec_hint: {cn:'仅收录选择本板块产生的答题成绩，所有成绩在本板块内进行比对排名。', en:'Only attempts submitted within this module will be counted. All scores are ranked against one another within this module.'},
   race_board_dept_sec_hint: {cn:'仅收录选择本板块产生的答题成绩。', en:'Only attempts submitted within this module are counted.'},
   race_board_dept_mix_hint: {cn:'汇总各部门参赛人员在全部板块的答题成绩。', en:'Combines the results of each department\u2019s members across all modules.'},
   race_my_section: {cn:'你本期所选', en:'Your section'},
-  race_go_pick: {cn:'去选板块参与挑战吧！', en:'Pick a section and join the challenge!'},
+  race_go_pick: {cn:'去选板块参与挑战吧！', en:'Pick a module and join the challenge!'},
   // ---- 打卡日历 ----
   race_cal_open: {cn:'📅 我的打卡日历', en:'📅 My check-in calendar'},
-  race_cal_retry: {cn:'再挑战一次', en:'Challenge again'},
+  race_cal_retry: {cn:'再挑战一次', en:'Try again'},
   race_cal_title: {cn:'打卡日历', en:'Check-in Calendar'},
   race_cal_sub: {cn:'每天完成一次挑战即视为打卡一天', en:'One completed challenge = one checked-in day'},
   race_cal_month_days: {cn:'本月打卡 {n} 天', en:'{n} days checked in this month'},
@@ -5932,7 +5932,7 @@ var I18N = {
   badge_admin_rule_fast: {cn:'单期平均每题不超过 N 秒（每期一枚）', en:'Avg under N sec per question (per round)'},
   badge_admin_rule_newbie: {cn:'首周打卡 N 天（终身一次）', en:'N days in first week (one-off)'},
   // 竞速闯关 / 学习沉淀 / 限定主题（2026-11-04）
-  badge_admin_rule_dept_top: {cn:'板块速答榜当期前 N 名（赛季结束后结算）', en:'Top N on a section board (settled after the round ends)'},
+  badge_admin_rule_dept_top: {cn:'板块速答榜当期前 N 名（赛季结束后结算）', en:'Top N on a module board (settled after the round ends)'},
   badge_admin_rule_all_top: {cn:'全题库速答榜当期前 N 名（每期一枚）', en:'Top N on the all-question board this round'},
   badge_admin_rule_wrong: {cn:'累计重做错题 N 道（终身一次）', en:'N wrong answers redone all-time (one-off)'},
   badge_admin_rule_fav: {cn:'累计收藏题目 N 道（终身一次）', en:'N questions saved all-time (one-off)'},
@@ -5941,15 +5941,15 @@ var I18N = {
   badge_admin_rid: {cn:'限定届次（仅主题徽章用，留空 = 当前届）', en:'Bound round (theme badges only, blank = current)'},
   badge_admin_mc: {cn:'另需当期答对多少题（仅主题徽章用，0 = 只看打卡）', en:'Also require N correct answers this round (theme only, 0 = check-ins only)'},
   badge_admin_mc_hint: {cn:'打卡管「来过」，答对管「学过」，两个一起才配得上主题徽章。整月赛事建议 8 天 + 50 题。', en:'Check-ins prove showing up, correct answers prove learning. For a full month, 8 days + 50 correct is a good balance.'},
-  badge_admin_sec: {cn:'限定板块（板块速答榜 / 限定主题徽章用）', en:'Bound section (section-board / monthly theme badges)'},
-  badge_admin_sec_hint: {cn:'速答榜：留空 = 任一板块榜都算，选板块 = 只认该板块榜；主题徽章：选板块 = 打卡天数与答对题数都只算该板块，留空 = 全题库。', en:'Board badges: blank = any board, pick one = only that board. Theme badges: picking a section counts check-ins and correct answers in that section only; blank = all questions.'},
-  badge_admin_sec_any: {cn:'任一板块（不限）', en:'Any section'},
+  badge_admin_sec: {cn:'限定板块（板块速答榜 / 限定主题徽章用）', en:'Bound module (module board / monthly theme badges)'},
+  badge_admin_sec_hint: {cn:'速答榜：留空 = 任一板块榜都算，选板块 = 只认该板块榜；主题徽章：选板块 = 打卡天数与答对题数都只算该板块，留空 = 全题库。', en:'Board badges: blank = any board, pick one = only that board. Theme badges: picking a module counts check-ins and correct answers in that module only; blank = all questions.'},
+  badge_admin_sec_any: {cn:'任一板块（不限）', en:'Any module'},
   race_theme_kicker: {cn:'本期限定徽章', en:'This round only'},
   race_theme_got: {cn:'已获得', en:'earned'},
   race_hero_kicker: {cn:'本期赛事', en:'Season'},
-  race_hero_section: {cn:'参赛板块', en:'Section'},
-  race_hero_pool: {cn:'题目池', en:'Pool'},
-  race_hero_sub_choice: {cn:'每轮任选一个板块开赛，各板块相互独立、均可分别挑战', en:'Pick a section each round · all sections are independently playable'},
+  race_hero_section: {cn:'参赛板块', en:'Module'},
+  race_hero_pool: {cn:'题目池', en:'Question pool'},
+  race_hero_sub_choice: {cn:'每轮任选一个板块开赛，各板块相互独立、均可分别挑战', en:'Pick a module each round · all modules are independently playable'},
   race_hero_spare: {cn:'答完后自动补充品牌与酒店知识 {m} 题', en:'{m} Brand & Hotel questions added after the pool runs out'},
   badge_admin_rid_cur: {cn:'当前届', en:'Current round'},
   race_badge_theme_ended: {cn:'本期已结束', en:'Round closed'},
@@ -6064,9 +6064,9 @@ var I18N = {
   race_mk_task_a_tag: {cn:'任务一', en:'Task 1'},
   race_mk_task_b_tag: {cn:'任务二', en:'Task 2'},
   race_mk_parallel_note: {cn:'两项任务相互独立，可任选或全部完成。', en:'Tasks are independent. You may complete either or both.'},
-  race_mk_task_a_name: {cn:'错题巩固', en:'Error Mastery'},
+  race_mk_task_a_name: {cn:'错题巩固', en:'Error Review'},
   // 2026-11-12 任务一改版：从「每巩固完成 N 道」改为「错题本抽 5 题全对得 1 次」
-  race_mk_task_a_desc: {cn:'从错题本中随机抽取 5 道已开启复习巩固的错题，全部答对，即可获得 1 张补签卡。', en:'Draw 5 random review-enabled questions from the error notebook. Answer all correctly to earn one make-up card.'},
+  race_mk_task_a_desc: {cn:'从错题本中随机抽取 5 道已开启复习巩固的错题，全部答对，即可获得 1 张补签卡。', en:'Draw 5 random review-enabled questions from the Error Notebook. Answer all correctly to earn one make-up card.'},
   race_mk_task_a_stat: {cn:'本届挑战成功：{n} 次', en:'Successful Attempts This Season: {n}'},
   race_mk_task_a_pool: {cn:'符合条件错题：{n} 道', en:'Eligible Items: {n}'},  race_mk_task_a_poor: {cn:'符合条件的错题不足 5 道，暂时无法开启此任务。请前往错题本开启复习，让符合条件的错题数量满足要求后再来挑战。', en:'Fewer than 5 eligible wrong answers — this task is locked for now. Review in the Error Notebook first, then come back once you have at least 5.'},
   race_mk_task_a_cool: {cn:'今日挑战已成功，明天再来继续挑战。', en:'Challenge passed today. Come back tomorrow for another round.'},
@@ -6089,7 +6089,7 @@ var I18N = {
   race_mk_task_b_stat: {cn:'本届挑战成功 {n} 次', en:'{n} passed this season'},
   race_mk_task_b_desc: {cn:'选定模块，答对 ≥{m}/{n} 题，获得 1 张补签卡；同一模块本届仅可领取一次。', en:'Earn one make-up card by scoring ≥{m}/{n}. One card per module each season.'},
   race_mk_task_go: {cn:'开始挑战', en:'Start Challenge'},
-  race_mk_task_retry: {cn:'再挑战一次', en:'Try Again'},
+  race_mk_task_retry: {cn:'再挑战一次', en:'Try again'},
   race_mk_task_done: {cn:'已完成 ✓', en:'Completed ✓'},
   race_mk_mod_pass: {cn:'模块挑战通过！补签卡 +1，当前共 {n} 张。打开打卡日历，点击虚线日期即可补签。', en:'Module challenge passed! +1 card ({n} in total). Open the calendar and tap a dashed date to make up.'},
   race_mk_mod_dup: {cn:'该模块本届已完成挑战，请更换模块。', en:'This module is already completed this round. Pick another one.'},
@@ -6271,7 +6271,7 @@ var I18N = {
   rv_due_in: {cn:'{n} 天后再复习', en:'in {n}d'},
   rv_done_today_tag: {cn:'今日已复习', en:'reviewed today'},  rv_due_n: {cn:'{n} 道该复习', en:'{n} due'},
   rv_tab_due: {cn:'该复习', en:'Due'},
-  rv_tab_all: {cn:'全部错题', en:'All'},
+  rv_tab_all: {cn:'全部错题', en:'All mistakes'},
   rv_tab_tag: {cn:'按知识点', en:'By topic'},
   rv_tab_due_hint: {cn:'下面这些题的复习时间到了，现在练记得最牢。', en:'These are due for review — the best time to practise them.'},
   rv_tab_all_hint: {cn:'你在练习、模拟考、答题赛里做错过的全部题目。', en:'Every question you have got wrong in practice, exams and races.'},
@@ -6280,7 +6280,7 @@ var I18N = {
   // 规则文案（2026-11-10 统一术语）：巩固 = 答对 1 次推进 1 阶；巩固完成 = 走完两阶后（第 5 天）
   // 再答对 1 次、自动移出错题本；巩固完成后仍会被练习抽查两次。
   // 「掌握」这个词在学员端全部退役 —— 任务一叫「错题巩固完成」，错题本就该用同一套词。
-  rv_stage_hint: {cn:'规则：第 1 天答对记 1 阶，第 3 天再答对记 2 阶，第 5 天再答对一次即巩固完成、自动移出错题本。同一道错题每天最多推进 1 阶；中途又答错，就回到第 1 阶重来。巩固完成后仍会被抽查：练习、模拟考试、限时答题赛里都可能再遇到它，答错就重新回到第 1 阶。', en:'How it works: correct on day 1 (stage 1), correct on day 3 (stage 2), then one more correct answer on day 5 clears it and removes it from the book. At most one stage per day; a wrong answer sends it back to stage 1. Clearing does not mean it is never asked again: practice, mock exams and timed races may still bring it back \u2014 answer wrong and it returns to stage 1.'},
+  rv_stage_hint: {cn:'规则：第 1 天答对记 1 阶，第 3 天再答对记 2 阶，第 5 天再答对一次即巩固完成、自动移出错题本。同一道错题每天最多推进 1 阶；中途又答错，就回到第 1 阶重来。巩固完成后仍会被抽查：练习、模拟考试、限时答题赛里都可能再遇到它，答错就重新回到第 1 阶。', en:'How it works: correct on day 1 (stage 1), correct on day 3 (stage 2), then one more correct answer on day 5 clears it and removes it from the Error Notebook. At most one stage per day; a wrong answer sends it back to stage 1. Clearing does not mean it is never asked again: practice, mock exams and timed races may still bring it back \u2014 answer wrong and it returns to stage 1.'},
   rv_stage_n: {cn:'已巩固 {n}/{m} 阶', en:'stage {n} of {m}'},
   rv_wrong_times: {cn:'您做错过 {n} 次', en:'{n} wrong attempts'},
   rv_redo_due: {cn:'复习这 {n} 道题', en:'Review these {n}'},
@@ -6305,7 +6305,7 @@ var I18N = {
   rv_src_all_d: {cn:'练习、考试、答题赛里做错过的全部题目', en:'Every question you have got wrong so far'},
   rv_src_fav: {cn:'收藏题', en:'Saved questions'},
   rv_src_fav_d: {cn:'你自己收藏的题（不一定是错题）', en:'Questions you saved yourself'},
-  rv_src_tag: {cn:'薄弱知识点', en:'Weak topic'},
+  rv_src_tag: {cn:'薄弱知识点', en:'Weak knowledge points'},
   rv_src_tag_d: {cn:'挑一个错得最多的知识点，只练这一类', en:'Pick the topic you miss most'},
   rv_all_q: {cn:'全部', en:'All'},
   rv_paper_take: {cn:'道题', en:'questions'},
@@ -6325,7 +6325,7 @@ var I18N = {
   rv_finish_bar_go: {cn:'查看小结', en:'See summary'},
   rv_paper_line: {cn:'答对 {ok} / {total} 道', en:'{ok} / {total} correct'},
   rv_paper_gain: {cn:'{p} 道巩固进阶 · {g} 道已巩固完成', en:'{p} advanced · {g} cleared'},
-  rv_back_wrong: {cn:'返回错题本', en:'Back to mistakes'},
+  rv_back_wrong: {cn:'返回错题本', en:'Back to Error Notebook'},
   // 小结页返回按钮：从哪来回哪去，按钮文案跟着入口变
   rv_back_race_result: {cn:'返回本场解析', en:"Back to this run's review"},
   rv_back_exam_result: {cn:'返回本卷解析', en:"Back to this paper's review"},
@@ -6342,15 +6342,15 @@ var I18N = {
   rv_redo_all: {cn:'重做错题', en:'Review mistakes'},
   rv_hub_title: {cn:'温故而知新', en:'Review to Progress'},
   rv_rule_toggle: {cn:'错题复习规则', en:'Review Rules'},
-  rv_hub_browse: {cn:'打开错题本', en:'Open'},
-  rv_hub_mastery_short: {cn:'巩固完成率', en:'Mastery rate'},
-  rv_hub_sub: {cn:'已巩固完成 {g} 道 · 错题本现有 {n} 道', en:'{g} cleared · {n} in the book'},
+  rv_hub_browse: {cn:'打开错题本', en:'Open Error Notebook'},
+  rv_hub_mastery_short: {cn:'巩固完成率', en:'Clear rate'},
+  rv_hub_sub: {cn:'已巩固完成 {g} 道 · 错题本现有 {n} 道', en:'{g} cleared · {n} in the Error Notebook'},
   rv_hub_empty: {cn:'还没有错题记录，去练几道新题吧。', en:'No mistakes yet — start practising.'},
   rv_hub_due: {cn:'今天该复习 {n} 道', en:'{n} due today'},
   rv_hub_hint: {cn:'近一周你的错题集中在「{tag}」，点开复习巩固一下。', en:'Most of your recent mistakes are in "{tag}" — review them now.'},
   rv_hub_none: {cn:'本周没有该复习的错题，可以自己挑几道错题巩固，或者练几道新题。', en:'Nothing due this week — review any mistake you like, or practise new questions.'},
   rv_stat_line: {cn:'累计复习 {rv} 次 · 巩固进阶 {p} 道 · 已巩固完成 {g} 道', en:'{rv} reviews · {p} advanced · {g} cleared'},
-  race_goto_wrong: {cn:'去错题本复习（本场答错已收录）', en:'Review mistakes (this run saved)'},
+  race_goto_wrong: {cn:'去错题本复习（本场答错已收录）', en:'Review Error Notebook (this run saved)'},
   race_goto_wrong_run: {cn:'一键重做本场错题（{n} 道）', en:'Redo all mistakes from this run ({n})'},
   exam_goto_wrong_run: {cn:'一键重做本卷错题（{n} 道）', en:'Redo all mistakes from this paper ({n})'},
   rv_book_ledger: {cn:'我的学习记录', en:'My learning record'},
@@ -6360,8 +6360,8 @@ var I18N = {
   rv_task_done: {cn:'本周任务已完成', en:'Done this week'},
   rv_task_none: {cn:'暂无该复习的错题，去练几道新题保持手感。', en:'Nothing due — try some new questions.'},
   rv_task_progress: {cn:'已完成 {d}/{n}', en:'{d}/{n} done'},
-  rv_mastery: {cn:'巩固完成率', en:'Mastery rate'},
-  rv_mastery_sub: {cn:'已巩固完成 {g} 道 · 错题本还剩 {n} 道', en:'{g} cleared · {n} left'},
+  rv_mastery: {cn:'巩固完成率', en:'Clear rate'},
+  rv_mastery_sub: {cn:'已巩固完成 {g} 道 · 错题本还剩 {n} 道', en:'{g} cleared · {n} left in the Error Notebook'},
   rv_mastery_none: {cn:'还没有错题记录，先练几道再来。', en:'No mistakes recorded yet.'},
   rv_cal_redo_run: {cn:'一键重做本次错题（{n} 道）', en:'Redo all mistakes from this run ({n})'},
   rv_cal_redo_one: {cn:'再做一次', en:'Try again'},
@@ -6372,7 +6372,7 @@ var I18N = {
   rv_src_label: {cn:'看哪一批错题', en:'Which questions'},
   rv_src_all_opt: {cn:'全部来源', en:'All sources'},
   rv_src_all_opt_d: {cn:'产品知识 + 21 天培训 + 优质服务三步骤 + 答题赛', en:'Product knowledge + 21-day + The Three Steps of Service + races'},
-  rv_src_bank_manual: {cn:'酒店产品知识', en:'Product knowledge'},
+  rv_src_bank_manual: {cn:'酒店产品知识', en:'Hotel Product Knowledge'},
   rv_src_bank_manual_d: {cn:'酒店产品知识手册里的题（含模拟考）', en:'From the product knowledge handbook'},
   rv_src_bank_day21: {cn:'21 天培训考试', en:'21-day exam'},
   rv_src_bank_day21_d: {cn:'21 天培训考试的题', en:'21-day training exam questions'},
@@ -6381,7 +6381,7 @@ var I18N = {
   rv_paper_unit: {cn:'道', en:''},
   rv_pick_tag: {cn:'选一个知识点', en:'Pick a topic'},
   rv_book_sub: {cn:'共 {n} 道 · 该复习 {d} 道', en:'{n} total · {d} due'},
-  rv_src_race: {cn:'限时答题赛', en:'Quiz races'},
+  rv_src_race: {cn:'限时答题赛', en:'Speed Quiz'},
   rv_src_race_d: {cn:'在限时答题赛里做错的题', en:'Missed in timed races'},
   // ===== 错题本三版：三大功能分区（2026-11-05）=====
   // 学员端只讲"这里能干什么"，不讲系统原理。分类名沿用领导的定稿，不再自创同义词。
@@ -6401,22 +6401,22 @@ var I18N = {
   // 错题进度图表（2026-11-10）：三个数字 + 一条分段进度条，代替原来那行「掌握度 X% | …」。
   // 学员一眼能看出「多少道学完了、多少道在复习、多少道还没开始」。
   rv_chart_title: {cn:'错题复习进度', en:'Review Progress of Error Items'},
-  rv_chart_pct: {cn:'巩固完成率 {p}%', en:'{p}% mastered'},
-  rv_chart_grad: {cn:'已巩固完成', en:'Mastered'},
+  rv_chart_pct: {cn:'巩固完成率 {p}%', en:'{p}% cleared'},
+  rv_chart_grad: {cn:'已巩固完成', en:'Cleared'},
   rv_chart_doing: {cn:'巩固中', en:'In Progress'},
   rv_chart_todo: {cn:'待开启', en:'Pending'},
   rv_chart_unit: {cn:'道', en:''},
-  rv_chart_rule: {cn:'请遵循记忆曲线，于第 1、3、5 天对错题进行复习巩固；若三次全部答对，系统即判定该题已被熟练掌握，题目将自动移出错题本。', en:'Please follow the memory curve, and review your incorrect questions on Day 1, Day 3 and Day 5. If you get all three attempts right, the system will mark the question as fully mastered and it will be automatically removed from the error notebook.'},
+  rv_chart_rule: {cn:'请遵循记忆曲线，于第 1、3、5 天对错题进行复习巩固；若三次全部答对，系统即判定该题已被熟练掌握，题目将自动移出错题本。', en:'Please follow the memory curve, and review your incorrect questions on Day 1, Day 3 and Day 5. If you get all three attempts right, the system will mark the question as fully mastered and it will be automatically removed from the Error Notebook.'},
   // 答完一题后的即时说明：告诉学员「这一答到底推进了什么」，否则做了还是 0/3 会以为坏了
   rv_h_promote: {cn:'本题已推进到第 {n} 阶（共 {m} 阶）· {d} 天后再复习', en:'Advanced to stage {n} of {m} · review again in {d} days'},
   rv_h_promote_today: {cn:'本题已推进到第 {n} 阶（共 {m} 阶）· 明天可再复习', en:'Advanced to stage {n} of {m} · review again tomorrow'},
-  rv_h_grad: {cn:'本题已巩固完成，已自动移出错题本（以后练习、考试里还会抽查）', en:'Cleared and removed from your mistake book (still spot-checked in practice and exams)'},
+  rv_h_grad: {cn:'本题已巩固完成，已自动移出错题本（以后练习、考试里还会抽查）', en:'Cleared and removed from the Error Notebook (still spot-checked in practice and exams)'},
   rv_h_checkpass: {cn:'抽查通过：这道题你已稳定掌握', en:'Spot-check passed — this one is solid'},
-  rv_h_readded: {cn:'这道题此前已巩固完成、移出错题本；这次答错，重新回到第 1 阶', en:'You had already cleared this one and it had left your book — now it is back at stage 1'},
+  rv_h_readded: {cn:'这道题此前已巩固完成、移出错题本；这次答错，重新回到第 1 阶', en:'You had already cleared this one and it had left the Error Notebook — now it is back at stage 1'},
   rv_h_early: {cn:'本题今天已作答过：同一道错题每天最多推进 1 阶，明天再答对即可进到下一阶', en:'Already answered today \u2014 one stage per day. Answer correctly tomorrow for the next stage.'},
-  rv_h_added: {cn:'本题已加入错题本，将按记忆曲线安排复习', en:'Added to your mistake book and scheduled for review'},
+  rv_h_added: {cn:'本题已加入错题本，将按记忆曲线安排复习', en:'Added to the Error Notebook and scheduled for review'},
   rv_h_added_back: {cn:'本题已记录错误：重回第 1 次巩固', en:'Recorded — back to the first consolidation round'},
-  rv_cat_all: {cn:'全部错题', en:'All incorrect questions'},
+  rv_cat_all: {cn:'全部错题', en:'All mistakes'},
   rv_cat_due: {cn:'需要优先巩固', en:'For priority review'},
   rv_cat_fav: {cn:'收藏题目', en:'Saved favourites'},
   rv_cat_tag: {cn:'薄弱知识点', en:'Weak knowledge points'},
@@ -6430,7 +6430,7 @@ var I18N = {
   rv_bk_gen_none: {cn:'这一类暂时没有题', en:'Nothing in this category yet'},
   rv_bk_eb3: {cn:'错题归档', en:'My Error Bank'},
   rv_bk_t3: {cn:'当前错题总览', en:'My Error Bank'},
-  rv_bk_d3: {cn:'按来源与分类筛选，查看仍在错题本中的全部题目。', en:'Filter by source and category to browse every question still in your notebook.'},
+  rv_bk_d3: {cn:'按来源与分类筛选，查看仍在错题本中的全部题目。', en:'Filter by source and category to browse every question still in the Error Notebook.'},
   rv_bk_cat_title: {cn:'错题分类', en:'Category'},
   rv_bk_src_title: {cn:'题目来源', en:'Question source'},
   // 二级菜单的小标题（点开筛选按钮后，展开面板顶部那行）
@@ -12221,6 +12221,18 @@ function raceDayKeyBj(ts) {
   var m = d.getUTCMonth() + 1, dd = d.getUTCDate();
   return d.getUTCFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd;
 }
+// 成绩单底部「作答时间」注脚：北京时间 YYYY 年 M 月 D 日 HH:mm（中）/ Mon D, YYYY HH:mm（英）
+function fmtRaceStampBj(ts) {
+  if (!ts) return '';
+  var d = new Date(ts + 8 * 3600000);
+  function p(n) { return (n < 10 ? '0' : '') + n; }
+  var hm = p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
+  if (state.lang === 'en') {
+    var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return MON[d.getUTCMonth()] + ' ' + d.getUTCDate() + ', ' + d.getUTCFullYear() + ' ' + hm;
+  }
+  return d.getUTCFullYear() + ' 年 ' + (d.getUTCMonth() + 1) + ' 月 ' + d.getUTCDate() + ' 日 ' + hm;
+}
 function raceIsNightTs(ts) {
   var hr = raceBjHour(ts);
   return hr >= 22 || hr < 5;
@@ -16125,33 +16137,46 @@ function renderRaceResult() {
   if (lockLeft > 0 || !state.raceResultRevealed) {
     var enL = state.lang === 'en';
     var isTO = r.endReason === 'timeout';
-    // ① 大横幅：超时 = ⏰ 时间到；做完全部题 / 手动交卷 = 🎉 交卷成功
-    // 满分或拿到新徽章时（state.raceCelebrate）横幅上撒一轮彩带
+    // ① 大横幅：超时 = 时钟线稿「时间到」；做完全部题 / 手动交卷 = 对勾线稿「交卷成功」
+    // 只用黑 + 丽思蓝，去掉 emoji 与红/绿警示色；满分或新徽章时照常撒彩带
     var cel = state.raceCelebrate;
     html += '<div style="text-align:center;padding:16px 0 2px;"' + (cel ? ' class="race-confetti"' : '') + '>';
     if (cel) html += raceConfettiHtml();
-    html += '<div style="font-size:46px;line-height:1.1;">' + (isTO ? '⏰' : '🎉') + '</div>';
-    html += '<div style="font-size:26px;font-weight:800;letter-spacing:2px;color:' + (isTO ? '#c62828' : '#2e7d32') + ';margin-top:4px;">'
+    if (isTO) {
+      html += '<svg width="38" height="38" viewBox="0 0 44 44" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" style="display:block;margin:0 auto;"><circle cx="22" cy="22" r="16"/><path d="M22 12v10l7 4"/></svg>';
+    } else {
+      html += '<svg width="38" height="38" viewBox="0 0 44 44" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto;"><circle cx="22" cy="22" r="16"/><path d="M14 22l6 6 11-12"/></svg>';
+    }
+    html += '<div style="font-size:26px;font-weight:500;letter-spacing:8px;color:#000;margin-top:6px;font-family:\'Songti SC\',\'STSong\',\'SimSun\',serif;">'
       + (isTO ? t('race_time_up') : t('race_lock_done')) + '</div>';
     html += '</div>';
-    // ② 大成绩单：和页头 banner 完全同款（linear-gradient(135deg, --primary-soft,
-    // --primary-light) + var(--shadow)），品牌一致性由"直接复用"保证，不再自调色值。
+    // ② 大成绩单：纯丽思蓝 #C7DDF3 平铺、不加渐变阴影。信息分三层——
+    // 准确率圆环（焦点）/ 答对·作答两栏（次焦点）/ 身份与时间（注脚），大小错落、一眼读取。
     var myName = raceDisplayName();
     var myDept = raceDeptName();
-    html += '<div class="q-card" style="text-align:center;padding:20px 14px 16px;margin-top:8px;'
-      + 'background:linear-gradient(135deg,var(--primary-soft) 0%,var(--primary-light) 100%);'
-      + 'border:1px solid rgba(0,0,0,.06);box-shadow:var(--shadow);">';
-    html += '<div style="font-size:12px;color:rgba(0,0,0,.6);">' + escapeHtml((r.conf && r.conf.title) || t('race_title')) + '</div>';
-    html += '<div style="font-size:15px;font-weight:700;color:#000;margin-top:2px;">' + raceSecIcon(r.section || 'all') + ' ' + escapeHtml(raceSecName(r.section || 'all')) + '</div>';
-    if (myName) html += '<div style="margin-top:12px;font-size:14px;color:#000;">' + (enL ? 'Name' : '姓名') + ' · <b>' + escapeHtml(myName) + '</b></div>';
-    if (myDept) html += '<div style="font-size:12px;color:rgba(0,0,0,.6);margin-top:2px;">' + escapeHtml(myDept) + '</div>';
-    html += '<div style="font-size:58px;font-weight:800;color:#000;line-height:1.2;margin-top:6px;">' + r.correct + '</div>';
-    html += '<div style="font-size:12px;color:rgba(0,0,0,.6);">' + t('race_correct') + '</div>';
-    html += '<div style="display:flex;margin-top:14px;border-top:1px solid rgba(0,0,0,.12);padding-top:12px;">';
-    html += '<div style="flex:1;"><div style="font-size:20px;font-weight:700;color:#000;">' + r.answered + '</div><div style="font-size:11px;color:rgba(0,0,0,.6);margin-top:2px;">' + t('race_answered') + '</div></div>';
-    html += '<div style="flex:1;border-left:1px solid rgba(0,0,0,.12);"><div style="font-size:20px;font-weight:700;color:#000;">' + r.correct + '</div><div style="font-size:11px;color:rgba(0,0,0,.6);margin-top:2px;">' + t('race_correct') + '</div></div>';
-    html += '<div style="flex:1;border-left:1px solid rgba(0,0,0,.12);"><div style="font-size:20px;font-weight:700;color:#000;">' + acc + '%</div><div style="font-size:11px;color:rgba(0,0,0,.6);margin-top:2px;">' + t('race_accuracy') + '</div></div>';
+    var _ringC = 339.3, _ringOff = (_ringC * (1 - acc / 100)).toFixed(1);
+    html += '<div class="q-card" style="text-align:center;padding:16px 16px 14px;margin-top:8px;'
+      + 'background:#C7DDF3;border:1px solid rgba(0,0,0,.06);border-radius:14px;box-shadow:none;">';
+    html += '<div style="font-size:11px;color:rgba(0,0,0,.6);text-align:left;">' + escapeHtml((r.conf && r.conf.title) || t('race_title')) + '</div>';
+    html += '<div style="width:24px;height:1.5px;background:#000;margin-top:7px;"></div>';
+    html += '<div style="display:flex;justify-content:center;margin:10px 0 12px;">';
+    html += '<svg width="112" height="112" viewBox="0 0 128 128">';
+    html += '<circle cx="64" cy="64" r="54" fill="#fff" stroke="#fff" stroke-width="9"/>';
+    html += '<circle cx="64" cy="64" r="54" fill="none" stroke="#000" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + _ringC + ' ' + _ringC + '" stroke-dashoffset="' + _ringOff + '" transform="rotate(-90 64 64)"/>';
+    html += '<text x="64" y="65" text-anchor="middle" font-size="30" font-weight="500" fill="#000">' + acc + '%</text>';
+    html += '<text x="64" y="85" text-anchor="middle" font-size="11" fill="rgba(0,0,0,.6)">' + escapeHtml(t('race_accuracy')) + '</text>';
+    html += '</svg></div>';
+    html += '<div style="display:flex;align-items:center;justify-content:center;">';
+    html += '<div style="flex:1;text-align:center;"><div style="font-size:27px;font-weight:500;line-height:1.1;">' + r.correct + '</div><div style="font-size:11px;color:rgba(0,0,0,.55);margin-top:3px;">' + escapeHtml(t('race_correct_n')) + '</div></div>';
+    html += '<div style="width:1px;height:32px;background:rgba(0,0,0,.16);"></div>';
+    html += '<div style="flex:1;text-align:center;"><div style="font-size:27px;font-weight:500;line-height:1.1;">' + r.answered + '</div><div style="font-size:11px;color:rgba(0,0,0,.55);margin-top:3px;">' + escapeHtml(t('race_answered_n')) + '</div></div>';
     html += '</div>';
+    html += '<div style="border-top:.5px solid rgba(0,0,0,.15);margin-top:16px;padding-top:12px;">';
+    if (myName) html += '<div style="display:flex;align-items:baseline;font-size:12px;padding:3px 0;"><span style="flex:0 0 66px;color:rgba(0,0,0,.5);text-align:left;">' + escapeHtml(t('race_name')) + '</span><span style="flex:1;color:#000;text-align:left;">' + escapeHtml(myName) + '</span></div>';
+    if (myDept) html += '<div style="display:flex;align-items:baseline;font-size:12px;padding:3px 0;"><span style="flex:0 0 66px;color:rgba(0,0,0,.5);text-align:left;">' + escapeHtml(t('race_dept')) + '</span><span style="flex:1;color:#000;text-align:left;">' + escapeHtml(myDept) + '</span></div>';
+    html += '</div>';
+    // 作答时间只作节点注脚，与赛事名同款字号颜色，底部留白不贴边
+    html += '<div style="text-align:center;font-size:11px;color:rgba(0,0,0,.6);margin-top:14px;">' + escapeHtml(fmtRaceStampBj(r.endTs || r.startTs)) + '</div>';
     html += raceSyncTipHtml();
     html += '</div>';
     // ③ 徽章照样当场点亮
@@ -16199,12 +16224,13 @@ function renderRaceResult() {
       html += '</div>';
     }
     // ④ 唯一的按钮：保护期内灰色禁用（倒计时写在按钮里），到点点亮，点击展开解析
+    var _bookIco = '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="vertical-align:-2px;"><path d="M2 3.5h4.5L8 5l1.5-1.5H14v9H2z"/><path d="M8 5v7"/></svg> ';
     if (lockLeft > 0) {
       html += '<button id="raceLockBtn" disabled style="display:block;width:100%;margin-top:14px;padding:13px;border:none;border-radius:12px;'
-        + 'background:#c7d0d9;color:#828e99;font-size:15px;font-weight:600;cursor:default;">📖 '
+        + 'background:#c7d0d9;color:#828e99;font-size:15px;font-weight:600;cursor:default;">' + _bookIco
         + '<span id="raceLockMsg">' + t('race_review_wait').replace('{n}', String(Math.ceil(lockLeft / 1000))) + '</span></button>';
     } else {
-      html += '<button class="action-btn primary" style="display:block;width:100%;margin-top:14px;" onclick="raceRevealResult()">📖 ' + t('race_review') + '</button>';
+      html += '<button class="action-btn primary" style="display:block;width:100%;margin-top:14px;" onclick="raceRevealResult()">' + _bookIco + t('race_review') + '</button>';
     }
     html += '</div>';
     return html;
