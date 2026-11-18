@@ -411,22 +411,24 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .action-btn:active { transform:scale(0.98); }
 
 /* 打卡日历底部入口：图标 + 文字横向并排。
-   尺寸对齐本页「查看答题清单」(.action-btn)：padding 12 / font 14 / weight 600 / 行高 1.6，
-   实际高度约 48px，不再显得比上面的按钮小。只用品牌黑 + 回忆蓝 + 白。 */
+   尺寸对齐排行榜的榜切换 tab（.action-btn + font-size:13px）：min-height 40 / font 13 / weight 600 / 行高 1.2，
+   比原来的 48/14 秀气，跟日历格子同一量级。只用品牌黑 + 回忆蓝 + 白。
+   展开某天详情时加 .with-detail 留白，和详情内容分组，不再贴在一起。 */
 .race-quick-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:8px; }
+.race-quick-2.with-detail { margin-top:24px; }
 .race-quick-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:8px; }
 .race-quick-card { position:relative; background:#fff; border:1px solid var(--border); border-radius:10px;
-  min-height:48px; padding:12px 10px; display:flex; flex-direction:row; align-items:center;
+  min-height:40px; padding:12px 10px; display:flex; flex-direction:row; align-items:center;
   justify-content:center; gap:8px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
-.race-quick-card .ic { flex:0 0 18px; width:18px; height:18px; display:flex; align-items:center; justify-content:center;
-  font-size:17px; line-height:1; }
-.race-quick-card .lb { font-size:14px; font-weight:600; color:#1a1a1a; line-height:1.6; white-space:nowrap; }
+.race-quick-card .ic { flex:0 0 17px; width:17px; height:17px; display:flex; align-items:center; justify-content:center;
+  font-size:15px; line-height:1; }
+.race-quick-card .lb { font-size:13px; font-weight:600; color:#1a1a1a; line-height:1.2; white-space:nowrap; }
 .race-quick-card.main { background:#1a1a1a; border-color:#1a1a1a; }
 .race-quick-card.main .lb { color:#fff; }
 .race-quick-card.sub { border-color:var(--primary-light); background:#fff; }
-.race-quick-card.mini { min-height:48px; padding:12px 4px; gap:6px; }
-.race-quick-card.mini .ic { flex-basis:16px; width:16px; height:16px; font-size:15px; }
-.race-quick-card.mini .lb { font-size:14px; }
+.race-quick-card.mini { min-height:40px; padding:12px 4px; gap:6px; }
+.race-quick-card.mini .ic { flex-basis:15px; width:15px; height:15px; font-size:14px; }
+.race-quick-card.mini .lb { font-size:13px; }
 .race-quick-card:active { transform:scale(0.98); }
 
 /* 2026-11-12: 统计卡改自适应一行（4 张卡不再 3+1 折行） */
@@ -15840,7 +15842,8 @@ function renderRaceCalendar() {
   // 底部入口（2026-11-18 方案B）：2 张大主卡 + 3 个小方格。
   // 层级：再挑战（黑主卡）/ 排行榜（白卡）在第一行 —— 学员更爱看榜；
   // 兑奖券 / 题库练习 / 错题本 收进第二行小方格。跳转与文案 key 全部沿用。
-  html += '<div class="race-quick-2">';
+  // 展开某天详情时加大上边距（.with-detail），五入口和详情内容分开；未展开时保持紧凑。
+  html += '<div class="race-quick-2' + (state.raceCalDay ? ' with-detail' : '') + '">';
   html += raceQuickCardHtml('main', 'bolt', t('race_cal_retry'), "navigate('race')");
   html += raceQuickCardHtml('sub', 'board', t('race_q_board'), 'raceOpenBoard()');
   html += '</div>';
