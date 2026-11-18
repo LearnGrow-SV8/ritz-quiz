@@ -423,7 +423,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .race-quick-card .ic { flex:0 0 17px; width:17px; height:17px; display:flex; align-items:center; justify-content:center;
   font-size:15px; line-height:1; }
 .race-quick-card .lb { font-size:13px; font-weight:600; color:#1a1a1a; line-height:1.2; white-space:nowrap; }
-.race-quick-card.main { background:var(--primary-light); border-color:var(--primary-light); }
+.race-quick-card.main { background:linear-gradient(135deg,var(--primary-soft),var(--primary-light)); border-color:var(--primary-light); }
 .race-quick-card.sub { background:#fff; border-color:var(--border); }
 .race-quick-card.mini { min-height:40px; padding:12px 8px; gap:7px; }
 .race-quick-card.mini .ic { flex-basis:17px; width:17px; height:17px; font-size:15px; }
@@ -16144,27 +16144,28 @@ function renderRaceResult() {
     var cel = state.raceCelebrate;
     html += '<div style="text-align:center;padding:16px 0 2px;"' + (cel ? ' class="race-confetti"' : '') + '>';
     if (cel) html += raceConfettiHtml();
+    html += '<div style="display:flex;align-items:center;justify-content:center;gap:9px;">';
     if (isTO) {
-      html += '<svg width="38" height="38" viewBox="0 0 44 44" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" style="display:block;margin:0 auto;"><circle cx="22" cy="22" r="16"/><path d="M22 12v10l7 4"/></svg>';
+      html += '<svg width="26" height="26" viewBox="0 0 44 44" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" style="flex:0 0 auto;"><circle cx="22" cy="22" r="16"/><path d="M22 12v10l7 4"/></svg>';
     } else {
-      html += '<svg width="38" height="38" viewBox="0 0 44 44" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto;"><circle cx="22" cy="22" r="16"/><path d="M14 22l6 6 11-12"/></svg>';
+      html += '<svg width="26" height="26" viewBox="0 0 44 44" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;"><circle cx="22" cy="22" r="16"/><path d="M14 22l6 6 11-12"/></svg>';
     }
-    html += '<div style="font-size:26px;font-weight:500;letter-spacing:8px;color:#000;margin-top:6px;font-family:\'Songti SC\',\'STSong\',\'SimSun\',serif;">'
-      + (isTO ? t('race_time_up') : t('race_lock_done')) + '</div>';
-    html += '</div>';
-    // ② 大成绩单：纯丽思蓝 #C7DDF3 平铺、不加渐变阴影。信息分三层——
+    html += '<span style="font-size:26px;font-weight:500;letter-spacing:8px;text-indent:8px;color:#000;font-family:\'Songti SC\',\'STSong\',\'SimSun\',serif;">'
+      + (isTO ? t('race_time_up') : t('race_lock_done')) + '</span>';
+    html += '</div></div>';
+    // ② 大成绩单：丽思蓝半透明平铺（轻盈）、不加渐变阴影。信息分三层——
     // 准确率圆环（焦点）/ 答对·作答两栏（次焦点）/ 身份与时间（注脚），大小错落、一眼读取。
     var myName = raceDisplayName();
     var myDept = raceDeptName();
     var _ringC = 339.3, _ringOff = (_ringC * (1 - acc / 100)).toFixed(1);
     html += '<div class="q-card" style="text-align:center;padding:16px 16px 14px;margin-top:8px;'
-      + 'background:#C7DDF3;border:1px solid rgba(0,0,0,.06);border-radius:14px;box-shadow:none;">';
+      + 'background:rgba(199,221,243,.55);border:1px solid rgba(0,0,0,.06);border-radius:14px;box-shadow:none;">';
     html += '<div style="font-size:11px;color:rgba(0,0,0,.6);text-align:left;">' + escapeHtml((r.conf && r.conf.title) || t('race_title')) + '</div>';
     html += '<div style="width:24px;height:1.5px;background:#000;margin-top:7px;"></div>';
     html += '<div style="display:flex;justify-content:center;margin:10px 0 12px;">';
     html += '<svg width="112" height="112" viewBox="0 0 128 128">';
-    html += '<circle cx="64" cy="64" r="54" fill="#fff" stroke="#fff" stroke-width="9"/>';
-    html += '<circle cx="64" cy="64" r="54" fill="none" stroke="#000" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + _ringC + ' ' + _ringC + '" stroke-dashoffset="' + _ringOff + '" transform="rotate(-90 64 64)"/>';
+    html += '<circle cx="64" cy="64" r="54" fill="#fff" stroke="rgba(0,0,0,.09)" stroke-width="9"/>';
+    html += '<circle cx="64" cy="64" r="54" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + _ringC + ' ' + _ringC + '" stroke-dashoffset="' + _ringOff + '" transform="rotate(-90 64 64)"/>';
     html += '<text x="64" y="65" text-anchor="middle" font-size="30" font-weight="500" fill="#000">' + acc + '%</text>';
     html += '<text x="64" y="85" text-anchor="middle" font-size="11" fill="rgba(0,0,0,.6)">' + escapeHtml(t('race_accuracy')) + '</text>';
     html += '</svg></div>';
