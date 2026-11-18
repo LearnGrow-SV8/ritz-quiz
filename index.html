@@ -11640,6 +11640,7 @@ var BADGE_DESC_TEXT = {
   bd_perf:    { cn: '单场限时竞速答对 10 题以上，答题实力在线', en: '10+ correct in one race run — speed meets accuracy' },
   bd_fast:    { cn: '单赛季答题平均每题用时 ≤5 秒（至少答对 8 题），反应敏捷', en: 'Avg \u2264 5 sec per question (8+ answered) — lightning reflexes' },
   bd_theme1:  { cn: '✨ 月度限定 · 当期打卡满 8 天且累计答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers this round' },
+  // 12 月场第二期预留：当前目录未收录，届时随徽章一起启用
   bd_theme2:  { cn: '✨ 月度限定 · 品牌与酒店知识打卡 8 天、答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers in Brand & Hotel Knowledge' }
 };
 // 预设徽章：先用一套合理的，管理端随时可改（改完发布即生效）。
@@ -11680,14 +11681,10 @@ function badgeDefaultCatalog() {
       badgeDef('bd_wkend', W, 3, '周末战士', 'Weekend Warrior', '⚔️', 2, '#b2dfdb', '#00695c'),
       badgeDef('bd_perf', PF, 10, '答题能手', 'Run Sharpshooter', '💯', 3, '#f8bbd0', '#ad1457'),
       badgeDef('bd_fast', F, 5, '闪电快手', 'Lightning Fast', '⚡', 3, '#ffe08a', '#ef6c00'),
-      // 限定主题第一期：整月赛事 = 打卡 8 天 + 当期答对 50 题（约 10~12 局，摊到 8 天每天一局半）。
-      // 第一期门槛：打卡偏松（保参与），答对收紧（保证真学了产品知识）。
-      // 第一期主题（2026-11 产品知识启航狮）：已结束，停发保留历史荣誉。
-      // 新一代主题徽章另起 id：换 id 才能让 12 月这一期重新可拿（theme 是终身一次，同 id 拿过就不再发）。
-      Object.assign(badgeDef('bd_theme1', TH, 8, '产品知识启航狮', 'Product Launch Lion', '⛵', 3, '#ffd7a8', '#c2410c', '', 50), { on: false }),
-      // 2026-12 第二期主题：品牌文化探索狮，绑定「品牌与酒店知识」板块（sec=general）。
-      // 赛事不锁板块，徽章达标只认该板块的打卡与答对（见 raceComputeAwards / raceBadgeProgress）。
-      badgeDef('bd_theme2', TH, 8, '品牌文化探索狮', 'Brand Culture Explorer Lion', '🦁', 3, '#ffd7a8', '#c2410c', '', 50, 'general')
+      // 限定主题：整月赛事 = 打卡 8 天 + 当期答对 50 题（约 10~12 局，摊到 8 天每天一局半）。
+      // 门槛：打卡偏松（保参与），答对收紧（保证真学了产品知识）。
+      // 2026-11 第一期「产品知识启航狮」发放中；第二期按用户要求等 12 月场再上。
+      badgeDef('bd_theme1', TH, 8, '产品知识启航狮', 'Product Launch Lion', '⛵', 3, '#ffd7a8', '#c2410c', '', 50)
     ]
   };
   // 挂上逐条定稿的员工端说明（见 BADGE_DESC_TEXT）
@@ -11812,31 +11809,33 @@ function badgePatchThemeMc(list) {
   }
   return changed;
 }
-// 主题徽章换代（2026-11-18，12 月场启用）：
-//   ① 月度全勤狮 🦁 → 🗓️（让位给新的「品牌文化探索狮」🦁，避免撞图标）；
-//   ② 第一期「产品知识启航狮」原封未动的 → 停发（历史荣誉保留，已拿到的记录不动）；
-//   ③ 补入第二期「品牌文化探索狮」（id 不同 ⇒ 上一期拿过的人这一期还能再拿）。
+// 主题徽章换代回滚（2026-11-18）：第二期原定 12 月才启用，但这批改动被提前带上线，
+// 导致 11 月场的「产品知识启航狮」被误停发。按值回滚到 11 月口径：
+//   ① 目录里还有"原封未动的第二期徽章"= 确实被换代污染过，才执行回滚（幂等、尊重手动目录）；
+//   ② 被换代停发的第一期徽章 → 恢复发放；
+//   ③ 换代自动补入的第二期徽章（门槛 8 天+50 题，刚上线无人拿到）→ 撤下，12 月场再加回；
+//   ④ 月度全勤狮 🗓️ 保留（用户已确认换图标，不撞新徽章）。
 // 发布过的目录 ver 是 Date.now()，不能靠 ver 比较，只能按值判定；管理员改过的图标 / 名字一律尊重。
-function badgePatchThemeRollover(list) {
-  var changed = false, i, b, oldUntouched = false, hasNew = false;
+function badgePatchThemeUnroll(list) {
+  var changed = false, i, b, polluted = false;
   for (i = 0; i < list.length; i++) {
     b = list[i];
     if (!b) continue;
+    // 图标让位独立于徽章换代：老目录里还是 🦁 的照样迁到 🗓️（幂等）。
     if (b.id === 'bd_p20' && b.icon === '🦁') { b.icon = '🗓️'; changed = true; }
-    if (b.id === 'bd_theme2') hasNew = true;
-    // 只有"原封未动的旧徽章"还在，才算这台设备还没换代。
-    // 换代过 / 管理员删过旧徽章就不再自动补新徽章，尊重手动目录。
-    if (b.id === 'bd_theme1' && b.cn === '产品知识启航狮' && b.icon === '⛵' && b.on !== false) {
-      oldUntouched = true; b.on = false; changed = true;
+    if (b.id === 'bd_theme2' && b.cn === '品牌文化探索狮' && b.icon === '🦁' && b.on !== false && !b.rid) {
+      polluted = true;
     }
   }
-  if (oldUntouched && !hasNew) {
-    var defs = badgeDefaultCatalog().list;
-    for (i = 0; i < defs.length; i++) {
-      if (defs[i].id !== 'bd_theme2') continue;
-      list.push(Object.assign({}, defs[i]));
-      changed = true;
-      break;
+  if (!polluted) return changed;
+  for (i = list.length - 1; i >= 0; i--) {
+    b = list[i];
+    if (!b) continue;
+    if (b.id === 'bd_theme2' && b.cn === '品牌文化探索狮' && b.icon === '🦁' && b.on !== false && !b.rid) {
+      list.splice(i, 1); changed = true; continue;
+    }
+    if (b.id === 'bd_theme1' && b.cn === '产品知识启航狮' && b.icon === '⛵' && b.on === false) {
+      b.on = true; changed = true;
     }
   }
   return changed;
@@ -11929,7 +11928,7 @@ function raceBadgeCatalog() {
   badgePatchThemeMc(list);
   badgePatchNightN(list);
   badgePatchSplitDeptTop(list);
-  badgePatchThemeRollover(list);
+  badgePatchThemeUnroll(list);
   // 已下线的 id 一律剔掉：云端目录若还是旧版（管理员没重发布 / 旧缓存），界面也不会再画出来
   badgeDropRetired(list);
   return { ver: ver, list: list };
@@ -14956,17 +14955,18 @@ function raceHeroCardHtml(c, st, mode) {
 
   // 第 2 格：参赛板块。管理员指定就报板块名；自由选则报「N 板块 · 均可挑战」——
   // 2026-11-05：旧文案「任选 N 选 1」让员工误以为只能挑一个板块玩，其实各板块互相独立都能打。
-  var secVal = '', secUnit = '', allow = raceAllowedList(conf), i;
+  var secVal = '', secUnit = '', allow = raceAllowedList(conf);
   if (mode === 'admin') {
     secVal = raceSecIcon(conf.section || 'all') + ' ' + raceSecName(conf.section || 'all');
   } else {
     secVal = allow.length + ' ' + (en ? 'sec' : '板块');
     secUnit = en ? 'all open' : '均可挑战';
   }
-  // 第 3 格：题目池。自由选时把各板块可答题数加起来，给一个「量很足」的直觉
+  // 第 3 格：题目池。自由选时取所有开放板块题目的并集（按题 id 去重）：
+  // 'all' 板块本就含全量，旧算法把各板块数量相加会重复计同一道题（2026-11-18 修正）。
   var poolN = 0;
   if (mode === 'admin') poolN = racePoolOfSize(conf.section || 'all');
-  else for (i = 0; i < allow.length; i++) poolN += racePoolOfSize(allow[i]);
+  else poolN = racePoolUnionSize(allow);
 
   var html = '<div class="race-hero">';
   html += '<div class="race-hero-top">';
@@ -15093,6 +15093,25 @@ var _racePoolSizeCache = {};
 function racePoolOfSize(key) {
   if (_racePoolSizeCache[key] == null) _racePoolSizeCache[key] = racePoolOf(key).length;
   return _racePoolSizeCache[key];
+}
+// 首页「题目池」口径：所有开放板块题目的并集，同一道题只算一次。
+// 不能直接相加：默认全开放时 allow 里既有 'all'（已含全量）又有各部门板块，
+// 且 FSQM 入职试卷同时挂在厨房部和餐饮部，相加会让数字虚高近一倍。
+function racePoolUnionSize(keys) {
+  var seen = {}, n = 0, i, j;
+  keys = keys || [];
+  // 'all' 已覆盖全量：直接取全题库，避免新 section 尚未归入部门板块时漏计
+  if (keys.indexOf('all') >= 0) return raceQuestionsOf('all').length;
+  for (i = 0; i < keys.length; i++) {
+    var pool = raceQuestionsOf(keys[i]);
+    for (j = 0; j < pool.length; j++) {
+      var id = pool[j] && pool[j].id;
+      if (!id || seen[id]) continue;
+      seen[id] = 1;
+      n++;
+    }
+  }
+  return n;
 }
 // "本模块答完后自动补充品牌与酒店知识"这句只在**题真的可能不够**的时候才有意义。
 // 多数板块（如厨房 175 题、餐饮 108 题）限时内根本答不完，写上反而让人以为
