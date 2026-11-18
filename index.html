@@ -5180,6 +5180,11 @@ const state = {
   // 归档筛选：两个按钮各自展开/收起（2026-11-11 改回折叠，默认都收着 = 看全部）
   wrongSrcOpen: false,
   wrongCatOpen: false,
+  // 错题总览搜索（2026-11-13 领导）：题干/章节/标签实时过滤，与来源/分类叠加
+  wrongSearchQ: '',
+  // 展示答案浏览模式（2026-11-13 领导）：开启后总览每题直接显示正确答案+解析，
+  // 纯阅读——行内再做一次/移除隐藏、点行不进答题、右上角重做也隐藏，防瞬时记忆作答
+  wrongReveal: false,
   paperOpen: false,   // 旧版组卷面板开关（三版改成常显，字段留作兼容）
   paperSource: 'all', // 自主组卷选中的分类（默认"全部错题"，最好懂）
   paperCount: 10,     // 自主组卷题量档位
@@ -6243,6 +6248,13 @@ var I18N = {
   rv_redo_due: {cn:'复习这 {n} 道题', en:'Review these {n}'},
   rv_redo_due_sub: {cn:'复习时间已到，现在练记得最牢。', en:'Due now — the best time to review.'},
   rv_redo_one: {cn:'再做一次', en:'Try again'},
+  // 展示答案浏览模式 + 搜索框（2026-11-13 领导两条）
+  rv_reveal_on: {cn:'📖 显示答案', en:'📖 Show answers'},
+  rv_reveal_off: {cn:'🙈 隐藏答案', en:'🙈 Hide answers'},
+  rv_ans_label: {cn:'正确答案', en:'Answer'},
+  rv_exp_label: {cn:'解析', en:'Explanation'},
+  rv_search_ph: {cn:'搜索错题…', en:'Search mistakes…'},
+  rv_search_none: {cn:'没有找到匹配的错题', en:'No matching mistakes'},
   rv_make_paper: {cn:'自己组一份练习卷', en:'Build my own paper'},
   rv_make_paper_sub: {cn:'按全部错题、知识点或收藏题组卷，题量自己定。', en:'Build a paper from all mistakes, a topic, or your saved questions.'},
   rv_paper_title: {cn:'组一份练习卷', en:'Build a paper'},
@@ -20421,8 +20433,23 @@ function wrongRowListHtml(rows) {
     // 今天答对过（pd=今日）一律「今日已作答」，哪怕 st 已到顶（early 答对、还差一次
     // 间隔达标的巩固完成）——旧逻辑 st=MAX 时落回「该复习了」，结果每日巩固显示
     // 「今日巩固已完成」、列表却标「该复习了」，两个数字当面打架。
-    h += '<div class="wrong-item" style="' + (!doneToday && dueNow ? 'border-left-color:#e65100;' : '') + '" onclick="openWrongFromKey(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)">';
+    // 展示答案浏览模式（2026-11-13 领导）：纯阅读——点行不进答题（防瞬时记忆），
+    // 题干下直接给正确答案 + 解析；行内再做一次/移除按钮整块隐藏。
+    var reveal = !!state.wrongReveal;
+    h += '<div class="wrong-item" style="' + (!doneToday && dueNow ? 'border-left-color:#e65100;' : '')
+      + (reveal ? 'cursor:default;' : '') + '"'
+      + (reveal ? '' : ' onclick="openWrongFromKey(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)"') + '>';
     h += '<div class="q-preview">' + escapeHtml(preview ? preview.substring(0, 100) : '') + '</div>';
+    if (reveal) {
+      var ansTxt = q ? qCorrectAnswerText(q) : '';
+      var expTxt = q ? (state.lang === 'en' ? (q.explanation_en || q.explanation || '') : (q.explanation_cn || q.explanation || '')) : '';
+      h += '<div style="background:var(--primary-soft);border-radius:8px;padding:8px 11px;margin-top:8px;font-size:12.5px;line-height:1.65;">';
+      h += '<b style="color:#000;">✅ ' + escapeHtml(t('rv_ans_label')) + '</b>　<span style="color:#1a1a1a;">'
+        + escapeHtml(ansTxt).replace(/\n/g, '<br>') + '</span>';
+      if (expTxt) h += '<div style="margin-top:5px;color:#42525f;">📖 ' + escapeHtml(t('rv_exp_label'))
+        + '：' + escapeHtml(expTxt).replace(/\n/g, '<br>') + '</div>';
+      h += '</div>';
+    }
     h += '<div class="q-meta">';
     h += '<span>' + escapeHtml(wrongBankLabel(row.skey)) + (sectionDisplay ? ' · ' + escapeHtml(sectionDisplay) : '') + ' · ' + getTypeShort(row.e.type) + '</span>';
     h += '<span>' + (doneToday
@@ -20450,10 +20477,13 @@ function wrongRowListHtml(rows) {
     var _tagDisp = qtags.map(reviewTagName).join(' · ');
     var _dispSec = sectionDisplay || wrongBankLabel(row.skey);
     if (_tagDisp && _tagDisp !== _dispSec) h += '<div style="margin-top:6px;font-size:11px;color:#5b6b7a;">🏷 ' + escapeHtml(_tagDisp) + '</div>';
-    h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:9px;">';
-    h += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRedoOne(&quot;' + row.qid + '&quot;)">🔁 ' + t('rv_redo_one') + '</button>';
-    h += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRemoveOne(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)">🗑 ' + t('remove_one') + '</button>';
-    h += '</div>';
+    // 浏览模式只有阅读，没有操作按钮（2026-11-13 领导：要做题就切回隐藏答案的模式）
+    if (!reveal) {
+      h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:9px;">';
+      h += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRedoOne(&quot;' + row.qid + '&quot;)">🔁 ' + t('rv_redo_one') + '</button>';
+      h += '<button class="nav-btn secondary" style="flex:0 0 auto;font-size:12px;padding:5px 14px;" onclick="event.stopPropagation();wrongRemoveOne(&quot;' + row.skey + '&quot;,&quot;' + row.qid + '&quot;)">🗑 ' + t('remove_one') + '</button>';
+      h += '</div>';
+    }
     h += '</div>';
   }
   h += '</div>';
@@ -20521,7 +20551,7 @@ function wrongFilterToggle(which) {
   else { state.wrongCatOpen = !state.wrongCatOpen; state.wrongSrcOpen = false; }
   render();
 }
-// 当前筛选命中的错题行（来源 → 分类 → 知识点），统一按错题次数从多到少排。
+// 当前筛选命中的错题行（来源 → 分类 → 知识点 → 搜索词），统一按错题次数从多到少排。
 // 归档列表、一键重做、计数三处共用这一个出口，避免"按钮说 8 道、列表 12 道"。
 function wrongFilteredRows() {
   var tab = state.wrongTab || 'all';
@@ -20538,6 +20568,19 @@ function wrongFilteredRows() {
   } else {
     rows = scoped.slice();
   }
+  // 搜索词（2026-11-13 领导）：题干 / 章节 / 知识点标签，小写包含匹配；空词不过滤。
+  // 放在统一出口里，右上角重做计数与练习清单自动跟着搜索结果走。
+  var kw = (state.wrongSearchQ || '').trim().toLowerCase();
+  if (kw) {
+    var hit = [];
+    for (i = 0; i < rows.length; i++) {
+      var rq = findByIdAllBanks(rows[i].qid);
+      var sec = state.lang === 'en' ? ((rows[i].e && rows[i].e.section_en) || (rows[i].e && rows[i].e.section) || '') : ((rows[i].e && rows[i].e.section) || '');
+      var hay = ((rq ? qTextOf(rq) : '') + ' ' + (rq ? questionTagsOf(rq).map(reviewTagName).join(' ') : '') + ' ' + sec + ' ' + ((rows[i].e && rows[i].e.question) || '')).toLowerCase();
+      if (hay.indexOf(kw) >= 0) hit.push(rows[i]);
+    }
+    rows = hit;
+  }
   return wrongRowsByTimes(rows);
 }
 function wrongRedoIdsScoped() {
@@ -20551,6 +20594,49 @@ function wrongStartScopedRedo() {
   if (!ids.length) { alert(t('wrong_none_alert')); return; }
   var isAll = (state.wrongTab || 'all') === 'all' && !state.wrongSrc;
   startWrongRedoIds(ids, { kind: 'bank', title: isAll ? t('rv_bk_redo_all') : t('rv_bk_redo_now') });
+}
+// 总览右上角角标：重做按钮（或纯计数）。浏览模式（wrongReveal）下只留计数。
+// 抽成函数是因为搜索防抖局部更新时要重算这一个格子（#rvBankCorner）。
+function wrongBankCornerHtml() {
+  var redoIds = wrongRedoIdsScoped();
+  var _unit = t('rv_paper_unit');
+  if (!state.wrongReveal && redoIds.length) {
+    var redoIsAll = (state.wrongTab || 'all') === 'all' && !state.wrongSrc;
+    return '<button class="nav-btn secondary" style="padding:5px 10px;font-size:11px;border-radius:999px;flex:0 0 auto;margin:0;" '
+      + 'onclick="wrongStartScopedRedo()">🔁 '
+      + escapeHtml(t(redoIsAll ? 'rv_bk_redo_all' : 'rv_bk_redo_now').replace('{n}', String(redoIds.length))) + '</button>';
+  }
+  return '<b style="font-size:14px;color:#000;">' + redoIds.length + '</b>'
+    + (_unit ? ' <span style="color:#5a6473;">' + escapeHtml(_unit) + '</span>' : '');
+}
+// 搜索框打字中绝不整页 render（铁律：重建 <input> 会弹键盘、拉滚动）——
+// 防抖 350ms 后只更新清单容器和右上角角标两个格子，输入框原地不动。
+var __rvSearchT = null;
+function rvBankSearchInput(v) {
+  state.wrongSearchQ = v || '';
+  if (__rvSearchT) clearTimeout(__rvSearchT);
+  __rvSearchT = setTimeout(rvBankSearchApply, 350);
+}
+function rvBankSearchApply() {
+  __rvSearchT = null;
+  var rows = wrongFilteredRows();
+  var el = document.getElementById('rvBankList');
+  if (el) el.innerHTML = wrongRowListHtml(rows);
+  var ce = document.getElementById('rvBankCorner');
+  if (ce) ce.innerHTML = wrongBankCornerHtml();
+  var cb = document.getElementById('rvSearchClear');
+  if (cb) cb.style.display = (state.wrongSearchQ || '').trim() ? '' : 'none';
+}
+function rvBankSearchClear() {
+  state.wrongSearchQ = '';
+  var el = document.getElementById('rvSearchBox');
+  if (el) el.value = '';
+  rvBankSearchApply();
+}
+// 展示答案浏览模式开关：整页重绘没问题（这里没有输入焦点要保）。
+function wrongRevealToggle() {
+  state.wrongReveal = !state.wrongReveal;
+  render();
 }
 function renderWrongAll() {
   var tab = state.wrongTab || 'all';
@@ -20626,34 +20712,40 @@ function renderWrongAll() {
   html += '</div>';
   html += '</div></div>';
 
-  // ---- 板块三｜当前错题总览：两个筛选按钮 + 当前命中的清单 ----
-  var redoIds = wrongRedoIdsScoped();
-  var redoIsAll = (tab === 'all') && !state.wrongSrc;
+  // ---- 板块三｜当前错题总览：两个筛选按钮 + 搜索框 + 当前命中的清单 ----
   html += '<div class="rv-blk" id="rvBlkBank">';
   // 右上角：小号「重做全部错题（N 道）」按钮（2026-11-11 领导：撤大按钮与 N 道角标，二合一）。
-  // 无题可重做时回落成纯计数。
-  var _unit = t('rv_paper_unit');
-  var _corner;
-  if (redoIds.length) {
-    _corner = '<button class="nav-btn secondary" style="padding:5px 10px;font-size:11px;border-radius:999px;flex:0 0 auto;margin:0;" '
-      + 'onclick="wrongStartScopedRedo()">🔁 '
-      + escapeHtml(t(redoIsAll ? 'rv_bk_redo_all' : 'rv_bk_redo_now').replace('{n}', String(redoIds.length))) + '</button>';
-  } else {
-    _corner = '<b style="font-size:14px;color:#000;">0</b>'
-      + (_unit ? ' <span style="color:#5a6473;">' + escapeHtml(_unit) + '</span>' : '');
-  }
-  html += rvBlkHeadHtml('📚', t('rv_bk_t3'), t('rv_bk_d3'), _corner);
+  // 无题可重做时回落成纯计数。展示答案浏览模式下按钮藏起来只留计数（2026-11-13 领导：纯阅读防瞬时记忆）。
+  html += rvBlkHeadHtml('📚', t('rv_bk_t3'), t('rv_bk_d3'), '<span id="rvBankCorner">' + wrongBankCornerHtml() + '</span>');
   html += '<div class="rv-blk-b">';
   html += rvFilterBarHtml();
+  // 搜索框（2026-11-13 领导）：来源/分类之下、清单之上，实时过滤；收藏夹页签不走筛选出口，不显示
+  if (tab !== 'fav') {
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;">';
+    html += '<input id="rvSearchBox" type="text" value="' + escapeHtml(state.wrongSearchQ || '') + '"'
+      + ' placeholder="' + escapeHtml(t('rv_search_ph')) + '"'
+      + ' oninput="rvBankSearchInput(this.value)"'
+      + ' style="flex:1;min-width:0;height:38px;border:1.5px solid var(--border);border-radius:10px;padding:0 12px;font-size:13.5px;background:#fff;color:#000;outline:none;" />';
+    html += '<button id="rvSearchClear" class="admin-mini-btn" style="display:' + ((state.wrongSearchQ || '').trim() ? '' : 'none') + ';" onclick="rvBankSearchClear()">✕</button>';
+    html += '</div>';
+    // 展示答案浏览模式开关：开了整页变纯阅读（答案+解析直接铺开，不能做题）
+    html += '<button class="action-btn ' + (state.wrongReveal ? 'primary' : 'secondary') + '" style="width:100%;margin-top:8px;padding:9px;font-size:13px;" onclick="wrongRevealToggle()">'
+      + escapeHtml(t(state.wrongReveal ? 'rv_reveal_off' : 'rv_reveal_on')) + '</button>';
+  }
 
   if (tab === 'fav') {
     html += wrongFavListHtml();
   } else if (tab === 'tag' && !state.wrongTag) {
     html += '<div class="empty-state"><div class="icon">🏷</div><p>' + escapeHtml(t('rv_bk_tag_pick')) + '</p></div>';
   } else if (rows.length === 0) {
-    html += '<div class="empty-state"><div class="icon">🎉</div><p>' + escapeHtml(tab === 'due' ? t('rv_no_due') : t('wrong_empty')) + '</p></div>';
+    if ((state.wrongSearchQ || '').trim()) {
+      // 搜索无命中与"错题本空了"是两回事，别让学员以为题都做完了
+      html += '<div class="empty-state"><div class="icon">🔍</div><p>' + escapeHtml(t('rv_search_none')) + '</p></div>';
+    } else {
+      html += '<div class="empty-state"><div class="icon">🎉</div><p>' + escapeHtml(tab === 'due' ? t('rv_no_due') : t('wrong_empty')) + '</p></div>';
+    }
   } else {
-    html += wrongRowListHtml(rows);
+    html += '<div id="rvBankList">' + wrongRowListHtml(rows) + '</div>';
   }
   html += '</div></div>';
 
