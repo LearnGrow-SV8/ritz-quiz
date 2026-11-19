@@ -31053,6 +31053,20 @@ function smartLabel(line) {
   var bare = s.replace(/^\s*[-*#>]\s*/, '').replace(/[\[\]]/g, '').trim().replace(/\s+/g, '').toLowerCase();
   var m = s.match(/^\s*\[([^\]]{1,16})\]\s*:?\s*/)
        || s.match(/^\s*([^:\[\]]{1,18})\s*:\s*/);
+  // 长标签兜底：如 "Answer Explanation(English): " / "Answer Explanation（中文）："
+  // 超过 18 字符的普通标签（带语言括号）也要认出来，否则整行连标签一起被塞进解析正文。
+  // 必须同时满足「带语言括号」+「命中标签关键词」，避免把正文里带冒号的长句误当标签。
+  if (!m) {
+    var mLong = s.match(/^\s*([^:\[\]]{19,60})\s*:\s*([\s\S]*)$/);
+    if (mLong) {
+      var head = mLong[1].replace(/\s+/g, '').toLowerCase();
+      if (/\([^)]*(?:english|en|中文|chinese|cn|zh)\)/.test(head) && smartKindOf(head)) {
+        // m[0] 必须只覆盖「标签+冒号」这一段——若把整行都算进去，rest 会被切空。
+        var labelPart = mLong[0].slice(0, mLong[0].length - mLong[2].length);
+        m = [labelPart, head, mLong[2]];
+      }
+    }
+  }
   var L = '', rest = '';
   if (m) {
     L = m[1].replace(/\s+/g, '').toLowerCase();
