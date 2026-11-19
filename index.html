@@ -104,6 +104,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .q-type-badge.single { background:var(--primary-soft); color:var(--primary); }
 .q-type-badge.fill { background:#fff3e0; color:#e65100; }
 .q-type-badge.multiple { background:#fce4ec; color:#c62828; }
+.q-type-badge.sort { background:var(--primary-soft); color:var(--primary); }
 .q-text { font-size:16px; line-height:1.7; margin-bottom:16px; white-space:pre-wrap; word-break:break-word; }
 .q-section-tag { font-size:12px; color:var(--accent); margin-bottom:8px; font-weight:600; letter-spacing:0.5px; }
 
@@ -128,6 +129,22 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
 .fill-input.correct { border-color:var(--success); background:#e8f5e9; }
 .fill-input.wrong { border-color:var(--danger); background:#ffebee; }
 .fill-hint { font-size:12px; color:var(--text-light); margin-top:4px; }
+
+/* 排序题：拖拽 + 上下箭头排序 */
+.sort-list { display:flex; flex-direction:column; gap:8px; }
+.sort-row { display:flex; align-items:stretch; background:var(--bg); border:2px solid var(--border); border-radius:10px; overflow:hidden; transition:border-color 0.15s,background 0.15s; }
+.sort-row.dragging { opacity:0.5; }
+.sort-row.drop-target { border-color:var(--primary); }
+.sort-row.correct { border-color:var(--success); background:#e8f5e9; }
+.sort-row.wrong { border-color:var(--danger); background:#ffebee; }
+.sort-grip { display:flex; align-items:center; justify-content:center; width:34px; flex-shrink:0; color:var(--text-light); font-size:18px; cursor:grab; touch-action:none; user-select:none; background:var(--card-bg); }
+.sort-grip:active { cursor:grabbing; }
+.sort-rank { display:flex; align-items:center; justify-content:center; width:30px; flex-shrink:0; font-size:14px; font-weight:700; color:var(--primary); }
+.sort-body { flex:1; min-width:0; display:flex; align-items:center; padding:12px 6px; font-size:15px; line-height:1.5; }
+.sort-btns { display:flex; flex-direction:column; flex-shrink:0; width:34px; }
+.sort-btns button { flex:1; border:none; background:var(--card-bg); color:var(--primary); font-size:15px; cursor:pointer; padding:0; }
+.sort-btns button:disabled { color:var(--border); cursor:default; }
+.sort-btns button+button { border-top:1px solid var(--border); }
 
 .feedback { margin-top:14px; padding:14px; border-radius:10px; font-size:14px; display:none; }
 .feedback.show { display:block; }
@@ -5581,9 +5598,12 @@ var I18N = {
   type_single: {cn:'单选题', en:'Single Choice'},
   type_fill: {cn:'填空题', en:'Fill in the Blank'},
   type_multiple: {cn:'多选题', en:'Multiple Choice'},
+  type_sort: {cn:'排序题', en:'Ordering'},
   type_single_s: {cn:'单选', en:'Single'},
   type_fill_s: {cn:'填空', en:'Fill'},
   type_multiple_s: {cn:'多选', en:'Multiple'},
+  type_sort_s: {cn:'排序', en:'Order'},
+  sort_hint: {cn:'拖动排序，或点 ↑↓ 调整顺序', en:'Drag to reorder, or tap ↑↓'},
   multi_hint: {cn:'本题为多选题，请选择所有正确选项', en:'Multiple choice - select all correct options'},
   fill_hint: {cn:'答案支持中文或英文，标点符号无需完全对应', en:'Answers accept Chinese or English, punctuation may vary'},
   fill_ph_prefix: {cn:'请输入第', en:'Enter answer for blank '},
@@ -6370,6 +6390,7 @@ var I18N = {
   rv_hub_browse: {cn:'打开错题本', en:'Open Error Notebook'},
   rv_hub_mastery_short: {cn:'巩固完成率', en:'Clear rate'},
   rv_hub_sub: {cn:'已巩固完成 {g} 道 · 错题本现有 {n} 道', en:'{g} cleared · {n} in the Error Notebook'},
+  rv_hub_pending: {cn:'今日巩固还未完成，去错题本继续复习', en:'Daily review not finished — continue in the Error Notebook'},
   rv_hub_empty: {cn:'还没有错题记录，去练几道新题吧。', en:'No mistakes yet — start practising.'},
   rv_hub_due: {cn:'今天该复习 {n} 道', en:'{n} due today'},
   rv_hub_hint: {cn:'近一周你的错题集中在「{tag}」，点开复习巩固一下。', en:'Most of your recent mistakes are in "{tag}" — review them now.'},
@@ -9261,11 +9282,7 @@ function recordExamEvent() {
       var ans = state.examAnswers[i];
       var ok = false, answered = !!(ans && !(Array.isArray(ans) && ans.length === 0));
       if (answered) {
-        if (q.type === 'fill') ok = checkAllFillAnswers(ans, q.fill_answers);
-        else {
-          var c = q.correct_answer || [];
-          ok = ans.length === c.length && ans.every(function(x){ return c.indexOf(x) >= 0; });
-        }
+        ok = qIsCorrect(q, ans);
         if (ok) correct++; else wrong++;
       } else unanswered++;
       // Answers are stored against the BANK option order (via the shuffle
@@ -10445,6 +10462,11 @@ function qIsCorrect(q, ans) {
   var sel = Array.isArray(ans) ? ans : [];
   var cor = q.correct_answer || [];
   if (!sel.length || sel.length !== cor.length) return false;
+  // 排序题：答案是有序序列，逐位严格比较（全对才算对）。
+  if (q.type === 'sort') {
+    for (var k = 0; k < sel.length; k++) { if (sel[k] !== cor[k]) return false; }
+    return true;
+  }
   for (var i = 0; i < sel.length; i++) { if (cor.indexOf(sel[i]) < 0) return false; }
   return true;
 }
@@ -10460,10 +10482,18 @@ function prepareQuestions(questions) {
       var orig = copy.options;
       copy.options = shuffleArray(orig);
       copy._optOrder = copy.options.map(function(o) { return orig.indexOf(o); });
-      copy.correct_answer = [];
-      for (var j=0; j<copy.options.length; j++) {
-        if (copy.options[j].correct) {
-          copy.correct_answer.push(j);
+      if (copy.type === 'sort') {
+        // 排序题：correct_answer 是"题库下标的有序序列"。选项照样洗牌，
+        // 但要把这个正确序列换算成【显示下标】序列，学员排出的也是显示下标。
+        var bankCor = (copy.correct_answer && copy.correct_answer.length === orig.length)
+          ? copy.correct_answer : orig.map(function (_, bi) { return bi; });
+        copy.correct_answer = bankCor.map(function (bi) { return copy._optOrder.indexOf(bi); });
+      } else {
+        copy.correct_answer = [];
+        for (var j=0; j<copy.options.length; j++) {
+          if (copy.options[j].correct) {
+            copy.correct_answer.push(j);
+          }
         }
       }
     }
@@ -10494,10 +10524,10 @@ function highlightKeyword(text, keyword) {
 }
 
 function getTypeText(type) {
-  return {single:t('type_single'),fill:t('type_fill'),multiple:t('type_multiple')}[type] || t('type_single');
+  return {single:t('type_single'),fill:t('type_fill'),multiple:t('type_multiple'),sort:t('type_sort')}[type] || t('type_single');
 }
 function getTypeShort(type) {
-  return {single:t('type_single_s'),fill:t('type_fill_s'),multiple:t('type_multiple_s')}[type] || t('type_single_s');
+  return {single:t('type_single_s'),fill:t('type_fill_s'),multiple:t('type_multiple_s'),sort:t('type_sort_s')}[type] || t('type_single_s');
 }
 
 // ============ Renderers ============
@@ -10669,8 +10699,9 @@ var RACE_SECTIONS = [
 var RACE_SECTION_SOURCE = {
   culinary: ['FSQM-入职培训考试试卷','FSQM-常用食物保质期','卫生','FSQM-审计提问重点'],
   fb:       ['FSQM-入职培训考试试卷','宴会','大堂吧','意大利餐厅','雪茄吧','全日制餐厅','星丽中餐厅','美食屋','客房送餐部','叶子吧'],
-  rooms:    ['防损部','客房部','水疗及健身中心','宾客服务部','行政酒廊','洗衣房'],
-  general:  ['丽思卡尔顿集团信息概述','酒店信息概述','黄金标准默写','丽思卡尔顿文化理念','质量','万豪旅享家','使用指引','高博卡'],
+  // 万豪旅享家 2026-11-19 由品牌与酒店知识移入房务部（章节 → 板块，仅影响答题赛题池）
+  rooms:    ['防损部','客房部','水疗及健身中心','宾客服务部','行政酒廊','洗衣房','万豪旅享家'],
+  general:  ['丽思卡尔顿集团信息概述','酒店信息概述','黄金标准默写','丽思卡尔顿文化理念','质量','使用指引','高博卡'],
   hr:       ['人力资源部'],
   finance:  ['财务部','信息部'],
   sm:       ['市场销售部'],
@@ -11794,8 +11825,8 @@ var BADGE_DESC_TEXT = {
   bd_perf:    { cn: '单场限时竞速答对 10 题以上，答题实力在线', en: '10+ correct in one race run — speed meets accuracy' },
   bd_fast:    { cn: '单赛季答题平均每题用时 ≤5 秒（至少答对 8 题），反应敏捷', en: 'Avg \u2264 5 sec per question (8+ answered) — lightning reflexes' },
   bd_acc10:   { cn: '单场连续答对 10 题不出错，弹无虚发', en: '10 correct in a row in one run — unerring accuracy' },
-  bd_acc20:   { cn: '单场连续答对 20 题不出错，百发百中', en: '20 correct in a row in one run — dead on target' },
-  bd_acc30:   { cn: '单场连续答对 30 题不出错，百步穿杨', en: '30 correct in a row in one run — master marksmanship' },
+  bd_acc15:   { cn: '单场连续答对 15 题不出错，百发百中', en: '15 correct in a row in one run — dead on target' },
+  bd_acc20:   { cn: '单场连续答对 20 题不出错，万无一失', en: '20 correct in a row in one run — infallible' },
   bd_theme1:  { cn: '✨ 月度限定 · 当期打卡满 8 天且累计答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers this round' },
   // 12 月场第二期预留：当前目录未收录，届时随徽章一起启用
   bd_theme2:  { cn: '✨ 月度限定 · 品牌与酒店知识打卡 8 天、答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers in Brand & Hotel Knowledge' }
@@ -11842,8 +11873,8 @@ function badgeDefaultCatalog() {
       // 精准作答（2026-11-19）：单次连对不出错的阶梯。配色走丽思蓝系（#c7ddf3 起），
       // 跟打卡（暖黄）/ 竞速（橙）/ 学习（蓝紫）/ 彩蛋（粉橙）拉开，一眼能认出新系列。
       badgeDef('bd_acc10', AC, 10, '弹无虚发', 'Unerring', '🎯', 3, '#c7ddf3', '#5b8fc7'),
-      badgeDef('bd_acc20', AC, 20, '百发百中', 'Dead Center', '🏹', 4, '#b9d4ef', '#3f74ad'),
-      badgeDef('bd_acc30', AC, 30, '百步穿杨', 'Master Archer', '💎', 5, '#a9c9e8', '#2b5f96'),
+      badgeDef('bd_acc15', AC, 15, '百发百中', 'Dead Center', '🏹', 4, '#b9d4ef', '#3f74ad'),
+      badgeDef('bd_acc20', AC, 20, '万无一失', 'Infallible', '💎', 5, '#a9c9e8', '#2b5f96'),
       // 限定主题：整月赛事 = 打卡 8 天 + 当期答对 50 题（约 10~12 局，摊到 8 天每天一局半）。
       // 门槛：打卡偏松（保参与），答对收紧（保证真学了产品知识）。
       // 2026-11 第一期「产品知识启航狮」发放中；第二期按用户要求等 12 月场再上。
@@ -12006,7 +12037,8 @@ function badgePatchThemeUnroll(list) {
 // 精准作答三枚（2026-11-19）：线上已发布目录 ver 是时间戳，靠 ver 比较永远不会注入新徽章。
 // 按值判定：目录里一枚 acc 规则徽章都没有 → 视为还没接触过这个系列，补进三枚；
 // 只要已有任意一枚（管理员增删过）就整体不插手 —— 尊重手动选择、且幂等。
-var BADGE_ACC_NEW_IDS = ['bd_acc10', 'bd_acc20', 'bd_acc30'];
+// 门槛 10/15/20，id 数字与门槛对齐（bd_acc15=百发百中、bd_acc20=万无一失）。
+var BADGE_ACC_NEW_IDS = ['bd_acc10', 'bd_acc15', 'bd_acc20'];
 function badgePatchAddAcc(list) {
   var have = {}, touched = false, i;
   for (i = 0; i < list.length; i++) {
@@ -17469,7 +17501,7 @@ var BADGE_NAME_SEEDS = {
   wrong: [[50, '错题猎手', 'Mistake Hunter'], [100, '错题终结者', 'Mistake Slayer']],
   fav: [[20, '考点收藏家', 'Key Point Collector'], [50, '考点博物馆', 'Key Point Museum']],
   practice: [[100, '温故知新', 'Review Master'], [300, '刷题狂人', 'Practice Machine']],
-  acc: [[10, '弹无虚发', 'Unerring'], [20, '百发百中', 'Dead Center'], [30, '百步穿杨', 'Master Archer']]
+  acc: [[10, '弹无虚发', 'Unerring'], [15, '百发百中', 'Dead Center'], [20, '万无一失', 'Infallible']]
 };
 // 描述 → 徽章建议。管理端不需要懂规则术语，写一句"连续打卡 5 天"就够了。
 function badgeSuggestFromDesc(desc) {
@@ -17551,7 +17583,7 @@ function badgeSuggestFromDesc(desc) {
   else if (rule === BADGE_RULE_DEPT_TOP) lv = n <= 3 ? 4 : 3;
   else if (rule === BADGE_RULE_ALL_TOP) lv = n <= 3 ? 5 : 4;
   else if (rule === BADGE_RULE_WRONG || rule === BADGE_RULE_FAV || rule === BADGE_RULE_PRACTICE) lv = n >= 100 ? 4 : 3;
-  else if (rule === BADGE_RULE_ACC) lv = n >= 30 ? 5 : (n >= 20 ? 4 : 3);
+  else if (rule === BADGE_RULE_ACC) lv = n >= 20 ? 5 : (n >= 15 ? 4 : 3);
   else if (rule === BADGE_RULE_THEME) lv = 3;
   else if (rule === BADGE_RULE_STREAK) lv = n >= 21 ? 5 : (n >= 14 ? 4 : (n >= 7 ? 3 : (n >= 5 ? 2 : 1)));
   else if (rule === BADGE_RULE_PERIOD) lv = n >= 25 ? 5 : (n >= 20 ? 4 : (n >= 15 ? 3 : (n >= 10 ? 2 : 1)));
@@ -19976,7 +20008,33 @@ function renderQuestion() {
   html += '</div>';
   html += '<div class="q-text">'+escapeHtml(qTextOf(q))+'</div>';
   
-  if (q.type === 'fill') {
+  if (q.type === 'sort') {
+    var sortOrder = sortOrderOf(idx);
+    var sortCor = q.correct_answer || [];
+    var sortLocked = state.showAnswer && state.currentMode !== 'exam' && state.currentMode !== 'formal';
+    html += '<div class="fill-hint">💡 '+t('sort_hint')+'</div>';
+    html += '<div class="sort-list">';
+    for (var si = 0; si < sortOrder.length; si++) {
+      var sIdx = sortOrder[si];
+      var sOpt = q.options[sIdx] || {};
+      var sCls = '';
+      if (state.showAnswer) sCls = (sortCor[si] === sIdx) ? ' correct' : ' wrong';
+      html += '<div class="sort-row'+sCls+'" data-pos="'+si+'" draggable="'+(sortLocked?'false':'true')+'"'
+        + ' ondragstart="sortDragStart(event,'+idx+','+si+')" ondragover="sortDragOver(event)"'
+        + ' ondrop="sortDrop(event,'+idx+','+si+')" ondragend="sortDragEnd()">';
+      html += '<div class="sort-grip" ontouchstart="sortTouchStart(event,'+idx+','+si+')" ontouchmove="sortTouchMove(event,'+idx+')" ontouchend="sortTouchEnd(event,'+idx+')">⋮⋮</div>';
+      html += '<div class="sort-rank">'+(si+1)+'</div>';
+      html += '<div class="sort-body">'+escapeHtml(qOptText(q, sIdx))+'</div>';
+      if (!sortLocked) {
+        html += '<div class="sort-btns">'
+          + '<button type="button" onclick="sortMove('+idx+','+si+',-1)" '+(si===0?'disabled':'')+'>↑</button>'
+          + '<button type="button" onclick="sortMove('+idx+','+si+',1)" '+(si===sortOrder.length-1?'disabled':'')+'>↓</button>'
+          + '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  } else if (q.type === 'fill') {
     var answers = q.fill_answers || [];
     var blankCount = answers.length > 2 ? Math.ceil(answers.length / 2) : 1;
     var userAns = state.selectedAnswers[idx] || [];
@@ -20019,7 +20077,14 @@ function renderQuestion() {
     var correctText = '';
     var userText = '';
     var isGoldStandard = q.section_en === 'Gold Standards';
-    if (q.type === 'fill') {
+    if (q.type === 'sort') {
+      var sAns = sortOrderOf(idx);
+      isCorrect = qIsCorrect(q, sAns);
+      // 排序题正确答案按顺序列出：1. xxx  2. xxx …
+      var sCor = q.correct_answer || [];
+      correctText = sCor.map(function (di, n) { return (n+1)+'. '+qOptText(q, di); }).join('\n');
+      userText = sAns.map(function (di, n) { return (n+1)+'. '+qOptText(q, di); }).join('\n');
+    } else if (q.type === 'fill') {
       var userAns2 = state.selectedAnswers[idx] || [];
       isCorrect = checkAllFillAnswers(userAns2, q.fill_answers);
       // 填空题正确答案按"空"分组显示：每空一行 "中文 / 英文"
@@ -21019,8 +21084,12 @@ function reviewHubCardHtml() {
     + '<div style="font-size:11.5px;font-weight:600;color:#5a6473;white-space:nowrap;background:#EDF2F9;padding:3px 9px;border-radius:999px;">'
     + t('rv_hub_browse') + ' ›</div></div>';
   html += '<div style="font-size:12.5px;color:#5a6473;margin-top:6px;line-height:1.5;">'
-    + (left > 0 ? escapeHtml(t('rv_hub_sub').replace('{g}', String(grad)).replace('{n}', String(left)))
-                : escapeHtml(t('rv_hub_empty'))) + '</div>';
+    + (left > 0
+      ? (dueN > 0
+        // 今日巩固未完成：给行动提示（下面红胶囊同时标注还剩几道，2026-11-19 领导）
+        ? escapeHtml(t('rv_hub_pending'))
+        : escapeHtml(t('rv_hub_sub').replace('{g}', String(grad)).replace('{n}', String(left))))
+      : escapeHtml(t('rv_hub_empty'))) + '</div>';
   if (dueN > 0) {
     html += '<div style="margin-top:7px;display:inline-block;background:#FDECEA;color:#c62828;font-size:11px;'
       + 'font-weight:700;padding:3px 9px;border-radius:999px;">⏰ ' + escapeHtml(t('rv_hub_due').replace('{n}', String(dueN))) + '</div>';
@@ -21188,13 +21257,7 @@ function examWrongIds() {
   for (var i = 0; i < state.questions.length; i++) {
     var q = state.questions[i], ans = state.examAnswers ? state.examAnswers[i] : null;
     if (!ans || (Array.isArray(ans) && !ans.length)) continue;
-    var ok = false;
-    if (q.type === 'fill') ok = checkAllFillAnswers(ans, q.fill_answers);
-    else {
-      var c = q.correct_answer || [];
-      ok = ans.length === c.length && ans.every(function (x) { return c.indexOf(x) >= 0; });
-    }
-    if (!ok) out.push(q.id);
+    if (!qIsCorrect(q, ans)) out.push(q.id);
   }
   return out;
 }
@@ -21910,6 +21973,12 @@ function qCorrectAnswerText(q) {
     }
     return parts.join('\n');
   }
+  if (q.type === 'sort') {
+    var sCor = q.correct_answer || [];
+    var sOut = [];
+    for (var s = 0; s < sCor.length; s++) sOut.push((s+1)+'. '+qOptText(q, sCor[s]));
+    return sOut.join('\n');
+  }
   var cor = q.correct_answer || [];
   var out = [];
   for (var i = 0; i < cor.length; i++) out.push(qOptText(q, cor[i]));
@@ -22080,13 +22149,7 @@ function renderExamResult() {
     var q = state.questions[i];
     var ans = state.examAnswers[i];
     if (!ans || (Array.isArray(ans) && ans.length === 0)) { unanswered++; continue; }
-    var isCorrect = false;
-    if (q.type === 'fill') {
-      isCorrect = checkAllFillAnswers(ans, q.fill_answers);
-    } else {
-      var correctIdx = q.correct_answer || [];
-      isCorrect = ans.length === correctIdx.length && ans.every(function(i){ return correctIdx.indexOf(i) >= 0; });
-    }
+    var isCorrect = qIsCorrect(q, ans);
     if (isCorrect) correct++; else wrong++;
   }
 
@@ -22098,14 +22161,7 @@ function renderExamResult() {
     var sqQ = state.questions[si];
     var sqAns = state.examAnswers[si];
     var sqAnswered = !!(sqAns && !(Array.isArray(sqAns) && sqAns.length === 0));
-    var sqOk = false;
-    if (sqAnswered) {
-      if (sqQ.type === 'fill') sqOk = checkAllFillAnswers(sqAns, sqQ.fill_answers);
-      else {
-        var sqC = sqQ.correct_answer || [];
-        sqOk = sqAns.length === sqC.length && sqAns.every(function (x) { return sqC.indexOf(x) >= 0; });
-      }
-    }
+    var sqOk = sqAnswered ? qIsCorrect(sqQ, sqAns) : false;
     var sqUa = sqAns, sqCa = sqQ.type === 'fill' ? (sqQ.fill_answers || []) : (sqQ.correct_answer || []);
     if (sqQ._optOrder) {
       sqUa = Array.isArray(sqAns) ? sqAns.map(function (x) { return sqQ._optOrder[x]; }) : sqAns;
@@ -22187,13 +22243,7 @@ function renderExamResult() {
     var q = state.questions[i];
     var ans = state.examAnswers[i];
     if (!ans || (Array.isArray(ans) && ans.length === 0)) continue;
-    var isCorrect2 = false;
-    if (q.type === 'fill') {
-      isCorrect2 = checkAllFillAnswers(ans, q.fill_answers);
-    } else {
-      var correctIdx2 = q.correct_answer || [];
-      isCorrect2 = ans.length === correctIdx2.length && ans.every(function(i){ return correctIdx2.indexOf(i) >= 0; });
-    }
+    var isCorrect2 = qIsCorrect(q, ans);
     recordAttempt(q, ans, { ok: isCorrect2, skey: examSkey, src: 'exam' });
   }
   saveState();
@@ -22941,6 +22991,79 @@ function startSearch(bank) {
   navigate('search');
 }
 
+// ===== 排序题学员端交互 =====
+// answer = 显示下标的【有序数组】，如 [2,0,1] 表示第1位放显示项2、第2位放显示项0…
+// 首屏若还没排过，默认按当前显示顺序（洗牌后）作为答案，保证 examAnswers 有值。
+function sortOrderOf(idx) {
+  var q = state.questions[idx];
+  if (!q || q.type !== 'sort') return [];
+  var n = (q.options || []).length;
+  var cur = state.selectedAnswers[idx];
+  var ok = Array.isArray(cur) && cur.length === n;
+  if (ok) {
+    var seen = {};
+    for (var i = 0; i < n; i++) {
+      if (typeof cur[i] !== 'number' || cur[i] < 0 || cur[i] >= n || seen[cur[i]]) { ok = false; break; }
+      seen[cur[i]] = 1;
+    }
+  }
+  if (!ok) {
+    cur = [];
+    for (var j = 0; j < n; j++) cur.push(j);
+    state.selectedAnswers[idx] = cur;
+  }
+  if (state.currentMode === 'exam' || state.currentMode === 'formal') state.examAnswers[idx] = cur.slice();
+  return cur;
+}
+function sortCommitOrder(idx, order) {
+  state.selectedAnswers[idx] = order.slice();
+  if (state.currentMode === 'exam' || state.currentMode === 'formal') state.examAnswers[idx] = order.slice();
+  render();
+}
+function sortSwap(idx, a, b) {
+  if (state.showAnswer && state.currentMode !== 'exam' && state.currentMode !== 'formal') return;
+  var order = sortOrderOf(idx).slice();
+  if (a < 0 || b < 0 || a >= order.length || b >= order.length || a === b) return;
+  var t = order[a]; order[a] = order[b]; order[b] = t;
+  sortCommitOrder(idx, order);
+}
+function sortMove(idx, pos, dir) { sortSwap(idx, pos, pos + dir); }
+var sortDragFrom = -1;
+function sortDragStart(e, idx, pos) {
+  sortDragFrom = pos;
+  try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(pos)); } catch (err) {}
+  if (e.currentTarget && e.currentTarget.classList) e.currentTarget.classList.add('dragging');
+}
+function sortDragOver(e) { if (e && e.preventDefault) e.preventDefault(); }
+function sortDrop(e, idx, pos) {
+  if (e && e.preventDefault) e.preventDefault();
+  var from = sortDragFrom;
+  try { var dt = e.dataTransfer && e.dataTransfer.getData('text/plain'); if (dt !== '' && dt != null) from = parseInt(dt, 10); } catch (err) {}
+  sortDragFrom = -1;
+  if (from >= 0 && from !== pos) sortSwap(idx, from, pos); else render();
+}
+function sortDragEnd() { sortDragFrom = -1; render(); }
+function sortTouchStart(e, idx, pos) {
+  sortDragFrom = pos;
+  var el = e.currentTarget && e.currentTarget.closest ? e.currentTarget.closest('.sort-row') : null;
+  if (el && el.classList) el.classList.add('dragging');
+}
+function sortTouchMove(e, idx) {
+  if (sortDragFrom < 0) return;
+  if (e && e.preventDefault) e.preventDefault();
+  var t = e.touches && e.touches[0];
+  if (!t || !document.elementFromPoint) return;
+  var under = document.elementFromPoint(t.clientX, t.clientY);
+  var row = under && under.closest ? under.closest('.sort-row') : null;
+  if (!row) return;
+  var to = parseInt(row.getAttribute('data-pos'), 10);
+  if (isNaN(to) || to === sortDragFrom) return;
+  var from = sortDragFrom;
+  sortDragFrom = to;
+  sortSwap(idx, from, to);
+}
+function sortTouchEnd(e, idx) { sortDragFrom = -1; render(); }
+
 function selectOption(idx, optionIdx) {
   if (state.showAnswer && state.currentMode !== 'exam' && state.currentMode !== 'formal') return;
   var q = state.questions[idx];
@@ -23211,6 +23334,17 @@ function answerDisplayText(ans, q) {
   }
   var opts = q.options || [];
   if (!Array.isArray(ans)) return String(ans == null ? '' : ans);
+  if (q.type === 'sort') {
+    var sParts = [];
+    var langS = state.lang === 'en' ? 'en' : 'cn';
+    for (var sk = 0; sk < ans.length; sk++) {
+      var so = opts[ans[sk]];
+      if (!so) { sParts.push((sk+1)+'. #'+ans[sk]); continue; }
+      var slabel = (so.text_cn && so.text_en) ? (langS === 'en' ? so.text_en : so.text_cn) : (so.text || '');
+      sParts.push((sk+1)+'. '+slabel);
+    }
+    return sParts.join('\n');
+  }
   var lang = state.lang === 'en' ? 'en' : 'cn';
   var parts = [];
   for (var i = 0; i < ans.length; i++) {
@@ -29109,6 +29243,7 @@ function renderAdminBank() {
     h += '<option value="single"' + (adminState.qTypeFilter === 'single' ? ' selected' : '') + '>' + t('type_single') + '</option>';
     h += '<option value="multiple"' + (adminState.qTypeFilter === 'multiple' ? ' selected' : '') + '>' + t('type_multiple') + '</option>';
     h += '<option value="fill"' + (adminState.qTypeFilter === 'fill' ? ' selected' : '') + '>' + t('type_fill') + '</option>';
+    h += '<option value="sort"' + (adminState.qTypeFilter === 'sort' ? ' selected' : '') + '>' + t('type_sort') + '</option>';
     h += '</select>';
   }
   h += '<span class="ap-count">' + (en
@@ -29590,10 +29725,10 @@ function renderAdminPaper() {
   }
   // 统计 pills：题型构成 + 按板块，一行铺开（原来各占一整张卡）
   var stats = adminPaperStats(paperKey);
-  var typeOrder = ['single', 'multiple', 'judge', 'fill', 'essay'];
+  var typeOrder = ['single', 'multiple', 'sort', 'judge', 'fill', 'essay'];
   var typeLabels = state.lang === 'en'
-    ? { single: 'Single', multiple: 'Multiple', judge: 'True/False', fill: 'Fill', essay: 'Essay', unknown: 'Other' }
-    : { single: '\u5355\u9009', multiple: '\u591a\u9009', judge: '\u5224\u65ad', fill: '\u586b\u7a7a', essay: '\u7b80\u7b54', unknown: '\u5176\u4ed6' };
+    ? { single: 'Single', multiple: 'Multiple', sort: 'Order', judge: 'True/False', fill: 'Fill', essay: 'Essay', unknown: 'Other' }
+    : { single: '\u5355\u9009', multiple: '\u591a\u9009', sort: '\u6392\u5e8f', judge: '\u5224\u65ad', fill: '\u586b\u7a7a', essay: '\u7b80\u7b54', unknown: '\u5176\u4ed6' };
   var statPills = [];
   for (var ti = 0; ti < typeOrder.length; ti++) {
     var tk = typeOrder[ti];
@@ -29868,8 +30003,8 @@ function adminExportPaperWord(paperKey) {
   var bankKey = paperKey.replace(/_(all|kitchen)$/, '');
   var paperName = getBankName(bankKey) + ' · ' + ((/_all$/.test(paperKey)) ? t('paper_all') : t('paper_kitchen'));
   var typeLabels = en
-    ? { single: 'Single', multiple: 'Multiple', judge: 'True/False', fill: 'Fill-in', essay: 'Essay' }
-    : { single: '单选', multiple: '多选', judge: '判断', fill: '填空', essay: '简答' };
+    ? { single: 'Single', multiple: 'Multiple', sort: 'Order', judge: 'True/False', fill: 'Fill-in', essay: 'Essay' }
+    : { single: '单选', multiple: '多选', sort: '排序', judge: '判断', fill: '填空', essay: '简答' };
   function escNl(s) { return escapeHtml(String(s || '')).replace(/\n/g, '<br>'); }
   function optText(o) {
     var cn = o.text_cn || '', e2 = o.text_en || '';
@@ -31069,6 +31204,7 @@ function adminSmartParse(raw) {
       if (lab.kind === 'type' && lab.rest) {
         var T = smartNormLine(lab.rest).toLowerCase();
         st.type = /填空|fill|blank/.test(T) ? 'fill'
+          : /排序|order|sort|sequence/.test(T) ? 'sort'
           : /多选|multiple/.test(T) ? 'multiple'
           : /判断|judge|true|false|是非/.test(T) ? 'judge'
           : /单选|single/.test(T) ? 'single' : '';
@@ -31152,10 +31288,16 @@ function adminSmartParse(raw) {
     else if (ans.length > 1) type = 'multiple';
     else type = 'single';
   }
-  if (type !== 'fill') for (var ki = 0; ki < opts.length; ki++) opts[ki].correct = ans.indexOf(ki) >= 0;
+  if (type === 'sort') {
+    // 排序题：粘贴时的行序即正确顺序，correctIdx 取恒等序列（行序=答题序）。
+    for (var sk = 0; sk < opts.length; sk++) opts[sk].correct = false;
+    ans = opts.map(function (_, ai) { return ai; });
+  } else if (type !== 'fill') {
+    for (var ki = 0; ki < opts.length; ki++) opts[ki].correct = ans.indexOf(ki) >= 0;
+  }
   return {
     questionCn: q.cn, questionEn: q.en, explanationCn: e.cn, explanationEn: e.en,
-    options: opts, correctIdx: type === 'fill' ? [] : ans, fillAnswers: fills, type: type
+    options: opts, correctIdx: (type === 'fill') ? [] : ans, fillAnswers: fills, type: type
   };
 }
 // 把解析结果写进当前编辑表单，并触发预览/校验/草稿保存
@@ -31170,7 +31312,7 @@ function adminSmartImportApply() {
     if (!d.fillAnswers.length) return fail(state.lang === 'en' ? 'No fill answers found' : '\u672a\u8bc6\u522b\u5230\u586b\u7a7a\u7b54\u6848');
   } else {
     if (d.options.length < 2) return fail(state.lang === 'en' ? 'Fewer than 2 options found' : '\u9009\u9879\u4e0d\u8db3 2 \u4e2a');
-    if (!d.correctIdx.length) return fail(state.lang === 'en' ? 'No correct answer found' : '\u672a\u8bc6\u522b\u5230\u6b63\u786e\u7b54\u6848');
+    if (d.type !== 'sort' && !d.correctIdx.length) return fail(state.lang === 'en' ? 'No correct answer found' : '\u672a\u8bc6\u522b\u5230\u6b63\u786e\u7b54\u6848');
   }
   var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v || ''; };
   var typeSel = document.getElementById('qType');
@@ -31305,18 +31447,22 @@ function adminDraftToQuestion(snap) {
     q.fill_answers = (snap.fillAnswers || []).slice();
   } else {
     var opts = [];
+    var isSortQ = (snap.type === 'sort');
     for (var i = 0; i < snap.options.length; i++) {
       var o = snap.options[i];
       var opt = {
         text: (o.cn && o.en) ? (o.cn + ' | ' + o.en) : (o.cn || o.en),
-        correct: (snap.correctIdx || []).indexOf(i) >= 0
+        correct: isSortQ ? false : (snap.correctIdx || []).indexOf(i) >= 0
       };
       if (o.cn) opt.text_cn = o.cn;
       if (o.en) opt.text_en = o.en;
       opts.push(opt);
     }
     q.options = opts;
-    q.correct_answer = (snap.correctIdx || []).slice();
+    // 排序题：行顺序即正确顺序，correct_answer = [0,1,2,…]（题库下标的有序序列）
+    q.correct_answer = isSortQ
+      ? opts.map(function (_, si) { return si; })
+      : (snap.correctIdx || []).slice();
   }
   return q;
 }
@@ -31362,6 +31508,13 @@ function adminEditValidate() {
     var anyAns = false;
     for (var i = 0; i < cur.items.length; i++) if (String(cur.items[i].text || '').trim()) anyAns = true;
     if (!anyAns) msgs.push(en ? 'No acceptable answer' : '填空答案为空');
+  } else if (type === 'sort') {
+    var sfilled = 0;
+    for (var si = 0; si < cur.items.length; si++) {
+      var sit = cur.items[si] || {};
+      if (String(sit.cn || '').trim() || String(sit.en || '').trim()) sfilled++;
+    }
+    if (sfilled < 2) msgs.push(en ? 'Fewer than 2 items' : '不足 2 个排序项');
   } else {
     var filled = 0, correct = 0, correctEmpty = 0;
     for (var j = 0; j < cur.items.length; j++) {
@@ -31502,6 +31655,7 @@ function renderAdminEdit() {
     + '<select id="qType" onchange="adminOnTypeChange()">'
     + '<option value="single"' + (q.type === 'single' ? ' selected' : '') + '>' + t('type_single') + '</option>'
     + '<option value="multiple"' + (q.type === 'multiple' ? ' selected' : '') + '>' + t('type_multiple') + '</option>'
+    + '<option value="sort"' + (q.type === 'sort' ? ' selected' : '') + '>' + t('type_sort') + '</option>'
     + '<option value="fill"' + (q.type === 'fill' ? ' selected' : '') + '>' + t('type_fill') + '</option>'
     + '</select></div>';
   html += '</div>';
@@ -31575,7 +31729,7 @@ function adminEditPreviewHtml() {
     var type = pv('qType') || 'single';
     var cn = pv('qTextCn'), qen = pv('qTextEn');
     var expCn = pv('qExplanationCn'), expEn = pv('qExplanationEn');
-    var typeLabel = { single: en ? 'Single choice' : '单选', multiple: en ? 'Multiple choice' : '多选', fill: en ? 'Fill in the blank' : '填空' }[type] || type;
+    var typeLabel = { single: en ? 'Single choice' : '单选', multiple: en ? 'Multiple choice' : '多选', sort: en ? 'Ordering' : '排序', fill: en ? 'Fill in the blank' : '填空' }[type] || type;
     var html = '<h3>' + (en ? '\ud83d\udc41 Student preview' : '\ud83d\udc41 \u5b66\u5458\u7aef\u5b9e\u65f6\u9884\u89c8') + '</h3>';
     html += '<span class="ed-pv-type">' + escapeHtml(typeLabel) + '</span>';
     html += '<div class="ed-pv-stem">' + escapeHtml(cn || (en ? '(Chinese stem)' : '\uff08\u4e2d\u6587\u9898\u5e72\uff09')) + (qen ? '<div class="ed-pv-lang">' + escapeHtml(qen) + '</div>' : '') + '</div>';
@@ -31591,7 +31745,9 @@ function adminEditPreviewHtml() {
         var chk = rows[i].querySelector('.correct-check input');
         var ocn = tas[0] ? tas[0].value : '';
         var oen = tas[1] ? tas[1].value : '';
-        html += '<div class="ed-pv-opt' + (chk && chk.checked ? ' correct' : '') + '">' + String.fromCharCode(65 + i) + '. ' + escapeHtml(ocn || (en ? '(option)' : '\uff08\u9009\u9879\uff09')) + (oen ? '<span class="ed-pv-lang">' + escapeHtml(oen) + '</span>' : '') + (chk && chk.checked ? ' \u2713' : '') + '</div>';
+        var prefix = type === 'sort' ? (i + 1) : String.fromCharCode(65 + i);
+        var isCorrect = chk && chk.checked;
+        html += '<div class="ed-pv-opt' + (isCorrect ? ' correct' : '') + '">' + prefix + '. ' + escapeHtml(ocn || (type === 'sort' ? (en ? '(item)' : '\uff08\u6392\u5e8f\u9879\uff09') : (en ? '(option)' : '\uff08\u9009\u9879\uff09'))) + (oen ? '<span class="ed-pv-lang">' + escapeHtml(oen) + '</span>' : '') + (isCorrect ? ' \u2713' : '') + '</div>';
       }
     }
     if (expCn || expEn) {
@@ -31640,7 +31796,9 @@ function adminRenderOptionsOrFill(q) {
     html += '</div>';
     html += '<button class="admin-btn-add" onclick="adminAddFill()">\u2795 ' + (state.lang === 'en' ? 'Add Answer' : '\u6dfb\u52a0\u7b54\u6848') + '</button>';
   } else {
-    var hint = q.type === 'single'
+    var hint = q.type === 'sort'
+      ? (state.lang === 'en' ? 'Items (enter in CORRECT order; top = first)' : '\u6392\u5e8f\u9879\uff08\u6309\u6b63\u786e\u987a\u5e8f\u586b\uff0c\u7b2c\u4e00\u884c\u662f\u7b2c\u4e00\u4f4d\uff09')
+      : q.type === 'single'
       ? (state.lang === 'en' ? 'Options (pick ONE correct answer)' : '\u9009\u9879\uff08\u9009\u4e00\u4e2a\u6b63\u786e\u7b54\u6848\uff09')
       : (state.lang === 'en' ? 'Options (check ALL correct answers)' : '\u9009\u9879\uff08\u52fe\u9009\u5168\u90e8\u6b63\u786e\u7b54\u6848\uff09');
     html += '<label>' + hint + '</label>';
@@ -31648,7 +31806,7 @@ function adminRenderOptionsOrFill(q) {
     var opts = q.options || [];
     if (opts.length === 0) opts = [{text:'',correct:false},{text:'',correct:false}];
     for (var oi = 0; oi < opts.length; oi++) {
-      html += adminRenderOptionRow(opts[oi], q.type);
+      html += adminRenderOptionRow(opts[oi], q.type, oi);
     }
     html += '</div>';
     html += '<button class="admin-btn-add" onclick="adminAddOption()">\u2795 ' + (state.lang === 'en' ? 'Add Option' : '\u6dfb\u52a0\u9009\u9879') + '</button>';
@@ -31656,7 +31814,7 @@ function adminRenderOptionsOrFill(q) {
   return html;
 }
 
-function adminRenderOptionRow(opt, qType) {
+function adminRenderOptionRow(opt, qType, rowIdx) {
   // Accept several legacy field names (text/text_cn/text_en and the plain
   // cn/en produced by adminReadCurrentOptions) so type switches stay lossless.
   var cn = opt.text_cn != null ? opt.text_cn : (opt.cn != null ? opt.cn : '');
@@ -31665,16 +31823,23 @@ function adminRenderOptionRow(opt, qType) {
   // single → radio (HTML-level mutual exclusion); multiple → checkbox.
   // qType defaults to 'multiple' to keep older call-sites safe.
   var isSingle = (qType === 'single');
+  var isSort = (qType === 'sort');
   var inputType = isSingle ? 'radio' : 'checkbox';
   var html = '<div class="admin-opt-row">';
   // Batch-2: textareas (auto-grow + drag-resize) so long options stay fully
   // visible, just like the explanation boxes.
   html += '<textarea class="opt-txt" rows="1" oninput="adminAutoGrow(this)">' + escapeHtml(sp.cn) + '</textarea>';
   html += '<textarea class="opt-txt" rows="1" oninput="adminAutoGrow(this)">' + escapeHtml(sp.en) + '</textarea>';
-  // Click handler enforces single-choice mutual exclusion even if the user
-  // ctrl-clicks or another row was already checked (defence in depth on top
-  // of the browser's native radio behaviour).
-  html += '<div class="correct-check"><input type="' + inputType + '"' + (opt.correct ? ' checked' : '') + ' onclick="adminOnOptionCorrectChange(this)"> ' + (state.lang === 'en' ? 'Correct' : '\u6b63\u786e') + '</div>';
+  // 排序题：行的上下顺序就是正确顺序，用序号替代"正确"勾选框。
+  if (isSort) {
+    html += '<div class="correct-check" title="' + (state.lang === 'en' ? 'Correct order (top = first)' : '\u987a\u5e8f\u5373\u6b63\u786e\u7b54\u6848\uff08\u7b2c\u4e00\u884c\u5728\u6700\u4e0a\uff09') + '">'
+      + '<b style="font-size:14px;">' + (typeof rowIdx === 'number' ? (rowIdx + 1) : '·') + '.</b></div>';
+  } else {
+    // Click handler enforces single-choice mutual exclusion even if the user
+    // ctrl-clicks or another row was already checked (defence in depth on top
+    // of the browser's native radio behaviour).
+    html += '<div class="correct-check"><input type="' + inputType + '"' + (opt.correct ? ' checked' : '') + ' onclick="adminOnOptionCorrectChange(this)"> ' + (state.lang === 'en' ? 'Correct' : '\u6b63\u786e') + '</div>';
+  }
   html += '<div class="admin-opt-btns">';
   html += '<button type="button" class="move-opt" onclick="adminMoveOptRow(this,-1)" title="' + (state.lang === 'en' ? 'Move up' : '\u4e0a\u79fb') + '">\u2191</button>';
   html += '<button type="button" class="move-opt" onclick="adminMoveOptRow(this,1)" title="' + (state.lang === 'en' ? 'Move down' : '\u4e0b\u79fb') + '">\u2193</button>';
@@ -31829,7 +31994,8 @@ function adminAddOption() {
   // Batch-2: build the row through the same renderer the initial paint uses,
   // so add-row can never drift from the rendered rows (textarea + move btns).
   var div = document.createElement('div');
-  div.innerHTML = adminRenderOptionRow({ cn: '', en: '', correct: false }, qType);
+  var rowIdx = container.querySelectorAll('.admin-opt-row').length;
+  div.innerHTML = adminRenderOptionRow({ cn: '', en: '', correct: false }, qType, rowIdx);
   container.appendChild(div.firstChild);
   adminAutoGrowAll(container);
 }
@@ -31907,7 +32073,7 @@ function adminSaveQuestion(saveThenNext) {
     if (snap.options.length < 2) {
       return fail(state.lang === 'en' ? 'At least 2 options required!' : '\u81f3\u5c11\u9700\u89812\u4e2a\u9009\u9879\uff01');
     }
-    if (!snap.correctIdx.length) {
+    if (snap.type !== 'sort' && !snap.correctIdx.length) {
       return fail(state.lang === 'en' ? 'At least one correct answer required!' : '\u81f3\u5c11\u9700\u89811\u4e2a\u6b63\u786e\u7b54\u6848\uff01');
     }
   }
