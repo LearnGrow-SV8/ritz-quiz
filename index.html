@@ -12590,7 +12590,7 @@ function raceBadgeEarnedAnywhere(rec, id) {
 //   ③ 判据：本人须在 awardSettle[届次].rankRows 里，且 boards 命中徽章绑定板块（见 raceAwardRankBadges）。
 // 幂等：已拿过的跳过；名单重发布后再结算只补新的，不会重复也不会收回。
 //
-// 「名单确认」怎么判：loadRaceSettle() 里有该届次（r + 时间戳）且 rankRows 非空即算确认。
+// 「名单确认」怎么判：loadRaceSettle() 里有该届次键且 rankRows 非空即算确认。
 //   学员端不主动拉名单 —— 名单随 refreshRoster 下发，落地时（applyRaceSettle）触发一次结算；
 //   之后每次拉榜单 / 读记录也会再试，换设备或后补确认都能补发。
 var RACE_TOP_BADGE_RANK = 10;
@@ -12655,7 +12655,7 @@ function raceAwardRankBadges(rows, rid) {
   // 遍历所有已确认的届次（往届名单同样有效，换设备/后补确认都能结）
   for (var R in settle) {
     if (!Object.prototype.hasOwnProperty.call(settle, R)) continue;
-    if (!/^r\d+$/.test(R)) continue;                    // 老月度键不是真届次，跳过
+    if (/^\d{4}-\d{2}$/.test(R)) continue;              // 老月度键（YYYY-MM）不是真届次，跳过
     var st = settle[R];
     if (!st || !Array.isArray(st.rankRows)) continue;   // 没确认过名单的届次 → 跳过
     var win = null;
