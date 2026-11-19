@@ -1225,7 +1225,9 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
 .adm-content .admin-q-item.pc-ins-after { box-shadow:0 3px 0 0 var(--a-blue); }
 #adminPaperList.pc-drop-end::after { content:''; display:block; height:3px; background:var(--a-blue); border-radius:2px; margin-top:4px; }
 .ed-grid { display:grid; grid-template-columns:1fr; gap:14px; align-items:start; }
-.ed-preview { background:#fff; border:1px solid var(--a-line); border-radius:12px; padding:16px; position:sticky; top:76px; }
+/* 预览栏不用 position:sticky（管理端内容区禁 sticky：内容一长就卡在顶部、合成滚动重影）。
+   桌面端改为左右两栏各自钉高、内部滚动（见下方 @media），预览内容再长也能滚到底。 */
+.ed-preview { background:#fff; border:1px solid var(--a-line); border-radius:12px; padding:16px; }
 /* 编号信息行：ID / 序号 / 题型 横排，省纵向空间 */
 .ed-meta-row { display:flex; gap:10px; align-items:flex-end; scroll-margin-top:14px; }
 .ed-meta-row .ed-meta-cell { display:flex; flex-direction:column; min-width:0; }
@@ -1253,6 +1255,14 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
   /* 标签 chip 区块单独限高，几十个部门标签不再把题目列表顶到屏幕外 */
   .adm-content .pc-col.pc-right .admin-section-chips { max-height:96px; overflow-y:auto; }
   .adm-content .pc-col.pc-right #adminBankList { flex:1 1 auto; min-height:0; max-height:none; }
+  /* 题目编辑双栏各自内部滚动（2026-11-19）：预览栏改用普通流+自身滚动，
+     编辑下方字段（选项/解析）时预览不用滑到页面底也能跟着看，避免"卡住"。 */
+  .adm-content .ed-grid { align-items:stretch; }
+  /* 高度钉死（不用 max-height）：带输入框的容器随内容变高会让浏览器为留焦点自行滚动。 */
+  .adm-content .ed-form-col, .adm-content .ed-preview {
+    height:calc(100vh - 128px); min-height:280px; overflow-y:auto; overscroll-behavior:contain;
+  }
+  .adm-content .ed-preview { position:static; }
 }
 @media (max-width:900px) {
   .pc-right, .ed-preview { display:none !important; }
@@ -1339,6 +1349,40 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
   border:1px solid var(--a-line) !important; background:#fff !important; color:var(--a-i2) !important;
   cursor:pointer; font-family:inherit; }
 .adm-content .admin-cloud-btn:hover { border-color:var(--a-blue-d) !important; background:#FAFCFE !important; }
+
+/* ===== 题库列表列对齐（2026-11-19 用户反馈：题型和答案看着连成一列右对齐）=====
+   原来题型/答案都是 flex:0 0 auto，列宽跟着内容变，每列起点随行漂移。
+   固定 flex-basis 后各列一律左对齐；超长在列内省略，全文看悬停预览。 */
+.adm-content .admin-q-item .q-type { flex:0 0 170px; width:170px; min-width:0; margin-right:0;
+  font-size:11.5px; color:var(--a-i4); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:left; }
+.adm-content .admin-q-item .q-ans { flex:0 0 220px; width:220px; max-width:220px; min-width:0;
+  display:flex; justify-content:flex-start; }
+@media (max-width:1360px) {
+  .adm-content .admin-q-item .q-type { flex-basis:135px; width:135px; }
+  .adm-content .admin-q-item .q-ans { flex-basis:185px; width:185px; max-width:185px; }
+}
+
+/* 题库列表悬停预览：跟鼠标浮窗，与编辑页右栏预览同款结构；
+   pointer-events:none 保证不截获点击/拖拽，浮窗只做展示。 */
+#adminQHoverPreview { position:fixed; z-index:9000; display:none; width:460px; max-width:calc(100vw - 28px);
+  max-height:calc(100vh - 28px); overflow-y:auto; overscroll-behavior:contain;
+  background:#fff; color:#0E0E0E; border:1px solid #E8EAED; border-radius:12px; padding:14px 16px;
+  box-shadow:0 14px 36px rgba(0,0,0,.15); text-align:left; font-size:13px; line-height:1.6;
+  pointer-events:none; }
+#adminQHoverPreview .qh-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+#adminQHoverPreview .qh-type { display:inline-block; font-size:11px; background:#C7DDF3; color:#0E0E0E;
+  border-radius:5px; padding:1px 7px; }
+#adminQHoverPreview .qh-id { margin-left:auto; font-size:11px; color:#9AA0A6;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+#adminQHoverPreview .qh-stem { font-size:14px; line-height:1.65; white-space:pre-wrap; }
+#adminQHoverPreview .qh-opt { display:flex; gap:8px; align-items:flex-start; padding:6px 10px; margin-top:5px;
+  border:1px solid #E8EAED; border-radius:7px; }
+#adminQHoverPreview .qh-opt.correct { border-color:#C7DDF3; background:rgba(199,221,243,.42); font-weight:600; }
+#adminQHoverPreview .qh-lang { font-size:11.5px; color:#9AA0A6; width:100%; font-weight:400; }
+#adminQHoverPreview .qh-exp { margin-top:10px; padding-top:9px; border-top:1px dashed #E8EAED;
+  font-size:12.5px; color:#3D4145; line-height:1.65; white-space:pre-wrap; }
+@media (max-width:900px) { #adminQHoverPreview { display:none !important; } }
+
 /* 2026-11-12 v8b：评分与统计合并为一张整行卡片（原两张大卡 50% 并排已移除） */
 .adm-content #paperGradingCard { margin-bottom:12px; }
 .adm-content #paperGradingCard input { border:1px solid var(--a-line) !important; border-radius:8px !important; font-family:inherit; }
@@ -30581,6 +30625,115 @@ function adminAnswerPreviewHtml(q) {
   return html + '</div>';
 }
 
+// ===== 题库列表悬停预览（2026-11-19）=====
+// 同编辑页右栏预览：题型 / 中英题干 / 选项（正确高亮）/ 解析。
+// 数据直接取当前题库的题目对象，不重渲染列表，不影响拖拽与行内按钮。
+function adminQHoverTypeLabel(type) {
+  var en = state.lang === 'en';
+  return ({ single: en ? 'Single choice' : '单选', multiple: en ? 'Multiple choice' : '多选',
+    sort: en ? 'Ordering' : '排序', fill: en ? 'Fill in the blank' : '填空' })[type] || (type || '');
+}
+function adminQHoverPreviewHtml(q) {
+  if (!q) return '';
+  var en = state.lang === 'en';
+  var cnStem = q.question_cn || legacyCnStem(q.question || '');
+  var expCn = q.explanation_cn || '', expEn = q.explanation_en || '';
+  if (!expCn && !expEn && q.explanation) expCn = q.explanation;
+  var h = '<div class="qh-head"><span class="qh-type">' + escapeHtml(adminQHoverTypeLabel(q.type))
+    + '</span><span class="qh-id">' + escapeHtml(q.id || '') + '</span></div>';
+  h += '<div class="qh-stem">' + escapeHtml(cnStem || (en ? '(Chinese stem)' : '\uff08\u4e2d\u6587\u9898\u5e72\uff09'))
+    + (q.question_en ? '<div class="qh-lang">' + escapeHtml(q.question_en) + '</div>' : '') + '</div>';
+  if (q.type === 'fill') {
+    var fa = q.fill_answers || [];
+    h += '<div class="qh-opt correct">\u270e ' + (en ? 'Acceptable answers: ' : '\u53ef\u63a5\u53d7\u7b54\u6848\uff1a')
+      + escapeHtml(fa.join(' / ') || '\u2014') + '</div>';
+  } else {
+    var opts = q.options || [], ca = q.correct_answer || [];
+    for (var i = 0; i < opts.length; i++) {
+      var o = opts[i] || {};
+      var correct = ca.indexOf(i) >= 0 || !!o.correct;
+      var prefix = q.type === 'sort' ? (i + 1) : String.fromCharCode(65 + i);
+      var oen = o.text_en || '';
+      if (!oen && typeof o.text === 'string') {
+        var p = o.text.indexOf('|');
+        if (p >= 0) {
+          var l = o.text.slice(0, p).trim(), r = o.text.slice(p + 1).trim();
+          if (l && r && hasCJKStr(l) !== hasCJKStr(r)) oen = hasCJKStr(l) ? r : l;
+        }
+      }
+      h += '<div class="qh-opt' + (correct ? ' correct' : '') + '">' + prefix + '. '
+        + escapeHtml(qOptText(q, i) || o.text_cn || o.text_en || o.text || '?') + (correct ? ' \u2713' : '')
+        + (oen ? '<div class="qh-lang">' + escapeHtml(oen) + '</div>' : '') + '</div>';
+    }
+  }
+  if (expCn || expEn) {
+    h += '<div class="qh-exp"><b>' + (en ? 'Explanation' : '\u89e3\u6790') + '\uff1a</b>' + escapeHtml(expCn)
+      + (expEn ? '<div class="qh-lang">' + escapeHtml(expEn) + '</div>' : '') + '</div>';
+  }
+  return h;
+}
+var adminQHover = { timer: 0, qid: null };
+function adminQHoverHide() {
+  if (adminQHover.timer) { clearTimeout(adminQHover.timer); adminQHover.timer = 0; }
+  adminQHover.qid = null;
+  var el = document.getElementById('adminQHoverPreview');
+  if (el) el.style.display = 'none';
+}
+function adminQHoverPlace(x, y) {
+  var el = document.getElementById('adminQHoverPreview');
+  if (!el) return;
+  var pad = 14, w = el.offsetWidth || 460, h = el.offsetHeight || 300;
+  var vw = (window && window.innerWidth) || 1280, vh = (window && window.innerHeight) || 800;
+  var left = x + 18;
+  if (left + w > vw - pad) left = x - w - 18;
+  if (left < pad) left = pad;
+  var top = y + 18;
+  if (top + h > vh - pad) top = vh - h - pad;
+  if (top < pad) top = pad;
+  el.style.left = left + 'px'; el.style.top = top + 'px';
+}
+function adminQHoverShow(qid, x, y) {
+  var list = QUESTION_DATA[adminState.bank] || [], q = null;
+  for (var i = 0; i < list.length; i++) if (list[i].id === qid) { q = list[i]; break; }
+  if (!q) return;
+  var el = document.getElementById('adminQHoverPreview');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'adminQHoverPreview';
+    document.body.appendChild(el);
+  }
+  if (el.__sig !== qid) { el.innerHTML = adminQHoverPreviewHtml(q); el.__sig = qid; }
+  el.style.display = 'block';
+  adminQHoverPlace(x, y);
+}
+// 事件委托挂 document：题库列表每次翻页/筛选都会 innerHTML 重画，行级监听会丢。
+function adminInitQHover() {
+  document.addEventListener('mouseover', function (e) {
+    if (adminDragState && (adminDragState.qid !== null || adminDragState.secFrom !== null)) return;
+    var row = e.target && e.target.closest ? e.target.closest('#adminQList .admin-q-item[data-qid]') : null;
+    if (!row) return;
+    var qid = row.getAttribute('data-qid');
+    if (adminQHover.qid === qid) return;
+    adminQHoverHide();
+    adminQHover.qid = qid;
+    var x = e.clientX, y = e.clientY;
+    adminQHover.timer = setTimeout(function () { adminQHover.timer = 0; adminQHoverShow(qid, x, y); }, 140);
+  });
+  document.addEventListener('mousemove', function (e) {
+    var el = document.getElementById('adminQHoverPreview');
+    if (el && el.style.display === 'block') adminQHoverPlace(e.clientX, e.clientY);
+  });
+  document.addEventListener('mouseout', function (e) {
+    var row = e.target && e.target.closest ? e.target.closest('#adminQList .admin-q-item[data-qid]') : null;
+    if (!row) return;
+    if (e.relatedTarget && row.contains && row.contains(e.relatedTarget)) return;
+    adminQHoverHide();
+  });
+  document.addEventListener('mousedown', adminQHoverHide);
+  document.addEventListener('dragstart', adminQHoverHide);
+  if (window && typeof window.addEventListener === 'function') window.addEventListener('blur', adminQHoverHide);
+}
+
 // 题库列表每页题数。581 题一次全渲染，滚动找题和浏览器重排都吃力；
 // 分 50 题一页后单页 DOM 量降到 1/12，翻页也只重画列表容器，不整页刷新。
 var ADMIN_Q_PER_PAGE = 50;
@@ -30638,8 +30791,7 @@ function adminRenderQList(questions) {
     html += '<div class="admin-q-item" draggable="true" data-qid="' + escapeHtml(q.id) + '">';
     html += '<div class="q-num">' + escapeHtml(q.id) + '</div>';
     html += '<div class="q-text" title="' + escapeHtml(qCn || '') + '">' + escapeHtml(qText) + '</div>';
-    html += '<span class="q-type" style="flex:0 0 auto;font-size:11.5px;color:#9AA0A6;white-space:nowrap;margin-right:2px;">'
-      + getTypeShort(q.type) + secTag + '</span>';
+    html += '<span class="q-type">' + getTypeShort(q.type) + secTag + '</span>';
     if (qEn) html += '<div class="q-en" title="' + escapeHtml(qEn) + '">' + escapeHtml(qEn) + '</div>';
     html += adminAnswerPreviewHtml(q);
     html += '<div class="q-actions">';
@@ -30750,6 +30902,7 @@ function adminDndClearMarks() {
   for (var i = 0; i < els.length; i++) els[i].classList.remove('dragging', 'drag-over');
 }
 adminInitDnd();
+adminInitQHover();
 
 // ===== Batch-3: editor keyboard shortcuts =====
 // Ctrl/Cmd+S = save · Esc = back to the list (draft force-flushed first so
@@ -30917,6 +31070,7 @@ function adminDuplicateFromEditor() {
 }
 
 function adminUpdateList() {
+  adminQHoverHide(); // 列表重画后旧浮窗内容可能已失效，先收起
   var el = document.getElementById('adminQList');
   if (el) {
     var questions = QUESTION_DATA[adminState.bank] || [];
