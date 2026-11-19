@@ -1227,7 +1227,7 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
 .ed-grid { display:grid; grid-template-columns:1fr; gap:14px; align-items:start; }
 .ed-preview { background:#fff; border:1px solid var(--a-line); border-radius:12px; padding:16px; position:sticky; top:76px; }
 /* 编号信息行：ID / 序号 / 题型 横排，省纵向空间 */
-.ed-meta-row { display:flex; gap:10px; align-items:flex-end; }
+.ed-meta-row { display:flex; gap:10px; align-items:flex-end; scroll-margin-top:14px; }
 .ed-meta-row .ed-meta-cell { display:flex; flex-direction:column; min-width:0; }
 .ed-meta-row .ed-meta-cell label { margin-top:0; }
 .ed-meta-row .ed-meta-cell input, .ed-meta-row .ed-meta-cell select { width:100%; }
@@ -11956,9 +11956,10 @@ function badgeNormList(list) {
 // 学员端读到的徽章目录：优先用管理端发布的那份，没有就用内置预设。
 // 版本迁移（2026-11-04）：v3 及更早的目录里没有竞速 / 学习 / 限定主题这 6 枚，
 // 补进去并把版本推到 4 —— 否则云端旧目录永远盖住新徽章。
-// 只在 ver < 4 时合并一次：v2/v3 的老目录既缺挑战彩蛋、也缺这 6 枚新徽章；
+// 只在 ver < 4 时合并一次：v2/v3 的老目录既缺挑战彩蛋、也缺这些新徽章；
 // 之后管理员删掉某枚再发布（ver ≥ 5）不会被强行加回。
-var BADGE_NEW_DEFAULT_IDS = ['bd_top_cul', 'bd_top_fb', 'bd_top_rooms', 'bd_alltop', 'bd_wrong', 'bd_fav', 'bd_prac', 'bd_theme1',
+// 2026-11-19：竞速类旧四枚退役，换成 bd_gen_master（否则会把已收回的旧徽章补回来）。
+var BADGE_NEW_DEFAULT_IDS = ['bd_gen_master', 'bd_wrong', 'bd_fav', 'bd_prac', 'bd_theme1',
   'bd_newb', 'bd_night', 'bd_wkend', 'bd_perf', 'bd_fast'];
 function badgeMergeNewDefaults(list) {
   var have = {}, i, added = false;
@@ -22424,7 +22425,18 @@ function navigate(page, opts) {
   if (page === 'adminBank' && prev !== 'adminBank' && adminState.bankScrollY > 0) {
     var y = adminState.bankScrollY;
     setTimeout(function () { try { adminScrollTo(y); } catch (e) {} }, 60);
-  } else if (String(page).indexOf('admin') === 0 && prev !== page
+  } else if (page === 'adminEdit' && prev !== page && o.scrollToId !== false) {
+    // 题目编辑页：一律从 ID 信息行开始展示，不还原上次的滚动位置。
+    // 上次离开多半停在表单底部，直接还原会「一进来就在最下面」，反而找不到 ID。
+    // 一键导入面板在 ID 上方，需要时自己上滑（2026-11-19 用户反馈）。
+    setTimeout(function () {
+      try {
+        var meta = document.getElementById('edMetaRow');
+        if (meta && typeof meta.scrollIntoView === 'function') meta.scrollIntoView({ block: 'start' });
+        else adminScrollTo(0);
+      } catch (e) { adminScrollTo(0); }
+    }, 60);
+  } else if (String(page).indexOf('admin') === 0 && prev !== page && o.scrollToId !== false
       && adminState.pageScrollY && (adminState.pageScrollY[page] || 0) > 0) {
     // 回到管理端某页时还原上次离开时的滚动位置
     var yAdmin = adminState.pageScrollY[page];
@@ -30946,15 +30958,16 @@ function adminEditFromPaper(qid, returnPage) {
   adminToast(state.lang === 'en' ? ('Question not found in banks: ' + qid) : ('\u9898\u5e93\u4e2d\u672a\u627e\u5230\u8be5\u9898\u76ee\uff1a' + qid));
 }
 
-function adminAddNew() {
+function adminAddNew(opts) {
   adminState.editingId = null;
   adminState.editingBank = adminState.bank;
   adminState.isNew = true;
-  navigate('adminEdit');
+  navigate('adminEdit', opts);
 }
-// 一键导入入口：新建一道空题并自动展开粘贴面板、聚焦输入框
+// 一键导入入口：新建一道空题并自动展开粘贴面板、聚焦输入框。
+// scrollToId:false —— 让编辑页不要滚到 ID 行，否则 60ms 后那次滚动会把刚聚焦的粘贴框顶出视野。
 function adminSmartNew() {
-  adminAddNew();
+  adminAddNew({ scrollToId: false });
   var box = document.getElementById('smartImportRaw');
   if (box) {
     var body = document.getElementById('smartImportBody');
@@ -31620,7 +31633,7 @@ function renderAdminEdit() {
 
   // 编号信息一行放下（ID 只读 · 序号 · 题型）——原来纵排三个字段占了近半屏，
   // 批量整理题库时每题都要滚过一遍，收成一行后题干直接进入视野。
-  html += '<div class="ed-meta-row">';
+  html += '<div class="ed-meta-row" id="edMetaRow">';
   html += '<div class="ed-meta-cell" style="flex:1.3;min-width:0;"><label>ID</label>'
     + '<input type="text" value="' + escapeHtml(q.id) + '" readonly style="background:var(--bg);color:var(--text-light);"></div>';
   html += '<div class="ed-meta-cell" style="flex:0 0 88px;"><label>' + (state.lang === 'en' ? 'Number' : '\u5e8f\u53f7') + '</label>'
