@@ -6438,7 +6438,6 @@ var I18N = {
   rv_hub_browse: {cn:'打开错题本', en:'Open Error Notebook'},
   rv_hub_mastery_short: {cn:'巩固完成率', en:'Clear rate'},
   rv_hub_sub: {cn:'已巩固完成 {g} 道 · 错题本现有 {n} 道', en:'{g} cleared · {n} in the Error Notebook'},
-  rv_hub_pending: {cn:'今日巩固还未完成，去错题本继续复习', en:'Daily review not finished — continue in the Error Notebook'},
   rv_hub_empty: {cn:'还没有错题记录，去练几道新题吧。', en:'No mistakes yet — start practising.'},
   rv_hub_due: {cn:'今天该复习 {n} 道', en:'{n} due today'},
   rv_hub_hint: {cn:'近一周你的错题集中在「{tag}」，点开复习巩固一下。', en:'Most of your recent mistakes are in "{tag}" — review them now.'},
@@ -21103,12 +21102,8 @@ function reviewHubCardHtml() {
     + '<div style="font-size:11.5px;font-weight:600;color:#5a6473;white-space:nowrap;background:#EDF2F9;padding:3px 9px;border-radius:999px;">'
     + t('rv_hub_browse') + ' ›</div></div>';
   html += '<div style="font-size:12.5px;color:#5a6473;margin-top:6px;line-height:1.5;">'
-    + (left > 0
-      ? (dueN > 0
-        // 今日巩固未完成：给行动提示（下面红胶囊同时标注还剩几道，2026-11-19 领导）
-        ? escapeHtml(t('rv_hub_pending'))
-        : escapeHtml(t('rv_hub_sub').replace('{g}', String(grad)).replace('{n}', String(left))))
-      : escapeHtml(t('rv_hub_empty'))) + '</div>';
+    + (left > 0 ? escapeHtml(t('rv_hub_sub').replace('{g}', String(grad)).replace('{n}', String(left)))
+                : escapeHtml(t('rv_hub_empty'))) + '</div>';
   if (dueN > 0) {
     html += '<div style="margin-top:7px;display:inline-block;background:#FDECEA;color:#c62828;font-size:11px;'
       + 'font-weight:700;padding:3px 9px;border-radius:999px;">⏰ ' + escapeHtml(t('rv_hub_due').replace('{n}', String(dueN))) + '</div>';
