@@ -11793,9 +11793,9 @@ var BADGE_DESC_TEXT = {
   bd_wkend:   { cn: '累计周末完成 3 天打卡', en: '3 weekend check-ins all-time' },
   bd_perf:    { cn: '单场限时竞速答对 10 题以上，答题实力在线', en: '10+ correct in one race run — speed meets accuracy' },
   bd_fast:    { cn: '单赛季答题平均每题用时 ≤5 秒（至少答对 8 题），反应敏捷', en: 'Avg \u2264 5 sec per question (8+ answered) — lightning reflexes' },
-  bd_acc10:   { cn: '单场连续答对 10 题不出错，稳扎稳打', en: '10 correct in a row in one run — steady and precise' },
+  bd_acc10:   { cn: '单场连续答对 10 题不出错，弹无虚发', en: '10 correct in a row in one run — unerring accuracy' },
   bd_acc20:   { cn: '单场连续答对 20 题不出错，百发百中', en: '20 correct in a row in one run — dead on target' },
-  bd_acc30:   { cn: '单场连续答对 30 题不出错，一气呵成', en: '30 correct in a row in one run — flawless from start to finish' },
+  bd_acc30:   { cn: '单场连续答对 30 题不出错，百步穿杨', en: '30 correct in a row in one run — master marksmanship' },
   bd_theme1:  { cn: '✨ 月度限定 · 当期打卡满 8 天且累计答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers this round' },
   // 12 月场第二期预留：当前目录未收录，届时随徽章一起启用
   bd_theme2:  { cn: '✨ 月度限定 · 品牌与酒店知识打卡 8 天、答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers in Brand & Hotel Knowledge' }
@@ -11841,9 +11841,9 @@ function badgeDefaultCatalog() {
       badgeDef('bd_fast', F, 5, '闪电快手', 'Lightning Fast', '⚡', 3, '#ffe08a', '#ef6c00'),
       // 精准作答（2026-11-19）：单次连对不出错的阶梯。配色走丽思蓝系（#c7ddf3 起），
       // 跟打卡（暖黄）/ 竞速（橙）/ 学习（蓝紫）/ 彩蛋（粉橙）拉开，一眼能认出新系列。
-      badgeDef('bd_acc10', AC, 10, '十拿九稳', 'Steady Hand', '🎯', 3, '#c7ddf3', '#5b8fc7'),
+      badgeDef('bd_acc10', AC, 10, '弹无虚发', 'Unerring', '🎯', 3, '#c7ddf3', '#5b8fc7'),
       badgeDef('bd_acc20', AC, 20, '百发百中', 'Dead Center', '🏹', 4, '#b9d4ef', '#3f74ad'),
-      badgeDef('bd_acc30', AC, 30, '一气呵成', 'Flawless Run', '💎', 5, '#a9c9e8', '#2b5f96'),
+      badgeDef('bd_acc30', AC, 30, '百步穿杨', 'Master Archer', '💎', 5, '#a9c9e8', '#2b5f96'),
       // 限定主题：整月赛事 = 打卡 8 天 + 当期答对 50 题（约 10~12 局，摊到 8 天每天一局半）。
       // 门槛：打卡偏松（保参与），答对收紧（保证真学了产品知识）。
       // 2026-11 第一期「产品知识启航狮」发放中；第二期按用户要求等 12 月场再上。
@@ -17469,7 +17469,7 @@ var BADGE_NAME_SEEDS = {
   wrong: [[50, '错题猎手', 'Mistake Hunter'], [100, '错题终结者', 'Mistake Slayer']],
   fav: [[20, '考点收藏家', 'Key Point Collector'], [50, '考点博物馆', 'Key Point Museum']],
   practice: [[100, '温故知新', 'Review Master'], [300, '刷题狂人', 'Practice Machine']],
-  acc: [[10, '十拿九稳', 'Steady Hand'], [20, '百发百中', 'Dead Center'], [30, '一气呵成', 'Flawless Run']]
+  acc: [[10, '弹无虚发', 'Unerring'], [20, '百发百中', 'Dead Center'], [30, '百步穿杨', 'Master Archer']]
 };
 // 描述 → 徽章建议。管理端不需要懂规则术语，写一句"连续打卡 5 天"就够了。
 function badgeSuggestFromDesc(desc) {
@@ -30964,6 +30964,25 @@ function smartOption(line) {
   var body = orig.slice(m[0].length - (m[5] || '').length).trim();
   return { idx: idx, body: body };
 }
+// 单行中英混排（无 | / 分隔符）时按语言边界自动切分：
+// 英文在前 → 首个汉字处切；中文在前 → 末个汉字后切。
+function smartAutoBi(s) {
+  var cf = -1, cl = -1, lf = -1, ll = -1;
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charAt(i);
+    if (/[\u3400-\u9FFF\uF900-\uFAFF]/.test(c)) { if (cf < 0) cf = i; cl = i; }
+    else if (/[A-Za-z]/.test(c)) { if (lf < 0) lf = i; ll = i; }
+  }
+  if (cf < 0 || lf < 0) return null;
+  if (lf < cf) {
+    var en = s.slice(0, cf).trim(), cn = s.slice(cf).trim();
+    if (en && cn) return { cn: cn, en: en };
+  } else {
+    var cn2 = s.slice(0, cl + 1).trim(), en2 = s.slice(cl + 1).trim();
+    if (cn2 && en2 && /[A-Za-z]/.test(en2)) return { cn: cn2, en: en2 };
+  }
+  return null;
+}
 function smartSplitBi(text) {
   var s = String(text == null ? '' : text).trim();
   if (!s) return { cn: '', en: '' };
@@ -30984,6 +31003,8 @@ function smartSplitBi(text) {
     }
     if (cn && en) return { cn: cn, en: en };
   }
+  var auto = smartAutoBi(s);
+  if (auto) return auto;
   return hasCJKStr(s) ? { cn: s, en: '' } : { cn: '', en: s };
 }
 function smartStripMark(s) {
@@ -31064,7 +31085,10 @@ function adminSmartParse(raw) {
       continue;
     }
     var op = smartOption(line);
-    if (op && st.section === 'opt') {
+    // 没有 [选项] 标签时，A./B./C. 连续编号行本身就是选项段的信号：
+    // 首个 A.（idx 0）或已有选项时自动切段，否则整段选项会被当成题干吞掉。
+    if (op && (st.section === 'opt' || op.idx === 0 || st.options.length > 0)) {
+      st.section = 'opt';
       var body = smartStripMark(op.body);
       var bi = smartSplitBi(body);
       var correct = smartIsCorrect(op.body);
