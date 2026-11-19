@@ -6155,7 +6155,7 @@ var I18N = {
   rv_cal_redo_all_done: {cn:'本组错题已全部巩固完成，可随时再练。', en:'All mistakes in this run are cleared \u2014 practice again anytime.'},
   race_cal_makeup_note: {cn:'✍ 这一天是补签（通过产品知识挑战补回）。', en:'✍ Restored via a make-up product-knowledge quiz.'},
   race_cal_makeup_day: {cn:'补签', en:'Make-up'},
-  race_badge_mine_hint: {cn:'连续打卡徽章每一期都能重新拿一次，跨期没断的话会接着累计；累计型徽章终身只拿一次。名字旁边带 ×N 表示你在 N 个周期里都拿到了这枚。点「设为展示徽章」可以挑选一枚挂在排行榜你的名字旁（不选则默认展示等级最高的一枚）。', en:'Streak badges can be earned again in every round \u2014 an unbroken streak keeps counting across rounds. All-time badges are earned once only. \u00d7N means you earned that badge in N different rounds. Tap "Show on leaderboard" to pin one badge next to your name on the leaderboard (defaults to your highest-level one).'},
+  race_badge_mine_hint: {cn:'连续打卡徽章每一期都能重新拿一次，跨期没断的话会接着累计；累计型徽章终身只拿一次。名字旁边带 ×N 表示你在 N 个周期里都拿到了这枚。点「设为展示徽章」可以挑选一枚挂在排行榜你的名字旁（不选则默认展示最近获得的一枚）。', en:'Streak badges can be earned again in every round \u2014 an unbroken streak keeps counting across rounds. All-time badges are earned once only. \u00d7N means you earned that badge in N different rounds. Tap "Show on leaderboard" to pin one badge next to your name on the leaderboard (defaults to your most recently earned one).'},
   race_badge_set_show: {cn:'设为展示徽章', en:'Show on leaderboard'},
   race_badge_showing: {cn:'展示中 · 点击取消', en:'Shown \u2014 tap to unpin'},
   badge_admin_title: {cn:'徽章设置', en:'Badge settings'},
@@ -10703,9 +10703,10 @@ var RACE_SECTIONS = [
 var RACE_SECTION_SOURCE = {
   culinary: ['FSQM-入职培训考试试卷','FSQM-常用食物保质期','卫生','FSQM-审计提问重点'],
   fb:       ['FSQM-入职培训考试试卷','宴会','大堂吧','意大利餐厅','雪茄吧','全日制餐厅','星丽中餐厅','美食屋','客房送餐部','叶子吧'],
-  // 万豪旅享家 2026-11-19 由品牌与酒店知识移入房务部（章节 → 板块，仅影响答题赛题池）
-  rooms:    ['防损部','客房部','水疗及健身中心','宾客服务部','行政酒廊','洗衣房','万豪旅享家'],
-  general:  ['丽思卡尔顿集团信息概述','酒店信息概述','黄金标准默写','丽思卡尔顿文化理念','质量','使用指引','高博卡'],
+  // 2026-11-19 章节归属调整（章节 → 板块，仅影响答题赛题池）：
+  //   万豪旅享家、高博卡 → 房务部；使用指引不进答题赛（留题库供顺序练习/模拟考）。
+  rooms:    ['防损部','客房部','水疗及健身中心','宾客服务部','行政酒廊','洗衣房','万豪旅享家','高博卡'],
+  general:  ['丽思卡尔顿集团信息概述','酒店信息概述','黄金标准默写','丽思卡尔顿文化理念','质量'],
   hr:       ['人力资源部'],
   finance:  ['财务部','信息部'],
   sm:       ['市场销售部'],
@@ -11249,6 +11250,9 @@ function applyRaceSettle(s) {
   try { a = JSON.stringify(cur); b = JSON.stringify(s); } catch (e) { return false; }
   if (a === b) return false;
   try { localStorage.setItem(RACE_SETTLE_KEY, JSON.stringify(s)); } catch (e2) { return false; }
+  // 名单确认落地 → 立刻结算竞速徽章（2026-11-19：只有确认名单后才发）。
+  // 失败不影响名单本身；之后拉榜单 / 读记录会再试，换设备也能补发。
+  try { if (typeof raceAwardRankBadges === 'function') raceAwardRankBadges(null, ''); } catch (e3) {}
   return true;
 }
 function raceSettleOf(rid) {
@@ -11816,10 +11820,7 @@ var BADGE_DESC_TEXT = {
   bd_t30:     { cn: '全平台历史累计打卡满 30 天，步步积累', en: '30 check-in days all-time — step by step' },
   bd_t60:     { cn: '全平台历史累计打卡满 60 天，勤学不止', en: '60 check-in days all-time — never stop learning' },
   bd_t100:    { cn: '全平台历史累计打卡满 100 天，长期坚持的学习者', en: '100 check-in days all-time — the long runner' },
-  bd_top_cul: { cn: '「厨房部」速答榜前 10 名（赛季结束结算）', en: 'Top 10 on the Culinary board (settled at round end)' },
-  bd_top_fb:  { cn: '「餐饮部」速答榜前 10 名（赛季结束结算）', en: 'Top 10 on the F&B board (settled at round end)' },
-  bd_top_rooms: { cn: '「房务部」速答榜前 10 名（赛季结束结算）', en: 'Top 10 on the Rooms board (settled at round end)' },
-  bd_alltop:  { cn: '「全题库」速答榜前 10 名（赛季结束结算）', en: 'Top 10 on the All-Questions board (settled at round end)' },
+  bd_gen_master: { cn: '「品牌与酒店知识」速答榜前 10 名（管理端确认个人奖名单后发）', en: 'Top 10 on the Brand & Hotel Knowledge board (awarded after winners are confirmed)' },
   bd_wrong:   { cn: '累计完成 50 道错题重做，主动攻克知识薄弱点', en: '50 wrong answers redone — you fix what you miss' },
   bd_fav:     { cn: '累计收藏 20 道题目，收纳重点知识考题', en: '20 questions saved — your own key-point shelf' },
   bd_prac:    { cn: '练习模式累计完成 100 道练习，温故巩固知识', en: '100 practice answers — review makes it stick' },
@@ -11844,7 +11845,7 @@ function badgeDefaultCatalog() {
   var WG = BADGE_RULE_WRONG, FV = BADGE_RULE_FAV, PR = BADGE_RULE_PRACTICE, TH = BADGE_RULE_THEME;
   var AC = BADGE_RULE_ACC;
   var cat = {
-    ver: 7,
+    ver: 8,
     list: [
       badgeDef('bd_s3', S, 3, '星火初燃', 'First Spark', '✨', 1, '#ffd27f', '#ff9a3c'),
       badgeDef('bd_s5', S, 5, '灼灼微光', 'Steady Glow', '🔥', 2, '#ffc46b', '#ff7a00'),
@@ -11857,14 +11858,10 @@ function badgeDefaultCatalog() {
       badgeDef('bd_t30', T, 30, '积步成途', '30-day Walker', '🌿', 2, '#b7e4c7', '#2f855a'),
       badgeDef('bd_t60', T, 60, '勤学不辍', '60-day Scholar', '🌳', 3, '#9fd8b0', '#276749'),
       badgeDef('bd_t100', T, 100, '学习王者', 'Learning Champion', '👑', 5, '#ffe08a', '#b7791f'),
-      // 竞速闯关 · 板块榜（2026-11-04 细分）：原来一枚「题库征服者」= 任一板块前十，
-      // 太笼统 —— 厨房部的人拿了也不知道自己是"哪个题库"的征服者。现在按三大板块各发一枚，
-      // 名字直接点名板块（厨房部题库征服者），拿到的人一眼知道强在哪。
-      // sec = 只认该板块榜；留空 = 任一板块（兼容老目录）。
-      badgeDef('bd_top_cul', DT, 10, '厨房部题库征服者', 'Culinary Bank Conqueror', '🍳', 3, '#ffd08a', '#e06c00', '', 0, 'culinary'),
-      badgeDef('bd_top_fb', DT, 10, '餐饮部题库征服者', 'F&B Bank Conqueror', '🍽', 3, '#ffdca8', '#c86400', '', 0, 'fb'),
-      badgeDef('bd_top_rooms', DT, 10, '房务部题库征服者', 'Rooms Bank Conqueror', '🛏', 3, '#ffd2a0', '#b85c00', '', 0, 'rooms'),
-      badgeDef('bd_alltop', AT, 10, '全题库大师', 'All-Bank Master', '🥇', 5, '#ffe08a', '#b7791f'),
+      // 竞速闯关（2026-11-19 重构）：原「三枚板块题库征服者 + 全题库大师」全部下架 ——
+      // 测试场人少、上榜≈参与，徽章含金量不足。改为一枚「品牌与酒店知识大师」，绑 general 榜，
+      // 且必须管理端确认个人奖名单后才发（见 raceAwardRankBadges），与名单口径严格一致。
+      badgeDef('bd_gen_master', DT, 10, '品牌与酒店知识大师', 'Brand & Hotel Knowledge Master', '⭐', 5, '#c7ddf3', '#3f74ad', '', 0, 'general'),
       badgeDef('bd_wrong', WG, 50, '错题猎手', 'Mistake Hunter', '🏹', 3, '#d7c4f5', '#6b46c1'),
       badgeDef('bd_fav', FV, 20, '考点收藏家', 'Key Point Collector', '⭐', 3, '#ffe9a8', '#c08a00'),
       badgeDef('bd_prac', PR, 100, '温故知新', 'Review Master', '📖', 3, '#bfe3ff', '#1a5c96'),
@@ -12073,41 +12070,34 @@ function badgePatchNightN(list) {
   }
   return changed;
 }
-// v6 → v7（2026-11-04）：一枚「题库征服者」按板块拆成三枚。
-// 同样**不能靠 ver 比较**（发布过的目录 ver 是 Date.now()），按"老 id 还在不在"判定：
-// 见到 bd_depttop 就删掉、补进三枚新的，并把老徽章调过的门槛（n / lv / 配色）继承下来；
-// 老 id 已经不在 = 拆过了 / 管理员自己删了，什么都不做（幂等，也不会把删掉的加回来）。
-var BADGE_SPLIT_IDS = ['bd_top_cul', 'bd_top_fb', 'bd_top_rooms'];
+// v7 → v8（2026-11-19）：竞速徽章整体换血。
+// 用户要求把测试阶段发出去的「三枚板块题库征服者 + 全题库大师」全部收回，11 月这期也不发，
+// 改为一枚「品牌与酒店知识大师」，且只有管理端确认个人奖名单后才发。
+//   ① 旧四枚 id 进 BADGE_RETIRED_IDS → 目录剔除 + 学员记录静默删除（无弹窗）；
+//   ② badgePatchSplitDeptTop 把老目录里的旧竞速 id（含更早的 bd_depttop）按值换成新徽章
+//      （发布过的目录 ver 是 Date.now()，靠不了版本比较，只能按 id 判定，幂等）。
+var BADGE_RACE_OLD_IDS = ['bd_top_cul', 'bd_top_fb', 'bd_top_rooms', 'bd_alltop'];
+var BADGE_SPLIT_IDS = BADGE_RACE_OLD_IDS.concat(['bd_depttop']);
 function badgePatchSplitDeptTop(list) {
-  var oldIdx = -1, i, have = {};
+  var oldIdx = -1, i, haveNew = false;
   for (i = 0; i < list.length; i++) {
     if (!list[i]) continue;
-    if (list[i].id === 'bd_depttop') oldIdx = i;
-    have[list[i].id] = 1;
+    if (list[i].id === 'bd_gen_master') haveNew = true;
+    if (oldIdx < 0 && BADGE_SPLIT_IDS.indexOf(list[i].id) >= 0) oldIdx = i;
   }
-  if (oldIdx < 0) return false;
-  var old = list[oldIdx];
-  var oldN = Math.max(1, parseInt(old.n, 10) || 10);
-  list.splice(oldIdx, 1);
-  var defs = badgeDefaultCatalog().list;
-  for (i = 0; i < defs.length; i++) {
-    var d = defs[i];
-    if (BADGE_SPLIT_IDS.indexOf(d.id) < 0 || have[d.id]) continue;
-    var nb = Object.assign({}, d);
-    nb.n = oldN;
-    nb.lv = old.lv || nb.lv;
-    nb.on = old.on !== false;
-    list.push(nb);
-  }
+  if (oldIdx < 0 || haveNew) return false;
+  var def = null, defs = badgeDefaultCatalog().list;
+  for (i = 0; i < defs.length; i++) if (defs[i].id === 'bd_gen_master') { def = defs[i]; break; }
+  if (!def) return false;
+  // 第一个旧 id 位置换成新徽章，其余旧 id 交给 badgeDropRetired 剔除
+  list[oldIdx] = Object.assign({}, def);
   return true;
 }
-// v7 收尾（2026-11-04）：老的「题库征服者」（bd_depttop）是**错的定义**（一枚管所有板块），
-// 用户要求彻底下架 —— 目录里不再出现，学员记录里也要删掉，不能挂在任何人名下。
-// 两道保险：
-//   ① badgeDropRetired 把 id 从目录里剔掉（云端目录万一是旧版也照样剔）→ 界面根本画不出来；
-//   ② racePurgeRetiredBadges 把 rec.badges 里残留的键删掉 → 数据层面也干净，换设备 / 导 CSV 都不会冒出来。
-// 以后再有徽章要下架，往 BADGE_RETIRED_IDS 里加 id 就行。
-var BADGE_RETIRED_IDS = ['bd_depttop'];
+// 已下线的 id：目录里剔除 + 学员记录里删除，界面与数据双干净。
+//   - bd_depttop：最早「一枚管所有板块」的错误定义（2026-11-04 下架）；
+//   - 旧竞速四枚：2026-11-19 测试阶段发放不合理，全部收回。
+// 以后再有徽章要下架，往这个数组里加 id 就行。
+var BADGE_RETIRED_IDS = ['bd_depttop'].concat(BADGE_RACE_OLD_IDS);
 function badgeDropRetired(list) {
   var n = 0;
   for (var i = list.length - 1; i >= 0; i--) {
@@ -12591,20 +12581,18 @@ function raceBadgeEarnedAnywhere(rec, id) {
   }
   return false;
 }
-// ===== 竞速闯关 · 当期 TOP N（2026-11-04，2026-11-04 晚改为「赛后结算」）=====
-// 「TOP N」必须跟别人比，本机算不出来，只能等**榜单数据**到手时结算（跟着 raceFetchBoard 走）。
+// ===== 竞速闯关 · 当期 TOP N（2026-11-04 建，2026-11-19 改为「名单确认后发」）=====
 //
-// 🔴 发放时机：**赛季结束后才发**，赛中一枚不发。
-//   ① 语义：名次天天在变，赛中发就等于"进过前十就有"，跟"最终前十"是两件事；
-//   ② 技术：这套架构做不到"收回"—— 徽章存在本机记录里、跟着快照同步，多设备合并是并集，
-//      另一台设备的旧快照会把已收回的徽章原样复活，撤销结果不可信；
-//   ③ 体验：给了又收回，比一开始不给更伤人。
-//   所以赛中不公示也不发（用户 2026-11-04：徽章解释不必占榜单页——规则在徽章墙 / 管理端说明里都有），
-//   赛季结束、榜单最终定稿后才落徽章，落下去就只加不减，永久保留。
+// 🔴 发放时机：**管理端确认个人奖名单后才发**，赛中 / 测试场一枚不发。
+//   ① 语义：名单经管理端人工核对发布，以名单为准而非实时榜单，杜绝"测试场参与即得"的误发；
+//   ② 历史：2026-11-04~11-18 曾按榜单名次赛后自动发，测试阶段人少导致上榜≈参与，
+//      用户 2026-11-19 要求全部收回。旧竞速徽章已进 BADGE_RETIRED_IDS 静默清除；
+//   ③ 判据：本人须在 awardSettle[届次].rankRows 里，且 boards 命中徽章绑定板块（见 raceAwardRankBadges）。
+// 幂等：已拿过的跳过；名单重发布后再结算只补新的，不会重复也不会收回。
 //
-// 「已结束」怎么判：当前届看 raceStateOf（ended / closed）；**非当前届一律算已结束**
-// —— 榜单里还能看到往届成绩，往届结算不需要等谁点开关，谁先打开 App 谁先把自己那笔结掉。
-//   只认 `r + 时间戳` 形式的届次 id：老记录里按自然月落的 'YYYY-MM' 键不是真届次，跳过。
+// 「名单确认」怎么判：loadRaceSettle() 里有该届次（r + 时间戳）且 rankRows 非空即算确认。
+//   学员端不主动拉名单 —— 名单随 refreshRoster 下发，落地时（applyRaceSettle）触发一次结算；
+//   之后每次拉榜单 / 读记录也会再试，换设备或后补确认都能补发。
 var RACE_TOP_BADGE_RANK = 10;
 function raceBadgeMyRowKey() {
   try {
@@ -12641,68 +12629,50 @@ function raceRidsInRows(rows) {
   }
   return out;
 }
+// ===== 竞速闯关 · 名单确认后发（2026-11-19 重构）=====
+// 🔴 发放闸门：只有管理端确认过个人奖名单（awardSettle[届次]）才发，测试场 / 未确认一律不发。
+//    - 11 月测试场没走名单确认 → 一枚不发；
+//    - 用户担心误发 → 名单由管理端人工核对后发布，发什么以名单为准，不以实时榜单为准。
+// 判据用名单里本人的 rankRow：boards 含徽章绑定的板块 key 才发对应徽章（按上榜板块精确发）。
+//    - 新徽章 bd_gen_master 绑 general（品牌与酒店知识）→ 只有该榜上榜者拿到；
+//    - 历史已获的旧竞速徽章由 BADGE_RETIRED_IDS 静默清掉，不在这里补。
+// 幂等：已拿过的（box[id]）跳过；名单追加/重发布后再调用只会补新的。
 function raceAwardRankBadges(rows, rid) {
-  if (!rows || !rows.length || !rid) return 0;
-  var defs = raceBadgeDefs(false), i;
-  var want = false;
+  var defs = raceBadgeDefs(false), i, d;
+  var rankDefs = [];
   for (i = 0; i < defs.length; i++) {
-    if (defs[i].rule === BADGE_RULE_DEPT_TOP || defs[i].rule === BADGE_RULE_ALL_TOP) { want = true; break; }
+    if (defs[i].rule === BADGE_RULE_DEPT_TOP || defs[i].rule === BADGE_RULE_ALL_TOP) rankDefs.push(defs[i]);
   }
-  if (!want) return 0;
-  var myKey = raceBadgeMyRowKey();
-  if (!myKey) return 0;
-  var conf = null;
-  try { conf = raceConfOf(); } catch (e0) { conf = null; }
-  var st = conf ? raceStateOf(conf) : 'none';
-  // 待结算届次：当前届（已结束 / 已关闭）+ 榜单里能看到的往届
-  var rids = [], seen = {};
-  if (conf && conf.id === rid && (st === 'ended' || st === 'closed')) { rids.push(rid); seen[rid] = 1; }
-  var pool = raceRidsInRows(rows);
-  for (var pr in pool) {
-    if (!Object.prototype.hasOwnProperty.call(pool, pr)) continue;
-    if (pr === rid || seen[pr]) continue;
-    rids.push(pr);
-    seen[pr] = 1;
-  }
-  if (!rids.length) return 0;   // 赛事进行中（或还没同步到届次）→ 一枚都不发
+  if (!rankDefs.length) return 0;                       // 目录里没有竞速徽章 → 什么都不做
   var rec = null;
   try { rec = raceLocalRecord(); } catch (e) { rec = null; }
   if (!rec) return 0;
-  if (!rec.badges || typeof rec.badges !== 'object') rec.badges = {};
-  var today = raceDayKey(Date.now()), added = 0, r, s2;
-  for (r = 0; r < rids.length; r++) {
-    var R = rids[r];
+  var emp = raceMyEmpNo();
+  if (!emp) return 0;
+  var settle = loadRaceSettle();                        // 已确认名单（按届次）
+  if (!settle || typeof settle !== 'object') return 0;
+  var today = raceDayKey(Date.now()), added = 0;
+  // 遍历所有已确认的届次（往届名单同样有效，换设备/后补确认都能结）
+  for (var R in settle) {
+    if (!Object.prototype.hasOwnProperty.call(settle, R)) continue;
+    if (!/^r\d+$/.test(R)) continue;                    // 老月度键不是真届次，跳过
+    var st = settle[R];
+    if (!st || !Array.isArray(st.rankRows)) continue;   // 没确认过名单的届次 → 跳过
+    var win = null;
+    for (i = 0; i < st.rankRows.length; i++) {
+      if (normEmpNo(st.rankRows[i] && st.rankRows[i].emp) === emp) { win = st.rankRows[i]; break; }
+    }
+    if (!win) continue;                                 // 本人不在确认名单里 → 不发
+    var boards = Array.isArray(win.boards) ? win.boards : [];
+    if (!boards.length && win.section) boards = [win.section];  // 老名单没 boards 时用 section 兜底
     var box = rec.badges[R];
     if (!box || typeof box !== 'object' || box.s || box.m) box = rec.badges[R] = {};
-    // 同一个板块名次只算一次（多枚徽章共用一张榜时省算力）
-    var rankCache = {};
-    function rankOf(sec) {
-      var k = String(sec || '');
-      if (rankCache[k] == null) rankCache[k] = raceMyRankOnSection(rows, k, R, myKey);
-      return rankCache[k];
-    }
-    for (i = 0; i < defs.length; i++) {
-      var d = defs[i], need = Math.max(1, d.n || RACE_TOP_BADGE_RANK), ok = false;
+    for (i = 0; i < rankDefs.length; i++) {
+      d = rankDefs[i];
       if (box[d.id]) continue;
-      if (d.rule === BADGE_RULE_ALL_TOP) {
-        var rAll = rankOf('');
-        ok = rAll > 0 && rAll <= need;
-      } else if (d.rule === BADGE_RULE_DEPT_TOP) {
-        var sec = badgeSecValid(d.sec);
-        if (sec) {
-          var rs = rankOf(sec);
-          ok = rs > 0 && rs <= need;
-        } else {
-          // 老目录（没绑板块）= 任一板块榜；新目录三枚各绑一个板块，互不干扰
-          for (s2 = 0; s2 < RACE_SECTIONS.length; s2++) {
-            var sk = RACE_SECTIONS[s2].key;
-            if (sk === 'all') continue;
-            var ra = rankOf(sk);
-            if (ra > 0 && ra <= need) { ok = true; break; }
-          }
-        }
-      } else continue;
-      if (!ok) continue;
+      var wantBoard = d.rule === BADGE_RULE_ALL_TOP ? 'all' : badgeSecValid(d.sec);
+      if (wantBoard && boards.indexOf(wantBoard) < 0) continue;
+      if (!wantBoard && !boards.length) continue;
       box[d.id] = today;
       added++;
     }
@@ -12886,7 +12856,7 @@ function raceBadgeCounts(rec, rid) {
   }
   return out;
 }
-// 排行榜只挂一枚：等级最高的那枚；同级取最近拿到的（"最新的或最高等级的"）
+// 排行榜只挂一枚：最近获得的那枚（同一天拿到多枚时取等级高的）
 function raceTopBadgeOf(list) {
   var best = null, i, b;
   list = list || [];
@@ -12894,13 +12864,13 @@ function raceTopBadgeOf(list) {
     b = list[i];
     if (!b || !b.def) continue;
     if (!best) { best = b; continue; }
-    if ((b.def.lv || 0) > (best.def.lv || 0)) best = b;
-    else if ((b.def.lv || 0) === (best.def.lv || 0) && String(b.date) > String(best.date)) best = b;
+    if (String(b.date) > String(best.date)) best = b;
+    else if (String(b.date) === String(best.date) && (b.def.lv || 0) > (best.def.lv || 0)) best = b;
   }
   return best;
 }
 // 排行榜展示哪一枚：学员在「我的徽章」里自选的优先（rec.showBadge 随快照同步到云端，
-// 别人看他的榜单行时用同一份记录）；没选 / 选的已经拿不到了 → 退回「等级最高、同级取最新」。
+// 别人看他的榜单行时用同一份记录）；没选 / 选的已经拿不到了 → 退回「最近获得的一枚」。
 // 限定月度主题徽章在**发放那一刻**自动写入 showBadge（见 raceAwardBadges）——稀缺性先被看见，
 // 学员之后手动换别的仍以手动为准，两边不打架。
 function raceDisplayBadgeOf(rec, list) {
@@ -12911,7 +12881,7 @@ function raceDisplayBadgeOf(rec, list) {
   }
   return raceTopBadgeOf(list);
 }
-// 学员在「我的徽章」集锦里点「设为展示」：再点一次取消（取消后回到默认的最高等级）。
+// 学员在「我的徽章」集锦里点「设为展示」：再点一次取消（取消后回到默认的最近获得一枚）。
 function raceSetShowBadge(id) {
   var rec = raceLocalRecord() || {};
   rec.showBadge = (rec.showBadge === id) ? '' : id;
@@ -16652,7 +16622,7 @@ function renderRaceBoard() {
       html += '</div>';
       html += '<div style="flex:1;min-width:0;">';
       // 排行榜（个人榜）每行挂一枚徽章：学员自选的展示徽章优先，没选就挂
-      // 等级最高的（同级取最近拿到的）；部门聚合行不是个人，不挂。
+      // 最近获得的（同日拿到多枚时取等级高的）；部门聚合行不是个人，不挂。
       var myBadge = isDeptTab ? null : (rw.show || raceTopBadgeOf(rw.badges));
       var myBCount = 0;
       if (myBadge) {
@@ -19566,7 +19536,7 @@ function renderMyBadges() {
     var got = counts[d.id], pr = raceBadgeProgressOf(rec, d);
     var cell = raceBadgeChipHtml(d, !!got, got ? got.last : '', raceBadgeProgText(d, pr, en), got ? got.count : 0);
     // 拿到的徽章可以设为「排行榜展示徽章」：别人在榜单上看到的就是这枚；
-    // 再点一次取消，回到默认的最高等级一枚。
+    // 再点一次取消，回到默认的最近获得一枚。
     if (got) {
       var isShown = rec.showBadge === d.id;
       cell += '<div onclick="raceSetShowBadge(\'' + d.id + '\')" style="margin-top:5px;text-align:center;font-size:11px;font-weight:600;'
