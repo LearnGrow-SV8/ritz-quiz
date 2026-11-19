@@ -1280,6 +1280,26 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
 .adm-content .admin-edit-form input:focus, .adm-content .admin-edit-form textarea:focus, .adm-content .admin-edit-form select:focus {
   border-color:var(--a-blue-d); box-shadow:0 0 0 3px rgba(199,221,243,.4); }
 .adm-content .admin-edit-form textarea { resize:vertical; min-height:72px; line-height:1.6; }
+/* ===== 一键导入：整段双语题目文本 → 自动分栏（2026-11-19） ===== */
+.smart-import { border:1px solid var(--a-blue-d); border-radius:10px; background:var(--a-blue-s); margin:0 0 14px; overflow:hidden; }
+.smart-import .si-head { display:flex; align-items:center; gap:8px; padding:9px 12px; cursor:pointer; user-select:none; }
+.smart-import .si-head b { font-size:12.5px; color:var(--a-ink); }
+.smart-import .si-sub { font-size:11px; color:var(--a-i3); flex:1; }
+.smart-import .si-arrow { font-size:12px; color:var(--a-i3); }
+.smart-import .si-body { padding:0 12px 12px; }
+.smart-import textarea { width:100%; min-height:120px; padding:9px 11px; border:1px solid var(--a-line); border-radius:8px;
+  font-size:12.5px; line-height:1.6; background:#fff; color:var(--a-ink); font-family:inherit; resize:vertical; outline:none; }
+.smart-import textarea:focus { border-color:var(--a-blue-d); box-shadow:0 0 0 3px rgba(199,221,243,.4); }
+.smart-import .si-actions { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+.smart-import .si-btn { border:1px solid var(--a-blue-d); background:#fff; color:var(--a-ink); border-radius:7px;
+  padding:6px 12px; font-size:12px; cursor:pointer; }
+.smart-import .si-btn.pri { background:var(--a-blue); font-weight:600; }
+.smart-import .si-btn:hover { border-color:var(--a-blue-d); background:#FAFCFE; }
+.smart-import .si-msg { font-size:11.5px; color:var(--a-i2); margin-top:7px; min-height:16px; line-height:1.5; }
+.smart-import .si-help { margin-top:8px; font-size:11px; color:var(--a-i3); }
+.smart-import .si-help summary { cursor:pointer; }
+.smart-import .si-help pre { margin:8px 0 0; padding:9px; background:#fff; border:1px solid var(--a-line);
+  border-radius:7px; font-size:11px; line-height:1.55; white-space:pre-wrap; word-break:break-word; }
 .adm-content #adminPaperList { background:#fff; border:1px solid var(--a-line); border-radius:12px; overflow-y:auto; max-height:calc(100vh - 320px); }
 .adm-content .dash-dept-card { background:#fff; border:1px solid var(--a-line); border-radius:10px; padding:12px 14px; margin-bottom:8px; cursor:pointer; }
 .adm-content .dash-dept-card:hover { border-color:var(--a-blue-d); background:#FAFCFE; }
@@ -5926,6 +5946,10 @@ var I18N = {
   race_badge_cat_special: {cn:'🎖 挑战彩蛋', en:'🎖 Easter Eggs'},
   race_badge_cat_theme: {cn:'🦁 限定月度主题', en:'🦁 Monthly Theme'},
   race_badge_cat_theme_hint: {cn:'每期一换，只在当期发放，过期不再补发。', en:'A new one every round \u2014 only issued in that round, never re-issued.'},
+  // 第六大类（2026-11-19）：精准作答 —— 单次连对 N 题不出错，鼓励正确率而非答题量
+  race_badge_cat_acc: {cn:'🎯 精准作答', en:'🎯 Precision'},
+  race_badge_cat_acc_hint: {cn:'一局之内连续答对不出错，比的是准头，不是题量。', en:'Answer correctly in a row within one run \u2014 precision over volume.'},
+  badge_admin_rule_acc: {cn:'单次连对 N 题不出错（每期一枚）', en:'N correct in a row in one run (per round)'},
   // 挑战彩蛋（2026-11-03）：夜猫子 / 周末战士 / 答题能手 / 闪电快手 / 初出茅庐
   badge_admin_rule_night: {cn:'夜猫子（22:00 后打卡，每期一枚）', en:'Night owl (check in after 10 PM, once per round)'},
   badge_admin_rule_weekend: {cn:'累计周末打卡 N 天（终身一次）', en:'N weekend days all-time (one-off)'},
@@ -11673,11 +11697,14 @@ var BADGE_RULE_WRONG = 'wrong';
 var BADGE_RULE_FAV = 'fav';
 var BADGE_RULE_PRACTICE = 'practice';
 var BADGE_RULE_THEME = 'theme';
+// 精准作答（2026-11-19）：单次连对 N 题不出错。第六大类的唯一规则。
+// 判定读 log[].q（逐题明细，未作答的题不在明细里）——当场结算时本局明细一定在。
+var BADGE_RULE_ACC = 'acc';
 var BADGE_SPECIAL_RULES = [BADGE_RULE_NIGHT, BADGE_RULE_WEEKEND, BADGE_RULE_PERFECT, BADGE_RULE_FAST, BADGE_RULE_NEWBIE];
 // 规则白名单（老目录里出现别的值一律退回连续型）
 var BADGE_ALL_RULES = [BADGE_RULE_STREAK, BADGE_RULE_PERIOD, BADGE_RULE_TOTAL]
   .concat(BADGE_SPECIAL_RULES)
-  .concat([BADGE_RULE_DEPT_TOP, BADGE_RULE_ALL_TOP, BADGE_RULE_WRONG, BADGE_RULE_FAV, BADGE_RULE_PRACTICE, BADGE_RULE_THEME]);
+  .concat([BADGE_RULE_DEPT_TOP, BADGE_RULE_ALL_TOP, BADGE_RULE_WRONG, BADGE_RULE_FAV, BADGE_RULE_PRACTICE, BADGE_RULE_THEME, BADGE_RULE_ACC]);
 function badgeIsSpecialRule(rule) { return BADGE_SPECIAL_RULES.indexOf(rule) >= 0; }
 // ---- 五大类 ----
 var BADGE_CAT_CHECKIN = 'checkin';
@@ -11685,11 +11712,13 @@ var BADGE_CAT_SPEED = 'speed';
 var BADGE_CAT_STUDY = 'study';
 var BADGE_CAT_SPECIAL = 'special';
 var BADGE_CAT_THEME = 'theme';
+var BADGE_CAT_ACC = 'acc';
 var BADGE_CATS = [
   { key: BADGE_CAT_CHECKIN, icon: '📅', labelKey: 'race_badge_cat_checkin' },
   { key: BADGE_CAT_SPEED,   icon: '⚡', labelKey: 'race_badge_cat_speed' },
   { key: BADGE_CAT_STUDY,   icon: '📚', labelKey: 'race_badge_cat_study' },
   { key: BADGE_CAT_SPECIAL, icon: '🎖', labelKey: 'race_badge_cat_special' },
+  { key: BADGE_CAT_ACC,     icon: '🎯', labelKey: 'race_badge_cat_acc' },
   { key: BADGE_CAT_THEME,   icon: '🦁', labelKey: 'race_badge_cat_theme' }
 ];
 // 规则 → 大类。UI 分组、头像框解锁、排序都只看这一个函数，避免多处口径漂移。
@@ -11697,6 +11726,7 @@ function badgeCatOf(rule) {
   if (rule === BADGE_RULE_STREAK || rule === BADGE_RULE_PERIOD || rule === BADGE_RULE_TOTAL) return BADGE_CAT_CHECKIN;
   if (rule === BADGE_RULE_DEPT_TOP || rule === BADGE_RULE_ALL_TOP) return BADGE_CAT_SPEED;
   if (rule === BADGE_RULE_WRONG || rule === BADGE_RULE_FAV || rule === BADGE_RULE_PRACTICE) return BADGE_CAT_STUDY;
+  if (rule === BADGE_RULE_ACC) return BADGE_CAT_ACC;
   if (rule === BADGE_RULE_THEME) return BADGE_CAT_THEME;
   return BADGE_CAT_SPECIAL;
 }
@@ -11763,6 +11793,9 @@ var BADGE_DESC_TEXT = {
   bd_wkend:   { cn: '累计周末完成 3 天打卡', en: '3 weekend check-ins all-time' },
   bd_perf:    { cn: '单场限时竞速答对 10 题以上，答题实力在线', en: '10+ correct in one race run — speed meets accuracy' },
   bd_fast:    { cn: '单赛季答题平均每题用时 ≤5 秒（至少答对 8 题），反应敏捷', en: 'Avg \u2264 5 sec per question (8+ answered) — lightning reflexes' },
+  bd_acc10:   { cn: '单场连续答对 10 题不出错，稳扎稳打', en: '10 correct in a row in one run — steady and precise' },
+  bd_acc20:   { cn: '单场连续答对 20 题不出错，百发百中', en: '20 correct in a row in one run — dead on target' },
+  bd_acc30:   { cn: '单场连续答对 30 题不出错，一气呵成', en: '30 correct in a row in one run — flawless from start to finish' },
   bd_theme1:  { cn: '✨ 月度限定 · 当期打卡满 8 天且累计答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers this round' },
   // 12 月场第二期预留：当前目录未收录，届时随徽章一起启用
   bd_theme2:  { cn: '✨ 月度限定 · 品牌与酒店知识打卡 8 天、答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers in Brand & Hotel Knowledge' }
@@ -11774,8 +11807,9 @@ function badgeDefaultCatalog() {
   var N = BADGE_RULE_NIGHT, W = BADGE_RULE_WEEKEND, PF = BADGE_RULE_PERFECT, F = BADGE_RULE_FAST, NB = BADGE_RULE_NEWBIE;
   var DT = BADGE_RULE_DEPT_TOP, AT = BADGE_RULE_ALL_TOP;
   var WG = BADGE_RULE_WRONG, FV = BADGE_RULE_FAV, PR = BADGE_RULE_PRACTICE, TH = BADGE_RULE_THEME;
+  var AC = BADGE_RULE_ACC;
   var cat = {
-    ver: 6,
+    ver: 7,
     list: [
       badgeDef('bd_s3', S, 3, '星火初燃', 'First Spark', '✨', 1, '#ffd27f', '#ff9a3c'),
       badgeDef('bd_s5', S, 5, '灼灼微光', 'Steady Glow', '🔥', 2, '#ffc46b', '#ff7a00'),
@@ -11805,6 +11839,11 @@ function badgeDefaultCatalog() {
       badgeDef('bd_wkend', W, 3, '周末战士', 'Weekend Warrior', '⚔️', 2, '#b2dfdb', '#00695c'),
       badgeDef('bd_perf', PF, 10, '答题能手', 'Run Sharpshooter', '💯', 3, '#f8bbd0', '#ad1457'),
       badgeDef('bd_fast', F, 5, '闪电快手', 'Lightning Fast', '⚡', 3, '#ffe08a', '#ef6c00'),
+      // 精准作答（2026-11-19）：单次连对不出错的阶梯。配色走丽思蓝系（#c7ddf3 起），
+      // 跟打卡（暖黄）/ 竞速（橙）/ 学习（蓝紫）/ 彩蛋（粉橙）拉开，一眼能认出新系列。
+      badgeDef('bd_acc10', AC, 10, '十拿九稳', 'Steady Hand', '🎯', 3, '#c7ddf3', '#5b8fc7'),
+      badgeDef('bd_acc20', AC, 20, '百发百中', 'Dead Center', '🏹', 4, '#b9d4ef', '#3f74ad'),
+      badgeDef('bd_acc30', AC, 30, '一气呵成', 'Flawless Run', '💎', 5, '#a9c9e8', '#2b5f96'),
       // 限定主题：整月赛事 = 打卡 8 天 + 当期答对 50 题（约 10~12 局，摊到 8 天每天一局半）。
       // 门槛：打卡偏松（保参与），答对收紧（保证真学了产品知识）。
       // 2026-11 第一期「产品知识启航狮」发放中；第二期按用户要求等 12 月场再上。
@@ -11964,6 +12003,27 @@ function badgePatchThemeUnroll(list) {
   }
   return changed;
 }
+// 精准作答三枚（2026-11-19）：线上已发布目录 ver 是时间戳，靠 ver 比较永远不会注入新徽章。
+// 按值判定：目录里一枚 acc 规则徽章都没有 → 视为还没接触过这个系列，补进三枚；
+// 只要已有任意一枚（管理员增删过）就整体不插手 —— 尊重手动选择、且幂等。
+var BADGE_ACC_NEW_IDS = ['bd_acc10', 'bd_acc20', 'bd_acc30'];
+function badgePatchAddAcc(list) {
+  var have = {}, touched = false, i;
+  for (i = 0; i < list.length; i++) {
+    if (!list[i]) continue;
+    have[list[i].id] = 1;
+    if (list[i].rule === BADGE_RULE_ACC) touched = true;
+  }
+  if (touched) return false;
+  var defs = badgeDefaultCatalog().list, added = false;
+  for (i = 0; i < defs.length; i++) {
+    var d = defs[i];
+    if (BADGE_ACC_NEW_IDS.indexOf(d.id) < 0 || have[d.id]) continue;
+    list.push(Object.assign({}, d));
+    added = true;
+  }
+  return added;
+}
 // 夜猫子门槛 1 次 → 3 次（2026-11-13）：与管理端发布无关，按值打补丁 —— 已发布的云端目录、
 // 各设备本地缓存里的旧目录（bd_night n=1）读到内存时统一升到 3，口径全站一致。
 function badgePatchNightN(list) {
@@ -12053,6 +12113,8 @@ function raceBadgeCatalog() {
   badgePatchNightN(list);
   badgePatchSplitDeptTop(list);
   badgePatchThemeUnroll(list);
+  // 精准作答三枚：按值注入，已在册的目录（ver=时间戳）也能拿到新系列（幂等）
+  badgePatchAddAcc(list);
   // 已下线的 id 一律剔掉：云端目录若还是旧版（管理员没重发布 / 旧缓存），界面也不会再画出来
   badgeDropRetired(list);
   return { ver: ver, list: list };
@@ -12238,6 +12300,28 @@ function raceIsNightTs(ts) {
   var hr = raceBjHour(ts);
   return hr >= 22 || hr < 5;
 }
+// 单局最长连对（精准作答徽章共用）：读一条挑战流水的逐题明细 q（[题号,1/0,选项,1]）。
+// 未作答的题不在明细里，答错把连对清零。返回这一局的最长连续答对数。
+function raceMaxRunInLog(ae) {
+  if (!ae || !Array.isArray(ae.q) || !ae.q.length) return 0;
+  var maxRun = 0, run = 0;
+  for (var i = 0; i < ae.q.length; i++) {
+    var row = ae.q[i];
+    if (row && row[1] === 1) { run++; if (run > maxRun) maxRun = run; }
+    else run = 0;
+  }
+  return maxRun;
+}
+// 历史单局最长连对（供精准作答进度显示）：扫全部带明细的流水取最大值。
+function raceBestStreak(rec) {
+  if (!rec || !Array.isArray(rec.log)) return 0;
+  var best = 0;
+  for (var i = 0; i < rec.log.length; i++) {
+    var m = raceMaxRunInLog(rec.log[i]);
+    if (m > best) best = m;
+  }
+  return best;
+}
 // 某人各届的最佳成绩清单：[{rid, entry}]。byRoundSec（每届每板块）+ 老的 byRound（每届一条），
 // 同一届多条时由调用方自己挑——彩蛋规则只要"任何一条达标就算"。
 function raceRoundEntriesOf(rec) {
@@ -12396,6 +12480,24 @@ function raceComputeAwards(rec) {
       if (!okHit) continue;
       if (!out[rid]) out[rid] = {};
       if (!out[rid][d.id]) out[rid][d.id] = raceDayKey(e.ts || Date.now());
+    }
+  }
+  // ---- 精准作答（2026-11-19）----
+  // 扫每条挑战流水的逐题明细 q（[题号,1/0,选项,1]；未作答的题不在明细里，天然不算错也不算连对），
+  // 求该局最长连对，按届记账、达成日取该局日期。明细被裁剪的老流水自然不参与（历史无法回溯）。
+  if (defs.length && log.length) {
+    for (i = 0; i < log.length; i++) {
+      var ae = log[i];
+      var maxRun = raceMaxRunInLog(ae);
+      if (!maxRun) continue;
+      var aRid = ae.id || (raceDayKeyBj(ae.ts || Date.now()).slice(0, 7));
+      var aDay = raceDayKeyBj(ae.ts || Date.now());
+      for (k = 0; k < defs.length; k++) {
+        d = defs[k];
+        if (d.rule !== BADGE_RULE_ACC || maxRun < d.n) continue;
+        if (!out[aRid]) out[aRid] = {};
+        if (!out[aRid][d.id]) out[aRid][d.id] = aDay;
+      }
     }
   }
   // ---- 学习沉淀（2026-11-04）----
@@ -12814,6 +12916,7 @@ function raceBadgeDesc(b, lang) {
     if (rule === BADGE_RULE_WEEKEND) return n + ' weekend days all-time';
     if (rule === BADGE_RULE_PERFECT) return n + '+ correct answers in a single race run';
     if (rule === BADGE_RULE_FAST) return 'Avg \u2264 ' + n + ' sec per question';
+    if (rule === BADGE_RULE_ACC) return n + ' correct answers in a row in one run (no misses)';
     if (rule === BADGE_RULE_NEWBIE) return n + ' days in your first week';
     if (rule === BADGE_RULE_DEPT_TOP) {
       var secEn = badgeSecValid(def && def.sec);
@@ -12839,6 +12942,7 @@ function raceBadgeDesc(b, lang) {
   if (rule === BADGE_RULE_WEEKEND) return '累计周末打卡 ' + n + ' 天';
   if (rule === BADGE_RULE_PERFECT) return '单场竞速答对 ' + n + ' 题以上';
   if (rule === BADGE_RULE_FAST) return '单期平均每题不超过 ' + n + ' 秒（至少答对 ' + BADGE_FAST_MIN_ANS + ' 题）';
+  if (rule === BADGE_RULE_ACC) return '单场连续答对 ' + n + ' 题不出错（未作答不计）';
   if (rule === BADGE_RULE_NEWBIE) return '首次打卡 7 天内打卡满 ' + n + ' 天';
   if (rule === BADGE_RULE_DEPT_TOP) {
     var secCn = badgeSecValid(def && def.sec);
@@ -12918,6 +13022,10 @@ function raceBadgeProgressOf(rec, def) {
     }
     return { cur: hitF ? 1 : 0, max: def.n };
   }
+  if (def.rule === BADGE_RULE_ACC) {
+    // 真实进度：历史单局最长连对。学员能看到"我最好连到了几题"，才追得动。
+    return { cur: Math.min(raceBestStreak(rec || {}), def.n), max: def.n };
+  }
   // 学习沉淀：真实进度（练习答题数 / 错题重做数 / 收藏数），看得见才追得动
   if (def.rule === BADGE_RULE_WRONG || def.rule === BADGE_RULE_FAV || def.rule === BADGE_RULE_PRACTICE) {
     var sc = raceStudyCounters();
@@ -12956,6 +13064,7 @@ var RACE_FRAME_STYLE = {
   speed:   { ring: 'conic-gradient(from 20deg,#fff0c2,#ffc107,#e06c00,#ffe082,#fff0c2)', bg: '#fff8ec', glow: 'rgba(230,120,0,.72)' },
   study:   { ring: 'conic-gradient(from 150deg,#e3f2ff,#4a86e8,#6b46c1,#a8d8ff,#e3f2ff)', bg: '#f4f8ff', glow: 'rgba(90,110,220,.68)' },
   special: { ring: 'conic-gradient(from 110deg,#d7f7f0,#26a69a,#303f9f,#b2dfdb,#d7f7f0)', bg: '#f1fbf8', glow: 'rgba(40,140,150,.66)' },
+  acc:     { ring: 'conic-gradient(from 80deg,#eaf3fc,#c7ddf3,#5b8fc7,#b9d4ef,#eaf3fc)', bg: '#f4f9ff', glow: 'rgba(91,143,199,.66)' },
   theme:   { ring: 'conic-gradient(from 260deg,#fff0d6,#ffb347,#c2410c,#ffd7a8,#fff0d6)', bg: '#fff4e8', glow: 'rgba(200,90,20,.70)' }
 };
 function raceFrameRows(counts) {
@@ -15504,6 +15613,7 @@ function raceBadgeProgText(def, prg, en) {
   if (r === BADGE_RULE_PRACTICE) return cur + '/' + max + (en ? ' q' : ' 题');
   if (r === BADGE_RULE_FAST) return (en ? '\u2264' : '≤') + max + (en ? ' s/q' : ' 秒/题');
   if (r === BADGE_RULE_PERFECT) return (en ? '\u2265' : '≥') + max + (en ? ' correct' : ' 题');
+  if (r === BADGE_RULE_ACC) return cur + '/' + max + (en ? ' in a row' : ' 连对');
   if (r === BADGE_RULE_NIGHT) return cur + '/' + max + (en ? ' runs' : ' 次');
   if (r === BADGE_RULE_THEME) {
     // 双条件一起报：打卡 x/N 天 · 答对 y/M 题（没有第二道门槛就只报天数）
@@ -17358,7 +17468,8 @@ var BADGE_NAME_SEEDS = {
   all_top: [[10, '全题库大师', 'All-Bank Master'], [3, '全库好手', 'All-Bank Ace'], [1, '全库霸主', 'All-Bank Champion']],
   wrong: [[50, '错题猎手', 'Mistake Hunter'], [100, '错题终结者', 'Mistake Slayer']],
   fav: [[20, '考点收藏家', 'Key Point Collector'], [50, '考点博物馆', 'Key Point Museum']],
-  practice: [[100, '温故知新', 'Review Master'], [300, '刷题狂人', 'Practice Machine']]
+  practice: [[100, '温故知新', 'Review Master'], [300, '刷题狂人', 'Practice Machine']],
+  acc: [[10, '十拿九稳', 'Steady Hand'], [20, '百发百中', 'Dead Center'], [30, '一气呵成', 'Flawless Run']]
 };
 // 描述 → 徽章建议。管理端不需要懂规则术语，写一句"连续打卡 5 天"就够了。
 function badgeSuggestFromDesc(desc) {
@@ -17375,6 +17486,8 @@ function badgeSuggestFromDesc(desc) {
   // 数量单位比天数规则宽：题（答题能手）、秒（快手）也能识别。
   else if (/夜|晚上|深夜|owl|night/.test(low)) rule = BADGE_RULE_NIGHT;
   else if (/周末|weekend/.test(low)) rule = BADGE_RULE_WEEKEND;
+  // 精准作答必须排在 perfect / streak 之前："连续答对"含"答对"和"连续"，晚判会被抢走
+  else if (/连对|连续答对|连中|不出错|精准作答|in a row|consecutive correct|streak of correct|precision/.test(low)) rule = BADGE_RULE_ACC;
   else if (/答对|全对|满分|完美|perfect/.test(low)) rule = BADGE_RULE_PERFECT;
   else if (/快|速度|秒|闪电|fast|speed|lightning/.test(low)) rule = BADGE_RULE_FAST;
   else if (/新手|新秀|初出|首周|rookie|newbie|first week/.test(low)) rule = BADGE_RULE_NEWBIE;
@@ -17384,6 +17497,7 @@ function badgeSuggestFromDesc(desc) {
   var m = low.match(/(\d+)\s*(天|日|day|days|题|道|秒|sec|question|questions|名)/);
   var nDef = rule === BADGE_RULE_NIGHT ? 3 : rule === BADGE_RULE_WEEKEND ? 3
     : rule === BADGE_RULE_PERFECT ? 10 : rule === BADGE_RULE_FAST ? 5
+    : rule === BADGE_RULE_ACC ? 10
     : rule === BADGE_RULE_NEWBIE ? 3
     : rule === BADGE_RULE_DEPT_TOP || rule === BADGE_RULE_ALL_TOP ? 10
     : rule === BADGE_RULE_WRONG ? 50 : rule === BADGE_RULE_FAV ? 20 : rule === BADGE_RULE_PRACTICE ? 100
@@ -17392,6 +17506,7 @@ function badgeSuggestFromDesc(desc) {
   if (!(n > 0)) n = 3;
   if (n > 365) n = 365;
   var icon = rule === BADGE_RULE_STREAK ? '🔥' : (rule === BADGE_RULE_PERIOD ? '📅' : '🌿');
+  if (rule === BADGE_RULE_ACC) icon = '🎯';
   if (/王者|冠军|第一|king|champion/.test(low)) icon = '👑';
   else if (/全题库|master/.test(low)) icon = '🥇';
   else if (/前十|top|板块榜|部门榜/.test(low)) icon = '🎯';
@@ -17436,6 +17551,7 @@ function badgeSuggestFromDesc(desc) {
   else if (rule === BADGE_RULE_DEPT_TOP) lv = n <= 3 ? 4 : 3;
   else if (rule === BADGE_RULE_ALL_TOP) lv = n <= 3 ? 5 : 4;
   else if (rule === BADGE_RULE_WRONG || rule === BADGE_RULE_FAV || rule === BADGE_RULE_PRACTICE) lv = n >= 100 ? 4 : 3;
+  else if (rule === BADGE_RULE_ACC) lv = n >= 30 ? 5 : (n >= 20 ? 4 : 3);
   else if (rule === BADGE_RULE_THEME) lv = 3;
   else if (rule === BADGE_RULE_STREAK) lv = n >= 21 ? 5 : (n >= 14 ? 4 : (n >= 7 ? 3 : (n >= 5 ? 2 : 1)));
   else if (rule === BADGE_RULE_PERIOD) lv = n >= 25 ? 5 : (n >= 20 ? 4 : (n >= 15 ? 3 : (n >= 10 ? 2 : 1)));
@@ -17468,6 +17584,9 @@ function badgeThemeOf(rule, lv) {
   }
   if (rule === BADGE_RULE_THEME) {
     return lv >= 4 ? { c1: '#ffd7a8', c2: '#9a3412' } : { c1: '#ffd7a8', c2: '#c2410c' };
+  }
+  if (rule === BADGE_RULE_ACC) {
+    return lv >= 4 ? { c1: '#a9c9e8', c2: '#2b5f96' } : { c1: '#c7ddf3', c2: '#5b8fc7' };
   }
   return lv >= 4 ? { c1: '#ffe08a', c2: '#b7791f' } : { c1: '#b7e4c7', c2: '#2f855a' };
 }
@@ -17508,6 +17627,7 @@ function adminBadgeRuleText(b, en) {
   if (b.rule === BADGE_RULE_NIGHT) return en ? 'night owl' : '夜猫子';
   if (b.rule === BADGE_RULE_WEEKEND) return en ? ('weekend ' + b.n + 'd') : ('周末 ' + b.n + ' 天');
   if (b.rule === BADGE_RULE_PERFECT) return en ? (b.n + '+ correct in a race run') : ('单场竞速答对 ' + b.n + ' 题');
+  if (b.rule === BADGE_RULE_ACC) return en ? (b.n + ' in a row') : ('连续答对 ' + b.n + ' 题');
   if (b.rule === BADGE_RULE_FAST) return en ? ('\u2264' + b.n + 's/q') : ('每题\u2264' + b.n + ' 秒');
   if (b.rule === BADGE_RULE_NEWBIE) return en ? ('first week ' + b.n + 'd') : ('首周 ' + b.n + ' 天');
   if (b.rule === BADGE_RULE_DEPT_TOP) {
@@ -17609,6 +17729,7 @@ function renderAdminBadges() {
     + '<option value="wrong"' + (d.rule === BADGE_RULE_WRONG ? ' selected' : '') + '>' + t('badge_admin_rule_wrong') + '</option>'
     + '<option value="fav"' + (d.rule === BADGE_RULE_FAV ? ' selected' : '') + '>' + t('badge_admin_rule_fav') + '</option>'
     + '<option value="practice"' + (d.rule === BADGE_RULE_PRACTICE ? ' selected' : '') + '>' + t('badge_admin_rule_practice') + '</option>'
+    + '<option value="acc"' + (d.rule === BADGE_RULE_ACC ? ' selected' : '') + '>' + t('badge_admin_rule_acc') + '</option>'
     + '<option value="theme"' + (d.rule === BADGE_RULE_THEME ? ' selected' : '') + '>' + t('badge_admin_rule_theme') + '</option>'
     + '</select></div>';
   html += '</div>';
@@ -19428,6 +19549,9 @@ function renderMyBadges() {
     html += '<h4 style="margin:16px 2px 4px;">' + badgeCatLabel(catKey) + '</h4>';
     if (catKey === BADGE_CAT_THEME) {
       html += '<div style="font-size:11px;color:#9aa3ad;margin:0 2px 8px;">' + t('race_badge_cat_theme_hint') + '</div>';
+    }
+    if (catKey === BADGE_CAT_ACC) {
+      html += '<div style="font-size:11px;color:#9aa3ad;margin:0 2px 8px;">' + t('race_badge_cat_acc_hint') + '</div>';
     }
     if (catKey === BADGE_CAT_CHECKIN) {
       // 打卡系列保留原来的三个小区：连续 / 单期 / 累计 —— 三种口径混在一起容易看晕
@@ -28949,6 +29073,8 @@ function renderAdminBank() {
     acts += '<button class="ap-btn' + (adminState.sectionPanel === 'limit' ? ' blu' : '') + '" onclick="adminState.sectionPanel='
       + (adminState.sectionPanel === 'limit' ? '\'\'' : '\'limit\'') + ';render()">' + (en ? 'Mock exam count' : '模拟考题数') + '</button>';
   }
+  acts += '<button class="ap-btn" onclick="adminSmartNew()">'
+    + '<svg viewBox="0 0 24 24"><path d="M4 12h16M13 5l7 7-7 7"/></svg>' + (en ? 'Paste to import' : '一键导入') + '</button>';
   acts += '<button class="ap-btn pri" onclick="adminAddNew()">'
     + '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>' + (en ? 'New question' : '新建题目') + '</button>';
 
@@ -30717,6 +30843,18 @@ function adminAddNew() {
   adminState.isNew = true;
   navigate('adminEdit');
 }
+// 一键导入入口：新建一道空题并自动展开粘贴面板、聚焦输入框
+function adminSmartNew() {
+  adminAddNew();
+  var box = document.getElementById('smartImportRaw');
+  if (box) {
+    var body = document.getElementById('smartImportBody');
+    var arrow = document.getElementById('smartImportArrow');
+    if (body) body.style.display = 'block';
+    if (arrow) arrow.textContent = '\u25be';
+    try { box.focus(); } catch (e) {}
+  }
+}
 
 // Batch-4: 从试卷编排页新建题目——先落到正确的题库（全员版→本卷题库，
 // 厨房版→产品知识题库），保存后自动回到试卷编排页。
@@ -30762,6 +30900,297 @@ function adminSplitOpt(text) {
   var lc = hasCJKStr(l), rc = hasCJKStr(r);
   if (lc === rc) return { cn: text.trim(), en: '' };
   return lc ? { cn: l, en: r } : { cn: r, en: l };
+}
+
+// ===== 一键导入：整段双语题目文本 → 各栏（2026-11-19）======================
+// 纯前端解析，不发任何网络请求。输入是管理员从对话里复制来的结构化文本，
+// 解析器对全/半角、括号、标签别名、选项编号都做兼容，识别不出的行不会静默丢失。
+// 归一化只做 1:1 字符替换（不 trim），这样归一化串与原串下标一一对应，
+// 可以用匹配长度从【原串】切出正文，保住中文全角标点不被改动。
+function smartNormLine(s) {
+  return String(s == null ? '' : s).replace(/\u3000/g, ' ')
+    .replace(/[\uFF01-\uFF5E]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
+    .replace(/[\u3010\u3011\uFF3B\uFF3D]/g, function (c) {
+      return (c === '\u3010' || c === '\uFF3B') ? '[' : ']';
+    })
+    .replace(/[\uFF08\uFF09]/g, function (c) { return c === '\uFF08' ? '(' : ')'; });
+}
+function smartKindOf(L) {
+  if (/题型|type/.test(L)) return 'type';
+  if (/解析|解释|explanation|^exp$|analysis|note|说明/.test(L)) return 'exp';
+  if (/填空|fill|blank/.test(L)) return 'fill';
+  if (/题干|题目|问题|question|stem|^q$/.test(L)) return 'stem';
+  if (/选项|options?|choices?/.test(L)) return 'opt';
+  if (/答案|answer|correct|^key$/.test(L)) return 'ans';
+  return '';
+}
+function smartLabel(line) {
+  var orig = String(line == null ? '' : line);
+  var s = smartNormLine(orig);
+  if (!s.trim()) return null;
+  var bare = s.replace(/^\s*[-*#>]\s*/, '').replace(/[\[\]]/g, '').trim().replace(/\s+/g, '').toLowerCase();
+  var m = s.match(/^\s*\[([^\]]{1,16})\]\s*:?\s*/)
+       || s.match(/^\s*([^:\[\]]{1,18})\s*:\s*/);
+  var L = '', rest = '';
+  if (m) {
+    L = m[1].replace(/\s+/g, '').toLowerCase();
+    rest = orig.slice(m[0].length).trim();
+  } else {
+    // 裸标签行（选项 / 答案 / 解析 / 题干）必须与关键词【完全相等】。
+    // 只做子串匹配会把 "A Preferred Choice" 里的 choice 当成「选项」标题，吞掉整行。
+    if (/^(题干|题目|问题|选项|答案|正确答案|解析|解释|说明|填空答案|题型)$/.test(bare)
+        || /^(question|stem|options?|choices?|answer|ans|correct|explanation|exp|fill|type)$/.test(bare)) {
+      L = bare;
+    } else return null;
+  }
+  var kind = smartKindOf(L);
+  if (!kind) return null;
+  var lang = '';
+  if (/中|中文|cn|chinese|zh|汉/.test(L)) lang = 'cn';
+  else if (/英|英文|en|english/.test(L)) lang = 'en';
+  return { kind: kind, lang: lang, rest: rest };
+}
+function smartOption(line) {
+  var orig = String(line == null ? '' : line);
+  var s = smartNormLine(orig);
+  if (!s.trim()) return null;
+  var m = s.match(/^\s*(?:\(([A-Za-z0-9])\)|([A-Za-z])\s*[\.\u3001:\)]|([\d]{1,2})\s*[\.\u3001:\)]|([\u2460-\u2473]))\s*([\s\S]*)$/);
+  if (!m) return null;
+  var mark = m[1] || m[2] || m[3] || m[4] || '';
+  var idx = -1;
+  if (/^[A-Za-z]$/.test(mark)) idx = mark.toUpperCase().charCodeAt(0) - 65;
+  else if (/^\d+$/.test(mark)) idx = parseInt(mark, 10) - 1;
+  else if (m[4]) idx = mark.charCodeAt(0) - 0x2460;
+  var body = orig.slice(m[0].length - (m[5] || '').length).trim();
+  return { idx: idx, body: body };
+}
+function smartSplitBi(text) {
+  var s = String(text == null ? '' : text).trim();
+  if (!s) return { cn: '', en: '' };
+  var m = s.match(/^(?:中|cn|中文)\s*:?\s*([\s\S]*?)\s*(?:\||\/|\t|\s{2,})\s*(?:英|en|英文)\s*:?\s*([\s\S]*)$/i)
+       || s.match(/^(?:英|en|英文)\s*:?\s*([\s\S]*?)\s*(?:\||\/|\t|\s{2,})\s*(?:中|cn|中文)\s*:?\s*([\s\S]*)$/i);
+  if (m) {
+    var firstIsCn = /^(?:中|cn|中文)/i.test(s);
+    return firstIsCn ? { cn: m[1].trim(), en: m[2].trim() } : { cn: m[2].trim(), en: m[1].trim() };
+  }
+  var parts = s.split(/\s*\|\s*|\s*\uFF0F\s*|\s+\/\s+|\t+| {2,}/);
+  if (parts.length >= 2) {
+    var cn = '', en = '';
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i].trim();
+      if (!p) continue;
+      if (hasCJKStr(p)) cn = cn ? cn + ' ' + p : p;
+      else en = en ? en + ' ' + p : p;
+    }
+    if (cn && en) return { cn: cn, en: en };
+  }
+  return hasCJKStr(s) ? { cn: s, en: '' } : { cn: '', en: s };
+}
+function smartStripMark(s) {
+  return String(s == null ? '' : s)
+    .replace(/[\s\u00a0]*[✓√★*]\s*$/, '')
+    .replace(/[\s\u00a0]*[\(\[]\s*(?:正确|correct)\s*[\)\]]\s*$/i, '')
+    .trim();
+}
+function smartIsCorrect(s) {
+  return /[✓√★]|(?:[\(\[]\s*(?:正确|correct)\s*[\)\]]\s*$)/i.test(String(s == null ? '' : s));
+}
+function smartAnswerIdx(text) {
+  var s = smartNormLine(text).replace(/^(?:正确答案|答案|answer|correct|key)\s*:?\s*/i, '').trim();
+  var letters = s.match(/[A-Za-z]/g);
+  if (letters && letters.length) {
+    var out = [];
+    for (var i = 0; i < letters.length; i++) {
+      var n = letters[i].toUpperCase().charCodeAt(0) - 65;
+      if (n >= 0 && n < 26 && out.indexOf(n) < 0) out.push(n);
+    }
+    return out.sort(function (a, b) { return a - b; });
+  }
+  var nums = s.match(/\d+/g);
+  if (nums && nums.length) {
+    var out2 = [];
+    for (var j = 0; j < nums.length; j++) {
+      var k = parseInt(nums[j], 10) - 1;
+      if (k >= 0 && k < 60 && out2.indexOf(k) < 0) out2.push(k);
+    }
+    return out2.sort(function (a, b) { return a - b; });
+  }
+  if (/^(正确|对|是|true|t|yes|y)$/i.test(s)) return [0];
+  if (/^(错误|错|否|false|f|no|n)$/i.test(s)) return [1];
+  return [];
+}
+// 把段落文本按语言拆成 cn/en 两栏（题干、解析共用）
+function smartFillLangPair(lines, explicit) {
+  var out = { cn: explicit.cn || '', en: explicit.en || '' };
+  var cn = [], en = [];
+  for (var i = 0; i < lines.length; i++) {
+    var raw = String(lines[i] || '').trim();
+    if (!raw) continue;
+    var bi = smartSplitBi(raw);
+    if (bi.cn) cn.push(bi.cn);
+    if (bi.en) en.push(bi.en);
+  }
+  if (!out.cn && cn.length) out.cn = cn.join('\n');
+  if (!out.en && en.length) out.en = en.join('\n');
+  return out;
+}
+// 主解析入口：返回与 adminDraftSnapshot 同形状的草稿对象
+function adminSmartParse(raw) {
+  var lines = String(raw == null ? '' : raw).replace(/\r/g, '').split('\n');
+  var st = { section: 'stem', stem: [], exp: [], options: [], answer: [], fill: [],
+             questionCn: '', questionEn: '', explanationCn: '', explanationEn: '', type: '' };
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (!String(line).trim()) continue;
+    var lab = smartLabel(line);
+    if (lab) {
+      st.section = lab.kind;
+      if (lab.kind === 'type' && lab.rest) {
+        var T = smartNormLine(lab.rest).toLowerCase();
+        st.type = /填空|fill|blank/.test(T) ? 'fill'
+          : /多选|multiple/.test(T) ? 'multiple'
+          : /判断|judge|true|false|是非/.test(T) ? 'judge'
+          : /单选|single/.test(T) ? 'single' : '';
+      } else if (lab.kind === 'stem' && lab.lang) {
+        if (lab.rest) st[lab.lang === 'cn' ? 'questionCn' : 'questionEn'] = lab.rest;
+      } else if (lab.kind === 'exp' && lab.lang) {
+        if (lab.rest) st[lab.lang === 'cn' ? 'explanationCn' : 'explanationEn'] = lab.rest;
+      } else if (lab.rest) {
+        if (lab.kind === 'ans') st.answer.push(lab.rest);
+        else if (lab.kind === 'fill') st.fill.push(lab.rest);
+        else if (lab.kind === 'stem') st.stem.push(lab.rest);
+        else if (lab.kind === 'exp') st.exp.push(lab.rest);
+      }
+      continue;
+    }
+    var op = smartOption(line);
+    if (op && st.section === 'opt') {
+      var body = smartStripMark(op.body);
+      var bi = smartSplitBi(body);
+      var correct = smartIsCorrect(op.body);
+      var row = (op.idx >= 0) ? st.options[op.idx] : null;
+      if (row) {
+        if (bi.cn) row.cn = row.cn ? row.cn + '\n' + bi.cn : bi.cn;
+        if (bi.en) row.en = row.en ? row.en + '\n' + bi.en : bi.en;
+        if (correct) row.correct = true;
+      } else {
+        st.options.push({ cn: bi.cn, en: bi.en, correct: correct, idx: op.idx });
+      }
+      continue;
+    }
+    if (st.section === 'answer') st.answer.push(line);
+    else if (st.section === 'fill') st.fill.push(line);
+    else if (st.section === 'stem') st.stem.push(line);
+    else if (st.section === 'exp') st.exp.push(line);
+    else if (st.section === 'opt') {
+      // 没有编号的续行：接在最近一个选项后面
+      var lastOpt = st.options[st.options.length - 1];
+      if (lastOpt) {
+        var bi2 = smartSplitBi(line);
+        if (bi2.cn) lastOpt.cn = lastOpt.cn ? lastOpt.cn + '\n' + bi2.cn : bi2.cn;
+        if (bi2.en) lastOpt.en = lastOpt.en ? lastOpt.en + '\n' + bi2.en : bi2.en;
+        if (smartIsCorrect(line)) lastOpt.correct = true;
+      }
+    }
+  }
+  // 题干 / 解析：显式分语言标签优先，否则按行自动判语言
+  var q = smartFillLangPair(st.stem, { cn: st.questionCn, en: st.questionEn });
+  var e = smartFillLangPair(st.exp, { cn: st.explanationCn, en: st.explanationEn });
+  // 选项：去掉纯空行，按索引补齐
+  var opts = [];
+  for (var oi = 0; oi < st.options.length; oi++) {
+    var it = st.options[oi];
+    if (!it || (!it.cn && !it.en)) continue;
+    opts.push({ cn: it.cn || '', en: it.en || '', correct: !!it.correct });
+  }
+  // 正确答案：显式答案行优先；否则用选项上的勾选标记
+  var ans = [];
+  for (var ai = 0; ai < st.answer.length; ai++) {
+    var got = smartAnswerIdx(st.answer[ai]);
+    if (got.length) { ans = got; break; }
+  }
+  if (!ans.length) {
+    for (var ci = 0; ci < opts.length; ci++) if (opts[ci].correct) ans.push(ci);
+  }
+  // 填空题答案
+  var fills = [];
+  for (var fi = 0; fi < st.fill.length; fi++) {
+    var segs = smartNormLine(st.fill[fi]).split(/\s*[,\/|]\s*|\s{2,}/);
+    for (var sj = 0; sj < segs.length; sj++) if (segs[sj].trim()) fills.push(segs[sj].trim());
+  }
+  var type = st.type;
+  if (type === 'judge') {
+    if (!opts.length) opts = [{ cn: '正确', en: 'True', correct: false }, { cn: '错误', en: 'False', correct: false }];
+    type = 'single';
+  }
+  if (!type) {
+    if (fills.length) type = 'fill';
+    else if (ans.length > 1) type = 'multiple';
+    else type = 'single';
+  }
+  if (type !== 'fill') for (var ki = 0; ki < opts.length; ki++) opts[ki].correct = ans.indexOf(ki) >= 0;
+  return {
+    questionCn: q.cn, questionEn: q.en, explanationCn: e.cn, explanationEn: e.en,
+    options: opts, correctIdx: type === 'fill' ? [] : ans, fillAnswers: fills, type: type
+  };
+}
+// 把解析结果写进当前编辑表单，并触发预览/校验/草稿保存
+function adminSmartImportApply() {
+  var box = document.getElementById('smartImportRaw');
+  if (!box) return;
+  var d = adminSmartParse(box.value);
+  var msg = document.getElementById('smartImportMsg');
+  function fail(t) { if (msg) msg.textContent = t; adminToast(t); }
+  if (!d.questionCn && !d.questionEn) return fail(state.lang === 'en' ? 'No question stem found' : '\u672a\u8bc6\u522b\u5230\u9898\u5e72');
+  if (d.type === 'fill') {
+    if (!d.fillAnswers.length) return fail(state.lang === 'en' ? 'No fill answers found' : '\u672a\u8bc6\u522b\u5230\u586b\u7a7a\u7b54\u6848');
+  } else {
+    if (d.options.length < 2) return fail(state.lang === 'en' ? 'Fewer than 2 options found' : '\u9009\u9879\u4e0d\u8db3 2 \u4e2a');
+    if (!d.correctIdx.length) return fail(state.lang === 'en' ? 'No correct answer found' : '\u672a\u8bc6\u522b\u5230\u6b63\u786e\u7b54\u6848');
+  }
+  var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v || ''; };
+  var typeSel = document.getElementById('qType');
+  if (typeSel) typeSel.value = d.type;
+  set('qTextCn', d.questionCn); set('qTextEn', d.questionEn);
+  set('qExplanationCn', d.explanationCn); set('qExplanationEn', d.explanationEn);
+  var area = document.getElementById('qOptionsArea');
+  if (area) {
+    area.innerHTML = adminRenderOptionsOrFill(d);
+    adminAutoGrowAll(area);
+  }
+  if (typeof adminEditPreviewRefresh === 'function') adminEditPreviewRefresh();
+  if (typeof adminEditValidate === 'function') adminEditValidate();
+  adminDraftAutoSave();
+  var summary = state.lang === 'en'
+    ? 'Filled: stem / ' + (d.type === 'fill' ? d.fillAnswers.length + ' answers' : d.options.length + ' options') + ' / explanation. Check and save.'
+    : '\u5df2\u586b\u5165\uff1a\u9898\u5e72 / ' + (d.type === 'fill' ? d.fillAnswers.length + ' \u4e2a\u7b54\u6848' : d.options.length + ' \u4e2a\u9009\u9879') + ' / \u89e3\u6790\uff0c\u8bf7\u6838\u5bf9\u540e\u4fdd\u5b58\u3002';
+  if (msg) msg.textContent = summary;
+  adminToast(summary, true);
+}
+function adminSmartToggle() {
+  var b = document.getElementById('smartImportBody'), a = document.getElementById('smartImportArrow');
+  if (!b) return;
+  var open = b.style.display !== 'none';
+  b.style.display = open ? 'none' : 'block';
+  if (a) a.textContent = open ? '\u25b8' : '\u25be';
+}
+function adminSmartExample() {
+  var box = document.getElementById('smartImportRaw');
+  if (!box) return;
+  box.value = [
+    '[题干中] 深圳星河丽思卡尔顿酒店的情境主题是什么？',
+    '[题干英] What is the scenography of The Ritz-Carlton, Shenzhen?',
+    '[题型] 单选',
+    '[选项]',
+    'A. 您在城市中心的优雅绿洲 | Your Oasis of Luxury in the City Center ✓',
+    'B. 您在城市中心的奢华驿站 | A Luxury Stopover in the City Center',
+    'C. 商务旅居的优选之地 | A Preferred Choice for Business Travel',
+    'D. 城市中心的静谧居所 | A Quiet Residence in the City Center',
+    '[解析中] 酒店以“优雅绿洲”为情境主题，为宾客提供城市中心的静谧体验。',
+    '[解析英] The hotel scenography is an oasis of luxury in the city center.'
+  ].join('\n');
+  var msg = document.getElementById('smartImportMsg');
+  if (msg) msg.textContent = state.lang === 'en' ? 'Example loaded — check the fields, then save.' : '\u5df2\u586b\u5165\u793a\u4f8b\uff0c\u70b9\u201c\u89e3\u6790\u5e76\u586b\u5165\u201d\u67e5\u770b\u6548\u679c\u3002';
 }
 
 // ===== Stage-5: question-editor draft protection =====
@@ -31003,7 +31432,40 @@ function renderAdminEdit() {
   }
 
   html += '<div class="ed-grid">';
-  html += '<div class="ed-form-col"><div class="admin-edit-form" oninput="adminDraftAutoSave();adminEditPreviewRefresh();adminEditValidate()" onchange="adminDraftAutoSave();adminEditPreviewRefresh();adminEditValidate()">';
+  html += '<div class="ed-form-col">';
+
+  // 一键导入面板：把整段双语题目文字粘进来，自动拆到题干/选项/答案/解析各栏。
+  html += '<div class="smart-import">';
+  html += '<div class="si-head" onclick="adminSmartToggle()"><b>\u26a1 ' + (state.lang === 'en' ? 'Paste to import' : '\u4e00\u952e\u5bfc\u5165') + '</b>'
+    + '<span class="si-sub">' + (state.lang === 'en' ? 'Paste a whole question — auto-fill every field' : '\u6574\u6bb5\u7c98\u8d34\uff0c\u81ea\u52a8\u586b\u5165\u5404\u680f') + '</span>'
+    + '<span class="si-arrow" id="smartImportArrow">\u25be</span></div>';
+  html += '<div class="si-body" id="smartImportBody">';
+  html += '<textarea id="smartImportRaw" spellcheck="false" placeholder="'
+    + (state.lang === 'en'
+      ? 'Paste stem / options / answer / explanation (CN + EN together)...'
+      : '\u628a\u9898\u5e72 / \u9009\u9879 / \u7b54\u6848 / \u89e3\u6790\uff08\u4e2d\u82f1\u6587\u4e00\u8d77\uff09\u6574\u6bb5\u7c98\u8d34\u5230\u8fd9\u91cc\u2026')
+    + '"></textarea>';
+  html += '<div class="si-actions">';
+  html += '<button type="button" class="si-btn pri" onclick="adminSmartImportApply()">' + (state.lang === 'en' ? 'Parse & fill' : '\u89e3\u6790\u5e76\u586b\u5165') + '</button>';
+  html += '<button type="button" class="si-btn" onclick="adminSmartExample()">' + (state.lang === 'en' ? 'Load example' : '\u586b\u5165\u793a\u4f8b') + '</button>';
+  html += '</div>';
+  html += '<div class="si-msg" id="smartImportMsg"></div>';
+  html += '<details class="si-help"><summary>' + (state.lang === 'en' ? 'Format' : '\u683c\u5f0f\u8bf4\u660e') + '</summary>';
+  html += '<pre>' + escapeHtml(
+    '[\u9898\u5e72\u4e2d] \u4e2d\u6587\u9898\u5e72\n'
+    + '[\u9898\u5e72\u82f1] English stem\n'
+    + '[\u9898\u578b] \u5355\u9009            // \u5355\u9009/\u591a\u9009/\u5224\u65ad/\u586b\u7a7a\n'
+    + '[\u9009\u9879]\n'
+    + 'A. \u4e2d\u6587\u9009\u9879 | English option \u2713   // \u2713\u6807\u6b63\u786e\u7b54\u6848\n'
+    + 'B. \u4e2d\u6587\u9009\u9879 | English option\n'
+    + '[\u89e3\u6790\u4e2d] \u4e2d\u6587\u89e3\u6790\n'
+    + '[\u89e3\u6790\u82f1] English explanation\n\n'
+    + '\u4e5f\u652f\u6301\uff1a\u65e0\u6807\u7b7e\u76f4\u63a5\u5199\u9898\u5e72\uff0cA/B/C/D \u7f16\u53f7\u9009\u9879\uff0c'
+    + '[\u7b54\u6848] A \u5355\u72ec\u4e00\u884c\uff1b\u5224\u65ad\u9898\u5199 [\u9898\u578b] \u5224\u65ad \u5373\u53ef\u81ea\u52a8\u751f\u6210\u5bf9/\u9519\u9009\u9879\u3002'
+  ) + '</pre></details>';
+  html += '</div></div>';
+
+  html += '<div class="admin-edit-form" oninput="adminDraftAutoSave();adminEditPreviewRefresh();adminEditValidate()" onchange="adminDraftAutoSave();adminEditPreviewRefresh();adminEditValidate()">';
 
   // 编号信息一行放下（ID 只读 · 序号 · 题型）——原来纵排三个字段占了近半屏，
   // 批量整理题库时每题都要滚过一遍，收成一行后题干直接进入视野。
