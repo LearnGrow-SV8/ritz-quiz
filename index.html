@@ -217,6 +217,10 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Mi
   padding:3px 9px 3px 7px; border-radius:20px; letter-spacing:.2px; color:#000;
   border:1px solid rgba(26,58,92,.18); background:rgba(255,255,255,.65); white-space:nowrap; }
 .race-hero-pill i { width:5px; height:5px; border-radius:50%; display:block; }
+/* 「进行中·剩N天」即打卡日历入口（2026-11-20）：外观文案不变，只补手型与轻反馈 */
+.race-hero-pill-btn { font-family:inherit; line-height:1.5; -webkit-appearance:none; appearance:none; cursor:pointer; }
+.race-hero-pill-btn:hover { background:#fff; border-color:#C7DDF3; }
+.race-hero-pill-btn:active { background:#C7DDF3; }
 .race-hero-title-row { display:flex; align-items:flex-start; gap:8px; margin-top:10px; }
 .race-hero-title { flex:1 1 auto; min-width:0; font-size:20px; font-weight:700; line-height:1.32;
   letter-spacing:.3px; color:#0E2545; word-break:break-word; }
@@ -5965,15 +5969,18 @@ var I18N = {
   race_vch_none_list: {cn:'本届还没有人达标，或成绩还没上传。', en:'Nobody has qualified this round yet, or scores have not uploaded.'},
   race_vch_count: {cn:'达标 {n} 人 · 待兑换 {a} · 已核销 {b}', en:'{n} qualified · {a} unused · {b} redeemed'},
   race_vch_cfg: {cn:'奖项设置', en:'Award settings'},
-  race_vch_cfg_hint: {cn:'改完点下面的「发布赛事」才生效；留空按默认值（参与奖单场 6 题 / 打卡 8 天；个人奖正确率 60%、前 30%、封顶 50 人次；部门奖正确率 60%、前 5）。', en:'Tap Publish below to apply. Blank fields fall back to defaults (participation 6 correct in one attempt / 8 check-in days; individual 60% accuracy, top 30%, cap 50; department 60% accuracy, top 5).'},
+  race_vch_cfg_hint: {cn:'改完点下面的「发布赛事」才生效；留空按默认值（参与奖单场 6 题 / 打卡 8 天；个人奖正确率 60%、前 30%、封顶 50 人；部门奖正确率 60%、前 5）。', en:'Tap Publish below to apply. Blank fields fall back to defaults (participation 6 correct in one attempt / 8 check-in days; individual 60% accuracy, top 30%, cap 50 winners; department 60% accuracy, top 5).'},
   race_vch_cfg_part: {cn:'参与奖：单场答对达标题数', en:'Participation: correct answers in one attempt'},
   race_vch_cfg_part_days: {cn:'参与奖：本届打卡达标天数', en:'Participation: check-in days this round'},
   race_vch_cfg_rank: {cn:'个人排名奖：各榜单取前几名', en:'Ranking award: top N per leaderboard'},
   race_vch_cfg_rank_acc: {cn:'正确率达标线（%）· 低于此线不参与评奖', en:'Minimum accuracy (%) · below this is not eligible'},
   race_vch_cfg_rank_rate: {cn:'取达标者前（%）· 各榜单按比例取', en:'Top (%) of qualifiers · by ratio per leaderboard'},
-  race_vch_cfg_rank_cap: {cn:'合计封顶（人次）· 全部榜单加起来的获奖上限', en:'Overall cap (awards) · limit across all leaderboards'},
+  race_vch_cfg_rank_cap: {cn:'合计封顶（人）· 一人多榜只计一份', en:'Overall cap (winners) · counted once per person'},
   race_vch_cfg_dept: {cn:'部门奖：取前几个部门', en:'Department award: top N departments'},
   race_vch_cfg_dept_acc: {cn:'部门奖：平均正确率达标线（%）', en:'Department award: minimum average accuracy (%)'},
+  race_awd_desc_apply: {cn:'按当前规则生成', en:'Generate from current rules'},
+  race_awd_desc_preview: {cn:'预览奖项说明', en:'Preview award rules'},
+  race_awd_desc_done: {cn:'已填入，发布后生效', en:'Filled in — applies after Publish'},
   race_win_tag: {cn:'当前领先', en:'Currently leading'},
   race_lead_title: {cn:'当前领先', en:'Currently leading'},
   race_lead_desc: {cn:'表示你在这张榜单上处于获奖区间：正确率达 {acc}% 及以上、且排在达标选手的前 {rate}%。榜单实时变动，最终获奖名单以赛事结束后的截榜结算为准。', en:'You are in the award zone on this leaderboard: accuracy of {acc}% or above and ranked among the top {rate}% of qualifiers. Rankings change in real time; the final winners are confirmed when the contest closes.'},
@@ -11114,7 +11121,7 @@ function raceAutoClose() {
 
 // ---- 赛事配置 ----
 function raceConfOf() {
-  try { var s = localStorage.getItem('raceConf'); if (!s) return null; var c = JSON.parse(s); return (c && c.id) ? c : null; }
+  try { var s = localStorage.getItem('raceConf'); if (!s) return null; var c = JSON.parse(s); return (c && c.id) ? raceAwardDescPatchConf(c) : null; }
   catch (e) { return null; }
 }
 function raceSaveConf(c) { try { localStorage.setItem('raceConf', JSON.stringify(c)); } catch (e) {} }
@@ -15266,7 +15273,10 @@ function raceThemeCardHtml(conf) {
     var leftD = Math.ceil((endTs - Date.now()) / 86400000);
     leftTxt = (en ? leftD + 'd left' : '还剩 ' + leftD + ' 天');
   }
-  var html = '<div class="q-card" style="border:1px solid #f3e0c0;background:linear-gradient(135deg,#fffdf8,#fff7ea);">';
+  // 整卡即「我的徽章」入口（2026-11-20）：本期限定徽章只在这里露出，点开直接落到
+  // 集锦页的「限定月度主题」分组（已置顶）。不加新按钮文字（极简文案原则）。
+  var html = '<div class="q-card" style="border:1px solid #f3e0c0;background:linear-gradient(135deg,#fffdf8,#fff7ea);cursor:pointer;"'
+    + ' onclick="navigate(\'myBadges\')" title="' + escapeHtml(t('race_badge_mine')) + '">';
   html += '<div style="display:flex;align-items:center;gap:10px;">';
   html += '<div style="flex:0 0 auto;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;'
     + 'background:linear-gradient(135deg,' + def.c1 + ',' + def.c2 + ');box-shadow:0 2px 8px rgba(0,0,0,.08);' + (got ? '' : 'opacity:.72;') + '">' + def.icon + '</div>';
@@ -15346,7 +15356,17 @@ function raceHeroCardHtml(c, st, mode) {
   html += '<div class="race-hero-top">';
   html += '<div class="race-hero-kicker">' + t('race_hero_kicker') + '</div>';
   html += '<div class="race-hero-rule"></div>';
-  if (pillTxt) html += '<div class="race-hero-pill"><i style="background:' + dotColor + ';"></i>' + escapeHtml(pillTxt) + '</div>';
+  if (pillTxt) {
+    // 「进行中·剩N天」本身就是打卡日历入口（2026-11-20）：文案/外观不变，
+    // 悬停 title 点一下即达，不为它再多占一行版面（极简文案原则）。
+    if (st === 'open') {
+      html += '<button type="button" class="race-hero-pill race-hero-pill-btn" onclick="raceOpenCalendar()"'
+        + ' title="' + escapeHtml(t('race_cal_title')) + '"><i style="background:' + dotColor + ';"></i>'
+        + escapeHtml(pillTxt) + '</button>';
+    } else {
+      html += '<div class="race-hero-pill"><i style="background:' + dotColor + ';"></i>' + escapeHtml(pillTxt) + '</div>';
+    }
+  }
   html += '</div>';
   html += '<div class="race-hero-title-row">';
   html += '<div class="race-hero-title">' + (conf.title ? escapeHtml(conf.title) : t('race_title')) + '</div>';
@@ -15387,29 +15407,53 @@ function raceHeroCardHtml(c, st, mode) {
   html += '</div>';
   return html;
 }
-// ===== 奖项设置说明浮窗（2026-11-18）=====
+// ===== 奖项说明浮窗（2026-11-18）=====
 // 扫码进来就能看到本届奖项怎么设、怎么兑，但不占首页版面：只在主卡上放一个「奖项说明」小入口，
 // 点开看全文。文案优先用后台发布赛事时填的 descCn/descEn，留空则按当前参数自动生成。
+// 2026-11-20：现行规则（参与奖双路径 / 个人奖去重封顶 / 部门奖不发券 / 兑奖截止）统一从
+// raceAwardRuleLines 出，后台「按当前规则生成」、浮窗兜底、旧文案迁移全部复用，不许各写一套。
+function raceAwardRuleLines(ac, en, conf) {
+  ac = ac || raceAwardCfgOf(conf);
+  var lines = [];
+  var dTop = (ac.deptTopN > 3) ? ('3-' + ac.deptTopN) : String(ac.deptTopN);
+  if (ac.partOn) lines.push(en
+    ? '🥤Participation Award: Take part in the Speed Quiz and answer ' + ac.partMin + ' or more questions correctly in one attempt, or check in on ' + ac.partDays + ' or more days this round, to earn one voucher (one per person per round). Redeem at HR by 23:59 on the final day of the round.'
+    : '🥤参与奖：参加限时答题赛，单场答对 ' + ac.partMin + ' 题及以上或本届打卡满 ' + ac.partDays + ' 天，即可获兑换券一张（每人每届限一张），于赛事最后一天 23:59 前到 HR 兑换。');
+  if (ac.rankOn) lines.push(en
+    ? '🏆Individual Award: Across the five leaderboards (All Question Bank, Culinary, F&B, Rooms, Brand & Hotel Knowledge), the top ' + ac.rankRate + '% of candidates with accuracy of ' + ac.rankAccMin + '% or above win. Winners in multiple leaderboards are counted once at their best board; ' + ac.rankCap + ' winners maximum. Vouchers are valid for ' + ac.rankCutDays + ' days after the winner list is confirmed.'
+    : '🏆个人奖：五个榜单（全题库、厨房部、餐饮部、房务部、品牌与酒店知识）中，正确率达 ' + ac.rankAccMin + '% 及以上的选手各取前 ' + ac.rankRate + '%；一人多榜只计最佳榜一份，全酒店封顶 ' + ac.rankCap + ' 人。券于名单确认后 ' + ac.rankCutDays + ' 天内有效。');
+  if (ac.deptOn) lines.push(en
+    ? '🏅Department Award: Departments with average accuracy of ' + ac.deptAccMin + '% or above are ranked, and the top ' + dTop + ' receive department awards. Prizes go to the department; no personal voucher.'
+    : '🏅部门奖：平均正确率达 ' + ac.deptAccMin + '% 及以上的部门中，取前 ' + dTop + ' 名颁发部门奖，奖品发至部门，不发个人券。');
+  if (lines.length) lines.push(en
+    ? '🎁Redemption: Individual and department winners are confirmed from the final leaderboard data after the round ends and notified. All deadlines are Beijing time.'
+    : '🎁兑奖说明：赛事结束后按榜单截榜数据确认个人奖与部门奖名单，并通知获奖者；截止时间均为北京时间。');
+  else lines.push(en ? 'No awards are enabled for this round.' : '本届未设置奖项。');
+  return lines;
+}
+// 旧文案迁移：云端已发布的 descCn/descEn 是写死文本，改代码里的兜底文案不会动它。
+// 读到旧口径（只有单场答对 / 没有打卡路径）时按现行参数重生成；只在读数时改内存，
+// 不擅自写云端。管理端点一次「发布赛事」即把新文案落库。
+function raceAwardDescPatchConf(c) {
+  if (!c || !c.award || typeof RACE_AWARD_DEF === 'undefined') return c;
+  var a = c.award, cn = String(a.descCn || ''), en = String(a.descEn || '');
+  var staleCn = !!cn && cn.indexOf('单场答对') >= 0 && cn.indexOf('打卡') < 0;
+  var staleEn = !!en && /answer \d+ or more questions correctly in one attempt/i.test(en) && !/check in|check-in/i.test(en);
+  if (!staleCn && !staleEn) return c;
+  var ac = raceAwardCfgOf(c), out = {}, k;
+  for (k in c) if (Object.prototype.hasOwnProperty.call(c, k)) out[k] = c[k];
+  var na = {}, ak;
+  for (ak in a) if (Object.prototype.hasOwnProperty.call(a, ak)) na[ak] = a[ak];
+  if (staleCn) na.descCn = raceAwardRuleLines(ac, false, c).join('\n');
+  if (staleEn) na.descEn = raceAwardRuleLines(ac, true, c).join('\n');
+  out.award = na;
+  return out;
+}
 function raceAwardDescText(c) {
   c = c || raceConfOf() || {};
   var en = state.lang === 'en';
-  var ac = raceAwardCfgOf(c);
-  var custom = en ? ac.descEn : ac.descCn;
-  // 兜底文案（2026-11-20）：与赛事自定义说明四条严格同口径，数字参数化随后台变。
-  var lines = [];
-  if (ac.partOn) lines.push(en
-    ? 'Participation Award: All Ladies and Gentlemen who answer ' + ac.partMin + ' or more questions correctly in one attempt, or check in on ' + ac.partDays + ' or more days this round, may redeem a gift at HR with the voucher generated by the system.'
-    : '参与奖：参加限时答题赛、单场答对 ' + ac.partMin + ' 题及以上或本届打卡满 ' + ac.partDays + ' 天的绅士淑女，可凭系统发布的兑换券前往 HR 处兑换礼品一份。');
-  if (ac.rankOn) lines.push(en
-    ? 'Individual Award: Across the five leaderboards (All Question Bank, Culinary, F&B, Rooms, Brand & Hotel Knowledge), candidates with accuracy of ' + ac.rankAccMin + '% or above are ranked and the top ' + ac.rankRate + '% of each board win.'
-    : '个人奖：五个榜单（全题库、厨房部、餐饮部、房务部、品牌与酒店知识）中，正确率达 ' + ac.rankAccMin + '% 及以上的选手各取前 ' + ac.rankRate + '%。');
-  if (ac.deptOn) lines.push(en
-    ? 'Department Award: Among departments with average accuracy of ' + ac.deptAccMin + '% or above, the top 3-' + ac.deptTopN + ' receive department awards.'
-    : '部门奖：平均正确率达 ' + ac.deptAccMin + '% 及以上的部门中，取前 3-' + ac.deptTopN + ' 名颁发部门奖。');
-  lines.push(en
-    ? 'Redemption Rules: Upon completion of the challenge, the winners of individual and department awards will be confirmed based on the final leaderboard data and notified accordingly.'
-    : '兑奖说明：赛事结束后，我们将根据榜单截榜数据确定个人奖和部门奖获奖名单，并通知获奖者领奖。');
-  if (lines.length === 1 && !ac.partOn && !ac.rankOn && !ac.deptOn) return en ? 'No awards are enabled for this round.' : '本届未设置奖项。';
+  var custom = en ? raceAwardCfgOf(c).descEn : raceAwardCfgOf(c).descCn;
+  var lines = raceAwardRuleLines(raceAwardCfgOf(c), en, c);
   return (custom && custom.trim()) ? custom : lines.join('\n');
 }
 function raceAwardInfoHtml(c) {
@@ -15424,7 +15468,7 @@ function raceAwardInfoHtml(c) {
   }
   return html;
 }
-function raceAwardInfoShow() {
+function raceAwardInfoShow(c) {
   if (typeof document === 'undefined' || !document.body || !document.body.appendChild) return;
   var en = state.lang === 'en';
   var overlay = document.createElement('div');
@@ -15432,7 +15476,7 @@ function raceAwardInfoShow() {
   overlay.innerHTML =
     '<div class="confirm-box" style="max-width:400px;">' +
       '<div class="confirm-title" style="margin-bottom:10px;">' + escapeHtml(en ? 'Awards & redemption' : '奖项设置与兑奖说明') + '</div>' +
-      '<div class="confirm-body" style="text-align:left;line-height:1.7;">' + raceAwardInfoHtml(raceConfOf()) + '</div>' +
+      '<div class="confirm-body" style="text-align:left;line-height:1.7;">' + raceAwardInfoHtml(c || raceConfOf()) + '</div>' +
       '<div class="confirm-actions"><button class="confirm-btn primary" data-act="ok">'
         + escapeHtml(en ? 'Got it' : '知道了') + '</button></div>' +
     '</div>';
@@ -17638,11 +17682,15 @@ function renderAdminRace() {
   html += '<label style="font-size:12px;color:#666;display:block;margin-top:4px;">'
     + (en ? 'Award rules · Chinese (shown in a pop-up on the quiz home)' : '奖项说明 · 中文（赛事首页浮窗，留空自动生成）') + '</label>';
   html += '<textarea id="raceAwDescCn" rows="4" style="width:100%;padding:8px;margin:4px 0 8px;border:1px solid #d8dee4;border-radius:6px;font-size:12px;resize:vertical;" placeholder="'
-    + escapeHtml(raceAwardDescText(c).split('\n').join(' / ')) + '">' + escapeHtml(awd.descCn || '') + '</textarea>';
+    + escapeHtml(raceAwardRuleLines(awd, false, c).join(' / ')) + '">' + escapeHtml(awd.descCn || '') + '</textarea>';
   html += '<label style="font-size:12px;color:#666;display:block;">'
     + (en ? 'Award rules · English' : '奖项说明 · 英文') + '</label>';
   html += '<textarea id="raceAwDescEn" rows="4" style="width:100%;padding:8px;margin:4px 0 8px;border:1px solid #d8dee4;border-radius:6px;font-size:12px;resize:vertical;" placeholder="'
-    + escapeHtml(raceAwardDescText(c).split('\n').join(' / ')) + '">' + escapeHtml(awd.descEn || '') + '</textarea>';
+    + escapeHtml(raceAwardRuleLines(awd, true, c).join(' / ')) + '">' + escapeHtml(awd.descEn || '') + '</textarea>';
+  html += '<div style="display:flex;gap:6px;margin:0 0 8px;">'
+    + '<button class="action-btn secondary" style="flex:1;font-size:12px;" onclick="adminRaceAwardApplyRules()">' + t('race_awd_desc_apply') + '</button>'
+    + '<button class="action-btn secondary" style="flex:1;font-size:12px;" onclick="adminRaceAwardPreview()">' + t('race_awd_desc_preview') + '</button>'
+    + '</div>';
   html += '<button class="action-btn secondary" style="width:100%;margin:2px 0 4px;" onclick="navigate(\'adminVouchers\')">🎟 '
     + t('race_vch_admin') + '</button>';
   html += '<button class="action-btn secondary" style="width:100%;margin:2px 0 4px;" onclick="navigate(\'adminAwardSettle\')">🏅 '
@@ -18252,6 +18300,42 @@ function adminRaceModeToggle() {
   if (sb) sb.style.display = (m === 'admin') ? 'block' : 'none';
   if (d) d.textContent = (m === 'choice') ? t('race_mode_choice_desc') : t('race_mode_admin_desc');
 }
+// 后台奖项表单 → 配置对象（发布 / 预览 / 按当前规则生成共用一处，防止三套读法跑偏）
+function adminRaceAwardCfgFromForm() {
+  var el = function (id) { return document.getElementById ? document.getElementById(id) : null; };
+  return {
+    on: true,
+    partOn: !!(el('raceAwPartOn') && el('raceAwPartOn').checked),
+    partMin: raceAwardClamp((el('raceAwPartMin') && el('raceAwPartMin').value), 1, 50, RACE_AWARD_DEF.partMin),
+    partDays: raceAwardClamp((el('raceAwPartDays') && el('raceAwPartDays').value), 1, 31, RACE_AWARD_DEF.partDays),
+    rankOn: !!(el('raceAwRankOn') && el('raceAwRankOn').checked),
+    rankTopN: raceAwardClamp((el('raceAwRankTopN') && el('raceAwRankTopN').value), 1, 100, RACE_AWARD_DEF.rankTopN),
+    rankAccMin: raceAwardClamp((el('raceAwRankAccMin') && el('raceAwRankAccMin').value), 1, 100, RACE_AWARD_DEF.rankAccMin),
+    rankRate: raceAwardClamp((el('raceAwRankRate') && el('raceAwRankRate').value), 1, 100, RACE_AWARD_DEF.rankRate),
+    rankCap: raceAwardClamp((el('raceAwRankCap') && el('raceAwRankCap').value), 1, 200, RACE_AWARD_DEF.rankCap),
+    deptOn: !!(el('raceAwDeptOn') && el('raceAwDeptOn').checked),
+    deptAccMin: raceAwardClamp((el('raceAwDeptAccMin') && el('raceAwDeptAccMin').value), 1, 100, RACE_AWARD_DEF.deptAccMin),
+    deptTopN: raceAwardClamp((el('raceAwDeptTopN') && el('raceAwDeptTopN').value), 1, 50, RACE_AWARD_DEF.deptTopN),
+    rankCutDays: raceAwardClamp((el('raceAwRankCutDays') && el('raceAwRankCutDays').value), 1, 90, RACE_AWARD_DEF.rankCutDays),
+    descCn: ((el('raceAwDescCn') && el('raceAwDescCn').value) || '').trim(),
+    descEn: ((el('raceAwDescEn') && el('raceAwDescEn').value) || '').trim()
+  };
+}
+// 一键把当前表单里的数字写进两版奖项说明，避免后台改了门槛、浮窗还留旧数字
+function adminRaceAwardApplyRules() {
+  var ac = adminRaceAwardCfgFromForm(), c = raceConfOf() || {};
+  var cn = document.getElementById('raceAwDescCn'), en = document.getElementById('raceAwDescEn');
+  if (cn) cn.value = raceAwardRuleLines(ac, false, c).join('\n');
+  if (en) en.value = raceAwardRuleLines(ac, true, c).join('\n');
+  if (typeof adminToast === 'function') adminToast(t('race_awd_desc_done'), true);
+}
+// 预览用的临时配置：只换 award，不动正在编辑的赛事配置
+function adminRaceAwardPreview() {
+  var c = raceConfOf() || {}, out = {}, k;
+  for (k in c) if (Object.prototype.hasOwnProperty.call(c, k)) out[k] = c[k];
+  out.award = adminRaceAwardCfgFromForm();
+  raceAwardInfoShow(out);
+}
 function adminRacePublish() {
   var el = function (id) { return document.getElementById(id); };
   var c = raceConfOf() || {};
@@ -18289,23 +18373,7 @@ function adminRacePublish() {
   c.badgeDays = raceBadgeMonthDays();
   // 奖项参数（2026-11-17）：门槛与名额跟赛事一起发布 —— 学员端要靠 partMin 算券，
   // 获奖名单导出要靠 rankTopN / deptTopN 取名次。全部过夹取，绝不把 NaN 写进配置。
-  c.award = {
-    on: true,
-    partOn: !!(el('raceAwPartOn') && el('raceAwPartOn').checked),
-    partMin: raceAwardClamp((el('raceAwPartMin') && el('raceAwPartMin').value), 1, 50, RACE_AWARD_DEF.partMin),
-    partDays: raceAwardClamp((el('raceAwPartDays') && el('raceAwPartDays').value), 1, 31, RACE_AWARD_DEF.partDays),
-    rankOn: !!(el('raceAwRankOn') && el('raceAwRankOn').checked),
-    rankTopN: raceAwardClamp((el('raceAwRankTopN') && el('raceAwRankTopN').value), 1, 100, RACE_AWARD_DEF.rankTopN),
-    rankAccMin: raceAwardClamp((el('raceAwRankAccMin') && el('raceAwRankAccMin').value), 1, 100, RACE_AWARD_DEF.rankAccMin),
-    rankRate: raceAwardClamp((el('raceAwRankRate') && el('raceAwRankRate').value), 1, 100, RACE_AWARD_DEF.rankRate),
-    rankCap: raceAwardClamp((el('raceAwRankCap') && el('raceAwRankCap').value), 1, 200, RACE_AWARD_DEF.rankCap),
-    deptOn: !!(el('raceAwDeptOn') && el('raceAwDeptOn').checked),
-    deptAccMin: raceAwardClamp((el('raceAwDeptAccMin') && el('raceAwDeptAccMin').value), 1, 100, RACE_AWARD_DEF.deptAccMin),
-    deptTopN: raceAwardClamp((el('raceAwDeptTopN') && el('raceAwDeptTopN').value), 1, 50, RACE_AWARD_DEF.deptTopN),
-    rankCutDays: raceAwardClamp((el('raceAwRankCutDays') && el('raceAwRankCutDays').value), 1, 90, RACE_AWARD_DEF.rankCutDays),
-    descCn: ((el('raceAwDescCn') && el('raceAwDescCn').value) || '').trim(),
-    descEn: ((el('raceAwDescEn') && el('raceAwDescEn').value) || '').trim()
-  };
+  c.award = adminRaceAwardCfgFromForm();
   var sv = el('raceStart') && el('raceStart').value, ev = el('raceEnd') && el('raceEnd').value;
   c.startTime = sv ? new Date(sv).toISOString() : '';
   c.endTime = ev ? new Date(ev).toISOString() : '';
@@ -19052,13 +19120,13 @@ function renderAdminAwardSettle() {
     html += '<div class="q-card">';
     html += '<div style="font-size:13px;font-weight:600;margin-bottom:2px;">⚙️ ' + (en ? 'Confirm settings' : '确认参数') + '</div>';
     html += '<div style="font-size:11px;color:#888;margin:0 0 8px;line-height:1.5;">'
-      + (en ? 'Accuracy floor · top % of qualifiers · overall cap' : '正确率达标线 · 达标者前 % · 合计封顶人次') + '</div>';
+      + (en ? 'Accuracy floor · top % of qualifiers · overall cap' : '正确率达标线 · 达标者前 % · 合计封顶人数') + '</div>';
     html += '<div style="display:flex;gap:6px;">';
     html += '<div style="flex:1;"><label style="font-size:11px;color:#666;">' + (en ? 'Accuracy ≥ %' : '正确率 ≥ %') + '</label>'
       + '<input id="settleAccMin" type="number" min="1" max="100" value="' + ac.rankAccMin + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;"></div>';
     html += '<div style="flex:1;"><label style="font-size:11px;color:#666;">' + (en ? 'Top %' : '前 %') + '</label>'
       + '<input id="settleRate" type="number" min="1" max="100" value="' + ac.rankRate + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;"></div>';
-    html += '<div style="flex:1;"><label style="font-size:11px;color:#666;">' + (en ? 'Cap (people)' : '封顶人次') + '</label>'
+    html += '<div style="flex:1;"><label style="font-size:11px;color:#666;">' + (en ? 'Cap (people)' : '封顶人数') + '</label>'
       + '<input id="settleCap" type="number" min="1" max="200" value="' + ac.rankCap + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;"></div>';
     html += '</div>';
     html += '<div style="display:flex;gap:6px;margin-top:8px;">';
@@ -19961,6 +20029,14 @@ function raceMyBadgesCardHtml() {
   html += '</div>';
   return html + '</div>';
 }
+// 「我的徽章」展示顺序（2026-11-20 用户指定）：
+// 限定月度主题 → 打卡系列 → 精准作答 → 学习沉淀 → 竞速闯关 → 挑战彩蛋；
+// 专属头像框固定排最后（renderMyBadges 末尾的 raceFrameSectionHtml）。
+// 只改学员端展示顺序：管理端目录、头像框解锁列表仍用 BADGE_CATS 原序，互不干扰。
+var MY_BADGE_CAT_ORDER = [
+  BADGE_CAT_THEME, BADGE_CAT_CHECKIN, BADGE_CAT_ACC,
+  BADGE_CAT_STUDY, BADGE_CAT_SPEED, BADGE_CAT_SPECIAL
+];
 function renderMyBadges() {
   var en = state.lang === 'en';
   var rec = {};
@@ -19982,8 +20058,8 @@ function renderMyBadges() {
   if (!mine.length) {
     html += '<div class="q-card" style="text-align:center;color:#888;font-size:13px;line-height:1.7;">' + t('race_badge_none') + '</div>';
   }
-  // 五大类分组：打卡系列（内含连续 / 单期 / 累计三小区）· 竞速闯关 · 学习沉淀 ·
-  // 挑战彩蛋 · 限定月度主题。管理端用的是同一份 badgeCatOf，两边分类永远一致。
+  // 六大类按 MY_BADGE_CAT_ORDER 顺序展示；打卡系列内部仍细分连续 / 单期 / 累计。
+  // 分类归属只认 badgeCatOf，管理端与这里永远是同一套分类。
   var badgeCellHtml = function (d) {
     var got = counts[d.id], pr = raceBadgeProgressOf(rec, d);
     var cell = raceBadgeChipHtml(d, !!got, got ? got.last : '', raceBadgeProgText(d, pr, en), got ? got.count : 0);
@@ -20000,8 +20076,8 @@ function renderMyBadges() {
     return '<div>' + cell + '</div>';
   };
   var gridOpen = '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">';
-  for (var g = 0; g < BADGE_CATS.length; g++) {
-    var catKey = BADGE_CATS[g].key, catDefs = [], i;
+  for (var g = 0; g < MY_BADGE_CAT_ORDER.length; g++) {
+    var catKey = MY_BADGE_CAT_ORDER[g], catDefs = [], i;
     for (i = 0; i < defs.length; i++) if (badgeCatOf(defs[i].rule) === catKey) catDefs.push(defs[i]);
     if (!catDefs.length) continue;
     html += '<h4 style="margin:16px 2px 4px;">' + badgeCatLabel(catKey) + '</h4>';
