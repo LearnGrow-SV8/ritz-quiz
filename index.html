@@ -5963,9 +5963,12 @@ var I18N = {
   race_vch_none_list: {cn:'本届还没有人达标，或成绩还没上传。', en:'Nobody has qualified this round yet, or scores have not uploaded.'},
   race_vch_count: {cn:'达标 {n} 人 · 待兑换 {a} · 已核销 {b}', en:'{n} qualified · {a} unused · {b} redeemed'},
   race_vch_cfg: {cn:'奖项设置', en:'Award settings'},
-  race_vch_cfg_hint: {cn:'改完点下面的「发布赛事」才生效；数字留空按默认值（参与奖 7 题 / 排名奖前 10 / 部门奖前 5）。', en:'Tap Publish below to apply. Blank fields fall back to defaults (7 correct / top 10 / top 5).'},
+  race_vch_cfg_hint: {cn:'改完点下面的「发布赛事」才生效；数字留空按默认值（参与奖 7 题 / 个人奖正确率 60%、前 30%、封顶 60 人次 / 部门奖前 5）。', en:'Tap Publish below to apply. Blank fields fall back to defaults (participation 7 correct / individual 60% accuracy, top 30%, cap 60 / department top 5).'},
   race_vch_cfg_part: {cn:'参与奖：单场答对达标题数', en:'Participation: correct answers needed'},
   race_vch_cfg_rank: {cn:'个人排名奖：各榜单取前几名', en:'Ranking award: top N per leaderboard'},
+  race_vch_cfg_rank_acc: {cn:'正确率达标线（%）· 低于此线不参与评奖', en:'Minimum accuracy (%) · below this is not eligible'},
+  race_vch_cfg_rank_rate: {cn:'取达标者前（%）· 各榜单按比例取', en:'Top (%) of qualifiers · by ratio per leaderboard'},
+  race_vch_cfg_rank_cap: {cn:'合计封顶（人次）· 全部榜单加起来的获奖上限', en:'Overall cap (awards) · limit across all leaderboards'},
   race_vch_cfg_dept: {cn:'部门奖：取前几个部门', en:'Department award: top N departments'},
   race_vch_off: {cn:'关闭', en:'Off'},
   race_vch_to_admin: {cn:'去核销', en:'Redeem'},
@@ -11124,7 +11127,7 @@ function applyRaceConf(c) {
 // 参与奖 / 个人排名奖 / 部门奖三块，全部挂在赛事配置 conf.award 里随赛事下发：
 // 学员端要靠它算"达标线"，管理端导出要靠它算"取前几名"。数字一律夹取上下限，
 // 后台手输 0、999 或留空都不会把奖项算崩（留空 = 用默认值）。
-var RACE_AWARD_DEF = { on: true, partOn: true, partMin: 7, rankOn: true, rankTopN: 10, deptOn: true, deptTopN: 5, rankCutDays: 7 };
+var RACE_AWARD_DEF = { on: true, partOn: true, partMin: 7, rankOn: true, rankTopN: 10, rankAccMin: 60, rankRate: 30, rankCap: 60, deptOn: true, deptTopN: 5, rankCutDays: 7 };
 function raceAwardClamp(v, lo, hi, dft) {
   var n = parseInt(v, 10);
   if (!isFinite(n) || n <= 0) n = dft;
@@ -11141,6 +11144,11 @@ function raceAwardCfgOf(c) {
     partMin: raceAwardClamp(a.partMin, 1, 50, RACE_AWARD_DEF.partMin),
     rankOn: a.rankOn !== false,
     rankTopN: raceAwardClamp(a.rankTopN, 1, 100, RACE_AWARD_DEF.rankTopN),
+    // 个人奖比例制（2026-11-20）：达标线=正确率≥rankAccMin%，达标者取前 rankRate%，
+    // 五个榜合计封顶 rankCap 人次。rankTopN 保留只为兼容老配置/老测试，不再决定名额。
+    rankAccMin: raceAwardClamp(a.rankAccMin, 1, 100, RACE_AWARD_DEF.rankAccMin),
+    rankRate: raceAwardClamp(a.rankRate, 1, 100, RACE_AWARD_DEF.rankRate),
+    rankCap: raceAwardClamp(a.rankCap, 1, 200, RACE_AWARD_DEF.rankCap),
     deptOn: a.deptOn !== false,
     deptTopN: raceAwardClamp(a.deptTopN, 1, 50, RACE_AWARD_DEF.deptTopN),
     // 兑奖规则（2026-11-18）：rankCutDays = 个人奖券在「名单确认日」之后多少天截止，默认一周。
@@ -15323,8 +15331,8 @@ function raceAwardDescText(c) {
     ? 'Participation: answer ' + ac.partMin + ' or more correctly in one attempt to get a voucher instantly. Redeem by ' + endTxt + ' (end of the event day); it expires after that.'
     : '参与奖：单场答对 ' + ac.partMin + ' 题及以上即可当场获得兑换券，最迟于赛事最后一天 ' + endTxt.slice(11) + ' 前兑换，超时失效。');
   if (ac.rankOn) lines.push(en
-    ? 'Individual: top ' + ac.rankTopN + ' on each of the five leaderboards (all questions, Culinary, F&B, Rooms, Brand & Hotel Knowledge). Winners are confirmed by the admin; vouchers expire ' + ac.rankCutDays + ' days after confirmation.'
-    : '个人奖：全题库、厨房部、餐饮部、房务部、品牌与酒店知识五个榜单各前 ' + ac.rankTopN + ' 名，名单经管理端确认后发券，确认日起 ' + ac.rankCutDays + ' 天内兑换有效。');
+    ? 'Individual: accuracy ≥' + ac.rankAccMin + '% to qualify; top ' + ac.rankRate + '% of qualifiers on each of five leaderboards, capped at ' + ac.rankCap + ' awards in total. Winning more than one board earns one award per board. Winners are confirmed by the admin; vouchers expire ' + ac.rankCutDays + ' days after confirmation.'
+    : '个人奖：正确率 ≥' + ac.rankAccMin + '% 方可评奖，全题库、厨房部、餐饮部、房务部、品牌与酒店知识五个榜单各取达标者前 ' + ac.rankRate + '%，合计封顶 ' + ac.rankCap + ' 人次；一人中多榜则每榜各计一份。名单经管理端确认后发券，确认日起 ' + ac.rankCutDays + ' 天内兑换有效。');
   if (ac.deptOn) lines.push(en
     ? 'Department: top ' + ac.deptTopN + ' departments by final weighted score, awarded at CTL.'
     : '部门奖：按赛事最终加权得分排名前 ' + ac.deptTopN + ' 个部门，于 CTL 发放。');
@@ -17440,8 +17448,17 @@ function renderAdminRace() {
   html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;padding:2px 0;cursor:pointer;">'
     + '<input type="checkbox" id="raceAwRankOn" style="margin-top:2px;"' + (awd.rankOn ? ' checked' : '') + '> '
     + '<span>' + (en ? 'Ranking award (individual)' : '个人排名奖') + '</span></label>';
-  html += '<label style="font-size:12px;color:#666;display:block;margin-top:4px;">' + t('race_vch_cfg_rank') + '</label>';
-  html += '<input id="raceAwRankTopN" type="number" min="1" max="100" step="1" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + awd.rankTopN + '">';
+  html += '<input type="hidden" id="raceAwRankTopN" value="' + awd.rankTopN + '">';
+  var rank3 = [
+    ['raceAwRankAccMin', t('race_vch_cfg_rank_acc'), awd.rankAccMin, 100],
+    ['raceAwRankRate', t('race_vch_cfg_rank_rate'), awd.rankRate, 100],
+    ['raceAwRankCap', t('race_vch_cfg_rank_cap'), awd.rankCap, 200]
+  ];
+  for (var _ri = 0; _ri < rank3.length; _ri++) {
+    var _r3 = rank3[_ri];
+    html += '<label style="font-size:12px;color:#666;display:block;margin-top:4px;">' + _r3[1] + '</label>';
+    html += '<input id="' + _r3[0] + '" type="number" min="1" max="' + _r3[3] + '" step="1" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #d8dee4;border-radius:6px;" value="' + _r3[2] + '">';
+  }
   html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;padding:2px 0;cursor:pointer;">'
     + '<input type="checkbox" id="raceAwDeptOn" style="margin-top:2px;"' + (awd.deptOn ? ' checked' : '') + '> '
     + '<span>' + (en ? 'Department award' : '部门奖') + '</span></label>';
@@ -18112,6 +18129,9 @@ function adminRacePublish() {
     partMin: raceAwardClamp((el('raceAwPartMin') && el('raceAwPartMin').value), 1, 50, RACE_AWARD_DEF.partMin),
     rankOn: !!(el('raceAwRankOn') && el('raceAwRankOn').checked),
     rankTopN: raceAwardClamp((el('raceAwRankTopN') && el('raceAwRankTopN').value), 1, 100, RACE_AWARD_DEF.rankTopN),
+    rankAccMin: raceAwardClamp((el('raceAwRankAccMin') && el('raceAwRankAccMin').value), 1, 100, RACE_AWARD_DEF.rankAccMin),
+    rankRate: raceAwardClamp((el('raceAwRankRate') && el('raceAwRankRate').value), 1, 100, RACE_AWARD_DEF.rankRate),
+    rankCap: raceAwardClamp((el('raceAwRankCap') && el('raceAwRankCap').value), 1, 200, RACE_AWARD_DEF.rankCap),
     deptOn: !!(el('raceAwDeptOn') && el('raceAwDeptOn').checked),
     deptTopN: raceAwardClamp((el('raceAwDeptTopN') && el('raceAwDeptTopN').value), 1, 50, RACE_AWARD_DEF.deptTopN),
     rankCutDays: raceAwardClamp((el('raceAwRankCutDays') && el('raceAwRankCutDays').value), 1, 90, RACE_AWARD_DEF.rankCutDays),
@@ -18738,7 +18758,7 @@ function adminAwardLoad() {
     adminState.awardDraft = {
       rid: rid,
       rankCutDays: ac.rankCutDays,
-      rankRows: ac.rankOn ? raceRankCandidateRows(rows, rid, ac.rankTopN) : [],
+      rankRows: ac.rankOn ? raceRankCandidateRowsV2(rows, rid, ac) : [],
       deptRows: ac.deptOn ? raceDeptCandidateRows(rows, rid, ac.deptTopN, (typeof rosterLvOf === 'function' ? rosterLvOf : null)) : []
     };
     adminState.awardLoading = false;
@@ -18754,10 +18774,16 @@ function adminAwardLoad() {
 function adminAwardRecalc() {
   var d = adminState.awardDraft, rows = adminState.awardRows, c = raceConfOf();
   if (!d || !rows || !c) { adminToast(t('race_admin_no_scores'), false); return; }
-  var topN = Math.max(1, Math.min(100, parseInt(document.getElementById('settleTopN') && document.getElementById('settleTopN').value, 10) || 10));
+  var base = raceAwardCfgOf(c);
+  // 比例制三参数（确认前可微调，留空回落赛事配置）：达标线% / 取前% / 封顶人次
+  var accMin = raceAwardClamp((document.getElementById('settleAccMin') && document.getElementById('settleAccMin').value) || base.rankAccMin, 1, 100, base.rankAccMin);
+  var rate = raceAwardClamp((document.getElementById('settleRate') && document.getElementById('settleRate').value) || base.rankRate, 1, 100, base.rankRate);
+  var cap = raceAwardClamp((document.getElementById('settleCap') && document.getElementById('settleCap').value) || base.rankCap, 1, 200, base.rankCap);
   var deptN = Math.max(1, Math.min(50, parseInt(document.getElementById('settleDeptN') && document.getElementById('settleDeptN').value, 10) || 5));
   d.rankCutDays = Math.max(1, Math.min(90, parseInt(document.getElementById('settleCutDays') && document.getElementById('settleCutDays').value, 10) || 7));
-  d.rankRows = raceRankCandidateRows(rows, c.id, topN);
+  var ac2 = {}; for (var ak in base) ac2[ak] = base[ak];
+  ac2.rankAccMin = accMin; ac2.rankRate = rate; ac2.rankCap = cap;
+  d.rankRows = raceRankCandidateRowsV2(rows, c.id, ac2);
   d.deptRows = raceDeptCandidateRows(rows, c.id, deptN, (typeof rosterLvOf === 'function' ? rosterLvOf : null));
   if (state.currentPage === 'adminAwardSettle') { try { render(); } catch (e) {} }
 }
@@ -18848,17 +18874,25 @@ function renderAdminAwardSettle() {
   var d = adminState.awardDraft;
   if (d && d.rid === c.id) {
     html += '<div class="q-card">';
-    html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">⚙️ ' + (en ? 'Confirm settings' : '确认参数') + '</div>';
-    html += '<div style="display:flex;gap:8px;">';
-    html += '<div style="flex:1;"><label style="font-size:11px;color:#666;">' + (en ? 'Top N per board' : '各榜前 N 名') + '</label>'
-      + '<input id="settleTopN" type="number" min="1" max="100" value="' + ac.rankTopN + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;"></div>';
+    html += '<div style="font-size:13px;font-weight:600;margin-bottom:2px;">⚙️ ' + (en ? 'Confirm settings' : '确认参数') + '</div>';
+    html += '<div style="font-size:11px;color:#888;margin:0 0 8px;line-height:1.5;">'
+      + (en ? 'Accuracy floor · top % of qualifiers · overall cap' : '正确率达标线 · 达标者前 % · 合计封顶人次') + '</div>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<div style="flex:1;"><label style="font-size:11px;color:#666;">' + (en ? 'Accuracy ≥ %' : '正确率 ≥ %') + '</label>'
+      + '<input id="settleAccMin" type="number" min="1" max="100" value="' + ac.rankAccMin + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;"></div>';
+    html += '<div style="flex:1;"><label style="font-size:11px;color:#666;">' + (en ? 'Top %' : '前 %') + '</label>'
+      + '<input id="settleRate" type="number" min="1" max="100" value="' + ac.rankRate + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;"></div>';
+    html += '<div style="flex:1;"><label style="font-size:11px;color:#666;">' + (en ? 'Cap (people)' : '封顶人次') + '</label>'
+      + '<input id="settleCap" type="number" min="1" max="200" value="' + ac.rankCap + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;"></div>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;margin-top:8px;">';
     html += '<div style="flex:1;"><label style="font-size:11px;color:#666;">' + (en ? 'Top N departments' : '前 N 个部门') + '</label>'
       + '<input id="settleDeptN" type="number" min="1" max="50" value="' + ac.deptTopN + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;"></div>';
+    html += '<div style="flex:1;"><label style="font-size:11px;color:#666;">' + (en ? 'Voucher validity (days)' : '个人奖券有效期（天）') + '</label>'
+      + '<input id="settleCutDays" type="number" min="1" max="90" value="' + d.rankCutDays + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;"></div>';
     html += '</div>';
-    html += '<label style="font-size:11px;color:#666;display:block;margin-top:8px;">' + (en ? 'Individual voucher validity (days)' : '个人奖券有效期（天）') + '</label>';
-    html += '<input id="settleCutDays" type="number" min="1" max="90" value="' + d.rankCutDays + '" style="width:100%;padding:7px;border:1px solid #d8dee4;border-radius:6px;">';
     html += '<div style="display:flex;gap:8px;margin-top:10px;">';
-    html += '<button class="action-btn secondary" style="flex:1;" onclick="adminAwardRecalc()">' + (en ? 'Recalculate' : '按名额重算') + '</button>';
+    html += '<button class="action-btn secondary" style="flex:1;" onclick="adminAwardRecalc()">' + (en ? 'Recalculate' : '按参数重算') + '</button>';
     html += '<button class="action-btn primary" style="flex:1;" onclick="adminAwardConfirmPublish()">' + (en ? 'Confirm & publish' : '确认并发布') + '</button>';
     html += '</div></div>';
 
@@ -19050,6 +19084,77 @@ function raceRankCandidateRows(rows, rid, topN) {
     if (b.acc !== a.acc) return b.acc - a.acc;
     return (a.ts || 0) - (b.ts || 0);
   });
+  return out;
+}
+// 比例制个人奖候选（2026-11-20，取代上面的固定前 N 版用于正式结算）：
+//  ① 达标线：正确率 ≥ rankAccMin%（默认 60），不达标直接不进奖池，挡住乱答。
+//  ② 名额：每个榜取「该榜达标者」前 rankRate%（默认 30，分母是达标人数不是参与人数）。
+//  ③ 不去重：一人中多个榜就在 boards 里全列，copies = 中奖榜数（每份都发实物）。
+//  ④ 封顶：所有榜合计不超过 rankCap 人次（默认 60）——第一轮每人先保底一份，
+//     剩余名额再给多榜的人追加，既覆盖最多的人，又允许强者多拿。
+// 老函数 raceRankCandidateRows 原样保留（历史测试 / 老配置回放仍要用）。
+function raceRankCandidateRowsV2(rows, rid, ac) {
+  ac = ac || raceAwardCfgOf();
+  var minAcc = ac.rankAccMin, rate = ac.rankRate / 100, cap = ac.rankCap;
+  var sections = RACE_RANK_SECTIONS;
+  var byEmp = {}, order = [];
+  for (var s = 0; s < sections.length; s++) {
+    var sk = sections[s];
+    var board = raceBoardRowsFrom(rows, 'period', sk, rid);
+    var qual = [];
+    for (var i = 0; i < board.length; i++) {
+      var r = board[i];
+      if ((r.acc || 0) < minAcc) continue;
+      var sn = (r.raw && r.raw.snap) || {};
+      var emp = normEmpNo(dashEmpNoOf(sn, r.key)) || normEmpNo(empOfKey(r.key));
+      if (!emp) continue;
+      qual.push({ r: r, emp: emp, sn: sn });
+    }
+    if (!qual.length) continue;
+    var take = Math.max(1, Math.ceil(qual.length * rate));
+    if (take > qual.length) take = qual.length;
+    for (var j = 0; j < take; j++) {
+      var q = qual[j], it = byEmp[q.emp];
+      if (!it) {
+        it = byEmp[q.emp] = {
+          emp: q.emp,
+          cn: String(q.sn.cn || q.r.cn || ''), en: String(q.sn.en || q.r.en || ''),
+          div: q.r.div, dept: q.r.dept, section: q.r.section || sk,
+          correct: q.r.correct || 0, answered: q.r.answered || 0, acc: q.r.acc || 0, ts: q.r.ts || 0,
+          boards: [], rank: 0, copies: 0
+        };
+        order.push(q.emp);
+      }
+      if (it.boards.indexOf(sk) < 0) it.boards.push(sk);
+      if (!it.rank || (j + 1) < it.rank) it.rank = j + 1;
+      // 代表性成绩取该人各中奖榜里最好的一条（先看答对数，再看准确率）
+      if ((q.r.correct || 0) > it.correct || ((q.r.correct || 0) === it.correct && (q.r.acc || 0) > it.acc)) {
+        it.correct = q.r.correct || 0; it.answered = q.r.answered || 0;
+        it.acc = q.r.acc || 0; it.ts = q.r.ts || 0;
+        it.div = q.r.div; it.dept = q.r.dept;
+      }
+    }
+  }
+  var people = [];
+  for (var k = 0; k < order.length; k++) people.push(byEmp[order[k]]);
+  people.sort(function (a, b) {
+    if (b.correct !== a.correct) return b.correct - a.correct;
+    if (b.acc !== a.acc) return b.acc - a.acc;
+    return (a.ts || 0) - (b.ts || 0);
+  });
+  var out = [], used = 0;
+  // 第一轮：每人先拿一份，覆盖尽量多的人
+  for (var k2 = 0; k2 < people.length && used < cap; k2++) {
+    people[k2].copies = 1; used++; out.push(people[k2]);
+  }
+  // 第二轮起：多榜达标者按其中奖榜数追加名额（一人可占多份），直到封顶
+  for (var pass = 2; pass <= RACE_RANK_SECTIONS.length; pass++) {
+    for (var k3 = 0; k3 < people.length && used < cap; k3++) {
+      var p = people[k3];
+      if (p.boards.length >= pass && p.copies < pass) { p.copies = pass; used++; }
+    }
+    if (used >= cap) break;
+  }
   return out;
 }
 // 部门奖候选：复用加权部门榜取前 N
