@@ -15410,24 +15410,24 @@ function raceHeroCardHtml(c, st, mode) {
 // ===== 奖项说明浮窗（2026-11-18）=====
 // 扫码进来就能看到本届奖项怎么设、怎么兑，但不占首页版面：只在主卡上放一个「奖项说明」小入口，
 // 点开看全文。文案优先用后台发布赛事时填的 descCn/descEn，留空则按当前参数自动生成。
-// 2026-11-20：现行规则（参与奖双路径 / 个人奖去重封顶 / 部门奖不发券 / 兑奖截止）统一从
-// raceAwardRuleLines 出，后台「按当前规则生成」、浮窗兜底、旧文案迁移全部复用，不许各写一套。
+// 2026-11-20：现行规则文案（用户定稿）统一从 raceAwardRuleLines 出，
+// 后台「按当前规则生成」、浮窗兜底、旧文案迁移全部复用，不许各写一套。
 function raceAwardRuleLines(ac, en, conf) {
   ac = ac || raceAwardCfgOf(conf);
   var lines = [];
   var dTop = (ac.deptTopN > 3) ? ('3-' + ac.deptTopN) : String(ac.deptTopN);
   if (ac.partOn) lines.push(en
-    ? '🥤Participation Award: Take part in the Speed Quiz and answer ' + ac.partMin + ' or more questions correctly in one attempt, or check in on ' + ac.partDays + ' or more days this round, to earn one voucher (one per person per round). Redeem at HR by 23:59 on the final day of the round.'
-    : '🥤参与奖：参加限时答题赛，单场答对 ' + ac.partMin + ' 题及以上或本届打卡满 ' + ac.partDays + ' 天，即可获兑换券一张（每人每届限一张），于赛事最后一天 23:59 前到 HR 兑换。');
+    ? '🥤Participation Award: Take part in the Speed Quiz and answer ' + ac.partMin + ' or more questions correctly in one attempt, or check in on ' + ac.partDays + ' or more days this round, to earn one voucher (one per person per round).'
+    : '🥤参与奖：参加限时答题赛，单场答对 ' + ac.partMin + ' 题及以上或本届打卡满 ' + ac.partDays + ' 天，即可获兑换券一张（每人每届限一张）。');
   if (ac.rankOn) lines.push(en
-    ? '🏆Individual Award: Across the five leaderboards (All Question Bank, Culinary, F&B, Rooms, Brand & Hotel Knowledge), the top ' + ac.rankRate + '% of candidates with accuracy of ' + ac.rankAccMin + '% or above win. Winners in multiple leaderboards are counted once at their best board; ' + ac.rankCap + ' winners maximum. Vouchers are valid for ' + ac.rankCutDays + ' days after the winner list is confirmed.'
-    : '🏆个人奖：五个榜单（全题库、厨房部、餐饮部、房务部、品牌与酒店知识）中，正确率达 ' + ac.rankAccMin + '% 及以上的选手各取前 ' + ac.rankRate + '%；一人多榜只计最佳榜一份，全酒店封顶 ' + ac.rankCap + ' 人。券于名单确认后 ' + ac.rankCutDays + ' 天内有效。');
+    ? '🏆Individual Award: Across the five leaderboards (All Question Bank, Culinary, F&B, Rooms, Brand & Hotel Knowledge), the top ' + ac.rankRate + '% of candidates with accuracy of ' + ac.rankAccMin + '% or above win.'
+    : '🏆个人奖：五个榜单（全题库、厨房部、餐饮部、房务部、品牌与酒店知识）中，正确率达 ' + ac.rankAccMin + '% 及以上的选手各取前 ' + ac.rankRate + '% 颁发个人奖。');
   if (ac.deptOn) lines.push(en
-    ? '🏅Department Award: Departments with average accuracy of ' + ac.deptAccMin + '% or above are ranked, and the top ' + dTop + ' receive department awards. Prizes go to the department; no personal voucher.'
-    : '🏅部门奖：平均正确率达 ' + ac.deptAccMin + '% 及以上的部门中，取前 ' + dTop + ' 名颁发部门奖，奖品发至部门，不发个人券。');
+    ? '🏅Department Award: Departments with average accuracy of ' + ac.deptAccMin + '% or above are ranked, and the top ' + dTop + ' receive department awards.'
+    : '🏅部门奖：平均正确率达 ' + ac.deptAccMin + '% 及以上的部门中，取前 ' + dTop + ' 名颁发部门奖。');
   if (lines.length) lines.push(en
-    ? '🎁Redemption: Individual and department winners are confirmed from the final leaderboard data after the round ends and notified. All deadlines are Beijing time.'
-    : '🎁兑奖说明：赛事结束后按榜单截榜数据确认个人奖与部门奖名单，并通知获奖者；截止时间均为北京时间。');
+    ? '🎁Redemption: Individual and department winners are confirmed from the final leaderboard data after the round ends and notified.'
+    : '🎁兑奖说明：赛事结束后按榜单截榜数据确认个人奖与部门奖名单，并通知获奖者领奖。');
   else lines.push(en ? 'No awards are enabled for this round.' : '本届未设置奖项。');
   return lines;
 }
@@ -15774,13 +15774,15 @@ function raceLeadInfoShow() {
   overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
   document.body.appendChild(overlay);
 }
-function raceBadgeChipHtml(def, got, date, prog, count) {  if (def && !def.rule && def.id) def = raceBadgeById(def.id) || def;
+// wide=true 只给「限定月度主题」用：该系列每期只有一枚，独占整行，外观与首页主题卡同款淡金
+function raceBadgeChipHtml(def, got, date, prog, count, wide) {
+  if (def && !def.rule && def.id) def = raceBadgeById(def.id) || def;
   var d = def || {};
   var c1 = got ? (d.c1 || '#ffcf6b') : '#eef1f3';
   var c2 = got ? (d.c2 || '#d99a00') : '#d5dbe0';
   var fg = got ? '#6b4300' : '#8b98a3';
-  var s = '<div style="border:1px solid ' + (got ? '#f0b357' : '#e2e6ea') + ';border-radius:10px;'
-    + 'background:' + (got ? '#fffdf5' : '#fafbfc') + ';padding:9px 10px;display:flex;gap:9px;align-items:flex-start;">';
+  var s = '<div style="border:1px solid ' + (wide ? '#f3e0c0' : (got ? '#f0b357' : '#e2e6ea')) + ';border-radius:10px;'
+    + 'background:' + (wide ? 'linear-gradient(135deg,#fffdf8,#fff7ea)' : (got ? '#fffdf5' : '#fafbfc')) + ';padding:9px 10px;display:flex;gap:9px;align-items:flex-start;">';
   s += '<div style="flex:0 0 auto;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
     + 'font-size:19px;line-height:1;background:linear-gradient(135deg,' + c1 + ',' + c2 + ');'
     + (got ? 'box-shadow:0 2px 6px rgba(200,140,0,.35);' : 'opacity:.75;') + '">' + raceBadgeIcon(d) + '</div>';
@@ -20060,9 +20062,10 @@ function renderMyBadges() {
   }
   // 六大类按 MY_BADGE_CAT_ORDER 顺序展示；打卡系列内部仍细分连续 / 单期 / 累计。
   // 分类归属只认 badgeCatOf，管理端与这里永远是同一套分类。
-  var badgeCellHtml = function (d) {
+  // 限定月度主题每期只有一枚：跨满两列、不留右半边空格，外观与首页主题卡同款淡金。
+  var badgeCellHtml = function (d, wide) {
     var got = counts[d.id], pr = raceBadgeProgressOf(rec, d);
-    var cell = raceBadgeChipHtml(d, !!got, got ? got.last : '', raceBadgeProgText(d, pr, en), got ? got.count : 0);
+    var cell = raceBadgeChipHtml(d, !!got, got ? got.last : '', raceBadgeProgText(d, pr, en), got ? got.count : 0, wide);
     // 拿到的徽章可以设为「排行榜展示徽章」：别人在榜单上看到的就是这枚；
     // 再点一次取消，回到默认的最近获得一枚。
     if (got) {
@@ -20073,7 +20076,7 @@ function renderMyBadges() {
           ? 'background:#fff8e1;color:#8a5a00;border:1px solid #f0b357;">📌 ' + t('race_badge_showing')
           : 'background:#f4f6f8;color:#000;border:1px dashed #d8dee4;">' + t('race_badge_set_show')) + '</div>';
     }
-    return '<div>' + cell + '</div>';
+    return '<div' + (wide ? ' style="grid-column:1/-1;"' : '') + '>' + cell + '</div>';
   };
   var gridOpen = '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">';
   for (var g = 0; g < MY_BADGE_CAT_ORDER.length; g++) {
@@ -20105,7 +20108,7 @@ function renderMyBadges() {
       }
     } else {
       html += gridOpen;
-      for (i = 0; i < catDefs.length; i++) html += badgeCellHtml(catDefs[i]);
+      for (i = 0; i < catDefs.length; i++) html += badgeCellHtml(catDefs[i], catKey === BADGE_CAT_THEME);
       html += '</div>';
     }
   }
