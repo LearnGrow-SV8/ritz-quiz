@@ -16642,23 +16642,30 @@ function renderRaceBoard() {
     : isDays
     ? (isDeptTab ? raceDeptDaysRows(raceDeptDaysMode()) : raceDaysRows(tab))
     : (isDeptTab ? raceDeptAggRows(sec) : raceBoardRows(tab));
-  // 「当前领先」高亮（2026-11-20 定稿 · 与获奖名单完全同源）：只在本届个人榜的五个**发奖榜**上画。
-  // ① 两个"总榜"必须分清：'' = 全部板块总榜，是各板块个人最优的汇总、跨板块成绩不可比，
-  //    **不是发奖榜、不画高亮**；'all' = 全题库榜，与厨房/餐饮/房务/品牌平行的独立发奖榜，画高亮。
-  // ② 高亮来源 = V3 获奖名单的 byBoard（raceAwardWinMapOf）：每个获奖者只在自己的**最佳榜
-  //    winBoard** 亮一次。这样「榜单亮的人 = 最终获奖的人」，一人不跨榜重复亮，且非发奖榜
-  //    （hr/finance/sm/eng）与汇总榜天然无高亮。绝不再回到按单榜前30%各算各的 raceAwardLineOfRows
-  //    —— 那会一人多榜反复亮、且把非发奖榜也点亮。
-  // ③ 标记文案仍叫「当前领先」（榜单实时变动、最终名单以截榜结算为准），不承诺"已获奖"。
+  // 「当前领先」标记（2026-11-20 再定稿 · 高亮与皇冠解耦）：
+  //  ① 淡蓝底高亮 = 本榜自己「正确率≥rankAccMin 者取前 rankRate%」（raceAwardLineOfRows），
+  //     五张发奖榜各算各的 —— 一人可在多个榜同时高亮，避免"最佳榜在别处导致本榜没人亮"被误会。
+  //  ② 皇冠 👑 = 获奖名单 V3 的最佳榜归属（raceAwardWinMapOf.byBoard[sec]），一个人只在
+  //     自己成绩最好的那张榜带皇冠（内部区分用，不加文字）；其余高亮榜不带皇冠。
+  //  ③ 全部板块总榜 sec=''：高亮所有在任一发奖榜达标前 30% 的人（V3 winners 全集），显示其成绩，不带皇冠。
+  //     非发奖榜（hr/finance/sm/eng）、打卡天数榜不画高亮也不画皇冠。
+  //  ④ 发奖/券码仍走 V3 + 封顶，与榜单展示口径互不干扰。
   var awCfg = raceAwardCfgOf();
-  var winBoardEmps = null; // 当前发奖榜的获奖工号集合 {emp:true}
+  var leadSet = null;       // 本榜达标前 30% 的可见行下标（淡蓝底高亮）
+  var crownEmps = null;     // 本榜带皇冠的工号集合（V3 最佳榜归属）
+  var overallEmps = null;   // 总榜高亮工号集合（V3 winners 全集）
   var isAwardBoard = !!sec && RACE_RANK_SECTIONS.indexOf(sec) >= 0; // 排除 '' 汇总榜与打卡天数榜
-  if (tab === 'period' && !isMoverTab && !isDays && !isDeptTab && awCfg.rankOn && isAwardBoard) {
+  if (tab === 'period' && !isMoverTab && !isDays && !isDeptTab && awCfg.rankOn) {
     try {
       var _c = raceConfOf() || {};
       var _wmap = raceAwardWinMapOf(state.raceBoard || [], _c.id, awCfg);
-      winBoardEmps = (_wmap.byBoard && _wmap.byBoard[sec]) || {};
-    } catch (e2w) { winBoardEmps = null; }
+      if (isAwardBoard) {
+        leadSet = raceAwardLineOfRows(rows, awCfg).set;              // 高亮：本榜各算各的
+        crownEmps = (_wmap.byBoard && _wmap.byBoard[sec]) || {};     // 皇冠：仅最佳榜
+      } else if (!sec) {
+        overallEmps = _wmap.keys || {};                              // 总榜：所有获奖者
+      }
+    } catch (e2w) { leadSet = null; crownEmps = null; overallEmps = null; }
   }
   // 已经有数据就当 ready（不管状态位），避免"数据都在却被状态位挡住继续转圈"。
   var hasData = Array.isArray(state.raceBoard);
@@ -16743,10 +16750,13 @@ function renderRaceBoard() {
     for (var i = 0; i < rows.length; i++) {
       var rw = rows[i];
       var isMe = myKey && rw.key === myKey;
-      // 当前领先 = 此人在获奖名单里、且最佳榜正是当前这张榜（winBoardEmps 来自 V3）。
-      // 工号从快照/键统一提取，与 V3 内部取 emp 的口径一致；非发奖榜 winBoardEmps=null，一行不画。
+      // 工号从快照/键统一提取，与 V3 内部取 emp 的口径一致。
       var rowEmp = normEmpNo(dashEmpNoOf((rw.raw && rw.raw.snap) || {}, rw.key)) || normEmpNo(empOfKey(rw.key));
-      var inAward = !!(winBoardEmps && rowEmp && winBoardEmps[rowEmp]);
+      // 淡蓝底高亮：发奖榜按本榜达标前 30%（leadSet[i]）；总榜按是否获奖（overallEmps）；
+      // 非发奖榜两套集合都 null，一行不画。
+      var inAward = !!(leadSet ? leadSet[i] : (overallEmps && rowEmp && overallEmps[rowEmp]));
+      // 皇冠：只在该人最佳归属榜（crownEmps）显示；总榜与非发奖榜没有 crownEmps。
+      var hasCrown = !!(crownEmps && rowEmp && crownEmps[rowEmp]);
       var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
       html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + (inAward ? '#E8F0FA' : isMe ? '#eef4fa' : '#fff') + ';">';
       // 排名不再单独占一列，改成头像左下角的小标：一行省下 32px，名字能多显示两个字。
@@ -16791,9 +16801,8 @@ function renderRaceBoard() {
         ? ' <span onclick="raceTierInfoShow()" style="cursor:pointer;color:#8a5a00;font-weight:600;font-size:12px;">'
           + rw.tier.icon + ' ' + (state.lang === 'en' ? rw.tier.en : rw.tier.cn) + '</span>'
         : '';
-      // 「当前领先」普通皇冠（无底色）：点按/点击弹「当前领先」说明。
-      // 移动端没有 title 悬停，所以可点击是必须的 —— 用 onclick 直接弹卡。
-      var winTag = inAward
+      // 皇冠：只标在「最佳归属榜」那一张（内部区分，无文字）；点按/点击弹「当前领先」说明。
+      var winTag = hasCrown
         ? ' <span onclick="raceLeadInfoShow()" title="' + escapeHtml(t('race_win_tag')) + '"'
           + ' style="vertical-align:1px;margin-left:3px;font-size:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">👑</span>'
         : '';
