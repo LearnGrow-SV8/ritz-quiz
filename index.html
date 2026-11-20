@@ -16537,17 +16537,25 @@ function raceBoardChip(key, label, active) {
     + 'white-space:nowrap;cursor:pointer;background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';">'
     + label + '</button>';
 }
-// 选板块后重绘并把选中的 chip 滚到切换条中间，避免点完弹回最左、看不到刚点的那个。
+// 选板块后重绘。居中不再在这里单独做 —— 交给 render() 里统一的 raceBoardCenterChip，
+// 否则只有"点击"这一条路径会居中，其它重绘（数据刷新/名单刷新/下拉/页面恢复）都会弹回最左。
 function raceBoardPickSec(key) {
   state.raceBoardSec = key;
   render();
+}
+// 把选中的 chip 滚到切换条中间。每次榜单渲染后都会调用：
+// 任何一次 render() 都用新 DOM 重建 #raceSecStrip、scrollLeft 归零，只在点击时居中一次
+// 必然被后续重绘冲掉（用户看到"点房务/财务弹回最左""刷新后弹回最左""上拉回顶弹回最左"）。
+// 用 offsetLeft 绝对定位（配 strip 的 position:relative），不累加，重复调用收敛、不漂移。
+function raceBoardCenterChip() {
   try {
     var strip = document.getElementById('raceSecStrip');
-    var act = strip && strip.querySelector('[data-active="1"]');
-    if (strip && act) {
-      var sr = strip.getBoundingClientRect(), ar = act.getBoundingClientRect();
-      strip.scrollLeft += (ar.left + ar.width / 2) - (sr.left + sr.width / 2);
-    }
+    if (!strip || typeof strip.scrollLeft !== 'number') return;
+    var act = strip.querySelector('[data-active="1"]');
+    if (!act) return;
+    var target = (act.offsetLeft || 0) + (act.offsetWidth || 0) / 2 - (strip.clientWidth || 0) / 2;
+    if (target < 0) target = 0;
+    strip.scrollLeft = target;
   } catch (e) {}
 }
 // 三个榜的口径不一样（本届全员最佳 / 本届部门汇总 / 历届个人最佳），页签下面用一行
@@ -16616,7 +16624,7 @@ function renderRaceBoard() {
   // 仍是全部板块总榜（raceOpenBoard 里重置），不喧宾夺主。
   var isDays = sec === RACE_DAYS_KEY;
   if (!isMoverTab) {
-  html += '<div id="raceSecStrip" style="display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch;">';
+  html += '<div id="raceSecStrip" style="position:relative;display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch;">';
   html += raceBoardChip(RACE_DAYS_KEY, t('race_board_days'), isDays);
   html += raceBoardChip('', '\ud83d\udcca ' + t('race_filter_all'), !sec);
   for (var s = 0; s < RACE_SECTIONS.length; s++) {
@@ -33170,7 +33178,15 @@ function render() {
     case 'race': app.innerHTML = renderRaceHome(); break;
     case 'racePlay': app.innerHTML = renderRacePlay(); break;
     case 'raceResult': app.innerHTML = renderRaceResult(); break;
-    case 'raceBoard': app.innerHTML = renderRaceBoard(); break;
+    case 'raceBoard':
+      app.innerHTML = renderRaceBoard();
+      // 每次榜单重绘后都居中选中 chip（含数据/名单刷新、下拉、页面恢复触发的重绘）。
+      // rAF 等布局稳定再量 offsetLeft；无 rAF 环境（老 WebView）同步兜底。
+      try {
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(raceBoardCenterChip);
+        else raceBoardCenterChip();
+      } catch (eCenter) { try { raceBoardCenterChip(); } catch (e2) {} }
+      break;
     case 'raceHall': app.innerHTML = renderRaceHall(); break;
     case 'raceMakeup': app.innerHTML = renderRaceMakeup(); break;
     case 'raceMkTask': app.innerHTML = renderRaceMkTask(); break;
