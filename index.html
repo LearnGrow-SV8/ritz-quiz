@@ -16647,18 +16647,23 @@ function renderRaceBoard() {
     : isDays
     ? (isDeptTab ? raceDeptDaysRows(raceDeptDaysMode()) : raceDaysRows(tab))
     : (isDeptTab ? raceDeptAggRows(sec) : raceBoardRows(tab));
-  // 「当前领先」高亮（2026-11-20 修正）：只在本届个人榜的五个**发奖榜**上画。
+  // 「当前领先」高亮（2026-11-20 定稿 · 与获奖名单完全同源）：只在本届个人榜的五个**发奖榜**上画。
   // ① 两个"总榜"必须分清：'' = 全部板块总榜，是各板块个人最优的汇总、跨板块成绩不可比，
   //    **不是发奖榜、不画高亮**；'all' = 全题库榜，与厨房/餐饮/房务/品牌平行的独立发奖榜，画高亮。
-  // ② 高亮口径 = 当前这张榜自己「正确率 ≥ rankAccMin 的选手里排前 rankRate%」的行，
-  //    用 raceAwardLineOfRows 按当前可见行下标算。绝不再用全局获奖工号集合（winMap.keys）——
-  //    否则某人只要在任意榜获奖，就会在**所有榜**高亮（例如餐饮榜获奖者在全题库榜 43.8% 也亮）。
-  // ③ 高亮是"当前领先"提示，不是"已获奖"承诺：榜单实时变动，最终名单以截榜结算为准。
+  // ② 高亮来源 = V3 获奖名单的 byBoard（raceAwardWinMapOf）：每个获奖者只在自己的**最佳榜
+  //    winBoard** 亮一次。这样「榜单亮的人 = 最终获奖的人」，一人不跨榜重复亮，且非发奖榜
+  //    （hr/finance/sm/eng）与汇总榜天然无高亮。绝不再回到按单榜前30%各算各的 raceAwardLineOfRows
+  //    —— 那会一人多榜反复亮、且把非发奖榜也点亮。
+  // ③ 标记文案仍叫「当前领先」（榜单实时变动、最终名单以截榜结算为准），不承诺"已获奖"。
   var awCfg = raceAwardCfgOf();
-  var leadSet = null;
+  var winBoardEmps = null; // 当前发奖榜的获奖工号集合 {emp:true}
   var isAwardBoard = !!sec && RACE_RANK_SECTIONS.indexOf(sec) >= 0; // 排除 '' 汇总榜与打卡天数榜
   if (tab === 'period' && !isMoverTab && !isDays && !isDeptTab && awCfg.rankOn && isAwardBoard) {
-    try { leadSet = raceAwardLineOfRows(rows, awCfg).set; } catch (e2w) { leadSet = null; }
+    try {
+      var _c = raceConfOf() || {};
+      var _wmap = raceAwardWinMapOf(state.raceBoard || [], _c.id, awCfg);
+      winBoardEmps = (_wmap.byBoard && _wmap.byBoard[sec]) || {};
+    } catch (e2w) { winBoardEmps = null; }
   }
   // 已经有数据就当 ready（不管状态位），避免"数据都在却被状态位挡住继续转圈"。
   var hasData = Array.isArray(state.raceBoard);
@@ -16743,9 +16748,10 @@ function renderRaceBoard() {
     for (var i = 0; i < rows.length; i++) {
       var rw = rows[i];
       var isMe = myKey && rw.key === myKey;
-      // 当前领先 = 本张榜达标前 rankRate% 的行（按可见下标判断），与获奖名单解耦。
-      // 全部板块总榜（sec=''）leadSet=null，一行都不画；全题库/各板块榜各画各的领先区。
-      var inAward = !!(leadSet && leadSet[i]);
+      // 当前领先 = 此人在获奖名单里、且最佳榜正是当前这张榜（winBoardEmps 来自 V3）。
+      // 工号从快照/键统一提取，与 V3 内部取 emp 的口径一致；非发奖榜 winBoardEmps=null，一行不画。
+      var rowEmp = normEmpNo(dashEmpNoOf((rw.raw && rw.raw.snap) || {}, rw.key)) || normEmpNo(empOfKey(rw.key));
+      var inAward = !!(winBoardEmps && rowEmp && winBoardEmps[rowEmp]);
       var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
       html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + (inAward ? '#E8F0FA' : isMe ? '#eef4fa' : '#fff') + ';">';
       // 排名不再单独占一列，改成头像左下角的小标：一行省下 32px，名字能多显示两个字。
@@ -19268,8 +19274,9 @@ function raceRankCandidateRowsV2(rows, rid, ac) {
 //  ② 去重：一人中多榜只保留一个「最佳榜」（成绩最好的那条：答对多→正确率高→用时短；
 //     完全并列时按榜单顺序 all>culinary>fb>rooms>general 取先），每人一份。
 //  ③ 封顶：全体候选人按成绩排序，取前 rankCap 人（默认 50）。
-//  ④ 高亮同源：每行输出 winBoard（归属榜）/ winRank（该榜名次），榜单直接据此标「当前领先」，
-//     保证「榜单亮的人 = 最终获奖的人」，五榜高亮人数之和 = 获奖人数 ≤ 封顶。
+//  ④ 高亮同源：每行输出 winBoard（归属榜）/ winRank（该榜名次）；renderRaceBoard 经
+//     raceAwardWinMapOf 反推 byBoard[归属榜]，每个获奖者只在自己的最佳榜亮一次 ——
+//     「榜单亮的人 = 最终获奖的人」，五榜高亮人数之和 = 获奖人数 ≤ 封顶，非发奖榜无高亮。
 // 老函数 raceRankCandidateRows / V2 原样保留（历史测试 / 回放仍要用）。
 function raceRankCandidateRowsV3(rows, rid, ac) {
   ac = ac || raceAwardCfgOf();
@@ -19354,8 +19361,9 @@ function raceAwardWinMapOf(rows, rid, ac) {
   }
   return { byBoard: byBoard, keys: keys, winners: winners };
 }
-// 榜单「前30%评奖参考线」（2026-11-20）：与发奖口径一致 —— 当前榜内正确率 ≥ rankAccMin
-// 者按榜单顺序取前 rankRate%，记下这些行的下标。纯可视化，不决定获奖名单（名单仍看 V2 + 封顶）。
+// 【历史函数 · 生产已不调用，仅回归测试保留】榜单「前30%参考线」：当前榜内正确率 ≥ rankAccMin
+// 者按榜单顺序取前 rankRate% 的下标。2026-11-20 定稿后，榜单高亮改为完全同源（见 raceAwardWinMapOf），
+// 不再按单榜前30%各算各的（那会一人多榜重复亮、非发奖榜也亮）。获奖名单始终看 V3 + 封顶。
 function raceAwardLineOfRows(rows, ac) {
   rows = rows || [];
   ac = ac || raceAwardCfgOf();
