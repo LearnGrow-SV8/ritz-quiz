@@ -16508,10 +16508,23 @@ function raceBoardChip(key, label, active) {
   var bg = active ? '#000' : '#fff';
   var fg = active ? '#fff' : '#44546b';
   var bd = active ? '#000' : '#d8dee4';
-  return '<button onclick="state.raceBoardSec=\'' + key + '\';render()"'
+  return '<button data-active="' + (active ? '1' : '0') + '" onclick="raceBoardPickSec(\'' + key + '\')"'
     + ' style="flex:0 0 auto;padding:7px 13px;border-radius:999px;font-size:12px;font-weight:600;'
     + 'white-space:nowrap;cursor:pointer;background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';">'
     + label + '</button>';
+}
+// 选板块后重绘并把选中的 chip 滚到切换条中间，避免点完弹回最左、看不到刚点的那个。
+function raceBoardPickSec(key) {
+  state.raceBoardSec = key;
+  render();
+  try {
+    var strip = document.getElementById('raceSecStrip');
+    var act = strip && strip.querySelector('[data-active="1"]');
+    if (strip && act) {
+      var sr = strip.getBoundingClientRect(), ar = act.getBoundingClientRect();
+      strip.scrollLeft += (ar.left + ar.width / 2) - (sr.left + sr.width / 2);
+    }
+  } catch (e) {}
 }
 // 三个榜的口径不一样（本届全员最佳 / 本届部门汇总 / 历届个人最佳），页签下面用一行
 // 灰字讲清楚，免得学员以为"点了没反应"，或者换届后看到前两个榜空了以为成绩丢了。
@@ -16579,7 +16592,7 @@ function renderRaceBoard() {
   // 仍是全部板块总榜（raceOpenBoard 里重置），不喧宾夺主。
   var isDays = sec === RACE_DAYS_KEY;
   if (!isMoverTab) {
-  html += '<div style="display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch;">';
+  html += '<div id="raceSecStrip" style="display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch;">';
   html += raceBoardChip(RACE_DAYS_KEY, t('race_board_days'), isDays);
   html += raceBoardChip('', '\ud83d\udcca ' + t('race_filter_all'), !sec);
   for (var s = 0; s < RACE_SECTIONS.length; s++) {
@@ -16702,7 +16715,7 @@ function renderRaceBoard() {
       // 标记只代表「此人在获奖名单内」，不再要求归属榜等于当前榜。
       var inAward = !!(winMap && rowEmp && winMap.keys[rowEmp]);
       var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + (inAward ? '#C7DDF3' : isMe ? '#eef4fa' : '#fff') + ';">';
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + (inAward ? '#E8F0FA' : isMe ? '#eef4fa' : '#fff') + ';">';
       // 排名不再单独占一列，改成头像左下角的小标：一行省下 32px，名字能多显示两个字。
       // 前三名用金 / 银 / 铜底 + 奖牌，第 4 名起深蓝底 + 数字。
       var rankBg = i === 0 ? 'linear-gradient(135deg,#ffd76b,#d4a017)'
@@ -16746,7 +16759,7 @@ function renderRaceBoard() {
           + rw.tier.icon + ' ' + (state.lang === 'en' ? rw.tier.en : rw.tier.cn) + '</span>'
         : '';
       var winTag = inAward
-        ? ' <span style="color:#000;font-size:11px;font-weight:500;">' + t('race_win_tag') + '</span>' : '';
+        ? ' <span title="' + t('race_win_tag') + '" style="color:#000;font-size:9px;vertical-align:2px;">&#9679;</span>' : '';
       html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#000;font-size:12px;">' + t('race_you') + '</span>' : '') + winTag + bdgTag + tierTagHtml + '</div>';
       var deptTagHtml = '<span style="color:#888;font-size:12px;">'
         + escapeHtml(deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept))) + '</span>';
