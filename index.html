@@ -16615,16 +16615,18 @@ function renderRaceBoard() {
     : isDays
     ? (isDeptTab ? raceDeptDaysRows(raceDeptDaysMode()) : raceDaysRows(tab))
     : (isDeptTab ? raceDeptAggRows(sec) : raceBoardRows(tab));
-  // 个人奖「当前领先高亮」：与发奖名单 V3 同源 —— 只在本届个人总榜五个发奖榜显示。
-  // 历史最佳 / 进步之星 / 打卡天数 / 部门榜都不画（与个人奖无关）。
-  // 高亮按工号匹配获奖名单：名单基于全量 state.raceBoard 算，当前榜行按工号查归属榜。
+  // 「当前领先」高亮（2026-11-20 修正）：只在本届个人榜的五个**发奖榜**上画。
+  // ① 两个"总榜"必须分清：'' = 全部板块总榜，是各板块个人最优的汇总、跨板块成绩不可比，
+  //    **不是发奖榜、不画高亮**；'all' = 全题库榜，与厨房/餐饮/房务/品牌平行的独立发奖榜，画高亮。
+  // ② 高亮口径 = 当前这张榜自己「正确率 ≥ rankAccMin 的选手里排前 rankRate%」的行，
+  //    用 raceAwardLineOfRows 按当前可见行下标算。绝不再用全局获奖工号集合（winMap.keys）——
+  //    否则某人只要在任意榜获奖，就会在**所有榜**高亮（例如餐饮榜获奖者在全题库榜 43.8% 也亮）。
+  // ③ 高亮是"当前领先"提示，不是"已获奖"承诺：榜单实时变动，最终名单以截榜结算为准。
   var awCfg = raceAwardCfgOf();
-  var winMap = null, winSec = null;
-  if (tab === 'period' && !isMoverTab && !isDays && !isDeptTab && awCfg.rankOn
-      && (!sec || sec === 'all' || sec === 'general' || sec === 'culinary' || sec === 'fb' || sec === 'rooms')) {
-    winSec = !sec || sec === 'all' ? 'all' : sec;
-    var _c = raceConfOf() || {};
-    try { winMap = raceAwardWinMapOf(state.raceBoard || [], _c.id, awCfg); } catch (e2w) { winMap = null; }
+  var leadSet = null;
+  var isAwardBoard = !!sec && RACE_RANK_SECTIONS.indexOf(sec) >= 0; // 排除 '' 汇总榜与打卡天数榜
+  if (tab === 'period' && !isMoverTab && !isDays && !isDeptTab && awCfg.rankOn && isAwardBoard) {
+    try { leadSet = raceAwardLineOfRows(rows, awCfg).set; } catch (e2w) { leadSet = null; }
   }
   // 已经有数据就当 ready（不管状态位），避免"数据都在却被状态位挡住继续转圈"。
   var hasData = Array.isArray(state.raceBoard);
@@ -16709,11 +16711,9 @@ function renderRaceBoard() {
     for (var i = 0; i < rows.length; i++) {
       var rw = rows[i];
       var isMe = myKey && rw.key === myKey;
-      var rowEmp = normEmpNo(dashEmpNoOf((rw.raw && rw.raw.snap) || {}, rw.key)) || normEmpNo(empOfKey(rw.key));
-      // 获奖者在本届任一发奖榜均高亮：总榜（winSec=all）也显示所有获奖者，
-      // 否则获奖者的归属榜多为房务/餐饮等专业榜，默认总榜会一个标记都没有。
-      // 标记只代表「此人在获奖名单内」，不再要求归属榜等于当前榜。
-      var inAward = !!(winMap && rowEmp && winMap.keys[rowEmp]);
+      // 当前领先 = 本张榜达标前 rankRate% 的行（按可见下标判断），与获奖名单解耦。
+      // 全部板块总榜（sec=''）leadSet=null，一行都不画；全题库/各板块榜各画各的领先区。
+      var inAward = !!(leadSet && leadSet[i]);
       var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
       html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + (inAward ? '#E8F0FA' : isMe ? '#eef4fa' : '#fff') + ';">';
       // 排名不再单独占一列，改成头像左下角的小标：一行省下 32px，名字能多显示两个字。
