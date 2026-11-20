@@ -11887,6 +11887,18 @@ var BADGE_DESC_TEXT = {
   // 12 月场第二期预留：当前目录未收录，届时随徽章一起启用
   bd_theme2:  { cn: '✨ 月度限定 · 品牌与酒店知识打卡 8 天、答对 50 题', en: '\u2728 Monthly limited \u00b7 8 check-ins + 50 correct answers in Brand & Hotel Knowledge' }
 };
+// ── 徽章图标占用表（2026-11-20 起 · 新增徽章必须先查这里）─────────────────
+// 硬规则：全站徽章图标必须唯一，不做"一图多章"。
+// 新增徽章前：先按语义在本表检索 → 若已有图标更贴合新徽章，不要直接复用，
+// 先告诉用户"图标重复"，并给出旧徽章可替换的候选，等确认后再改（详见项目记忆）。
+// 当前占用（24 枚，逐枚权威定义见 badgeDefaultCatalog().list 的 icon 字段）：
+//   打卡系 ✨ 🔥 🌋 🏅 🏆 · 📅 🌟 🗓️ · 🌿 🌳 👑
+//   竞速系 ⭐
+//   学习系 🔍 🔖 📖
+//   彩蛋系 🌱 🦉 ⚔️ 💯 ⚡
+//   精准系 🎯 🏹 💎
+//   限定系 ⛵
+// ─────────────────────────────────────────────────────────────────────────
 // 预设徽章：先用一套合理的，管理端随时可改（改完发布即生效）。
 // 命名走「主题名 + 规则说明」：名号给人身份感（学习王者），副标题说清怎么拿到。
 function badgeDefaultCatalog() {
@@ -11913,8 +11925,8 @@ function badgeDefaultCatalog() {
       // 测试场人少、上榜≈参与，徽章含金量不足。改为一枚「品牌与酒店知识大师」，绑 general 榜，
       // 且必须管理端确认个人奖名单后才发（见 raceAwardRankBadges），与名单口径严格一致。
       badgeDef('bd_gen_master', DT, 10, '品牌与酒店知识大师', 'Brand & Hotel Knowledge Master', '⭐', 5, '#c7ddf3', '#3f74ad', '', 0, 'general'),
-      badgeDef('bd_wrong', WG, 50, '错题猎手', 'Mistake Hunter', '🏹', 3, '#d7c4f5', '#6b46c1'),
-      badgeDef('bd_fav', FV, 20, '考点收藏家', 'Key Point Collector', '⭐', 3, '#ffe9a8', '#c08a00'),
+      badgeDef('bd_wrong', WG, 50, '错题猎手', 'Mistake Hunter', '🔍', 3, '#d7c4f5', '#6b46c1'),
+      badgeDef('bd_fav', FV, 20, '考点收藏家', 'Key Point Collector', '🔖', 3, '#ffe9a8', '#c08a00'),
       badgeDef('bd_prac', PR, 100, '温故知新', 'Review Master', '📖', 3, '#bfe3ff', '#1a5c96'),
       badgeDef('bd_newb', NB, 3, '初出茅庐', 'First Steps', '🌱', 1, '#c8e6c9', '#388e3c'),
       // 夜猫子 2026-11-13：门槛 1 次 → 3 次（同届累计，按流水 ts 判定）
@@ -12157,6 +12169,22 @@ function badgeDropRetired(list) {
   }
   return n;
 }
+// 图标去重（2026-11-20）：历史目录里 ⭐ 被「考点收藏家 / 品牌与酒店知识大师」共用、
+// 🏹 被「错题猎手 / 百发百中」共用。按 id + 旧图标值迁移（幂等，管理员手动改过的图标不碰），
+// 云端旧目录与各设备旧缓存读到内存时统一修正 —— 已获徽章只存 id+日期，图标跟着目录走，
+// 所以不需要动任何学员记录。
+var BADGE_ICON_DEDUPE = {
+  bd_fav:   { from: ['⭐'], to: '🔖' }, // 考点收藏家：书签 = 收藏题目
+  bd_wrong: { from: ['🏹'], to: '🔍' }  // 错题猎手：放大镜 = 排查薄弱点
+};
+function badgePatchDedupeIcons(list) {
+  var changed = false;
+  for (var i = 0; i < list.length; i++) {
+    var b = list[i], m = b && BADGE_ICON_DEDUPE[b.id];
+    if (m && m.from.indexOf(b.icon) >= 0) { b.icon = m.to; changed = true; }
+  }
+  return changed;
+}
 // 删掉已下线徽章的记录；返回删了几个（0 = 本来就干净，调用方据此决定要不要落盘 / 推云端）。
 // 注意：只动 BADGE_RETIRED_IDS，其它键一律不碰 —— 管理员手工停用（on:false）的徽章记录要留着。
 function racePurgeRetiredBadges(rec) {
@@ -12195,6 +12223,8 @@ function raceBadgeCatalog() {
   badgePatchAddAcc(list);
   // 已下线的 id 一律剔掉：云端目录若还是旧版（管理员没重发布 / 旧缓存），界面也不会再画出来
   badgeDropRetired(list);
+  // 图标去重（按值补丁，幂等）：旧缓存 / 云端旧目录里的重复图标读到内存时统一改掉
+  badgePatchDedupeIcons(list);
   return { ver: ver, list: list };
 }
 // 云端目录 → 本机。版本更新才覆盖，避免把管理端刚改、还没发布的草稿冲掉。
@@ -17577,8 +17607,8 @@ function badgeSuggestFromDesc(desc) {
   if (/王者|冠军|第一|king|champion/.test(low)) icon = '👑';
   else if (/全题库|master/.test(low)) icon = '🥇';
   else if (/前十|top|板块榜|部门榜/.test(low)) icon = '🎯';
-  else if (/错题/.test(low)) icon = '🏹';
-  else if (/收藏|考点/.test(low)) icon = '⭐';
+  else if (/错题/.test(low)) icon = '🔍';   // 与「错题猎手」当前图标一致（2026-11-20 去重）
+  else if (/收藏|考点/.test(low)) icon = '🔖'; // 与「考点收藏家」当前图标一致（2026-11-20 去重）
   else if (/练习|刷题/.test(low)) icon = '📖';
   else if (/满分|全对|perfect score/.test(low)) icon = '💯';
   else if (/速度|神速|快|speed|fast/.test(low)) icon = '⚡';
