@@ -5971,10 +5971,7 @@ var I18N = {
   race_vch_cfg_rank_cap: {cn:'合计封顶（人次）· 全部榜单加起来的获奖上限', en:'Overall cap (awards) · limit across all leaderboards'},
   race_vch_cfg_dept: {cn:'部门奖：取前几个部门', en:'Department award: top N departments'},
   race_vch_cfg_dept_acc: {cn:'部门奖：平均正确率达标线（%）', en:'Department award: minimum average accuracy (%)'},
-  race_win_tag: {cn:'🏆 已获奖', en:'🏆 Winner'},
-  race_awardline_label: {cn:'评奖参考线 · 达标者前{n}%', en:'Award guideline · top {n}% of qualifiers'},
-  race_awardline_in: {cn:'已进入评奖范围', en:'In award range'},
-  race_awardline_gap: {cn:'距参考线 {n} 名', en:'{n} places to guideline'},
+  race_win_tag: {cn:'当前领先', en:'Currently leading'},
   race_vch_off: {cn:'关闭', en:'Off'},
   race_vch_to_admin: {cn:'去核销', en:'Redeem'},
   race_cal_no_detail: {cn:'这次挑战没有保存答题明细（明细仅保留最近 30 次）。', en:'No answer detail saved for this attempt (details are kept for the latest 30 attempts only).'},
@@ -16605,7 +16602,7 @@ function renderRaceBoard() {
     : isDays
     ? (isDeptTab ? raceDeptDaysRows(raceDeptDaysMode()) : raceDaysRows(tab))
     : (isDeptTab ? raceDeptAggRows(sec) : raceBoardRows(tab));
-  // 个人奖「已获奖高亮」：与发奖名单 V3 同源 —— 只在本届个人总榜五个发奖榜显示。
+  // 个人奖「当前领先高亮」：与发奖名单 V3 同源 —— 只在本届个人总榜五个发奖榜显示。
   // 历史最佳 / 进步之星 / 打卡天数 / 部门榜都不画（与个人奖无关）。
   // 高亮按工号匹配获奖名单：名单基于全量 state.raceBoard 算，当前榜行按工号查归属榜。
   var awCfg = raceAwardCfgOf();
@@ -16746,7 +16743,7 @@ function renderRaceBoard() {
           + rw.tier.icon + ' ' + (state.lang === 'en' ? rw.tier.en : rw.tier.cn) + '</span>'
         : '';
       var winTag = inAward
-        ? ' <span style="color:#0F6E56;font-size:11px;font-weight:500;">' + t('race_win_tag') + '</span>' : '';
+        ? ' <span style="color:#000;font-size:11px;font-weight:500;">' + t('race_win_tag') + '</span>' : '';
       html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#000;font-size:12px;">' + t('race_you') + '</span>' : '') + winTag + bdgTag + tierTagHtml + '</div>';
       var deptTagHtml = '<span style="color:#888;font-size:12px;">'
         + escapeHtml(deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept))) + '</span>';
@@ -19218,7 +19215,7 @@ function raceRankCandidateRowsV2(rows, rid, ac) {
 //  ② 去重：一人中多榜只保留一个「最佳榜」（成绩最好的那条：答对多→正确率高→用时短；
 //     完全并列时按榜单顺序 all>culinary>fb>rooms>general 取先），每人一份。
 //  ③ 封顶：全体候选人按成绩排序，取前 rankCap 人（默认 50）。
-//  ④ 高亮同源：每行输出 winBoard（归属榜）/ winRank（该榜名次），榜单直接据此标「已获奖」，
+//  ④ 高亮同源：每行输出 winBoard（归属榜）/ winRank（该榜名次），榜单直接据此标「当前领先」，
 //     保证「榜单亮的人 = 最终获奖的人」，五榜高亮人数之和 = 获奖人数 ≤ 封顶。
 // 老函数 raceRankCandidateRows / V2 原样保留（历史测试 / 回放仍要用）。
 function raceRankCandidateRowsV3(rows, rid, ac) {
@@ -19289,7 +19286,7 @@ function raceRankCandidateRowsV3(rows, rid, ac) {
   }
   return out;
 }
-// 榜单高亮映射：从获奖名单 V3 反推「当前榜哪几行已获奖」。
+// 榜单高亮映射：从获奖名单 V3 反推「当前榜哪几行处于领先区」。
 // 返回 { byBoard: {sk: {emp: rank}}, keys: {emp:true} }，榜单按工号匹配行。
 function raceAwardWinMapOf(rows, rid, ac) {
   var winners = raceRankCandidateRowsV3(rows, rid, ac);
