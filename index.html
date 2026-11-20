@@ -31145,7 +31145,8 @@ function adminRenderQList(questions) {
     var secTag = q.section ? ' · ' + escapeHtml(q.section) : '';
     html += '<div class="admin-q-item" draggable="true" data-qid="' + escapeHtml(q.id) + '">';
     html += '<div class="q-num">' + escapeHtml(q.id) + '</div>';
-    html += '<div class="q-text" title="' + escapeHtml(qCn || '') + '">' + escapeHtml(qText) + '</div>';
+    // 不挂 title：原生 tooltip 会和整题悬停预览抢位置、挡住浮窗；全文看预览即可。
+    html += '<div class="q-text">' + escapeHtml(qText) + '</div>';
     html += '<span class="q-type">' + getTypeShort(q.type) + secTag + '</span>';
     if (qEn) html += '<div class="q-en" title="' + escapeHtml(qEn) + '">' + escapeHtml(qEn) + '</div>';
     html += adminAnswerPreviewHtml(q);
