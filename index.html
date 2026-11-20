@@ -5971,6 +5971,7 @@ var I18N = {
   race_vch_cfg_rank_cap: {cn:'合计封顶（人次）· 全部榜单加起来的获奖上限', en:'Overall cap (awards) · limit across all leaderboards'},
   race_vch_cfg_dept: {cn:'部门奖：取前几个部门', en:'Department award: top N departments'},
   race_vch_cfg_dept_acc: {cn:'部门奖：平均正确率达标线（%）', en:'Department award: minimum average accuracy (%)'},
+  race_win_tag: {cn:'🏆 已获奖', en:'🏆 Winner'},
   race_awardline_label: {cn:'评奖参考线 · 达标者前{n}%', en:'Award guideline · top {n}% of qualifiers'},
   race_awardline_in: {cn:'已进入评奖范围', en:'In award range'},
   race_awardline_gap: {cn:'距参考线 {n} 名', en:'{n} places to guideline'},
@@ -11133,7 +11134,7 @@ function applyRaceConf(c) {
 // 后台手输 0、999 或留空都不会把奖项算崩（留空 = 用默认值）。
 // 2026-11-20：partMin 7→6（参与奖答对6题）；deptTopN 5 为部门奖上限（取前3-5，达标不足按实际）；
 // deptAccMin=60 为部门奖达标线（部门平均正确率≥60%才参评），与文案口径严格一致。
-var RACE_AWARD_DEF = { on: true, partOn: true, partMin: 6, rankOn: true, rankTopN: 10, rankAccMin: 60, rankRate: 30, rankCap: 60, deptOn: true, deptTopN: 5, deptAccMin: 60, rankCutDays: 7 };
+var RACE_AWARD_DEF = { on: true, partOn: true, partMin: 6, rankOn: true, rankTopN: 10, rankAccMin: 60, rankRate: 30, rankCap: 50, deptOn: true, deptTopN: 5, deptAccMin: 60, rankCutDays: 7 };
 function raceAwardClamp(v, lo, hi, dft) {
   var n = parseInt(v, 10);
   if (!isFinite(n) || n <= 0) n = dft;
@@ -16604,13 +16605,16 @@ function renderRaceBoard() {
     : isDays
     ? (isDeptTab ? raceDeptDaysRows(raceDeptDaysMode()) : raceDaysRows(tab))
     : (isDeptTab ? raceDeptAggRows(sec) : raceBoardRows(tab));
-  // 个人奖「前30%评奖参考线」：只在本届个人总榜五个发奖榜（多板块总榜 / 四个板块）显示。
-  // 历史最佳 / 进步之星 / 打卡天数 / 部门榜都不画（它们与个人奖评选无关）。
+  // 个人奖「已获奖高亮」：与发奖名单 V3 同源 —— 只在本届个人总榜五个发奖榜显示。
+  // 历史最佳 / 进步之星 / 打卡天数 / 部门榜都不画（与个人奖无关）。
+  // 高亮按工号匹配获奖名单：名单基于全量 state.raceBoard 算，当前榜行按工号查归属榜。
   var awCfg = raceAwardCfgOf();
-  var awardLine = null;
+  var winMap = null, winSec = null;
   if (tab === 'period' && !isMoverTab && !isDays && !isDeptTab && awCfg.rankOn
       && (!sec || sec === 'all' || sec === 'general' || sec === 'culinary' || sec === 'fb' || sec === 'rooms')) {
-    awardLine = raceAwardLineOfRows(rows, awCfg);
+    winSec = !sec || sec === 'all' ? 'all' : sec;
+    var _c = raceConfOf() || {};
+    try { winMap = raceAwardWinMapOf(state.raceBoard || [], _c.id, awCfg); } catch (e2w) { winMap = null; }
   }
   // 已经有数据就当 ready（不管状态位），避免"数据都在却被状态位挡住继续转圈"。
   var hasData = Array.isArray(state.raceBoard);
@@ -16695,7 +16699,8 @@ function renderRaceBoard() {
     for (var i = 0; i < rows.length; i++) {
       var rw = rows[i];
       var isMe = myKey && rw.key === myKey;
-      var inAward = !!(awardLine && awardLine.set[i]);
+      var rowEmp = normEmpNo(dashEmpNoOf((rw.raw && rw.raw.snap) || {}, rw.key)) || normEmpNo(empOfKey(rw.key));
+      var inAward = !!(winMap && winSec && rowEmp && winMap.byBoard[winSec] && winMap.byBoard[winSec][rowEmp]);
       var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
       html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + (inAward ? '#C7DDF3' : isMe ? '#eef4fa' : '#fff') + ';">';
       // 排名不再单独占一列，改成头像左下角的小标：一行省下 32px，名字能多显示两个字。
@@ -16740,13 +16745,9 @@ function renderRaceBoard() {
         ? ' <span onclick="raceTierInfoShow()" style="cursor:pointer;color:#8a5a00;font-weight:600;font-size:12px;">'
           + rw.tier.icon + ' ' + (state.lang === 'en' ? rw.tier.en : rw.tier.cn) + '</span>'
         : '';
-      var gapTag = '';
-      if (isMe && awardLine && awardLine.lastIdx >= 0) {
-        gapTag = inAward
-          ? ' <span style="color:#0F6E56;font-size:11px;font-weight:500;">' + t('race_awardline_in') + '</span>'
-          : ' <span style="color:#888;font-size:11px;font-weight:400;">' + t('race_awardline_gap').replace('{n}', String(i - awardLine.lastIdx)) + '</span>';
-      }
-      html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#000;font-size:12px;">' + t('race_you') + '</span>' : '') + gapTag + bdgTag + tierTagHtml + '</div>';
+      var winTag = inAward
+        ? ' <span style="color:#0F6E56;font-size:11px;font-weight:500;">' + t('race_win_tag') + '</span>' : '';
+      html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#000;font-size:12px;">' + t('race_you') + '</span>' : '') + winTag + bdgTag + tierTagHtml + '</div>';
       var deptTagHtml = '<span style="color:#888;font-size:12px;">'
         + escapeHtml(deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept))) + '</span>';
       var secTagHtml = (!isDays && !isMoverTab && rw.section && !sec)
@@ -16771,13 +16772,6 @@ function renderRaceBoard() {
         html += '<div style="font-size:12px;color:#888;">' + rw.acc + '%</div>';
       }
       html += '</div></div>';
-      if (awardLine && i === awardLine.lastIdx) {
-        html += '<div style="display:flex;align-items:center;gap:8px;margin:2px 0 8px;">'
-          + '<div style="flex:1;border-top:1px dashed #000;"></div>'
-          + '<div style="font-size:11px;color:#666;white-space:nowrap;">' + t('race_awardline_label').replace('{n}', String(awCfg.rankRate)) + '</div>'
-          + '<div style="flex:1;border-top:1px dashed #000;"></div>'
-          + '</div>';
-      }
     }
   }
   if (raceStateOf(raceConfOf()) === 'open') {
@@ -18816,7 +18810,7 @@ function adminAwardLoad() {
     adminState.awardDraft = {
       rid: rid,
       rankCutDays: ac.rankCutDays,
-      rankRows: ac.rankOn ? raceRankCandidateRowsV2(rows, rid, ac) : [],
+      rankRows: ac.rankOn ? raceRankCandidateRowsV3(rows, rid, ac) : [],
       deptRows: ac.deptOn ? raceDeptCandidateRowsV2(rows, rid, ac.deptTopN, (typeof rosterLvOf === 'function' ? rosterLvOf : null), ac.deptAccMin) : []
     };
     adminState.awardLoading = false;
@@ -18843,7 +18837,7 @@ function adminAwardRecalc() {
   var ac2 = {}; for (var ak in base) ac2[ak] = base[ak];
   ac2.rankAccMin = accMin; ac2.rankRate = rate; ac2.rankCap = cap;
   ac2.deptTopN = deptN; ac2.deptAccMin = deptAcc;
-  d.rankRows = raceRankCandidateRowsV2(rows, c.id, ac2);
+  d.rankRows = raceRankCandidateRowsV3(rows, c.id, ac2);
   d.deptRows = raceDeptCandidateRowsV2(rows, c.id, deptN, (typeof rosterLvOf === 'function' ? rosterLvOf : null), deptAcc);
   if (state.currentPage === 'adminAwardSettle') { try { render(); } catch (e) {} }
 }
@@ -19218,6 +19212,97 @@ function raceRankCandidateRowsV2(rows, rid, ac) {
     if (used >= cap) break;
   }
   return out;
+}
+// 获奖名单 V3（2026-11-20 定稿）：每人只占一份、按「最佳榜」归属、全局封顶、榜单高亮同源。
+//  ① 达标：五榜各取正确率 ≥ rankAccMin 者，再取该榜前 rankRate%（分母是达标人数）。
+//  ② 去重：一人中多榜只保留一个「最佳榜」（成绩最好的那条：答对多→正确率高→用时短；
+//     完全并列时按榜单顺序 all>culinary>fb>rooms>general 取先），每人一份。
+//  ③ 封顶：全体候选人按成绩排序，取前 rankCap 人（默认 50）。
+//  ④ 高亮同源：每行输出 winBoard（归属榜）/ winRank（该榜名次），榜单直接据此标「已获奖」，
+//     保证「榜单亮的人 = 最终获奖的人」，五榜高亮人数之和 = 获奖人数 ≤ 封顶。
+// 老函数 raceRankCandidateRows / V2 原样保留（历史测试 / 回放仍要用）。
+function raceRankCandidateRowsV3(rows, rid, ac) {
+  ac = ac || raceAwardCfgOf();
+  var minAcc = ac.rankAccMin, rate = ac.rankRate / 100, cap = ac.rankCap;
+  var sections = RACE_RANK_SECTIONS;
+  var byEmp = {}, order = [];
+  function better(n, o) { // n 的成绩是否优于 o
+    if (!o) return true;
+    if (n.correct !== o.correct) return n.correct > o.correct;
+    if (n.acc !== o.acc) return n.acc > o.acc;
+    return (n.ts || 0) < (o.ts || 0);
+  }
+  for (var s = 0; s < sections.length; s++) {
+    var sk = sections[s];
+    var board = raceBoardRowsFrom(rows, 'period', sk, rid);
+    var qual = [];
+    for (var i = 0; i < board.length; i++) {
+      var r = board[i];
+      if ((r.acc || 0) < minAcc) continue;
+      var sn = (r.raw && r.raw.snap) || {};
+      var emp = normEmpNo(dashEmpNoOf(sn, r.key)) || normEmpNo(empOfKey(r.key));
+      if (!emp) continue;
+      qual.push({ r: r, emp: emp, sn: sn, rank: i + 1 });
+    }
+    if (!qual.length) continue;
+    var take = Math.max(1, Math.ceil(qual.length * rate));
+    if (take > qual.length) take = qual.length;
+    for (var j = 0; j < take; j++) {
+      var q = qual[j], it = byEmp[q.emp];
+      var cand = { board: sk, rank: q.rank, correct: q.r.correct || 0, acc: q.r.acc || 0,
+        ts: q.r.ts || 0, r: q.r, sn: q.sn, div: q.r.div, dept: q.r.dept,
+        answered: q.r.answered || 0 };
+      if (!it) {
+        it = byEmp[q.emp] = {
+          emp: q.emp, cn: String(q.sn.cn || q.r.cn || ''), en: String(q.sn.en || q.r.en || ''),
+          div: cand.div, dept: cand.dept, correct: cand.correct, answered: cand.answered,
+          acc: cand.acc, ts: cand.ts, winBoard: sk, winRank: q.rank, boards: []
+        };
+        order.push(q.emp);
+        it._best = cand;
+      } else if (better(cand, it._best)) {
+        // 最佳榜改用成绩更好的那条（含其名次/归属榜）
+        it.winBoard = sk; it.winRank = q.rank;
+        it.correct = cand.correct; it.answered = cand.answered; it.acc = cand.acc; it.ts = cand.ts;
+        it.div = cand.div; it.dept = cand.dept;
+        it.cn = String(cand.sn.cn || cand.r.cn || it.cn || '');
+        it.en = String(cand.sn.en || cand.r.en || it.en || '');
+        it._best = cand;
+      }
+      if (it.boards.indexOf(sk) < 0) it.boards.push(sk);
+    }
+  }
+  var people = [];
+  for (var k = 0; k < order.length; k++) people.push(byEmp[order[k]]);
+  people.sort(function (a, b) {
+    if (b.correct !== a.correct) return b.correct - a.correct;
+    if (b.acc !== a.acc) return b.acc - a.acc;
+    return (a.ts || 0) - (b.ts || 0);
+  });
+  var out = [];
+  for (var m = 0; m < people.length && out.length < cap; m++) {
+    var p = people[m];
+    delete p._best;
+    p.copies = 1;                 // 每人只一份
+    p.boards = [p.winBoard];      // 券面 / 徽章只按归属榜计
+    out.push(p);
+  }
+  return out;
+}
+// 榜单高亮映射：从获奖名单 V3 反推「当前榜哪几行已获奖」。
+// 返回 { byBoard: {sk: {emp: rank}}, keys: {emp:true} }，榜单按工号匹配行。
+function raceAwardWinMapOf(rows, rid, ac) {
+  var winners = raceRankCandidateRowsV3(rows, rid, ac);
+  var byBoard = {}, keys = {};
+  for (var i = 0; i < RACE_RANK_SECTIONS.length; i++) byBoard[RACE_RANK_SECTIONS[i]] = {};
+  for (var j = 0; j < winners.length; j++) {
+    var w = winners[j], emp = normEmpNo(w.emp);
+    if (!emp) continue;
+    keys[emp] = true;
+    if (!byBoard[w.winBoard]) byBoard[w.winBoard] = {};
+    byBoard[w.winBoard][emp] = w.winRank || (j + 1);
+  }
+  return { byBoard: byBoard, keys: keys, winners: winners };
 }
 // 榜单「前30%评奖参考线」（2026-11-20）：与发奖口径一致 —— 当前榜内正确率 ≥ rankAccMin
 // 者按榜单顺序取前 rankRate%，记下这些行的下标。纯可视化，不决定获奖名单（名单仍看 V2 + 封顶）。
