@@ -11871,7 +11871,7 @@ var BADGE_DESC_TEXT = {
   bd_t30:     { cn: '全平台历史累计打卡满 30 天，步步积累', en: '30 check-in days all-time — step by step' },
   bd_t60:     { cn: '全平台历史累计打卡满 60 天，勤学不止', en: '60 check-in days all-time — never stop learning' },
   bd_t100:    { cn: '全平台历史累计打卡满 100 天，长期坚持的学习者', en: '100 check-in days all-time — the long runner' },
-  bd_gen_master: { cn: '「品牌与酒店知识」速答榜前 10 名（管理端确认个人奖名单后发）', en: 'Top 10 on the Brand & Hotel Knowledge board (awarded after winners are confirmed)' },
+  bd_gen_master: { cn: '本届榜单名列前茅的优异者', en: 'Among the best on this round\'s leaderboard' },
   bd_wrong:   { cn: '累计完成 50 道错题重做，主动攻克知识薄弱点', en: '50 wrong answers redone — you fix what you miss' },
   bd_fav:     { cn: '累计收藏 20 道题目，收纳重点知识考题', en: '20 questions saved — your own key-point shelf' },
   bd_prac:    { cn: '练习模式累计完成 100 道练习，温故巩固知识', en: '100 practice answers — review makes it stick' },
@@ -13006,12 +13006,8 @@ function raceBadgeDesc(b, lang) {
     if (rule === BADGE_RULE_FAST) return 'Avg \u2264 ' + n + ' sec per question';
     if (rule === BADGE_RULE_ACC) return n + ' correct answers in a row in one run (no misses)';
     if (rule === BADGE_RULE_NEWBIE) return n + ' days in your first week';
-    if (rule === BADGE_RULE_DEPT_TOP) {
-      var secEn = badgeSecValid(def && def.sec);
-      return 'Top ' + n + ' on the ' + (secEn ? raceSecMeta(secEn).en : 'any single-section')
-        + ' board \u2014 settled when the round ends';
-    }
-    if (rule === BADGE_RULE_ALL_TOP) return 'Top ' + n + ' on the all-question board \u2014 settled when the round ends';
+    if (rule === BADGE_RULE_DEPT_TOP) return 'Among the best on this round\'s leaderboard';
+    if (rule === BADGE_RULE_ALL_TOP) return 'Among the best on this round\'s leaderboard';
     if (rule === BADGE_RULE_WRONG) return n + ' wrong answers redone';
     if (rule === BADGE_RULE_FAV) return n + ' questions saved';
     if (rule === BADGE_RULE_PRACTICE) return n + ' practice answers';
@@ -13032,12 +13028,8 @@ function raceBadgeDesc(b, lang) {
   if (rule === BADGE_RULE_FAST) return '单期平均每题不超过 ' + n + ' 秒（至少答对 ' + BADGE_FAST_MIN_ANS + ' 题）';
   if (rule === BADGE_RULE_ACC) return '单场连续答对 ' + n + ' 题不出错（未作答不计）';
   if (rule === BADGE_RULE_NEWBIE) return '首次打卡 7 天内打卡满 ' + n + ' 天';
-  if (rule === BADGE_RULE_DEPT_TOP) {
-    var secCn = badgeSecValid(def && def.sec);
-    return (secCn ? ('「' + raceSecMeta(secCn).cn + '」速答榜前 ' + n + ' 名')
-                  : ('任一板块速答榜前 ' + n + ' 名')) + '（赛季结束结算）';
-  }
-  if (rule === BADGE_RULE_ALL_TOP) return '全题库速答榜前 ' + n + ' 名（赛季结束结算）';
+  if (rule === BADGE_RULE_DEPT_TOP) return '本届榜单名列前茅的优异者';
+  if (rule === BADGE_RULE_ALL_TOP) return '本届榜单名列前茅的优异者';
   if (rule === BADGE_RULE_WRONG) return '累计重做错题 ' + n + ' 道';
   if (rule === BADGE_RULE_FAV) return '累计收藏题目 ' + n + ' 道';
   if (rule === BADGE_RULE_PRACTICE) return '练习模式累计答题 ' + n + ' 道';
