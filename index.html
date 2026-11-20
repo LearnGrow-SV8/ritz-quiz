@@ -1375,8 +1375,9 @@ tr:hover .ap-rowact, .ap-q-item:hover .ap-rowact, .admin-q-item:hover .ap-rowact
 #adminQHoverPreview .qh-id { margin-left:auto; font-size:11px; color:#9AA0A6;
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
 #adminQHoverPreview .qh-stem { font-size:14px; line-height:1.65; white-space:pre-wrap; }
+/* 与编辑页 .ed-pv-opt 一致：英文副行 width:100% + flex-wrap 换行，中文在上英文在下 */
 #adminQHoverPreview .qh-opt { display:flex; gap:8px; align-items:flex-start; padding:6px 10px; margin-top:5px;
-  border:1px solid #E8EAED; border-radius:7px; }
+  border:1px solid #E8EAED; border-radius:7px; flex-wrap:wrap; }
 #adminQHoverPreview .qh-opt.correct { border-color:#C7DDF3; background:rgba(199,221,243,.42); font-weight:600; }
 #adminQHoverPreview .qh-lang { font-size:11.5px; color:#9AA0A6; width:100%; font-weight:400; }
 #adminQHoverPreview .qh-exp { margin-top:10px; padding-top:9px; border-top:1px dashed #E8EAED;
@@ -16647,9 +16648,10 @@ function renderRaceBoard() {
   //     五张发奖榜各算各的 —— 一人可在多个榜同时高亮，避免"最佳榜在别处导致本榜没人亮"被误会。
   //  ② 皇冠 👑 = 获奖名单 V3 的最佳榜归属（raceAwardWinMapOf.byBoard[sec]），一个人只在
   //     自己成绩最好的那张榜带皇冠（内部区分用，不加文字）；其余高亮榜不带皇冠。
-  //  ③ 全部板块总榜 sec=''：高亮所有在任一发奖榜达标前 30% 的人（V3 winners 全集），显示其成绩，不带皇冠。
-  //     非发奖榜（hr/finance/sm/eng）、打卡天数榜不画高亮也不画皇冠。
-  //  ④ 发奖/券码仍走 V3 + 封顶，与榜单展示口径互不干扰。
+  //  ③ 全部板块总榜 sec=''：高亮所有获奖者（V3 winners 全集）并显示其成绩；因总榜展示的正是
+  //     最佳成绩那条，获奖者也带皇冠。非发奖榜（hr/finance/sm/eng）、打卡天数榜不画高亮也不画皇冠。
+  //  ④ 高亮用淡金渐变（与皇冠/奖牌同色系），本人账号仍是淡蓝底，两者一眼可分。
+  //  ⑤ 发奖/券码仍走 V3 + 封顶，与榜单展示口径互不干扰。
   var awCfg = raceAwardCfgOf();
   var leadSet = null;       // 本榜达标前 30% 的可见行下标（淡蓝底高亮）
   var crownEmps = null;     // 本榜带皇冠的工号集合（V3 最佳榜归属）
@@ -16664,6 +16666,8 @@ function renderRaceBoard() {
         crownEmps = (_wmap.byBoard && _wmap.byBoard[sec]) || {};     // 皇冠：仅最佳榜
       } else if (!sec) {
         overallEmps = _wmap.keys || {};                              // 总榜：所有获奖者
+        // 总榜每行展示的正是该员工的最佳成绩（=有皇冠那条），故获奖者都带皇冠。
+        crownEmps = overallEmps;
       }
     } catch (e2w) { leadSet = null; crownEmps = null; overallEmps = null; }
   }
@@ -16758,7 +16762,9 @@ function renderRaceBoard() {
       // 皇冠：只在该人最佳归属榜（crownEmps）显示；总榜与非发奖榜没有 crownEmps。
       var hasCrown = !!(crownEmps && rowEmp && crownEmps[rowEmp]);
       var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + (inAward ? '#E8F0FA' : isMe ? '#eef4fa' : '#fff') + ';">';
+      // 获奖高亮=淡金渐变（与皇冠/奖牌同色系），本人账号=淡蓝底，一眼可分；获奖优先于本人。
+      var rowBg = inAward ? 'linear-gradient(135deg,#FFF3D0,#F7DFA0)' : (isMe ? '#eef4fa' : '#fff');
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + rowBg + ';">';
       // 排名不再单独占一列，改成头像左下角的小标：一行省下 32px，名字能多显示两个字。
       // 前三名用金 / 银 / 铜底 + 奖牌，第 4 名起深蓝底 + 数字。
       var rankBg = i === 0 ? 'linear-gradient(135deg,#ffd76b,#d4a017)'
@@ -31050,12 +31056,17 @@ function adminQHoverShow(qid, x, y) {
   el.style.display = 'block';
   adminQHoverPlace(x, y);
 }
+// 只有题号 + 题干（行左侧）才弹预览；题型/答案/操作按钮区不弹，免得挡住要点的东西。
+function adminQHoverLeftHit(target, row) {
+  var hit = target && target.closest ? target.closest('.q-num, .q-text') : null;
+  return hit && hit.parentNode === row ? hit : null;
+}
 // 事件委托挂 document：题库列表每次翻页/筛选都会 innerHTML 重画，行级监听会丢。
 function adminInitQHover() {
   document.addEventListener('mouseover', function (e) {
     if (adminDragState && (adminDragState.qid !== null || adminDragState.secFrom !== null)) return;
     var row = e.target && e.target.closest ? e.target.closest('#adminQList .admin-q-item[data-qid]') : null;
-    if (!row) return;
+    if (!row || !adminQHoverLeftHit(e.target, row)) return;
     var qid = row.getAttribute('data-qid');
     if (adminQHover.qid === qid) return;
     adminQHoverHide();
@@ -31070,7 +31081,7 @@ function adminInitQHover() {
   document.addEventListener('mouseout', function (e) {
     var row = e.target && e.target.closest ? e.target.closest('#adminQList .admin-q-item[data-qid]') : null;
     if (!row) return;
-    if (e.relatedTarget && row.contains && row.contains(e.relatedTarget)) return;
+    if (adminQHoverLeftHit(e.relatedTarget, row)) return; // 题号↔题干之间移动不算离开
     adminQHoverHide();
   });
   document.addEventListener('mousedown', adminQHoverHide);
