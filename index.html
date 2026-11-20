@@ -5972,6 +5972,8 @@ var I18N = {
   race_vch_cfg_dept: {cn:'部门奖：取前几个部门', en:'Department award: top N departments'},
   race_vch_cfg_dept_acc: {cn:'部门奖：平均正确率达标线（%）', en:'Department award: minimum average accuracy (%)'},
   race_win_tag: {cn:'当前领先', en:'Currently leading'},
+  race_lead_title: {cn:'当前领先', en:'Currently leading'},
+  race_lead_desc: {cn:'表示你在这张榜单上处于获奖区间：正确率达 {acc}% 及以上、且排在达标选手的前 {rate}%。榜单实时变动，最终获奖名单以赛事结束后的截榜结算为准。', en:'You are in the award zone on this leaderboard: accuracy of {acc}% or above and ranked among the top {rate}% of qualifiers. Rankings change in real time; the final winners are confirmed when the contest closes.'},
   race_vch_off: {cn:'关闭', en:'Off'},
   race_vch_to_admin: {cn:'去核销', en:'Redeem'},
   race_cal_no_detail: {cn:'这次挑战没有保存答题明细（明细仅保留最近 30 次）。', en:'No answer detail saved for this attempt (details are kept for the latest 30 attempts only).'},
@@ -15671,6 +15673,28 @@ function raceBadgeInfoShow(rawId) {
   overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
   document.body.appendChild(overlay);
 }
+// 榜单名字后面的「当前领先」小皇冠：点击弹出说明（移动端点按 / 桌面点击都触发）。
+// 纯展示、不写状态；文案走词条表，口径与本榜达标前 rankRate% 的高亮一致。
+function raceLeadInfoShow() {
+  if (typeof document === 'undefined' || !document.body || !document.body.appendChild) return;
+  var ac = raceAwardCfgOf();
+  var desc = t('race_lead_desc')
+    .replace('{rate}', (ac.rankRate != null ? ac.rankRate : 30))
+    .replace('{acc}', (ac.rankAccMin != null ? ac.rankAccMin : 60));
+  var overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML =
+    '<div class="confirm-box" style="max-width:320px;text-align:center;">' +
+      '<div style="width:56px;height:56px;margin:4px auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;background:#C7DDF3;">👑</div>' +
+      '<div class="confirm-title" style="margin-bottom:6px;">' + escapeHtml(t('race_lead_title')) + '</div>' +
+      '<div class="confirm-body" style="text-align:center;line-height:1.6;">' + escapeHtml(desc) + '</div>' +
+      '<div class="confirm-actions"><button class="confirm-btn primary" data-act="ok">' + t('race_badge_ok') + '</button></div>' +
+    '</div>';
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  overlay.querySelector('[data-act="ok"]').onclick = close;
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+  document.body.appendChild(overlay);
+}
 function raceBadgeChipHtml(def, got, date, prog, count) {  if (def && !def.rule && def.id) def = raceBadgeById(def.id) || def;
   var d = def || {};
   var c1 = got ? (d.c1 || '#ffcf6b') : '#eef1f3';
@@ -16758,8 +16782,13 @@ function renderRaceBoard() {
         ? ' <span onclick="raceTierInfoShow()" style="cursor:pointer;color:#8a5a00;font-weight:600;font-size:12px;">'
           + rw.tier.icon + ' ' + (state.lang === 'en' ? rw.tier.en : rw.tier.cn) + '</span>'
         : '';
+      // 「当前领先」皇冠小章：淡蓝底圆章（品牌蓝 #C7DDF3 + 纯黑皇冠），点按弹说明。
+      // 移动端没有 title 悬停，所以可点击是必须的 —— 用 onclick 直接弹卡。
       var winTag = inAward
-        ? ' <span title="' + t('race_win_tag') + '" style="color:#000;font-size:9px;vertical-align:2px;">&#9679;</span>' : '';
+        ? ' <span onclick="raceLeadInfoShow()" title="' + escapeHtml(t('race_win_tag')) + '"'
+          + ' style="display:inline-block;vertical-align:1px;margin-left:3px;width:17px;height:17px;line-height:17px;'
+          + 'text-align:center;border-radius:50%;background:#C7DDF3;font-size:10px;cursor:pointer;-webkit-tap-highlight-color:transparent;">👑</span>'
+        : '';
       html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#000;font-size:12px;">' + t('race_you') + '</span>' : '') + winTag + bdgTag + tierTagHtml + '</div>';
       var deptTagHtml = '<span style="color:#888;font-size:12px;">'
         + escapeHtml(deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept))) + '</span>';
