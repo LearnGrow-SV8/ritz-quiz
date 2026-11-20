@@ -16762,9 +16762,14 @@ function renderRaceBoard() {
       // 皇冠：只在该人最佳归属榜（crownEmps）显示；总榜与非发奖榜没有 crownEmps。
       var hasCrown = !!(crownEmps && rowEmp && crownEmps[rowEmp]);
       var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-      // 获奖高亮=淡金渐变（与皇冠/奖牌同色系），本人账号=淡蓝底，一眼可分；获奖优先于本人。
-      var rowBg = inAward ? 'linear-gradient(135deg,#FFF3D0,#F7DFA0)' : (isMe ? '#eef4fa' : '#fff');
-      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + rowBg + ';">';
+      // 获奖高亮=金属质感金（底层对称明暗渐变模拟金属本体 + 斜向白色高光带模拟反光 + 上下内高光做出立体感），
+      // 与皇冠/奖牌同色系；本人账号=淡蓝底，一眼可分；获奖优先于本人。
+      var rowBg = inAward
+        ? 'linear-gradient(115deg,rgba(255,255,255,0) 16%,rgba(255,255,255,.52) 40%,rgba(255,255,255,.85) 50%,rgba(255,255,255,.52) 60%,rgba(255,255,255,0) 84%),linear-gradient(115deg,#FDF3D4 0%,#EBCB85 26%,#DDB45A 50%,#EBCB85 74%,#FDF3D4 100%)'
+        : (isMe ? '#eef4fa' : '#fff');
+      var rowEdge = inAward ? (isMe ? '#000' : '#d8b25e') : (isMe ? '#000' : '#e2e6ea');
+      var rowFx = inAward ? ';box-shadow:inset 0 1px 0 rgba(255,255,255,.92),inset 0 -1px 0 rgba(168,122,30,.22)' : '';
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + rowEdge + ';border-radius:10px;background:' + rowBg + rowFx + ';">';
       // 排名不再单独占一列，改成头像左下角的小标：一行省下 32px，名字能多显示两个字。
       // 前三名用金 / 银 / 铜底 + 奖牌，第 4 名起深蓝底 + 数字。
       var rankBg = i === 0 ? 'linear-gradient(135deg,#ffd76b,#d4a017)'
