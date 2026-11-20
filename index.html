@@ -5971,6 +5971,9 @@ var I18N = {
   race_vch_cfg_rank_cap: {cn:'合计封顶（人次）· 全部榜单加起来的获奖上限', en:'Overall cap (awards) · limit across all leaderboards'},
   race_vch_cfg_dept: {cn:'部门奖：取前几个部门', en:'Department award: top N departments'},
   race_vch_cfg_dept_acc: {cn:'部门奖：平均正确率达标线（%）', en:'Department award: minimum average accuracy (%)'},
+  race_awardline_label: {cn:'评奖参考线 · 达标者前{n}%', en:'Award guideline · top {n}% of qualifiers'},
+  race_awardline_in: {cn:'已进入评奖范围', en:'In award range'},
+  race_awardline_gap: {cn:'距参考线 {n} 名', en:'{n} places to guideline'},
   race_vch_off: {cn:'关闭', en:'Off'},
   race_vch_to_admin: {cn:'去核销', en:'Redeem'},
   race_cal_no_detail: {cn:'这次挑战没有保存答题明细（明细仅保留最近 30 次）。', en:'No answer detail saved for this attempt (details are kept for the latest 30 attempts only).'},
@@ -16601,6 +16604,14 @@ function renderRaceBoard() {
     : isDays
     ? (isDeptTab ? raceDeptDaysRows(raceDeptDaysMode()) : raceDaysRows(tab))
     : (isDeptTab ? raceDeptAggRows(sec) : raceBoardRows(tab));
+  // 个人奖「前30%评奖参考线」：只在本届个人总榜五个发奖榜（多板块总榜 / 四个板块）显示。
+  // 历史最佳 / 进步之星 / 打卡天数 / 部门榜都不画（它们与个人奖评选无关）。
+  var awCfg = raceAwardCfgOf();
+  var awardLine = null;
+  if (tab === 'period' && !isMoverTab && !isDays && !isDeptTab && awCfg.rankOn
+      && (!sec || sec === 'all' || sec === 'general' || sec === 'culinary' || sec === 'fb' || sec === 'rooms')) {
+    awardLine = raceAwardLineOfRows(rows, awCfg);
+  }
   // 已经有数据就当 ready（不管状态位），避免"数据都在却被状态位挡住继续转圈"。
   var hasData = Array.isArray(state.raceBoard);
   var bst = hasData ? 'ready' : (state.raceBoardState || 'loading');
@@ -16684,8 +16695,9 @@ function renderRaceBoard() {
     for (var i = 0; i < rows.length; i++) {
       var rw = rows[i];
       var isMe = myKey && rw.key === myKey;
+      var inAward = !!(awardLine && awardLine.set[i]);
       var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + (isMe ? '#eef4fa' : '#fff') + ';">';
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + (inAward ? '#C7DDF3' : isMe ? '#eef4fa' : '#fff') + ';">';
       // 排名不再单独占一列，改成头像左下角的小标：一行省下 32px，名字能多显示两个字。
       // 前三名用金 / 银 / 铜底 + 奖牌，第 4 名起深蓝底 + 数字。
       var rankBg = i === 0 ? 'linear-gradient(135deg,#ffd76b,#d4a017)'
@@ -16728,7 +16740,13 @@ function renderRaceBoard() {
         ? ' <span onclick="raceTierInfoShow()" style="cursor:pointer;color:#8a5a00;font-weight:600;font-size:12px;">'
           + rw.tier.icon + ' ' + (state.lang === 'en' ? rw.tier.en : rw.tier.cn) + '</span>'
         : '';
-      html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#000;font-size:12px;">' + t('race_you') + '</span>' : '') + bdgTag + tierTagHtml + '</div>';
+      var gapTag = '';
+      if (isMe && awardLine && awardLine.lastIdx >= 0) {
+        gapTag = inAward
+          ? ' <span style="color:#0F6E56;font-size:11px;font-weight:500;">' + t('race_awardline_in') + '</span>'
+          : ' <span style="color:#888;font-size:11px;font-weight:400;">' + t('race_awardline_gap').replace('{n}', String(i - awardLine.lastIdx)) + '</span>';
+      }
+      html += '<div style="font-size:14px;font-weight:600;">' + escapeHtml(rw.name) + (isMe ? '<span style="color:#000;font-size:12px;">' + t('race_you') + '</span>' : '') + gapTag + bdgTag + tierTagHtml + '</div>';
       var deptTagHtml = '<span style="color:#888;font-size:12px;">'
         + escapeHtml(deptDisplayName(raceDeptPersonLabel(rw.div, rw.dept))) + '</span>';
       var secTagHtml = (!isDays && !isMoverTab && rw.section && !sec)
@@ -16753,6 +16771,13 @@ function renderRaceBoard() {
         html += '<div style="font-size:12px;color:#888;">' + rw.acc + '%</div>';
       }
       html += '</div></div>';
+      if (awardLine && i === awardLine.lastIdx) {
+        html += '<div style="display:flex;align-items:center;gap:8px;margin:2px 0 8px;">'
+          + '<div style="flex:1;border-top:1px dashed #000;"></div>'
+          + '<div style="font-size:11px;color:#666;white-space:nowrap;">' + t('race_awardline_label').replace('{n}', String(awCfg.rankRate)) + '</div>'
+          + '<div style="flex:1;border-top:1px dashed #000;"></div>'
+          + '</div>';
+      }
     }
   }
   if (raceStateOf(raceConfOf()) === 'open') {
@@ -19193,6 +19218,22 @@ function raceRankCandidateRowsV2(rows, rid, ac) {
     if (used >= cap) break;
   }
   return out;
+}
+// 榜单「前30%评奖参考线」（2026-11-20）：与发奖口径一致 —— 当前榜内正确率 ≥ rankAccMin
+// 者按榜单顺序取前 rankRate%，记下这些行的下标。纯可视化，不决定获奖名单（名单仍看 V2 + 封顶）。
+function raceAwardLineOfRows(rows, ac) {
+  rows = rows || [];
+  ac = ac || raceAwardCfgOf();
+  var qual = [];
+  for (var i = 0; i < rows.length; i++) {
+    if ((rows[i].acc || 0) < ac.rankAccMin) continue;
+    qual.push(i);
+  }
+  var take = Math.max(1, Math.ceil(qual.length * (ac.rankRate / 100)));
+  if (take > qual.length) take = qual.length;
+  var set = {}, lastIdx = -1;
+  for (var j = 0; j < take; j++) { set[qual[j]] = true; lastIdx = qual[j]; }
+  return { set: set, take: take, qualified: qual.length, lastIdx: lastIdx };
 }
 // 部门奖候选：复用加权部门榜取前 N
 function raceDeptCandidateRows(rows, rid, topN, rosterLv) {
