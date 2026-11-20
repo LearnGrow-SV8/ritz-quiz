@@ -16697,7 +16697,10 @@ function renderRaceBoard() {
       var rw = rows[i];
       var isMe = myKey && rw.key === myKey;
       var rowEmp = normEmpNo(dashEmpNoOf((rw.raw && rw.raw.snap) || {}, rw.key)) || normEmpNo(empOfKey(rw.key));
-      var inAward = !!(winMap && winSec && rowEmp && winMap.byBoard[winSec] && winMap.byBoard[winSec][rowEmp]);
+      // 获奖者在本届任一发奖榜均高亮：总榜（winSec=all）也显示所有获奖者，
+      // 否则获奖者的归属榜多为房务/餐饮等专业榜，默认总榜会一个标记都没有。
+      // 标记只代表「此人在获奖名单内」，不再要求归属榜等于当前榜。
+      var inAward = !!(winMap && rowEmp && winMap.keys[rowEmp]);
       var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
       html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid ' + (isMe ? '#000' : '#e2e6ea') + ';border-radius:10px;background:' + (inAward ? '#C7DDF3' : isMe ? '#eef4fa' : '#fff') + ';">';
       // 排名不再单独占一列，改成头像左下角的小标：一行省下 32px，名字能多显示两个字。
