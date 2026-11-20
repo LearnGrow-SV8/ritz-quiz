@@ -20918,16 +20918,21 @@ function masteredCount() {
   for (var k in mas) if (Object.prototype.hasOwnProperty.call(mas, k) && mas[k]) n++;
   return n;
 }
-// 全平台唯一「巩固完成率」口径（2026-11-11 领导：首页、个人页、错题本三处必须同一个数）。
-// = 已巩固完成 ÷（已巩固完成 + 仍在错题本的题），分母含全部题库（21 天 / 三步法 / 答题赛），
-// 整数百分比；错题本为空时返回 -1（界面显示「—」）。
-// 旧 masteryOf() 只看 manual 库、还把巩固中的题按阶数折算进度，和错题本进度卡对不上，已全部换掉。
+// 全平台唯一「巩固完成率」口径（2026-11-20 改按阶加权：首页、个人页、错题本三处必须同一个数）。
+// = （已巩固完成 × 满分 + 错题本各题当前阶数之和）÷（历史进入错题本的题目总数 × 满分）。
+// 满分 = WRONG_STAGE_DOTS = 3（答对 3 次才算巩固完成），所以 1 阶算 1/3、2 阶算 2/3、完成算 3/3。
+// 分母含全部题库（21 天 / 三步法 / 答题赛）：已完成的题按满分留在分母里，不会随历史膨胀而"钝化到
+// 卡在 93% 看不见变化"——每次答对（推进或完成）分子必涨、分母不变，全部完成正好 100%，且完成那一刻
+// 由 2/3 变 3/3 是上升的，不会回落。整数百分比；从未有过错题时返回 -1（界面显示「—」）。
 function masteryRateOf() {
   var grad = 0, rows = [];
   try { grad = masteredCount(); rows = wrongRowsAll({}); } catch (e) { return -1; }
   var nAll = grad + rows.length;
   if (!nAll) return -1;
-  return Math.round(grad / nAll * 100);
+  var full = WRONG_STAGE_DOTS;
+  var pts = grad * full;
+  for (var i = 0; i < rows.length; i++) pts += wrongStageOf(rows[i] && rows[i].e);
+  return Math.round(pts / (nAll * full) * 100);
 }
 
 // ---- 复习行为账本（2026-11-05）：积分制的唯一取数口 ----
@@ -21752,12 +21757,15 @@ function renderWrongAll() {
   // 组卷相关的「一键重做错题」（wrongStartScopedRedo）不受影响。
 
   // ---- 板块四｜错题复习进度（2026-11-12 从页首挪到最底部）----
+  // 2026-11-20：完成率改按阶加权，与全站共用 masteryRateOf()。
+  // 下面三段条和三个数字仍是「题数分布」（已完成/巩固中/待巩固），与右上角按阶加权的完成率
+  // 是两个视角，不再要求绿条宽度等于完成率——否则会出现"待巩固 0 道却有一段灰条"的错乱。
   var nTodo = 0, nDoing = 0;
   for (var ci2 = 0; ci2 < allRows.length; ci2++) {
     if (wrongStageOf(allRows[ci2].e) > 0) nDoing++; else nTodo++;
   }
   var nAll = grad + nTodo + nDoing;
-  var nPct = nAll > 0 ? Math.round(grad / nAll * 100) : 0;
+  var nPct = masteryRateOf(); if (nPct < 0) nPct = 0;
   var wGrad = nAll > 0 ? Math.round(grad / nAll * 1000) / 10 : 0;
   var wDoing = nAll > 0 ? Math.round(nDoing / nAll * 1000) / 10 : 0;
   html += '<div class="q-card" style="padding:14px;margin-bottom:12px;">';
